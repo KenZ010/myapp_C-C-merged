@@ -206,10 +206,13 @@ export default function InventoryMaintenancePage() {
             <div
               key={item.label}
               onClick={() => {
-  if (item.label === "Dashboard") router.push("/dashboard");
-  if (item.label === "Inventory Maintenance") router.push("/inventory");
-  if (item.label === "Supplier Maintenance") router.push("/supplier");
-}}
+                if (item.label === "Dashboard") router.push("/dashboard");
+                if (item.label === "Inventory Maintenance") router.push("/inventory");
+                if (item.label === "Supplier Maintenance") router.push("/supplier");
+              }}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
+                item.active ? "text-indigo-700 font-semibold" : "text-gray-400 hover:text-gray-600"
+              }`}
             >
               <div className="relative flex items-center gap-2 w-full">
                 <span>{item.icon}</span>
@@ -343,7 +346,7 @@ export default function InventoryMaintenancePage() {
         </div>
       </main>
 
-      {/* ADD / EDIT MODAL - bg-opacity-10 makes background visible */}
+      {/* ADD / EDIT MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
