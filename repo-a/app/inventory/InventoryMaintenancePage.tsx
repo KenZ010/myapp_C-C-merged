@@ -205,10 +205,11 @@ export default function InventoryMaintenancePage() {
           {navItems.map((item) => (
             <div
               key={item.label}
-              onClick={() => item.label === "Dashboard" && router.push("/dashboard")}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
-                item.active ? "text-indigo-700 font-semibold" : "text-gray-400 hover:text-gray-600"
-              }`}
+              onClick={() => {
+                if (item.label === "Dashboard") router.push("/dashboard");
+                if (item.label === "Inventory Maintenance") router.push("/inventory");
+                if (item.label === "Supplier Maintenance") router.push("/supplier");
+            }}
             >
               <div className="relative flex items-center gap-2 w-full">
                 <span>{item.icon}</span>
