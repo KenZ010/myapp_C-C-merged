@@ -169,6 +169,8 @@ export default function SupplierMaintenancePage() {
               onClick={() => {
                 if (item.label === "Dashboard") router.push("/dashboard");
                 if (item.label === "Inventory Maintenance") router.push("/inventory");
+                if (item.label === "Supplier Maintenance") router.push("/supplier");
+                if (item.label === "Sales Reports") router.push("/sales");
               }}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
                 item.active ? "text-indigo-700 font-semibold" : "text-gray-400 hover:text-gray-600"
