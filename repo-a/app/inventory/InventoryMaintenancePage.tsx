@@ -206,10 +206,10 @@ export default function InventoryMaintenancePage() {
             <div
               key={item.label}
               onClick={() => {
-                if (item.label === "Dashboard") router.push("/dashboard");
-                if (item.label === "Inventory Maintenance") router.push("/inventory");
-                if (item.label === "Supplier Maintenance") router.push("/supplier");
-            }}
+  if (item.label === "Dashboard") router.push("/dashboard");
+  if (item.label === "Inventory Maintenance") router.push("/inventory");
+  if (item.label === "Supplier Maintenance") router.push("/supplier");
+}}
             >
               <div className="relative flex items-center gap-2 w-full">
                 <span>{item.icon}</span>
