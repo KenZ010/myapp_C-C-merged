@@ -1,15 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PieChart, Pie, Cell, Tooltip } from "recharts";
+import { api } from "@/lib/api";
 
-const supplierData = [
-  { name: "ASOS Ridley High Waist", price: "$79.49", quantity: 82, amount: "$6,518.18" },
-  { name: "Marco Lightweight Shirt", price: "$128.50", quantity: 37, amount: "$4,754.50" },
-  { name: "Half Sleeve Shirt", price: "$39.99", quantity: 64, amount: "$2,559.36" },
-  { name: "Lightweight Jacket", price: "$20.00", quantity: 184, amount: "$3,680.00" },
-];
+type SupplierItem = {
+  code: string;
+  itemName: string;
+  supplierName: string;
+  contactNo: string;
+  lastOrdered: number | null;
+  status: string;
+};
+
+type Employee = {
+  id: number;
+  name: string;
+  role: string;
+  userStatus: string;
+  phone: string;
+};
 
 const inventoryData = [
   { name: "Soft Drinks", value: 47, color: "#60a5fa" },
@@ -58,7 +69,46 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("Daily");
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [suppliers, setSuppliers] = useState<SupplierItem[]>([]);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(true);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(true);
   const router = useRouter();
+
+  // Fetch suppliers
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      try {
+        setLoadingSuppliers(true);
+        const data = await api.getSuppliers();
+        setSuppliers(data);
+      } catch (err) {
+        console.error("Failed to fetch suppliers:", err);
+      } finally {
+        setLoadingSuppliers(false);
+      }
+    };
+    fetchSuppliers();
+  }, []);
+
+  // Fetch employees (CASHIER and STOCK_MANAGER only)
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        setLoadingEmployees(true);
+        const data = await api.getEmployees("");
+        const filtered = data.filter(
+          (emp: Employee) => emp.role === "CASHIER" || emp.role === "STOCK_MANAGER"
+        );
+        setEmployees(filtered);
+      } catch (err) {
+        console.error("Failed to fetch employees:", err);
+      } finally {
+        setLoadingEmployees(false);
+      }
+    };
+    fetchEmployees();
+  }, []);
 
   const navigate = (label: string) => {
     if (label === "Dashboard") router.push("/dashboard");
@@ -172,9 +222,46 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
+
+            {/* ✅ Account Management - Employees from DB */}
             <div className="md:col-span-4 bg-white rounded-2xl p-4 shadow-sm">
               <h2 className="font-bold text-gray-800 mb-3">Account Management</h2>
+              {loadingEmployees ? (
+                <p className="text-xs text-gray-400 text-center py-4">Loading employees...</p>
+              ) : employees.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-4">No employees found.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {employees.slice(0, 5).map((emp) => (
+                    <div key={emp.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs">
+                          {emp.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">{emp.name}</p>
+                          <p className="text-xs text-gray-400">{emp.phone}</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${emp.role === "CASHIER" ? "bg-blue-100 text-blue-600" : "bg-purple-100 text-purple-600"}`}>
+                          {emp.role}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs ${emp.userStatus === "ACTIVE" ? "bg-green-100 text-green-600" : "bg-yellow-100 text-yellow-600"}`}>
+                          {emp.userStatus}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {employees.length > 5 && (
+                    <button onClick={() => router.push("/accounts")} className="text-xs text-indigo-600 hover:underline mt-1">
+                      See all {employees.length} employees →
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
+
             <div className="md:col-span-3 bg-white rounded-2xl p-4 shadow-sm">
               <h2 className="font-bold text-gray-800 mb-3">Customer List</h2>
               <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
@@ -196,25 +283,41 @@ export default function DashboardPage() {
                 <thead>
                   <tr className="text-gray-400 text-xs border-b">
                     <th className="text-left pb-2">#</th>
-                    <th className="text-left pb-2">Name</th>
-                    <th className="text-right pb-2">Price</th>
-                    <th className="text-right pb-2">Qty</th>
-                    <th className="text-right pb-2">Amount</th>
+                    <th className="text-left pb-2">Item Name</th>
+                    <th className="text-left pb-2">Supplier</th>
+                    <th className="text-right pb-2">Last Ordered</th>
+                    <th className="text-right pb-2">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {supplierData.map((row, i) => (
-                    <tr key={i} className="border-b last:border-0 text-gray-600">
-                      <td className="py-2 text-gray-400">{i + 1}</td>
-                      <td className="py-2">{row.name}</td>
-                      <td className="py-2 text-right">{row.price}</td>
-                      <td className="py-2 text-right">{row.quantity}</td>
-                      <td className="py-2 text-right">{row.amount}</td>
-                    </tr>
-                  ))}
+                  {loadingSuppliers ? (
+                    <tr><td colSpan={5} className="py-4 text-center text-gray-400 text-xs">Loading...</td></tr>
+                  ) : suppliers.length === 0 ? (
+                    <tr><td colSpan={5} className="py-4 text-center text-gray-400 text-xs">No suppliers found.</td></tr>
+                  ) : (
+                    suppliers.slice(0, 5).map((row, i) => (
+                      <tr key={row.code} className="border-b last:border-0 text-gray-600">
+                        <td className="py-2 text-gray-400">{i + 1}</td>
+                        <td className="py-2">{row.itemName}</td>
+                        <td className="py-2">{row.supplierName}</td>
+                        <td className="py-2 text-right">{row.lastOrdered ?? "-"}</td>
+                        <td className="py-2 text-right">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${row.status === "ACTIVE" ? "bg-green-100 text-green-600" : "bg-yellow-100 text-yellow-600"}`}>
+                            {row.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
+              {suppliers.length > 5 && (
+                <button onClick={() => router.push("/supplier")} className="mt-3 text-xs text-indigo-600 hover:underline">
+                  See all {suppliers.length} suppliers →
+                </button>
+              )}
             </div>
+
             <div className="md:col-span-7 bg-white rounded-2xl p-4 shadow-sm">
               <h2 className="font-bold text-green-500 mb-3">Inventory Maintenances</h2>
               <div className="flex justify-center overflow-x-auto">
