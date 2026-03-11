@@ -10,12 +10,8 @@ export default function LoginPage() {
   const router = useRouter();
 
   const handleLogin = () => {
-    if (username && password) {
-      router.push("/dashboard");
-    } else {
-      alert("Please enter username and password.");
-    }
-  };
+  router.push("/dashboard");
+};
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
