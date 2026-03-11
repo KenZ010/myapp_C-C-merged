@@ -70,26 +70,16 @@ export default function DashboardPage() {
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
-
-      {/* SIDEBAR - desktop only */}
       <aside className="hidden md:flex w-52 bg-white flex-col py-6 px-4 border-r border-gray-100 shrink-0">
         <div className="text-center mb-10">
-          <p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide">
-            JULIETA SOFTDRINKS<br />STORE
-          </p>
+          <p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide">JULIETA SOFTDRINKS<br />STORE</p>
         </div>
         <nav className="flex flex-col gap-1">
           {navItems.map((item) => (
-            <div
-              key={item.label}
-              onClick={() => navigate(item.label)}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
-                item.active ? "text-indigo-700 font-semibold" : "text-gray-400 hover:text-gray-600"
-              }`}
-            >
+            <div key={item.label} onClick={() => navigate(item.label)}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${item.active ? "text-indigo-700 font-semibold" : "text-gray-400 hover:text-gray-600"}`}>
               <div className="relative flex items-center gap-2 w-full">
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
+                <span>{item.icon}</span><span>{item.label}</span>
                 {item.active && <div className="absolute -right-4 w-1 h-6 bg-green-500 rounded-full" />}
               </div>
             </div>
@@ -97,17 +87,14 @@ export default function DashboardPage() {
         </nav>
       </aside>
 
-      {/* MAIN */}
       <main className="flex-1 flex flex-col overflow-auto">
-
-        {/* HEADER */}
         <header className="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-100">
-          {/* Mobile menu button */}
           <button
-            className="md:hidden text-gray-600 text-xl mr-2"
+            className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300"
+            style={{ transform: showMobileMenu ? "rotate(90deg)" : "rotate(0deg)" }}
             onClick={() => setShowMobileMenu(!showMobileMenu)}
           >
-            ☰
+            {showMobileMenu ? "✕" : "☰"}
           </button>
           <h1 className="text-xl md:text-2xl font-bold text-indigo-900">Dashboard</h1>
           <div className="flex items-center gap-2 md:gap-3">
@@ -116,10 +103,8 @@ export default function DashboardPage() {
               <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" />
             </div>
             <div className="relative">
-              <button
-                onClick={() => setShowUserMenu(!showUserMenu)}
-                className={`flex items-center gap-2 md:gap-3 px-2 md:px-3 py-2 rounded-xl transition-colors ${showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"}`}
-              >
+              <button onClick={() => setShowUserMenu(!showUserMenu)}
+                className={`flex items-center gap-2 md:gap-3 px-2 md:px-3 py-2 rounded-xl transition-colors ${showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="https://i.pravatar.cc/40?img=8" alt="User" className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover" />
                 <div className="text-left hidden md:block">
@@ -141,31 +126,19 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {/* MOBILE MENU DRAWER */}
         {showMobileMenu && (
           <div className="md:hidden bg-white border-b border-gray-100 px-4 py-3 flex flex-col gap-1 z-40">
             {navItems.map((item) => (
-              <div
-                key={item.label}
-                onClick={() => navigate(item.label)}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${
-                  item.active ? "text-indigo-700 font-semibold" : "text-gray-500"
-                }`}
-              >
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
+              <div key={item.label} onClick={() => navigate(item.label)}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${item.active ? "text-indigo-700 font-semibold" : "text-gray-500"}`}>
+                <span>{item.icon}</span><span>{item.label}</span>
               </div>
             ))}
           </div>
         )}
 
-        {/* DASHBOARD CARDS */}
         <div className="flex-1 p-3 md:p-4 bg-green-50">
-
-          {/* ROW 1 */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-4">
-
-            {/* Sales Report */}
             <div className="md:col-span-5 bg-white rounded-2xl p-4 shadow-sm">
               <h2 className="font-bold text-gray-800 mb-3">Sales Report</h2>
               <div className="grid grid-cols-2 gap-3">
@@ -199,13 +172,9 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
-
-            {/* Account Management */}
             <div className="md:col-span-4 bg-white rounded-2xl p-4 shadow-sm">
               <h2 className="font-bold text-gray-800 mb-3">Account Management</h2>
             </div>
-
-            {/* Customer List */}
             <div className="md:col-span-3 bg-white rounded-2xl p-4 shadow-sm">
               <h2 className="font-bold text-gray-800 mb-3">Customer List</h2>
               <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
@@ -220,10 +189,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* ROW 2 */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-4">
-
-            {/* Supplier Information */}
             <div className="md:col-span-5 bg-white rounded-2xl p-4 shadow-sm overflow-x-auto">
               <h2 className="font-bold text-gray-800 mb-3">Supplier Information</h2>
               <table className="w-full text-sm min-w-max">
@@ -249,8 +215,6 @@ export default function DashboardPage() {
                 </tbody>
               </table>
             </div>
-
-            {/* Inventory Maintenances */}
             <div className="md:col-span-7 bg-white rounded-2xl p-4 shadow-sm">
               <h2 className="font-bold text-green-500 mb-3">Inventory Maintenances</h2>
               <div className="flex justify-center overflow-x-auto">
@@ -264,10 +228,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* ROW 3 */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-
-            {/* Product Maintenance */}
             <div className="md:col-span-7 bg-white rounded-2xl p-4 shadow-sm">
               <h2 className="font-bold text-gray-800 mb-3">Product Maintenance</h2>
               <div className="flex gap-3 overflow-x-auto pb-2">
@@ -280,8 +241,6 @@ export default function DashboardPage() {
                 ))}
               </div>
             </div>
-
-            {/* Transaction Logs */}
             <div className="md:col-span-5 bg-white rounded-2xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-bold text-gray-800">Transaction Logs</h2>
@@ -289,13 +248,8 @@ export default function DashboardPage() {
               </div>
               <div className="flex gap-2">
                 {["Daily", "Weekly", "Monthly"].map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                      activeTab === tab ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                    }`}
-                  >
+                  <button key={tab} onClick={() => setActiveTab(tab)}
+                    className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${activeTab === tab ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
                     {tab}
                   </button>
                 ))}

@@ -8,10 +8,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  // This lets us navigate to other pages
   const router = useRouter();
 
-  // When Log In is clicked, go to the dashboard page
   const handleLogin = () => {
     router.push("/dashboard");
   };
@@ -19,7 +17,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen w-full">
 
-      {/* LEFT SIDE - Green background with logo */}
+      {/* LEFT SIDE - Green background with logo (desktop only) */}
       <div
         className="hidden md:flex w-[55%] items-center justify-center relative"
         style={{
@@ -50,9 +48,19 @@ export default function LoginPage() {
       </div>
 
       {/* RIGHT SIDE - White background with login form */}
-      <div className="flex flex-1 items-center justify-center bg-white px-8">
-        <div className="w-full max-w-sm">
+      <div className="flex flex-1 items-center justify-center bg-white px-8 flex-col">
 
+        {/* Mobile logo */}
+        <div className="flex md:hidden flex-col items-center mb-8">
+          <div className="relative flex items-center justify-center rounded-full mb-2"
+            style={{ width: "120px", height: "120px", backgroundColor: "#F97316" }}>
+            <div className="absolute rounded-full bg-white" style={{ width: "85px", height: "85px" }} />
+            <span className="relative z-10 font-extrabold text-xl" style={{ color: "#2a9d8f", fontFamily: "Georgia, serif" }}>Julieta</span>
+          </div>
+          <p className="text-green-700 text-xs font-bold tracking-widest">SOFTDRINKS STORE</p>
+        </div>
+
+        <div className="w-full max-w-sm">
           <h1 className="text-3xl font-bold mb-6" style={{ color: "#1e1b4b" }}>Log In</h1>
 
           {/* Username Field */}
@@ -108,7 +116,6 @@ export default function LoginPage() {
           >
             Log In
           </button>
-
         </div>
       </div>
     </div>

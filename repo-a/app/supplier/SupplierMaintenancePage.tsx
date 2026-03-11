@@ -92,7 +92,13 @@ export default function SupplierMaintenancePage() {
 
       <main className="flex-1 flex flex-col overflow-auto">
         <header className="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-100">
-          <button className="md:hidden text-gray-600 text-xl mr-2" onClick={() => setShowMobileMenu(!showMobileMenu)}>☰</button>
+          <button
+            className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300"
+            style={{ transform: showMobileMenu ? "rotate(90deg)" : "rotate(0deg)" }}
+            onClick={() => setShowMobileMenu(!showMobileMenu)}
+          >
+            {showMobileMenu ? "✕" : "☰"}
+          </button>
           <h1 className="text-xl md:text-2xl font-bold text-gray-800">Supplier Maintenance</h1>
           <div className="flex items-center gap-2">
             <div className="relative"><span className="text-xl">🔔</span><div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" /></div>

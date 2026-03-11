@@ -107,8 +107,6 @@ export default function SalesReportsPage() {
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
-
-      {/* SIDEBAR - desktop */}
       <aside className="hidden md:flex w-52 bg-white flex-col py-6 px-4 border-r border-gray-100 shrink-0">
         <div className="text-center mb-10">
           <p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide">JULIETA SOFTDRINKS<br />STORE</p>
@@ -127,10 +125,14 @@ export default function SalesReportsPage() {
       </aside>
 
       <main className="flex-1 flex flex-col overflow-auto">
-
-        {/* HEADER */}
         <header className="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-100">
-          <button className="md:hidden text-gray-600 text-xl mr-2" onClick={() => setShowMobileMenu(!showMobileMenu)}>☰</button>
+          <button
+            className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300"
+            style={{ transform: showMobileMenu ? "rotate(90deg)" : "rotate(0deg)" }}
+            onClick={() => setShowMobileMenu(!showMobileMenu)}
+          >
+            {showMobileMenu ? "✕" : "☰"}
+          </button>
           <div>
             <h1 className="text-lg md:text-2xl font-bold text-gray-800">Sales & Inventory Reports</h1>
             <p className="text-xs text-gray-400">Administrator Dashboard</p>
@@ -155,7 +157,6 @@ export default function SalesReportsPage() {
           </div>
         </header>
 
-        {/* MOBILE MENU */}
         {showMobileMenu && (
           <div className="md:hidden bg-white border-b border-gray-100 px-4 py-3 flex flex-col gap-1 z-40">
             {navItems.map((item) => (
@@ -167,16 +168,12 @@ export default function SalesReportsPage() {
           </div>
         )}
 
-        {/* CONTENT */}
         <div className="flex-1 p-3 md:p-4 bg-green-50">
-
-          {/* TABS */}
           <div className="flex gap-2 mb-4">
             <button onClick={() => setActiveTab("sales")} className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-colors ${activeTab === "sales" ? "bg-blue-500 text-white" : "bg-white text-gray-500 border border-gray-200"}`}>📊 Sales Reports</button>
             <button onClick={() => setActiveTab("inventory")} className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-lg text-xs md:text-sm font-medium transition-colors ${activeTab === "inventory" ? "bg-blue-500 text-white" : "bg-white text-gray-500 border border-gray-200"}`}>📦 Inventory Reports</button>
           </div>
 
-          {/* SALES TAB */}
           {activeTab === "sales" && (
             <div className="flex flex-col gap-4">
               <div className="bg-white rounded-2xl p-4 shadow-sm">
@@ -188,8 +185,6 @@ export default function SalesReportsPage() {
                   ))}
                 </div>
               </div>
-
-              {/* Stat Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center justify-between">
                   <div><p className="text-xs text-gray-400">Total Revenue</p><p className="text-2xl font-bold text-gray-800">$201,353</p><p className="text-xs text-green-500">↑ 4.2%</p></div>
@@ -204,36 +199,28 @@ export default function SalesReportsPage() {
                   <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center text-purple-500 text-lg font-bold">$</div>
                 </div>
               </div>
-
-              {/* Revenue Trend */}
               <div className="bg-white rounded-2xl p-4 shadow-sm">
                 <h2 className="font-bold text-gray-800 mb-3">Revenue Trend</h2>
                 <ResponsiveContainer width="100%" height={200}>
                   <LineChart data={revenueData} margin={{ top: 5, right: 10, left: 0, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} angle={-15} textAnchor="end" />
-                    <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip />
+                    <YAxis tick={{ fontSize: 10 }} /><Tooltip />
                     <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} dot={false} name="Revenue ($)" />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-
-              {/* Transaction Volume */}
               <div className="bg-white rounded-2xl p-4 shadow-sm">
                 <h2 className="font-bold text-gray-800 mb-3">Transaction Volume</h2>
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={transactionData} margin={{ top: 5, right: 10, left: 0, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} angle={-15} textAnchor="end" />
-                    <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip />
+                    <YAxis tick={{ fontSize: 10 }} /><Tooltip />
                     <Bar dataKey="transactions" fill="#22c55e" radius={[3, 3, 0, 0]} name="Transactions" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-
-              {/* Top Selling */}
               <div className="bg-white rounded-2xl p-4 shadow-sm overflow-x-auto">
                 <h2 className="font-bold text-gray-800 mb-3">Top Selling Items</h2>
                 <table className="w-full text-sm min-w-max">
@@ -254,8 +241,6 @@ export default function SalesReportsPage() {
                   </tbody>
                 </table>
               </div>
-
-              {/* Unpopular */}
               <div className="bg-white rounded-2xl p-4 shadow-sm overflow-x-auto">
                 <h2 className="font-bold text-gray-800 mb-1">Unpopular Items <span className="text-red-400 text-sm">(Needs Attention)</span></h2>
                 <table className="w-full text-sm min-w-max">
@@ -279,24 +264,22 @@ export default function SalesReportsPage() {
             </div>
           )}
 
-          {/* INVENTORY TAB */}
           {activeTab === "inventory" && (
             <div className="flex flex-col gap-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center justify-between">
                   <div><p className="text-xs text-gray-400">Critical Stock</p><p className="text-3xl font-bold text-gray-800">0</p><p className="text-xs text-gray-400">Items need reorder</p></div>
-                  <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center text-yellow-500 text-lg">⚠️</div>
+                  <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center text-lg">⚠️</div>
                 </div>
                 <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center justify-between">
                   <div><p className="text-xs text-gray-400">Low Stock</p><p className="text-3xl font-bold text-gray-800">5</p><p className="text-xs text-gray-400">Monitor closely</p></div>
-                  <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center text-orange-500 text-lg">📦</div>
+                  <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center text-lg">📦</div>
                 </div>
                 <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center justify-between">
                   <div><p className="text-xs text-gray-400">Healthy Stock</p><p className="text-3xl font-bold text-gray-800">10</p><p className="text-xs text-gray-400">Adequate levels</p></div>
-                  <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center text-green-500 text-lg">✅</div>
+                  <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center text-lg">✅</div>
                 </div>
               </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-white rounded-2xl p-4 shadow-sm">
                   <h2 className="font-bold text-gray-800 mb-3">Top 5 Selling Items</h2>
@@ -329,7 +312,6 @@ export default function SalesReportsPage() {
                   </div>
                 </div>
               </div>
-
               <div className="bg-white rounded-2xl p-4 shadow-sm overflow-x-auto">
                 <h2 className="font-bold text-gray-800 mb-3">Complete Inventory Report</h2>
                 <table className="w-full text-sm min-w-max">
@@ -357,7 +339,6 @@ export default function SalesReportsPage() {
                   </tbody>
                 </table>
               </div>
-
               <div className="bg-white rounded-2xl p-4 shadow-sm overflow-x-auto">
                 <h2 className="font-bold text-gray-800 mb-3">📈 Top Selling Items - Inventory Details</h2>
                 <table className="w-full text-sm min-w-max">
