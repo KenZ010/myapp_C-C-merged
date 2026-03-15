@@ -2,22 +2,45 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const router = useRouter();
 
-  const handleLogin = () => {
-    router.push("/dashboard");
+  const handleLogin = async () => {
+    setError("");
+    setLoading(true);
+
+    try {
+      const data = await api.login(username, password);
+
+      if (data.token) {
+        // Save token and employee info
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("employee", JSON.stringify(data.employee));
+
+        // Redirect to dashboard
+        router.push("/dashboard");
+      } else {
+        setError(data.message || "Invalid credentials");
+      }
+    } catch (err) {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="flex min-h-screen w-full">
 
-      {/* LEFT SIDE - Green background with logo (desktop only) */}
+      {/* LEFT SIDE */}
       <div
         className="hidden md:flex w-[55%] items-center justify-center relative"
         style={{
@@ -47,7 +70,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* RIGHT SIDE - White background with login form */}
+      {/* RIGHT SIDE */}
       <div className="flex flex-1 items-center justify-center bg-white px-8 flex-col">
 
         {/* Mobile logo */}
@@ -62,6 +85,13 @@ export default function LoginPage() {
 
         <div className="w-full max-w-sm">
           <h1 className="text-3xl font-bold mb-6" style={{ color: "#1e1b4b" }}>Log In</h1>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">
+              {error}
+            </div>
+          )}
 
           {/* Username Field */}
           <div className="mb-4">
@@ -111,10 +141,11 @@ export default function LoginPage() {
           {/* Log In Button */}
           <button
             onClick={handleLogin}
+            disabled={loading}
             className="w-full py-3 rounded-lg text-white font-semibold text-base transition-opacity hover:opacity-90"
-            style={{ backgroundColor: "#4f46e5" }}
+            style={{ backgroundColor: loading ? "#a5b4fc" : "#4f46e5" }}
           >
-            Log In
+            {loading ? "Logging in..." : "Log In"}
           </button>
         </div>
       </div>
