@@ -42,11 +42,13 @@ export default function ProductManagementPage() {
   const [selectedSize, setSelectedSize] = useState("All");
   const [currentPage, setCurrentPage] = useState(1);
   const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [showModal, setShowModal] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: "", size: "1.5 L", price: 0, category: "Soft Drinks" });
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({ name: "", size: "1.5 L", price: 0, category: "Soft Drinks" });
+  const [addForm, setAddForm] = useState({ name: "", size: "1.5 L", price: 0, category: "Soft Drinks" });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showSizeDropdown, setShowSizeDropdown] = useState(false);
 
@@ -71,16 +73,34 @@ export default function ProductManagementPage() {
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  const openAddModal = () => { setForm({ name: "", size: "1.5 L", price: 0, category: "Soft Drinks" }); setEditingId(null); setShowModal(true); };
-  const openEditModal = (product: Product) => { setForm({ name: product.name, size: product.size, price: product.price, category: product.category }); setEditingId(product.id); setShowModal(true); };
-  const handleSave = () => {
-    if (!form.name) { alert("Product name is required."); return; }
-    if (editingId !== null) { setProducts((prev) => prev.map((p) => p.id === editingId ? { ...p, ...form } : p)); }
-    else { setProducts((prev) => [...prev, { id: Date.now(), ...form }]); }
-    setShowModal(false);
+  const handleCardClick = (product: Product) => {
+    setSelectedProduct(product);
+    setEditForm({ name: product.name, size: product.size, price: product.price, category: product.category });
+    setIsEditing(false);
+    setShowProductModal(true);
   };
-  const handleDelete = (id: number) => { setSelectedId(id); setShowDeleteConfirm(true); };
-  const confirmDelete = () => { setProducts((prev) => prev.filter((p) => p.id !== selectedId)); setShowDeleteConfirm(false); setSelectedId(null); };
+
+  const handleSaveEdit = () => {
+    if (!editForm.name) { alert("Product name is required."); return; }
+    setProducts((prev) => prev.map((p) => p.id === selectedProduct!.id ? { ...p, ...editForm } : p));
+    setSelectedProduct({ ...selectedProduct!, ...editForm });
+    setIsEditing(false);
+  };
+
+  const handleDeleteProduct = () => { setShowDeleteConfirm(true); };
+  const confirmDelete = () => {
+    setProducts((prev) => prev.filter((p) => p.id !== selectedProduct!.id));
+    setShowDeleteConfirm(false);
+    setShowProductModal(false);
+    setSelectedProduct(null);
+  };
+
+  const handleAddProduct = () => {
+    if (!addForm.name) { alert("Product name is required."); return; }
+    setProducts((prev) => [...prev, { id: Date.now(), ...addForm }]);
+    setShowAddModal(false);
+    setAddForm({ name: "", size: "1.5 L", price: 0, category: "Soft Drinks" });
+  };
 
   const getPageNumbers = () => {
     const pages = [];
@@ -164,7 +184,6 @@ export default function ProductManagementPage() {
 
             {/* Toolbar */}
             <div className="flex items-center gap-2 mb-6 flex-wrap">
-              {/* Search */}
               <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-40 md:w-48">
                 <span className="text-gray-400 text-sm">🔍</span>
                 <input type="text" placeholder="Search" value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} className="outline-none text-sm text-gray-700 w-full" />
@@ -206,22 +225,18 @@ export default function ProductManagementPage() {
                 )}
               </div>
 
-              <button onClick={openAddModal} className="ml-auto flex items-center gap-1 bg-gray-900 rounded-lg px-3 py-2 text-sm text-white hover:bg-gray-700">+ Add Product</button>
+              <button onClick={() => setShowAddModal(true)} className="ml-auto flex items-center gap-1 bg-gray-900 rounded-lg px-3 py-2 text-sm text-white hover:bg-gray-700">+ Add Product</button>
             </div>
 
             {/* Product Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
               {paginated.map((product) => (
-                <div key={product.id} className="flex flex-col rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow group relative">
+                <div key={product.id} onClick={() => handleCardClick(product)}
+                  className="flex flex-col rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow cursor-pointer">
                   <div className="w-full aspect-square bg-gray-200 rounded-t-2xl" />
                   <div className="p-2">
                     <p className="text-sm font-semibold text-gray-800">{product.name} <span className="text-gray-400 font-normal">{product.size}</span></p>
                     <p className="text-xs text-gray-500">₱{product.price}.00</p>
-                  </div>
-                  {/* Edit/Delete buttons on hover */}
-                  <div className="absolute top-2 right-2 hidden group-hover:flex gap-1">
-                    <button onClick={() => openEditModal(product)} className="bg-white rounded-lg p-1 shadow text-xs hover:bg-indigo-50">✏️</button>
-                    <button onClick={() => handleDelete(product.id)} className="bg-white rounded-lg p-1 shadow text-xs hover:bg-red-50">🗑️</button>
                   </div>
                 </div>
               ))}
@@ -229,10 +244,8 @@ export default function ProductManagementPage() {
 
             {/* Pagination */}
             <div className="flex items-center justify-center gap-1 flex-wrap">
-              <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1}
-                className="px-2 py-1 rounded-lg text-sm text-gray-500 hover:bg-gray-100 disabled:opacity-30">«</button>
-              <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}
-                className="px-2 py-1 rounded-lg text-sm text-gray-500 hover:bg-gray-100 disabled:opacity-30">‹</button>
+              <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-2 py-1 rounded-lg text-sm text-gray-500 hover:bg-gray-100 disabled:opacity-30">«</button>
+              <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 rounded-lg text-sm text-gray-500 hover:bg-gray-100 disabled:opacity-30">‹</button>
               {getPageNumbers().map((page, i) => (
                 page === "..." ? (
                   <span key={i} className="px-2 py-1 text-gray-400">...</span>
@@ -243,43 +256,106 @@ export default function ProductManagementPage() {
                   </button>
                 )
               ))}
-              <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-                className="px-2 py-1 rounded-lg text-sm text-gray-500 hover:bg-gray-100 disabled:opacity-30">›</button>
-              <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}
-                className="px-2 py-1 rounded-lg text-sm text-gray-500 hover:bg-gray-100 disabled:opacity-30">»</button>
+              <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-2 py-1 rounded-lg text-sm text-gray-500 hover:bg-gray-100 disabled:opacity-30">›</button>
+              <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} className="px-2 py-1 rounded-lg text-sm text-gray-500 hover:bg-gray-100 disabled:opacity-30">»</button>
             </div>
           </div>
         </div>
       </main>
 
-      {/* ADD/EDIT MODAL */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
-            <h2 className="text-lg font-bold text-gray-800 mb-4">{editingId !== null ? "Edit Product" : "Add New Product"}</h2>
-            <div className="flex flex-col gap-3">
-              <div><label className="text-xs font-medium text-gray-600">Product Name</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-              <div><label className="text-xs font-medium text-gray-600">Size</label>
-                <select value={form.size} onChange={(e) => setForm({ ...form, size: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                  {sizes.filter((s) => s !== "All").map((s) => <option key={s}>{s}</option>)}
-                </select>
-              </div>
-              <div><label className="text-xs font-medium text-gray-600">Price (₱)</label><input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-              <div><label className="text-xs font-medium text-gray-600">Category</label>
-                <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                  {categories.filter((c) => c !== "All").map((c) => <option key={c}>{c}</option>)}
-                </select>
+      {/* PRODUCT DETAIL / EDIT MODAL */}
+      {showProductModal && selectedProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+            <p className="text-xs text-gray-400 mb-3 font-medium">Product {isEditing ? "Editing" : "Details"}</p>
+            <div className="flex gap-4">
+              {/* Product image */}
+              <div className="w-32 h-32 bg-gray-200 rounded-xl shrink-0 flex items-center justify-center text-gray-400 text-xs">No Image</div>
+              {/* Product info */}
+              <div className="flex-1 flex flex-col gap-3">
+                {isEditing ? (
+                  <>
+                    <div>
+                      <p className="text-xs text-gray-400">Product Name</p>
+                      <input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400">Size</p>
+                      <select value={editForm.size} onChange={(e) => setEditForm({ ...editForm, size: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                        {sizes.filter((s) => s !== "All").map((s) => <option key={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400">Price (₱)</p>
+                      <input type="number" value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: Number(e.target.value) })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <p className="text-xs text-gray-400">Product Name</p>
+                      <p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedProduct.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400">Size</p>
+                      <p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedProduct.size}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400">Price</p>
+                      <p className="text-sm font-semibold text-gray-800 mt-0.5">₱{selectedProduct.price}.00</p>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
-            <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowModal(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={handleSave} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700">{editingId !== null ? "Save Changes" : "Add Product"}</button>
+
+            {/* Buttons */}
+            <div className="flex gap-2 mt-5 justify-end">
+              {isEditing ? (
+                <>
+                  <button onClick={() => setIsEditing(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+                  <button onClick={handleSaveEdit} className="px-4 py-2 bg-green-500 rounded-lg text-sm text-white font-medium hover:bg-green-600">Save</button>
+                </>
+              ) : (
+                <>
+                  <button onClick={handleDeleteProduct} className="flex items-center gap-1 px-4 py-2 border border-red-200 rounded-lg text-sm text-red-500 hover:bg-red-50">🗑️ Delete</button>
+                  <button onClick={() => setIsEditing(true)} className="flex items-center gap-1 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50">✏️ Edit</button>
+                  <button onClick={() => setShowProductModal(false)} className="px-4 py-2 bg-green-500 rounded-lg text-sm text-white font-medium hover:bg-green-600">Done</button>
+                </>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* DELETE MODAL */}
+      {/* ADD PRODUCT MODAL */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+            <h2 className="text-lg font-bold text-gray-800 mb-4">Add New Product</h2>
+            <div className="flex flex-col gap-3">
+              <div><label className="text-xs font-medium text-gray-600">Product Name</label><input value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+              <div><label className="text-xs font-medium text-gray-600">Size</label>
+                <select value={addForm.size} onChange={(e) => setAddForm({ ...addForm, size: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                  {sizes.filter((s) => s !== "All").map((s) => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+              <div><label className="text-xs font-medium text-gray-600">Price (₱)</label><input type="number" value={addForm.price} onChange={(e) => setAddForm({ ...addForm, price: Number(e.target.value) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+              <div><label className="text-xs font-medium text-gray-600">Category</label>
+                <select value={addForm.category} onChange={(e) => setAddForm({ ...addForm, category: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                  {categories.filter((c) => c !== "All").map((c) => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setShowAddModal(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleAddProduct} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700">Add Product</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRM MODAL */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
