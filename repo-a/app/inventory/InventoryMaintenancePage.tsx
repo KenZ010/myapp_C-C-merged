@@ -102,6 +102,7 @@ export default function InventoryMaintenancePage() {
     if (label === "Inventory Maintenance") router.push("/inventory");
     if (label === "Supplier Maintenance") router.push("/supplier");
     if (label === "Sales Reports") router.push("/sales");
+    if (label === "Transaction Logs") router.push("/transaction");
     setShowMobileMenu(false);
   };
 
