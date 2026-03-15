@@ -71,6 +71,7 @@ export default function SupplierMaintenancePage() {
     if (label === "Supplier Maintenance") router.push("/supplier");
     if (label === "Sales Reports") router.push("/sales");
     if (label === "Transaction Logs") router.push("/transaction");
+    if (label === "Product Management") router.push("/product");
     setShowMobileMenu(false);
   };
 
