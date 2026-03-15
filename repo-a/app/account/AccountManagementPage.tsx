@@ -225,7 +225,7 @@ export default function AccountManagementPage() {
                 <button className="hidden md:flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">📅 Date ▾</button>
                 <button onClick={exportEmp} className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">📤 Export</button>
                 {empSelected.length > 0 && <button onClick={() => setShowEmpDelete(true)} className="flex items-center gap-1 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-500 hover:bg-red-50">🗑️ Delete</button>}
-                <button onClick={openAddEmp} className="flex items-center gap-1 bg-gray-900 rounded-lg px-3 py-2 text-sm text-white hover:bg-gray-700">+ Add User</button>
+                <button onClick={openAddEmp} className="flex items-center gap-1 bg-gray-900 rounded-lg px-3 py-2 text-sm text-white hover:bg-gray-700">+ Add Employee</button>
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -293,7 +293,7 @@ export default function AccountManagementPage() {
                 <button className="hidden md:flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">📅 Date ▾</button>
                 <button onClick={exportCus} className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">📤 Export</button>
                 {cusSelected.length > 0 && <button onClick={() => setShowCusDelete(true)} className="flex items-center gap-1 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-500 hover:bg-red-50">🗑️ Delete</button>}
-                <button onClick={openAddCus} className="flex items-center gap-1 bg-gray-900 rounded-lg px-3 py-2 text-sm text-white hover:bg-gray-700">+ Add User</button>
+                <button onClick={openAddCus} className="flex items-center gap-1 bg-gray-900 rounded-lg px-3 py-2 text-sm text-white hover:bg-gray-700">+ Add Customer</button>
               </div>
             </div>
             <div className="overflow-x-auto">
