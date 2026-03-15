@@ -287,7 +287,7 @@ export default function ProductManagementPage() {
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Price (₱)</p>
-                      <input type="number" value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: Number(e.target.value) })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                      <input type="number" min="0" value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: Math.max(0, Number(e.target.value)) })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
                     </div>
                   </>
                 ) : (
@@ -340,7 +340,7 @@ export default function ProductManagementPage() {
                   {sizes.filter((s) => s !== "All").map((s) => <option key={s}>{s}</option>)}
                 </select>
               </div>
-              <div><label className="text-xs font-medium text-gray-600">Price (₱)</label><input type="number" value={addForm.price} onChange={(e) => setAddForm({ ...addForm, price: Number(e.target.value) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+              <div><label className="text-xs font-medium text-gray-600">Price (₱)</label><input type="number" min="0" value={addForm.price} onChange={(e) => setAddForm({ ...addForm, price: Math.max(0, Number(e.target.value)) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div><label className="text-xs font-medium text-gray-600">Category</label>
                 <select value={addForm.category} onChange={(e) => setAddForm({ ...addForm, category: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
                   {categories.filter((c) => c !== "All").map((c) => <option key={c}>{c}</option>)}

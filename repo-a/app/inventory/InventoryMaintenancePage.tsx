@@ -102,14 +102,11 @@ export default function InventoryMaintenancePage() {
     if (label === "Inventory Maintenance") router.push("/inventory");
     if (label === "Supplier Maintenance") router.push("/supplier");
     if (label === "Sales Reports") router.push("/sales");
-    if (label === "Transaction Logs") router.push("/transaction");
-    if (label === "Product Management") router.push("/product");
     setShowMobileMenu(false);
   };
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
-      {/* SIDEBAR - desktop */}
       <aside className="hidden md:flex w-52 bg-white flex-col py-6 px-4 border-r border-gray-100 shrink-0">
         <div className="text-center mb-10"><p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide">JULIETA SOFTDRINKS<br />STORE</p></div>
         <nav className="flex flex-col gap-1">
@@ -126,15 +123,14 @@ export default function InventoryMaintenancePage() {
       </aside>
 
       <main className="flex-1 flex flex-col overflow-auto">
-        {/* HEADER */}
         <header className="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-100">
           <button
-  className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300"
-  style={{ transform: showMobileMenu ? "rotate(90deg)" : "rotate(0deg)" }}
-  onClick={() => setShowMobileMenu(!showMobileMenu)}
->
-  {showMobileMenu ? "✕" : "☰"}
-</button>
+            className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300"
+            style={{ transform: showMobileMenu ? "rotate(90deg)" : "rotate(0deg)" }}
+            onClick={() => setShowMobileMenu(!showMobileMenu)}
+          >
+            {showMobileMenu ? "✕" : "☰"}
+          </button>
           <h1 className="text-xl md:text-2xl font-bold text-gray-800">Inventory Maintenance</h1>
           <div className="flex items-center gap-2">
             <div className="relative"><span className="text-xl">🔔</span><div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" /></div>
@@ -156,7 +152,6 @@ export default function InventoryMaintenancePage() {
           </div>
         </header>
 
-        {/* MOBILE MENU */}
         {showMobileMenu && (
           <div className="md:hidden bg-white border-b border-gray-100 px-4 py-3 flex flex-col gap-1 z-40">
             {navItems.map((item) => (
@@ -168,7 +163,6 @@ export default function InventoryMaintenancePage() {
           </div>
         )}
 
-        {/* CONTENT */}
         <div className="flex-1 p-3 md:p-4 bg-green-50">
           <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm mb-4">
             <div className="flex items-center gap-2 mb-4 flex-wrap">
@@ -249,8 +243,8 @@ export default function InventoryMaintenancePage() {
               <div><label className="text-xs font-medium text-gray-600">Product Name</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div><label className="text-xs font-medium text-gray-600">Date Acquired</label><input value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="e.g. 06 Nov 2025" /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs font-medium text-gray-600">Total Stock</label><input type="number" value={form.total} onChange={(e) => setForm({ ...form, total: Number(e.target.value) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-                <div><label className="text-xs font-medium text-gray-600">Remaining Stock</label><input type="number" value={form.remaining} onChange={(e) => setForm({ ...form, remaining: Number(e.target.value) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+                <div><label className="text-xs font-medium text-gray-600">Total Stock</label><input type="number" min="0" value={form.total} onChange={(e) => setForm({ ...form, total: Math.max(0, Number(e.target.value)) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+                <div><label className="text-xs font-medium text-gray-600">Remaining Stock</label><input type="number" min="0" value={form.remaining} onChange={(e) => setForm({ ...form, remaining: Math.max(0, Number(e.target.value)) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               </div>
               <div><label className="text-xs font-medium text-gray-600">Last Check By</label><input value={form.lastCheck} onChange={(e) => setForm({ ...form, lastCheck: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div>

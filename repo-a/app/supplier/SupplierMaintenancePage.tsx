@@ -70,8 +70,6 @@ export default function SupplierMaintenancePage() {
     if (label === "Inventory Maintenance") router.push("/inventory");
     if (label === "Supplier Maintenance") router.push("/supplier");
     if (label === "Sales Reports") router.push("/sales");
-    if (label === "Transaction Logs") router.push("/transaction");
-    if (label === "Product Management") router.push("/product");
     setShowMobileMenu(false);
   };
 
@@ -189,7 +187,7 @@ export default function SupplierMaintenancePage() {
               <div><label className="text-xs font-medium text-gray-600">Supplier Name</label><input value={form.supplierName} onChange={(e) => setForm({ ...form, supplierName: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div><label className="text-xs font-medium text-gray-600">Contact No.</label><input value={form.contactNo} onChange={(e) => setForm({ ...form, contactNo: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs font-medium text-gray-600">Last Ordered</label><input type="number" value={form.lastOrdered} onChange={(e) => setForm({ ...form, lastOrdered: Number(e.target.value) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+                <div><label className="text-xs font-medium text-gray-600">Last Ordered</label><input type="number" min="0" value={form.lastOrdered} onChange={(e) => setForm({ ...form, lastOrdered: Math.max(0, Number(e.target.value)) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
                 <div><label className="text-xs font-medium text-gray-600">Date Checked</label><input value={form.dateChecked} onChange={(e) => setForm({ ...form, dateChecked: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="e.g. 07 Apr 2030" /></div>
               </div>
               <div><label className="text-xs font-medium text-gray-600">Last Check By</label><input value={form.lastCheckBy} onChange={(e) => setForm({ ...form, lastCheckBy: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
