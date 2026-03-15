@@ -104,6 +104,7 @@ export default function SalesReportsPage() {
     if (label === "Sales Reports") router.push("/sales");
     if (label === "Transaction Logs") router.push("/transaction");
     if (label === "Product Management") router.push("/product");
+    if (label === "Account Management") router.push("/account");
     setShowMobileMenu(false);
   };
 
