@@ -6,7 +6,7 @@ import { PieChart, Pie, Cell, Tooltip } from "recharts";
 import { api } from "@/lib/api";
 
 type SupplierItem = {
-  code: string;
+  id: string;
   itemName: string;
   supplierName: string;
   contactNo: string;
@@ -15,7 +15,7 @@ type SupplierItem = {
 };
 
 type Employee = {
-  id: number;
+  id: string;
   name: string;
   role: string;
   userStatus: string;
@@ -299,7 +299,7 @@ export default function DashboardPage() {
                     <tr><td colSpan={5} className="py-4 text-center text-gray-400 text-xs">No suppliers found.</td></tr>
                   ) : (
                     suppliers.slice(0, 5).map((row, i) => (
-                      <tr key={row.code} className="border-b last:border-0 text-gray-600">
+                      <tr key={row.id} className="border-b last:border-0 text-gray-600">
                         <td className="py-2 text-gray-400">{i + 1}</td>
                         <td className="py-2">{row.itemName}</td>
                         <td className="py-2">{row.supplierName}</td>

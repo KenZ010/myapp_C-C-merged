@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 
 const navItems = [
   { label: "Dashboard", icon: "🏠" },
@@ -14,44 +15,34 @@ const navItems = [
 ];
 
 type Employee = {
-  id: number; name: string; email: string; username: string;
-  status: string; role: string; joinedDate: string; lastActive: string;
+  id: string;
+  name: string;
+  phone: string;
+  role: string;
+  userStatus: string;
+  createdAt: string;
 };
 
 type Customer = {
-  id: number; name: string; storeName: string; email: string;
-  status: string; joinedDate: string; username: string; address: string;
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  userStatus: string;
+  createdAt: string;
 };
 
 const statusColors: Record<string, string> = {
-  Active: "bg-green-500 text-white",
-  Inactive: "bg-gray-400 text-white",
-  Banned: "bg-red-500 text-white",
-  Pending: "bg-indigo-900 text-white",
-  Suspended: "bg-orange-400 text-white",
+  ACTIVE: "bg-green-500 text-white",
+  INACTIVE: "bg-gray-400 text-white",
+  SUSPENDED: "bg-orange-400 text-white",
 };
 
-const initialEmployees: Employee[] = [
-  { id: 1, name: "Ken Masilungan", email: "john.smith@gmail.com", username: "jonny77", status: "Active", role: "Inventory Manager", joinedDate: "March 12, 2023", lastActive: "1 minute ago" },
-  { id: 2, name: "Olivia Bennett", email: "ollyben@gmail.com", username: "olly659", status: "Inactive", role: "Inventory", joinedDate: "June 27, 2022", lastActive: "1 month ago" },
-  { id: 3, name: "Daniel Warren", email: "dwarren3@gmail.com", username: "dwarren3", status: "Banned", role: "Cashier", joinedDate: "January 8, 2024", lastActive: "4 days ago" },
-  { id: 4, name: "Chloe Hayes", email: "chloehhye@gmail.com", username: "chloehh", status: "Pending", role: "Guest", joinedDate: "October 5, 2021", lastActive: "10 days ago" },
-  { id: 5, name: "Marcus Reed", email: "reeds777@gmail.com", username: "reeds7", status: "Suspended", role: "Cashier", joinedDate: "February 19, 2023", lastActive: "3 months ago" },
-];
-
-const initialCustomers: Customer[] = [
-  { id: 1, name: "Ray Teodoro", storeName: "Teodoro Store", email: "john.smith@gmail.com", status: "Active", joinedDate: "March 12, 2023", username: "jonny77", address: "Meow meow street" },
-  { id: 2, name: "Olivia Bennett", storeName: "Olivas Store", email: "ollyben@gmail.com", status: "Inactive", joinedDate: "June 27, 2022", username: "olly659", address: "Meow meow street" },
-  { id: 3, name: "Daniel Warren", storeName: "Minimili Store", email: "dwarren3@gmail.com", status: "Banned", joinedDate: "January 8, 2024", username: "dwarren3", address: "Meow meow street" },
-  { id: 4, name: "Chloe Hayes", storeName: "Chlo Store", email: "chloehhye@gmail.com", status: "Pending", joinedDate: "October 5, 2021", username: "chloehh", address: "Meow meow street" },
-  { id: 5, name: "Marcus Reed", storeName: "Marcus Store", email: "reeds777@gmail.com", status: "Suspended", joinedDate: "February 19, 2023", username: "reeds7", address: "Meow meow street" },
-];
-
-const emptyEmployee = { name: "", email: "", username: "", status: "Active", role: "Cashier", joinedDate: "", lastActive: "Just now" };
-const emptyCustomer = { name: "", storeName: "", email: "", status: "Active", joinedDate: "", username: "", address: "" };
+const emptyEmployee = { name: "", phone: "", password: "", role: "CASHIER", userStatus: "ACTIVE" };
+const emptyCustomer = { name: "", email: "", phone: "", address: "", password: "", userStatus: "ACTIVE" };
 const ROWS_OPTIONS = [5, 10, 20];
 
-// Pagination component OUTSIDE main component to fix ESLint error
 function Pagination({ page, total, onChange }: { page: number; total: number; onChange: (p: number) => void }) {
   return (
     <div className="flex items-center gap-1">
@@ -73,26 +64,59 @@ export default function AccountManagementPage() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   // Employee state
-  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loadingEmp, setLoadingEmp] = useState(true);
   const [empSearch, setEmpSearch] = useState("");
   const [empPage, setEmpPage] = useState(1);
   const [empRows, setEmpRows] = useState(10);
-  const [empSelected, setEmpSelected] = useState<number[]>([]);
+  const [empSelected, setEmpSelected] = useState<string[]>([]);
   const [showEmpModal, setShowEmpModal] = useState(false);
   const [empForm, setEmpForm] = useState(emptyEmployee);
-  const [empEditingId, setEmpEditingId] = useState<number | null>(null);
+  const [empEditingId, setEmpEditingId] = useState<string | null>(null);
   const [showEmpDelete, setShowEmpDelete] = useState(false);
 
   // Customer state
-  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loadingCus, setLoadingCus] = useState(true);
   const [cusSearch, setCusSearch] = useState("");
   const [cusPage, setCusPage] = useState(1);
   const [cusRows, setCusRows] = useState(10);
-  const [cusSelected, setCusSelected] = useState<number[]>([]);
+  const [cusSelected, setCusSelected] = useState<string[]>([]);
   const [showCusModal, setShowCusModal] = useState(false);
   const [cusForm, setCusForm] = useState(emptyCustomer);
-  const [cusEditingId, setCusEditingId] = useState<number | null>(null);
+  const [cusEditingId, setCusEditingId] = useState<string | null>(null);
   const [showCusDelete, setShowCusDelete] = useState(false);
+
+  // Fetch employees
+  const fetchEmployees = async () => {
+    try {
+      setLoadingEmp(true);
+      const data = await api.getEmployees("");
+      setEmployees(data);
+    } catch (err) {
+      console.error("Failed to fetch employees:", err);
+    } finally {
+      setLoadingEmp(false);
+    }
+  };
+
+  // Fetch customers
+  const fetchCustomers = async () => {
+    try {
+      setLoadingCus(true);
+      const data = await api.getCustomers();
+      setCustomers(data);
+    } catch (err) {
+      console.error("Failed to fetch customers:", err);
+    } finally {
+      setLoadingCus(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEmployees();
+    fetchCustomers();
+  }, []);
 
   const navigate = (label: string) => {
     if (label === "Dashboard") router.push("/dashboard");
@@ -106,48 +130,108 @@ export default function AccountManagementPage() {
   };
 
   // Employee helpers
-  const filteredEmp = employees.filter((e) => e.name.toLowerCase().includes(empSearch.toLowerCase()) || e.email.toLowerCase().includes(empSearch.toLowerCase()));
+  const filteredEmp = employees.filter((e) =>
+    e.name.toLowerCase().includes(empSearch.toLowerCase()) ||
+    e.phone.toLowerCase().includes(empSearch.toLowerCase())
+  );
   const totalEmpPages = Math.max(1, Math.ceil(filteredEmp.length / empRows));
   const paginatedEmp = filteredEmp.slice((empPage - 1) * empRows, empPage * empRows);
-  const toggleEmp = (id: number) => setEmpSelected((p) => p.includes(id) ? p.filter((i) => i !== id) : [...p, id]);
+  const toggleEmp = (id: string) => setEmpSelected((p) => p.includes(id) ? p.filter((i) => i !== id) : [...p, id]);
   const toggleAllEmp = () => empSelected.length === paginatedEmp.length ? setEmpSelected([]) : setEmpSelected(paginatedEmp.map((e) => e.id));
+
   const openAddEmp = () => { setEmpForm(emptyEmployee); setEmpEditingId(null); setShowEmpModal(true); };
-  const openEditEmp = (emp: Employee) => { setEmpForm({ name: emp.name, email: emp.email, username: emp.username, status: emp.status, role: emp.role, joinedDate: emp.joinedDate, lastActive: emp.lastActive }); setEmpEditingId(emp.id); setShowEmpModal(true); };
-  const saveEmp = () => {
-    if (!empForm.name) { alert("Full name is required."); return; }
-    if (empEditingId !== null) { setEmployees((p) => p.map((e) => e.id === empEditingId ? { ...e, ...empForm } : e)); }
-    else { setEmployees((p) => [...p, { id: Date.now(), ...empForm }]); }
-    setShowEmpModal(false);
+  const openEditEmp = (emp: Employee) => {
+    setEmpForm({ name: emp.name, phone: emp.phone, password: "", role: emp.role, userStatus: emp.userStatus });
+    setEmpEditingId(emp.id);
+    setShowEmpModal(true);
   };
-  const deleteEmp = () => { setEmployees((p) => p.filter((e) => !empSelected.includes(e.id))); setEmpSelected([]); setShowEmpDelete(false); };
+
+  const saveEmp = async () => {
+    if (!empForm.name) { alert("Full name is required."); return; }
+    try {
+      if (empEditingId !== null) {
+        await api.updateEmployee(empEditingId, empForm);
+      } else {
+        await api.createEmployee(empForm, "");
+      }
+      await fetchEmployees();
+      setShowEmpModal(false);
+      setEmpSelected([]);
+    } catch (err) {
+      console.error("Failed to save employee:", err);
+    }
+  };
+
+  const deleteEmp = async () => {
+    try {
+      await Promise.all(empSelected.map((id) => api.deleteEmployee(id)));
+      await fetchEmployees();
+      setEmpSelected([]);
+      setShowEmpDelete(false);
+    } catch (err) {
+      console.error("Failed to delete employee:", err);
+    }
+  };
+
   const exportEmp = () => {
-    const headers = ["Full Name", "Email", "Username", "Status", "Role", "Joined Date", "Last Active"];
-    const rows = employees.map((e) => [e.name, e.email, e.username, e.status, e.role, e.joinedDate, e.lastActive]);
+    const headers = ["ID", "Full Name", "Phone", "Role", "Status", "Created At"];
+    const rows = employees.map((e) => [e.id, e.name, e.phone, e.role, e.userStatus, e.createdAt]);
     const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = "employees.csv"; a.click(); URL.revokeObjectURL(url);
   };
 
   // Customer helpers
-  const filteredCus = customers.filter((c) => c.name.toLowerCase().includes(cusSearch.toLowerCase()) || c.email.toLowerCase().includes(cusSearch.toLowerCase()));
+  const filteredCus = customers.filter((c) =>
+    c.name.toLowerCase().includes(cusSearch.toLowerCase()) ||
+    (c.email && c.email.toLowerCase().includes(cusSearch.toLowerCase()))
+  );
   const totalCusPages = Math.max(1, Math.ceil(filteredCus.length / cusRows));
   const paginatedCus = filteredCus.slice((cusPage - 1) * cusRows, cusPage * cusRows);
-  const toggleCus = (id: number) => setCusSelected((p) => p.includes(id) ? p.filter((i) => i !== id) : [...p, id]);
+  const toggleCus = (id: string) => setCusSelected((p) => p.includes(id) ? p.filter((i) => i !== id) : [...p, id]);
   const toggleAllCus = () => cusSelected.length === paginatedCus.length ? setCusSelected([]) : setCusSelected(paginatedCus.map((c) => c.id));
+
   const openAddCus = () => { setCusForm(emptyCustomer); setCusEditingId(null); setShowCusModal(true); };
-  const openEditCus = (cus: Customer) => { setCusForm({ name: cus.name, storeName: cus.storeName, email: cus.email, status: cus.status, joinedDate: cus.joinedDate, username: cus.username, address: cus.address }); setCusEditingId(cus.id); setShowCusModal(true); };
-  const saveCus = () => {
-    if (!cusForm.name) { alert("Full name is required."); return; }
-    if (cusEditingId !== null) { setCustomers((p) => p.map((c) => c.id === cusEditingId ? { ...c, ...cusForm } : c)); }
-    else { setCustomers((p) => [...p, { id: Date.now(), ...cusForm }]); }
-    setShowCusModal(false);
+  const openEditCus = (cus: Customer) => {
+    setCusForm({ name: cus.name, email: cus.email || "", phone: cus.phone || "", address: cus.address || "", password: "", userStatus: cus.userStatus });
+    setCusEditingId(cus.id);
+    setShowCusModal(true);
   };
-  const deleteCus = () => { setCustomers((p) => p.filter((c) => !cusSelected.includes(c.id))); setCusSelected([]); setShowCusDelete(false); };
+
+  const saveCus = async () => {
+    if (!cusForm.name) { alert("Full name is required."); return; }
+    try {
+      if (cusEditingId !== null) {
+        await api.updateCustomer(cusEditingId, cusForm);
+      } else {
+        await api.createCustomer(cusForm);
+      }
+      await fetchCustomers();
+      setShowCusModal(false);
+      setCusSelected([]);
+    } catch (err) {
+      console.error("Failed to save customer:", err);
+    }
+  };
+
+  const deleteCus = async () => {
+    try {
+      await Promise.all(cusSelected.map((id) => api.deleteCustomer(id)));
+      await fetchCustomers();
+      setCusSelected([]);
+      setShowCusDelete(false);
+    } catch (err) {
+      console.error("Failed to delete customer:", err);
+    }
+  };
+
   const exportCus = () => {
-    const headers = ["Full Name", "Store Name", "Email", "Status", "Joined Date", "Username", "Address"];
-    const rows = customers.map((c) => [c.name, c.storeName, c.email, c.status, c.joinedDate, c.username, c.address]);
+    const headers = ["ID", "Full Name", "Email", "Phone", "Address", "Status", "Created At"];
+    const rows = customers.map((c) => [c.id, c.name, c.email, c.phone, c.address, c.userStatus, c.createdAt]);
     const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = "customers.csv"; a.click(); URL.revokeObjectURL(url);
   };
 
@@ -170,11 +254,7 @@ export default function AccountManagementPage() {
 
       <main className="flex-1 flex flex-col overflow-auto">
         <header className="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-100">
-          <button
-            className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300"
-            style={{ transform: showMobileMenu ? "rotate(90deg)" : "rotate(0deg)" }}
-            onClick={() => setShowMobileMenu(!showMobileMenu)}
-          >
+          <button className="md:hidden text-gray-600 text-xl mr-2" onClick={() => setShowMobileMenu(!showMobileMenu)}>
             {showMobileMenu ? "✕" : "☰"}
           </button>
           <h1 className="text-xl md:text-2xl font-bold text-gray-800">Account Management</h1>
@@ -220,9 +300,6 @@ export default function AccountManagementPage() {
                   <span className="text-gray-400 text-sm">🔍</span>
                   <input type="text" placeholder="Search" value={empSearch} onChange={(e) => { setEmpSearch(e.target.value); setEmpPage(1); }} className="outline-none text-sm text-gray-700 w-full" />
                 </div>
-                <button className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">👤 Role ▾</button>
-                <button className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">🔖 Status ▾</button>
-                <button className="hidden md:flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">📅 Date ▾</button>
                 <button onClick={exportEmp} className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">📤 Export</button>
                 {empSelected.length > 0 && <button onClick={() => setShowEmpDelete(true)} className="flex items-center gap-1 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-500 hover:bg-red-50">🗑️ Delete</button>}
                 <button onClick={openAddEmp} className="flex items-center gap-1 bg-gray-900 rounded-lg px-3 py-2 text-sm text-white hover:bg-gray-700">+ Add Employee</button>
@@ -233,37 +310,54 @@ export default function AccountManagementPage() {
                 <thead>
                   <tr className="bg-indigo-900 text-white text-xs">
                     <th className="p-3 text-left w-8"><input type="checkbox" onChange={toggleAllEmp} checked={empSelected.length === paginatedEmp.length && paginatedEmp.length > 0} /></th>
-                    <th className="p-3 text-left">Full Name ↕</th><th className="p-3 text-left">Email ↕</th>
-                    <th className="p-3 text-left">Username ↕</th><th className="p-3 text-left">Status ↕</th>
-                    <th className="p-3 text-left">Role ↕</th><th className="p-3 text-left">Joined Date ↕</th>
-                    <th className="p-3 text-left">Last Active ↕</th><th className="p-3 text-left">Actions</th>
+                    <th className="p-3 text-left">ID</th>
+                    <th className="p-3 text-left">Full Name</th>
+                    <th className="p-3 text-left">Phone</th>
+                    <th className="p-3 text-left">Role</th>
+                    <th className="p-3 text-left">Status</th>
+                    <th className="p-3 text-left">Created At</th>
+                    <th className="p-3 text-left">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedEmp.map((emp) => (
-                    <tr key={emp.id} className={`border-b border-gray-100 hover:bg-gray-50 ${empSelected.includes(emp.id) ? "bg-indigo-50" : ""}`}>
-                      <td className="p-3"><input type="checkbox" checked={empSelected.includes(emp.id)} onChange={() => toggleEmp(emp.id)} /></td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={`https://i.pravatar.cc/28?u=${emp.id}`} alt={emp.name} className="w-7 h-7 rounded-full" />
-                          <span className="text-gray-700">{emp.name}</span>
-                        </div>
-                      </td>
-                      <td className="p-3 text-gray-500">{emp.email}</td>
-                      <td className="p-3 text-gray-500">{emp.username}</td>
-                      <td className="p-3"><span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[emp.status] || "bg-gray-200 text-gray-600"}`}>{emp.status}</span></td>
-                      <td className="p-3 text-gray-700">{emp.role}</td>
-                      <td className="p-3 text-gray-500">{emp.joinedDate}</td>
-                      <td className="p-3 text-gray-500">{emp.lastActive}</td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => openEditEmp(emp)} className="text-gray-400 hover:text-indigo-600">✏️</button>
-                          <button onClick={() => { setEmpSelected([emp.id]); setShowEmpDelete(true); }} className="text-gray-400 hover:text-red-500">🗑️</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {loadingEmp ? (
+                    <tr><td colSpan={8} className="p-6 text-center text-gray-400">Loading employees...</td></tr>
+                  ) : paginatedEmp.length === 0 ? (
+                    <tr><td colSpan={8} className="p-6 text-center text-gray-400">No employees found.</td></tr>
+                  ) : (
+                    paginatedEmp.map((emp) => (
+                      <tr key={emp.id} className={`border-b border-gray-100 hover:bg-gray-50 ${empSelected.includes(emp.id) ? "bg-indigo-50" : ""}`}>
+                        <td className="p-3"><input type="checkbox" checked={empSelected.includes(emp.id)} onChange={() => toggleEmp(emp.id)} /></td>
+                        <td className="p-3 text-gray-500 text-xs">{emp.id}</td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs">
+                              {emp.name.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-gray-700">{emp.name}</span>
+                          </div>
+                        </td>
+                        <td className="p-3 text-gray-500">{emp.phone}</td>
+                        <td className="p-3">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${emp.role === "CASHIER" ? "bg-blue-100 text-blue-600" : emp.role === "STOCK_MANAGER" ? "bg-purple-100 text-purple-600" : "bg-red-100 text-red-600"}`}>
+                            {emp.role}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[emp.userStatus] || "bg-gray-200 text-gray-600"}`}>
+                            {emp.userStatus}
+                          </span>
+                        </td>
+                        <td className="p-3 text-gray-500">{new Date(emp.createdAt).toLocaleDateString()}</td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => openEditEmp(emp)} className="text-gray-400 hover:text-indigo-600">✏️</button>
+                            <button onClick={() => { setEmpSelected([emp.id]); setShowEmpDelete(true); }} className="text-gray-400 hover:text-red-500">🗑️</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -288,9 +382,6 @@ export default function AccountManagementPage() {
                   <span className="text-gray-400 text-sm">🔍</span>
                   <input type="text" placeholder="Search" value={cusSearch} onChange={(e) => { setCusSearch(e.target.value); setCusPage(1); }} className="outline-none text-sm text-gray-700 w-full" />
                 </div>
-                <button className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">👤 Role ▾</button>
-                <button className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">🔖 Status ▾</button>
-                <button className="hidden md:flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">📅 Date ▾</button>
                 <button onClick={exportCus} className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">📤 Export</button>
                 {cusSelected.length > 0 && <button onClick={() => setShowCusDelete(true)} className="flex items-center gap-1 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-500 hover:bg-red-50">🗑️ Delete</button>}
                 <button onClick={openAddCus} className="flex items-center gap-1 bg-gray-900 rounded-lg px-3 py-2 text-sm text-white hover:bg-gray-700">+ Add Customer</button>
@@ -301,37 +392,52 @@ export default function AccountManagementPage() {
                 <thead>
                   <tr className="bg-indigo-900 text-white text-xs">
                     <th className="p-3 text-left w-8"><input type="checkbox" onChange={toggleAllCus} checked={cusSelected.length === paginatedCus.length && paginatedCus.length > 0} /></th>
-                    <th className="p-3 text-left">Full Name ↕</th><th className="p-3 text-left">Store Name ↕</th>
-                    <th className="p-3 text-left">Email ↕</th><th className="p-3 text-left">Status ↕</th>
-                    <th className="p-3 text-left">Joined Date ↕</th><th className="p-3 text-left">Username ↕</th>
-                    <th className="p-3 text-left">Address ↕</th><th className="p-3 text-left">Actions</th>
+                    <th className="p-3 text-left">ID</th>
+                    <th className="p-3 text-left">Full Name</th>
+                    <th className="p-3 text-left">Email</th>
+                    <th className="p-3 text-left">Phone</th>
+                    <th className="p-3 text-left">Address</th>
+                    <th className="p-3 text-left">Status</th>
+                    <th className="p-3 text-left">Created At</th>
+                    <th className="p-3 text-left">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedCus.map((cus) => (
-                    <tr key={cus.id} className={`border-b border-gray-100 hover:bg-gray-50 ${cusSelected.includes(cus.id) ? "bg-indigo-50" : ""}`}>
-                      <td className="p-3"><input type="checkbox" checked={cusSelected.includes(cus.id)} onChange={() => toggleCus(cus.id)} /></td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={`https://i.pravatar.cc/28?u=c${cus.id}`} alt={cus.name} className="w-7 h-7 rounded-full" />
-                          <span className="text-gray-700">{cus.name}</span>
-                        </div>
-                      </td>
-                      <td className="p-3 text-gray-500">{cus.storeName}</td>
-                      <td className="p-3 text-gray-500">{cus.email}</td>
-                      <td className="p-3"><span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[cus.status] || "bg-gray-200 text-gray-600"}`}>{cus.status}</span></td>
-                      <td className="p-3 text-gray-500">{cus.joinedDate}</td>
-                      <td className="p-3 text-gray-500">{cus.username}</td>
-                      <td className="p-3 text-gray-500">{cus.address}</td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => openEditCus(cus)} className="text-gray-400 hover:text-indigo-600">✏️</button>
-                          <button onClick={() => { setCusSelected([cus.id]); setShowCusDelete(true); }} className="text-gray-400 hover:text-red-500">🗑️</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {loadingCus ? (
+                    <tr><td colSpan={9} className="p-6 text-center text-gray-400">Loading customers...</td></tr>
+                  ) : paginatedCus.length === 0 ? (
+                    <tr><td colSpan={9} className="p-6 text-center text-gray-400">No customers found.</td></tr>
+                  ) : (
+                    paginatedCus.map((cus) => (
+                      <tr key={cus.id} className={`border-b border-gray-100 hover:bg-gray-50 ${cusSelected.includes(cus.id) ? "bg-indigo-50" : ""}`}>
+                        <td className="p-3"><input type="checkbox" checked={cusSelected.includes(cus.id)} onChange={() => toggleCus(cus.id)} /></td>
+                        <td className="p-3 text-gray-500 text-xs">{cus.id}</td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs">
+                              {cus.name.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-gray-700">{cus.name}</span>
+                          </div>
+                        </td>
+                        <td className="p-3 text-gray-500">{cus.email ?? "-"}</td>
+                        <td className="p-3 text-gray-500">{cus.phone ?? "-"}</td>
+                        <td className="p-3 text-gray-500">{cus.address ?? "-"}</td>
+                        <td className="p-3">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[cus.userStatus] || "bg-gray-200 text-gray-600"}`}>
+                            {cus.userStatus}
+                          </span>
+                        </td>
+                        <td className="p-3 text-gray-500">{new Date(cus.createdAt).toLocaleDateString()}</td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => openEditCus(cus)} className="text-gray-400 hover:text-indigo-600">✏️</button>
+                            <button onClick={() => { setCusSelected([cus.id]); setShowCusDelete(true); }} className="text-gray-400 hover:text-red-500">🗑️</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -356,19 +462,26 @@ export default function AccountManagementPage() {
             <h2 className="text-lg font-bold text-gray-800 mb-4">{empEditingId !== null ? "Edit Employee" : "Add New Employee"}</h2>
             <div className="flex flex-col gap-3">
               <div><label className="text-xs font-medium text-gray-600">Full Name</label><input value={empForm.name} onChange={(e) => setEmpForm({ ...empForm, name: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-              <div><label className="text-xs font-medium text-gray-600">Email</label><input value={empForm.email} onChange={(e) => setEmpForm({ ...empForm, email: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-              <div><label className="text-xs font-medium text-gray-600">Username</label><input value={empForm.username} onChange={(e) => setEmpForm({ ...empForm, username: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+              <div><label className="text-xs font-medium text-gray-600">Phone</label><input value={empForm.phone} onChange={(e) => setEmpForm({ ...empForm, phone: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+              {empEditingId === null && (
+                <div><label className="text-xs font-medium text-gray-600">Password <span className="text-red-400">(min 8 characters)</span></label>
+                  <input type="password" value={empForm.password} onChange={(e) => setEmpForm({ ...empForm, password: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                </div>
+              )}
               <div><label className="text-xs font-medium text-gray-600">Role</label>
                 <select value={empForm.role} onChange={(e) => setEmpForm({ ...empForm, role: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                  {["Cashier", "Inventory Manager", "Inventory", "Guest"].map((r) => <option key={r}>{r}</option>)}
+                  <option value="CASHIER">CASHIER</option>
+                  <option value="STOCK_MANAGER">STOCK_MANAGER</option>
+                  <option value="ADMIN">ADMIN</option>
                 </select>
               </div>
               <div><label className="text-xs font-medium text-gray-600">Status</label>
-                <select value={empForm.status} onChange={(e) => setEmpForm({ ...empForm, status: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                  {["Active", "Inactive", "Banned", "Pending", "Suspended"].map((s) => <option key={s}>{s}</option>)}
+                <select value={empForm.userStatus} onChange={(e) => setEmpForm({ ...empForm, userStatus: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="INACTIVE">INACTIVE</option>
+                  <option value="SUSPENDED">SUSPENDED</option>
                 </select>
               </div>
-              <div><label className="text-xs font-medium text-gray-600">Joined Date</label><input value={empForm.joinedDate} onChange={(e) => setEmpForm({ ...empForm, joinedDate: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="e.g. March 12, 2023" /></div>
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowEmpModal(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
@@ -385,16 +498,21 @@ export default function AccountManagementPage() {
             <h2 className="text-lg font-bold text-gray-800 mb-4">{cusEditingId !== null ? "Edit Customer" : "Add New Customer"}</h2>
             <div className="flex flex-col gap-3">
               <div><label className="text-xs font-medium text-gray-600">Full Name</label><input value={cusForm.name} onChange={(e) => setCusForm({ ...cusForm, name: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-              <div><label className="text-xs font-medium text-gray-600">Store Name</label><input value={cusForm.storeName} onChange={(e) => setCusForm({ ...cusForm, storeName: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div><label className="text-xs font-medium text-gray-600">Email</label><input value={cusForm.email} onChange={(e) => setCusForm({ ...cusForm, email: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-              <div><label className="text-xs font-medium text-gray-600">Username</label><input value={cusForm.username} onChange={(e) => setCusForm({ ...cusForm, username: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+              <div><label className="text-xs font-medium text-gray-600">Phone</label><input value={cusForm.phone} onChange={(e) => setCusForm({ ...cusForm, phone: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div><label className="text-xs font-medium text-gray-600">Address</label><input value={cusForm.address} onChange={(e) => setCusForm({ ...cusForm, address: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+              {cusEditingId === null && (
+                <div><label className="text-xs font-medium text-gray-600">Password <span className="text-red-400">(min 8 characters)</span></label>
+                  <input type="password" value={cusForm.password} onChange={(e) => setCusForm({ ...cusForm, password: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                </div>
+              )}
               <div><label className="text-xs font-medium text-gray-600">Status</label>
-                <select value={cusForm.status} onChange={(e) => setCusForm({ ...cusForm, status: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                  {["Active", "Inactive", "Banned", "Pending", "Suspended"].map((s) => <option key={s}>{s}</option>)}
+                <select value={cusForm.userStatus} onChange={(e) => setCusForm({ ...cusForm, userStatus: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="INACTIVE">INACTIVE</option>
+                  <option value="SUSPENDED">SUSPENDED</option>
                 </select>
               </div>
-              <div><label className="text-xs font-medium text-gray-600">Joined Date</label><input value={cusForm.joinedDate} onChange={(e) => setCusForm({ ...cusForm, joinedDate: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="e.g. March 12, 2023" /></div>
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowCusModal(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
