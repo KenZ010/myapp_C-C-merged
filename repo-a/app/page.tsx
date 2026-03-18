@@ -14,28 +14,30 @@ export default function LoginPage() {
   const router = useRouter();
 
   const handleLogin = async () => {
-    setError("");
-    setLoading(true);
+  setError("");
+  setLoading(true);
 
-    try {
-      const data = await api.login(username, password);
+  try {
+    const data = await api.login(username, password);
 
-      if (data.token) {
-        // Save token and employee info
-        localStorage.setItem("token", data.token);
-        localStorage.setItem("employee", JSON.stringify(data.employee));
-
-        // Redirect to dashboard
+    if (data.token) {
+      // ← Set cookie BEFORE pushing to dashboard
+      document.cookie = `token=${data.token}; path=/; max-age=${60 * 60 * 24}`;
+      localStorage.setItem("employee", JSON.stringify(data.employee));
+      
+      // Small delay to make sure cookie is set
+      setTimeout(() => {
         router.push("/dashboard");
-      } else {
-        setError(data.message || "Invalid credentials");
-      }
-    } catch (err) {
-      setError("Something went wrong. Please try again.");
-    } finally {
-      setLoading(false);
+      }, 100);
+    } else {
+      setError(data.message || "Invalid credentials");
     }
-  };
+  } catch (err) {
+    setError("Something went wrong. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="flex min-h-screen w-full">
