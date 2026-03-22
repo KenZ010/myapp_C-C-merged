@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   PieChart, Pie, Cell, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer
@@ -16,6 +16,7 @@ type InventoryItem = {
 type SortKey = "code" | "name" | "type" | "date" | "total" | "remaining" | "expiry" | "stock";
 type SortDir = "asc" | "desc";
 
+// ✅ Now shows actual expiry date for Bottle type
 const calculateExpiry = (dateStr: string, type: string): { expiry: string; expiryColor: string } => {
   if (type === "Plastic Bottle") return { expiry: "No Expiry", expiryColor: "blue" };
   if (!dateStr) return { expiry: "Unknown", expiryColor: "gray" };
@@ -25,10 +26,16 @@ const calculateExpiry = (dateStr: string, type: string): { expiry: string; expir
     const now = new Date();
     const expiryDate = new Date(acquired);
     expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+
+    const formatted = expiryDate.toLocaleDateString("en-US", {
+      year: "numeric", month: "short", day: "numeric"
+    });
+
     const daysLeft = Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
     if (daysLeft < 0) return { expiry: "Expired", expiryColor: "red" };
-    if (daysLeft <= 30) return { expiry: "Expiring Soon", expiryColor: "orange" };
-    return { expiry: "Fresh/ Valid", expiryColor: "green" };
+    if (daysLeft <= 30) return { expiry: formatted, expiryColor: "orange" };
+    return { expiry: formatted, expiryColor: "green" };
   } catch {
     return { expiry: "Unknown", expiryColor: "gray" };
   }
@@ -59,13 +66,13 @@ const categoryData = [
 ];
 
 const navItems = [
-  { label: "Dashboard", icon: "🏠" },
-  { label: "Inventory Maintenance", icon: "🛒", active: true },
-  { label: "Supplier Maintenance", icon: "📊" },
-  { label: "Sales Reports", icon: "🌐" },
-  { label: "Transaction Logs", icon: "▦" },
-  { label: "Product Management", icon: "🗒️" },
-  { label: "Account Management", icon: "👤" },
+  { label: "Dashboard", icon: "🏠", path: "/dashboard" },
+  { label: "Inventory Maintenance", icon: "🛒", path: "/inventory" },
+  { label: "Supplier Maintenance", icon: "📊", path: "/supplier" },
+  { label: "Sales Reports", icon: "🌐", path: "/sales" },
+  { label: "Transaction Logs", icon: "▦", path: "/transaction" },
+  { label: "Product Management", icon: "🗒️", path: "/product" },
+  { label: "Account Management", icon: "👤", path: "/account" },
 ];
 
 const ITEMS_PER_PAGE = 5;
@@ -88,11 +95,12 @@ const renderLabel = (props: any) => {
 
 const emptyForm = {
   code: "", name: "", type: "Bottle", date: "", total: 0, remaining: 0,
-  lastCheck: "", expiry: "Fresh/ Valid", expiryColor: "green", stock: "In Stock", stockColor: "green",
+  lastCheck: "", expiry: "", expiryColor: "green", stock: "In Stock", stockColor: "green",
 };
 
 export default function InventoryMaintenancePage() {
   const router = useRouter();
+  const pathname = usePathname();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [search, setSearch] = useState("");
@@ -103,46 +111,32 @@ export default function InventoryMaintenancePage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [manualExpiry, setManualExpiry] = useState(false);
-  const [isDirty, setIsDirty] = useState(false); // ✅ tracks unsaved changes
-
-  // Filter states
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
-
-  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-
-  // ✅ Sorting
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [isDirty, setIsDirty] = useState(false);
 
-  // ✅ Refs for closing dropdowns on outside click
   const categoryRef = useRef<HTMLDivElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
 
-  // ✅ Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (categoryRef.current && !categoryRef.current.contains(e.target as Node)) {
-        setShowCategoryDropdown(false);
-      }
-      if (statusRef.current && !statusRef.current.contains(e.target as Node)) {
-        setShowStatusDropdown(false);
-      }
+      if (categoryRef.current && !categoryRef.current.contains(e.target as Node)) setShowCategoryDropdown(false);
+      if (statusRef.current && !statusRef.current.contains(e.target as Node)) setShowStatusDropdown(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // ✅ Summary card counts
   const totalItems = items.length;
   const inStockCount = items.filter((i) => i.stock === "In Stock").length;
   const lowStockCount = items.filter((i) => i.stock === "Low Stock").length;
   const outOfStockCount = items.filter((i) => i.stock === "Out of Stock").length;
 
-  // ✅ Filter + Sort logic
   const filtered = useMemo(() => {
     const f = items.filter((row) => {
       const matchSearch = row.name.toLowerCase().includes(search.toLowerCase()) || row.code.toLowerCase().includes(search.toLowerCase());
@@ -150,22 +144,15 @@ export default function InventoryMaintenancePage() {
       const matchStatus = statusFilter === "All" || row.stock === statusFilter;
       return matchSearch && matchCategory && matchStatus;
     });
-
     f.sort((a, b) => {
       const aVal = a[sortKey];
       const bVal = b[sortKey];
-      if (typeof aVal === "number" && typeof bVal === "number") {
-        return sortDir === "asc" ? aVal - bVal : bVal - aVal;
-      }
-      return sortDir === "asc"
-        ? String(aVal).localeCompare(String(bVal))
-        : String(bVal).localeCompare(String(aVal));
+      if (typeof aVal === "number" && typeof bVal === "number") return sortDir === "asc" ? aVal - bVal : bVal - aVal;
+      return sortDir === "asc" ? String(aVal).localeCompare(String(bVal)) : String(bVal).localeCompare(String(aVal));
     });
-
     return f;
   }, [items, search, categoryFilter, statusFilter, sortKey, sortDir]);
 
-  // Pagination
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
@@ -173,14 +160,9 @@ export default function InventoryMaintenancePage() {
   const handleCategoryFilter = (val: string) => { setCategoryFilter(val); setCurrentPage(1); setShowCategoryDropdown(false); };
   const handleStatusFilter = (val: string) => { setStatusFilter(val); setCurrentPage(1); setShowStatusDropdown(false); };
 
-  // ✅ Sort handler
   const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir((d) => d === "asc" ? "desc" : "asc");
-    } else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
+    if (sortKey === key) setSortDir((d) => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("asc"); }
   };
 
   const sortIcon = (key: SortKey) => {
@@ -189,16 +171,11 @@ export default function InventoryMaintenancePage() {
   };
 
   const topSellingData = items.slice(0, 5).map((item) => ({ name: item.name, units: item.total }));
-
-  // ✅ Fixed: select all only affects current page items, tracked globally
   const allPageSelected = paginated.length > 0 && paginated.every((r) => selected.includes(r.id));
   const toggleSelect = (id: number) => setSelected((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
   const toggleAll = () => {
-    if (allPageSelected) {
-      setSelected((prev) => prev.filter((id) => !paginated.map((r) => r.id).includes(id)));
-    } else {
-      setSelected((prev) => [...new Set([...prev, ...paginated.map((r) => r.id)])]);
-    }
+    if (allPageSelected) setSelected((prev) => prev.filter((id) => !paginated.map((r) => r.id).includes(id)));
+    else setSelected((prev) => [...new Set([...prev, ...paginated.map((r) => r.id)])]);
   };
 
   const openAddModal = () => { setForm(emptyForm); setEditingId(null); setManualExpiry(false); setIsDirty(false); setShowModal(true); };
@@ -209,55 +186,39 @@ export default function InventoryMaintenancePage() {
     setEditingId(item.id); setManualExpiry(false); setIsDirty(false); setShowModal(true);
   };
 
-  // ✅ Confirm before closing modal if unsaved changes
   const handleCloseModal = () => {
-    if (isDirty) {
-      if (!confirm("You have unsaved changes. Are you sure you want to close?")) return;
-    }
+    if (isDirty) { if (!confirm("You have unsaved changes. Are you sure you want to close?")) return; }
     setShowModal(false);
   };
 
   const handleTypeChange = (newType: string) => {
     setIsDirty(true);
-    if (!manualExpiry) {
-      const calc = calculateExpiry(form.date, newType);
-      setForm({ ...form, type: newType, ...calc });
-    } else {
-      setForm({ ...form, type: newType });
-    }
+    if (!manualExpiry) { const calc = calculateExpiry(form.date, newType); setForm({ ...form, type: newType, ...calc }); }
+    else setForm({ ...form, type: newType });
   };
 
   const handleDateChange = (newDate: string) => {
     setIsDirty(true);
-    if (!manualExpiry) {
-      const calc = calculateExpiry(newDate, form.type);
-      setForm({ ...form, date: newDate, ...calc });
-    } else {
-      setForm({ ...form, date: newDate });
-    }
+    if (!manualExpiry) { const calc = calculateExpiry(newDate, form.type); setForm({ ...form, date: newDate, ...calc }); }
+    else setForm({ ...form, date: newDate });
   };
 
   const handleRemainingChange = (val: number) => {
     setIsDirty(true);
     const remaining = Math.max(0, val);
-    const stockCalc = calculateStock(remaining, form.total);
-    setForm({ ...form, remaining, ...stockCalc });
+    setForm({ ...form, remaining, ...calculateStock(remaining, form.total) });
   };
 
   const handleTotalChange = (val: number) => {
     setIsDirty(true);
     const total = Math.max(0, val);
-    const stockCalc = calculateStock(form.remaining, total);
-    setForm({ ...form, total, ...stockCalc });
+    setForm({ ...form, total, ...calculateStock(form.remaining, total) });
   };
 
   const handleSave = () => {
     if (!form.code || !form.name) { alert("Code and Product Name are required."); return; }
-    if (editingId !== null) {
-      setItems((prev) => prev.map((item) => item.id === editingId ? { ...item, ...form } : item));
-    } else {
-      setItems((prev) => [...prev, { id: Date.now(), ...form }]);
-    }
+    if (editingId !== null) setItems((prev) => prev.map((item) => item.id === editingId ? { ...item, ...form } : item));
+    else setItems((prev) => [...prev, { id: Date.now(), ...form }]);
     setShowModal(false); setSelected([]); setIsDirty(false);
   };
 
@@ -273,47 +234,32 @@ export default function InventoryMaintenancePage() {
     const a = document.createElement("a"); a.href = url; a.download = "inventory.csv"; a.click(); URL.revokeObjectURL(url);
   };
 
-  const handleLogout = () => {
-    document.cookie = "token=; path=/; max-age=0";
-    localStorage.removeItem("employee");
-    router.push("/");
-  };
-
-  const navigate = (label: string) => {
-    if (label === "Dashboard") router.push("/dashboard");
-    if (label === "Inventory Maintenance") router.push("/inventory");
-    if (label === "Supplier Maintenance") router.push("/supplier");
-    if (label === "Sales Reports") router.push("/sales");
-    if (label === "Transaction Logs") router.push("/transaction");
-    if (label === "Product Management") router.push("/product");
-    if (label === "Account Management") router.push("/account");
-    setShowMobileMenu(false);
-  };
+  const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("employee"); router.push("/"); };
+  const navigate = (path: string) => { router.push(path); setShowMobileMenu(false); };
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
       <aside className="hidden md:flex w-52 bg-white flex-col py-6 px-4 border-r border-gray-100 shrink-0">
         <div className="text-center mb-10"><p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide">JULIETA SOFTDRINKS<br />STORE</p></div>
         <nav className="flex flex-col gap-1">
-          {navItems.map((item) => (
-            <div key={item.label} onClick={() => navigate(item.label)}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${item.active ? "text-indigo-700 font-semibold" : "text-gray-400 hover:text-gray-600"}`}>
-              <div className="relative flex items-center gap-2 w-full">
-                <span>{item.icon}</span><span>{item.label}</span>
-                {item.active && <div className="absolute -right-4 w-1 h-6 bg-green-500 rounded-full" />}
+          {navItems.map((item) => {
+            const isActive = pathname === item.path;
+            return (
+              <div key={item.label} onClick={() => navigate(item.path)}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${isActive ? "text-indigo-700 font-semibold bg-indigo-50" : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"}`}>
+                <div className="relative flex items-center gap-2 w-full">
+                  <span>{item.icon}</span><span>{item.label}</span>
+                  {isActive && <div className="absolute -right-4 w-1 h-6 bg-green-500 rounded-full" />}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </nav>
       </aside>
 
       <main className="flex-1 flex flex-col overflow-auto">
         <header className="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-100">
-          <button
-            className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300"
-            style={{ transform: showMobileMenu ? "rotate(90deg)" : "rotate(0deg)" }}
-            onClick={() => setShowMobileMenu(!showMobileMenu)}
-          >
+          <button className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300" style={{ transform: showMobileMenu ? "rotate(90deg)" : "rotate(0deg)" }} onClick={() => setShowMobileMenu(!showMobileMenu)}>
             {showMobileMenu ? "✕" : "☰"}
           </button>
           <h1 className="text-xl md:text-2xl font-bold text-gray-800">Inventory Maintenance</h1>
@@ -339,46 +285,37 @@ export default function InventoryMaintenancePage() {
 
         {showMobileMenu && (
           <div className="md:hidden bg-white border-b border-gray-100 px-4 py-3 flex flex-col gap-1 z-40">
-            {navItems.map((item) => (
-              <div key={item.label} onClick={() => navigate(item.label)}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${item.active ? "text-indigo-700 font-semibold" : "text-gray-500"}`}>
-                <span>{item.icon}</span><span>{item.label}</span>
-              </div>
-            ))}
+            {navItems.map((item) => {
+              const isActive = pathname === item.path;
+              return (
+                <div key={item.label} onClick={() => navigate(item.path)}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${isActive ? "text-indigo-700 font-semibold" : "text-gray-500"}`}>
+                  <span>{item.icon}</span><span>{item.label}</span>
+                </div>
+              );
+            })}
           </div>
         )}
 
         <div className="flex-1 p-3 md:p-4 bg-green-50">
 
-          {/* ✅ Summary Cards */}
+          {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-lg">📦</div>
-              <div>
-                <p className="text-xs text-gray-400">Total Items</p>
-                <p className="text-xl font-bold text-gray-800">{totalItems}</p>
-              </div>
+              <div><p className="text-xs text-gray-400">Total Items</p><p className="text-xl font-bold text-gray-800">{totalItems}</p></div>
             </div>
             <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-lg">✅</div>
-              <div>
-                <p className="text-xs text-gray-400">In Stock</p>
-                <p className="text-xl font-bold text-green-600">{inStockCount}</p>
-              </div>
+              <div><p className="text-xs text-gray-400">In Stock</p><p className="text-xl font-bold text-green-600">{inStockCount}</p></div>
             </div>
             <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-lg">⚠️</div>
-              <div>
-                <p className="text-xs text-gray-400">Low Stock</p>
-                <p className="text-xl font-bold text-yellow-500">{lowStockCount}</p>
-              </div>
+              <div><p className="text-xs text-gray-400">Low Stock</p><p className="text-xl font-bold text-yellow-500">{lowStockCount}</p></div>
             </div>
             <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-lg">❌</div>
-              <div>
-                <p className="text-xs text-gray-400">Out of Stock</p>
-                <p className="text-xl font-bold text-red-500">{outOfStockCount}</p>
-              </div>
+              <div><p className="text-xs text-gray-400">Out of Stock</p><p className="text-xl font-bold text-red-500">{outOfStockCount}</p></div>
             </div>
           </div>
 
@@ -389,13 +326,9 @@ export default function InventoryMaintenancePage() {
                 <span className="text-gray-400 text-sm">🔍</span>
                 <input type="text" placeholder="Search" value={search} onChange={(e) => handleSearch(e.target.value)} className="outline-none text-sm text-gray-700 w-full" />
               </div>
-
-              {/* ✅ Category Filter with outside click close */}
               <div className="relative" ref={categoryRef}>
-                <button
-                  onClick={() => { setShowCategoryDropdown(!showCategoryDropdown); setShowStatusDropdown(false); }}
-                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${categoryFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
-                >
+                <button onClick={() => { setShowCategoryDropdown(!showCategoryDropdown); setShowStatusDropdown(false); }}
+                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${categoryFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
                   👤 {categoryFilter === "All" ? "Category" : categoryFilter} ▾
                 </button>
                 {showCategoryDropdown && (
@@ -409,13 +342,9 @@ export default function InventoryMaintenancePage() {
                   </div>
                 )}
               </div>
-
-              {/* ✅ Status Filter with outside click close */}
               <div className="relative" ref={statusRef}>
-                <button
-                  onClick={() => { setShowStatusDropdown(!showStatusDropdown); setShowCategoryDropdown(false); }}
-                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${statusFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
-                >
+                <button onClick={() => { setShowStatusDropdown(!showStatusDropdown); setShowCategoryDropdown(false); }}
+                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${statusFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
                   🔖 {statusFilter === "All" ? "Status" : statusFilter} ▾
                 </button>
                 {showStatusDropdown && (
@@ -429,14 +358,10 @@ export default function InventoryMaintenancePage() {
                   </div>
                 )}
               </div>
-
               {(categoryFilter !== "All" || statusFilter !== "All") && (
                 <button onClick={() => { setCategoryFilter("All"); setStatusFilter("All"); setCurrentPage(1); }}
-                  className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">
-                  ✕ Clear
-                </button>
+                  className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
               )}
-
               <button onClick={handleExport} className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-600 hover:bg-gray-50 ml-auto">📤 Export</button>
               <button onClick={handleDelete} className="flex items-center gap-1 border border-red-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-red-500 hover:bg-red-50">🗑️ Delete</button>
               <button onClick={openEditModal} className="flex items-center gap-1 border border-gray-800 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-800 hover:bg-gray-100">✏️ Edit</button>
@@ -447,7 +372,6 @@ export default function InventoryMaintenancePage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-max">
                 <thead>
-                  {/* ✅ Sortable column headers */}
                   <tr className="bg-indigo-900 text-white text-xs">
                     <th className="p-3 text-left w-8"><input type="checkbox" onChange={toggleAll} checked={allPageSelected} /></th>
                     {[
@@ -463,21 +387,16 @@ export default function InventoryMaintenancePage() {
                       </th>
                     ))}
                     <th className="p-3 text-left">Last Check by</th>
-                    <th className="p-3 text-left cursor-pointer hover:bg-indigo-800 select-none" onClick={() => handleSort("expiry")}>Expiry Status{sortIcon("expiry")}</th>
+                    <th className="p-3 text-left cursor-pointer hover:bg-indigo-800 select-none" onClick={() => handleSort("expiry")}>Expiry Date{sortIcon("expiry")}</th>
                     <th className="p-3 text-left cursor-pointer hover:bg-indigo-800 select-none" onClick={() => handleSort("stock")}>Stock Status{sortIcon("stock")}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {/* ✅ Friendly empty state message */}
                   {paginated.length === 0 ? (
                     <tr>
                       <td colSpan={10} className="text-center py-10">
-                        <p className="text-gray-400 text-sm">
-                          {search ? `No results found for "${search}".` : "No items in inventory yet."}
-                        </p>
-                        {search && (
-                          <button onClick={() => handleSearch("")} className="mt-2 text-xs text-indigo-500 hover:underline">Clear search</button>
-                        )}
+                        <p className="text-gray-400 text-sm">{search ? `No results found for "${search}".` : "No items in inventory yet."}</p>
+                        {search && <button onClick={() => handleSearch("")} className="mt-2 text-xs text-indigo-500 hover:underline">Clear search</button>}
                       </td>
                     </tr>
                   ) : (
@@ -503,24 +422,16 @@ export default function InventoryMaintenancePage() {
             {/* Pagination */}
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-4 px-1">
-                <p className="text-xs text-gray-400">
-                  Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} of {filtered.length} items
-                </p>
+                <p className="text-xs text-gray-400">Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} of {filtered.length} items</p>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}
-                    className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
-                    ← Prev
-                  </button>
+                  <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">← Prev</button>
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                     <button key={page} onClick={() => setCurrentPage(page)}
                       className={`px-3 py-1 rounded-lg text-sm border transition-colors ${currentPage === page ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
                       {page}
                     </button>
                   ))}
-                  <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-                    className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
-                    Next →
-                  </button>
+                  <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Next →</button>
                 </div>
               </div>
             )}
@@ -581,7 +492,7 @@ export default function InventoryMaintenancePage() {
               <div><label className="text-xs font-medium text-gray-600">Last Check By</label><input value={form.lastCheck} onChange={(e) => { setForm({ ...form, lastCheck: e.target.value }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div>
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-medium text-gray-600">Expiry Status</label>
+                  <label className="text-xs font-medium text-gray-600">Expiry Date</label>
                   <label className="flex items-center gap-1 text-xs text-gray-400 cursor-pointer">
                     <input type="checkbox" checked={manualExpiry} onChange={(e) => setManualExpiry(e.target.checked)} />
                     Manual override
@@ -593,7 +504,7 @@ export default function InventoryMaintenancePage() {
                   </select>
                 ) : (
                   <div className={`mt-1 px-3 py-2 rounded-lg text-sm font-medium inline-block ${getExpiryBadge(form.expiryColor)}`}>
-                    {form.expiry} <span className="text-xs opacity-75">(auto)</span>
+                    {form.expiry || "Pick a date above"} <span className="text-xs opacity-75">(auto)</span>
                   </div>
                 )}
               </div>
@@ -605,7 +516,6 @@ export default function InventoryMaintenancePage() {
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              {/* ✅ Cancel warns if unsaved changes */}
               <button onClick={handleCloseModal} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
               <button onClick={handleSave} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700">{editingId !== null ? "Save Changes" : "Add Item"}</button>
             </div>
