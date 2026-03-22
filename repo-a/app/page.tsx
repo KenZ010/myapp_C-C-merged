@@ -11,6 +11,7 @@ export default function LoginPage() {
 
   const handleLogin = () => {
     if (username && password) {
+      document.cookie = "token=logged-in; path=/";
       router.push("/dashboard");
     } else {
       alert("Please enter username and password.");
