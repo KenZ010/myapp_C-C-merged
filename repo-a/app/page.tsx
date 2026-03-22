@@ -7,71 +7,99 @@ export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-
   const router = useRouter();
 
   const handleLogin = () => {
-    router.push("/dashboard");
+    if (username && password) {
+      router.push("/dashboard");
+    } else {
+      alert("Please enter username and password.");
+    }
   };
 
   return (
-    <div className="flex min-h-screen w-full">
+    <div className="flex min-h-screen flex-col md:flex-row">
+
+      {/* LEFT - Green gradient (hidden on small, shown on md+) */}
       <div
-        className="hidden md:flex w-[55%] items-center justify-center relative"
+        className="hidden md:flex md:w-1/2 items-center justify-center"
         style={{
           background: "radial-gradient(ellipse at 30% 30%, #3aad3a 0%, #1e7a1e 40%, #0d4d0d 100%)",
           borderRadius: "0 0 100px 0",
         }}
       >
-        <div className="flex items-center justify-center">
-          <div className="relative flex items-center justify-center rounded-full"
-            style={{ width: "320px", height: "320px", backgroundColor: "#F97316", boxShadow: "0 8px 32px rgba(0,0,0,0.3)" }}>
-            <div className="absolute rounded-full bg-white" style={{ width: "220px", height: "220px" }} />
-            <span className="absolute top-8 tracking-widest font-bold text-white text-sm">SOFTDRINKS</span>
-            <span className="relative z-10 font-extrabold text-5xl"
-              style={{ color: "#2a9d8f", fontFamily: "Georgia, serif", textShadow: "2px 2px 0px #1a7a6e", WebkitTextStroke: "1px white" }}>
-              Julieta
-            </span>
-            <span className="absolute bottom-8 tracking-widest font-bold text-white text-sm">✦ STORE ✦</span>
+        {/* Logo */}
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-32 h-32 rounded-full bg-orange-400 flex items-center justify-center shadow-xl">
+            <div className="w-24 h-24 rounded-full bg-white flex items-center justify-center">
+              <span
+                className="text-2xl font-bold"
+                style={{ color: "#2a9d8f", fontFamily: "Georgia, serif" }}
+              >
+                Julieta
+              </span>
+            </div>
           </div>
+          <p className="text-white text-xl font-bold tracking-widest">SOFTDRINKS STORE</p>
         </div>
       </div>
 
-      <div className="flex flex-1 items-center justify-center bg-white px-8 flex-col">
+      {/* RIGHT - Login form */}
+      <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 bg-white">
+
+        {/* Mobile logo */}
         <div className="flex md:hidden flex-col items-center mb-8">
-          <div className="relative flex items-center justify-center rounded-full mb-2"
-            style={{ width: "120px", height: "120px", backgroundColor: "#F97316" }}>
-            <div className="absolute rounded-full bg-white" style={{ width: "85px", height: "85px" }} />
-            <span className="relative z-10 font-extrabold text-xl" style={{ color: "#2a9d8f", fontFamily: "Georgia, serif" }}>Julieta</span>
+          <div className="w-20 h-20 rounded-full bg-orange-400 flex items-center justify-center shadow-xl">
+            <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center">
+              <span className="text-sm font-bold" style={{ color: "#2a9d8f", fontFamily: "Georgia, serif" }}>
+                Julieta
+              </span>
+            </div>
           </div>
-          <p className="text-green-700 text-xs font-bold tracking-widest">SOFTDRINKS STORE</p>
+          <p className="text-green-700 text-sm font-bold mt-2 tracking-widest">SOFTDRINKS STORE</p>
         </div>
 
         <div className="w-full max-w-sm">
-          <h1 className="text-3xl font-bold mb-6" style={{ color: "#1e1b4b" }}>Log In</h1>
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Username<span className="text-red-500">*</span></label>
-            <input type="text" placeholder="Username/Phone no." value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg border border-gray-200 text-sm text-gray-900 outline-none focus:border-indigo-400" />
-          </div>
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password<span className="text-red-500">*</span></label>
-            <div className="relative">
-              <input type={showPassword ? "text" : "password"} placeholder="Min. 8 characters" value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border border-gray-200 text-sm text-gray-900 outline-none focus:border-indigo-400 pr-10" />
-              <button onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">
-                {showPassword ? "Hide" : "Show"}
-              </button>
+          <h2 className="text-2xl font-bold text-gray-800 mb-1">Welcome Back!</h2>
+          <p className="text-gray-400 text-sm mb-8">Login to your account</p>
+
+          <div className="flex flex-col gap-4">
+            <div>
+              <label className="text-xs font-medium text-gray-600">Username</label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter your username"
+                className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
+              />
             </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600">Password</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
+                />
+                <button
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-4 text-gray-400 text-xs"
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+            </div>
+            <button
+              onClick={handleLogin}
+              className="w-full py-3 rounded-lg text-white text-sm font-semibold mt-2"
+              style={{ backgroundColor: "#4f46e5" }}
+            >
+              Log In
+            </button>
           </div>
-          <button onClick={handleLogin}
-            className="w-full py-3 rounded-lg text-white font-semibold text-base"
-            style={{ backgroundColor: "#4f46e5" }}>
-            Log In
-          </button>
         </div>
       </div>
     </div>
