@@ -8,19 +8,42 @@ import {
 } from "recharts";
 
 type InventoryItem = {
-  id: number; code: string; name: string; date: string; total: number;
+  id: number; code: string; name: string; type: string; date: string; total: number;
   remaining: number; lastCheck: string; expiry: string; expiryColor: string;
   stock: string; stockColor: string;
 };
 
+// Auto calculate expiry based on date acquired and type
+const calculateExpiry = (dateStr: string, type: string): { expiry: string; expiryColor: string } => {
+  if (type === "Plastic Bottle") return { expiry: "No Expiry", expiryColor: "blue" };
+  if (!dateStr) return { expiry: "Unknown", expiryColor: "gray" };
+
+  try {
+    const acquired = new Date(dateStr);
+    if (isNaN(acquired.getTime())) return { expiry: "Unknown", expiryColor: "gray" };
+
+    const now = new Date();
+    const expiryDate = new Date(acquired);
+    expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+
+    const daysLeft = Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (daysLeft < 0) return { expiry: "Expired", expiryColor: "red" };
+    if (daysLeft <= 30) return { expiry: "Expiring Soon", expiryColor: "orange" };
+    return { expiry: "Fresh/ Valid", expiryColor: "green" };
+  } catch {
+    return { expiry: "Unknown", expiryColor: "gray" };
+  }
+};
+
 const initialData: InventoryItem[] = [
-  { id: 1, code: "COLA22", name: "Coca Cola", date: "08 Nov 2025", total: 30, remaining: 10, lastCheck: "Rjay Salinas", expiry: "Fresh/ Valid", expiryColor: "green", stock: "Low Stock", stockColor: "yellow" },
-  { id: 2, code: "RC22", name: "RC", date: "06 Nov 2025", total: 30, remaining: 0, lastCheck: "Rjay Salinas", expiry: "Unknown", expiryColor: "gray", stock: "Out of Stock", stockColor: "red" },
-  { id: 3, code: "PEP12", name: "Pepsi", date: "06 Nov 2025", total: 30, remaining: 15, lastCheck: "Rjay Salinas", expiry: "Fresh/ Valid", expiryColor: "green", stock: "In Stock", stockColor: "green" },
-  { id: 4, code: "GATO22", name: "Gatorade", date: "06 Nov 2025", total: 15, remaining: 15, lastCheck: "Rjay Salinas", expiry: "Fresh/ Valid", expiryColor: "green", stock: "In Stock", stockColor: "green" },
-  { id: 5, code: "COB25", name: "Cobra", date: "06 Nov 2025", total: 30, remaining: 27, lastCheck: "Rjay Salinas", expiry: "No Expiry", expiryColor: "blue", stock: "In Stock", stockColor: "green" },
-  { id: 6, code: "COB25", name: "Cobra", date: "06 Nov 2025", total: 30, remaining: 27, lastCheck: "Rjay Salinas", expiry: "Expired", expiryColor: "red", stock: "In Stock", stockColor: "green" },
-  { id: 7, code: "COB25", name: "Cobra", date: "06 Nov 2025", total: 30, remaining: 27, lastCheck: "Rjay Salinas", expiry: "Expiring Soon", expiryColor: "orange", stock: "In Stock", stockColor: "green" },
+  { id: 1, code: "COLA22", name: "Coca Cola", type: "Bottle", date: "2025-11-08", total: 30, remaining: 10, lastCheck: "Rjay Salinas", ...calculateExpiry("2025-11-08", "Bottle"), stock: "Low Stock", stockColor: "yellow" },
+  { id: 2, code: "RC22", name: "RC", type: "Plastic Bottle", date: "2025-11-06", total: 30, remaining: 0, lastCheck: "Rjay Salinas", ...calculateExpiry("2025-11-06", "Plastic Bottle"), stock: "Out of Stock", stockColor: "red" },
+  { id: 3, code: "PEP12", name: "Pepsi", type: "Bottle", date: "2025-11-06", total: 30, remaining: 15, lastCheck: "Rjay Salinas", ...calculateExpiry("2025-11-06", "Bottle"), stock: "In Stock", stockColor: "green" },
+  { id: 4, code: "GATO22", name: "Gatorade", type: "Plastic Bottle", date: "2025-11-06", total: 15, remaining: 15, lastCheck: "Rjay Salinas", ...calculateExpiry("2025-11-06", "Plastic Bottle"), stock: "In Stock", stockColor: "green" },
+  { id: 5, code: "COB25", name: "Cobra", type: "Bottle", date: "2024-11-06", total: 30, remaining: 27, lastCheck: "Rjay Salinas", ...calculateExpiry("2024-11-06", "Bottle"), stock: "In Stock", stockColor: "green" },
+  { id: 6, code: "COB25", name: "Cobra", type: "Bottle", date: "2025-03-01", total: 30, remaining: 27, lastCheck: "Rjay Salinas", ...calculateExpiry("2025-03-01", "Bottle"), stock: "In Stock", stockColor: "green" },
+  { id: 7, code: "COB25", name: "Cobra", type: "Plastic Bottle", date: "2025-11-06", total: 30, remaining: 27, lastCheck: "Rjay Salinas", ...calculateExpiry("2025-11-06", "Plastic Bottle"), stock: "In Stock", stockColor: "green" },
 ];
 
 const categoryData = [
@@ -57,7 +80,10 @@ const renderLabel = (props: any) => {
   return <text x={x} y={y} fill="#555" fontSize={11} textAnchor={x > cx ? "start" : "end"}>{`${name}: ${value}%`}</text>;
 };
 
-const emptyForm = { code: "", name: "", date: "", total: 0, remaining: 0, lastCheck: "", expiry: "Fresh/ Valid", expiryColor: "green", stock: "In Stock", stockColor: "green" };
+const emptyForm = {
+  code: "", name: "", type: "Bottle", date: "", total: 0, remaining: 0,
+  lastCheck: "", expiry: "Fresh/ Valid", expiryColor: "green", stock: "In Stock", stockColor: "green",
+};
 
 export default function InventoryMaintenancePage() {
   const router = useRouter();
@@ -70,38 +96,65 @@ export default function InventoryMaintenancePage() {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [manualExpiry, setManualExpiry] = useState(false);
 
   const filtered = items.filter((row) => row.name.toLowerCase().includes(search.toLowerCase()) || row.code.toLowerCase().includes(search.toLowerCase()));
   const topSellingData = items.slice(0, 5).map((item) => ({ name: item.name, units: item.total }));
   const toggleSelect = (id: number) => setSelected((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
   const toggleAll = () => selected.length === filtered.length ? setSelected([]) : setSelected(filtered.map((r) => r.id));
-  const openAddModal = () => { setForm(emptyForm); setEditingId(null); setShowModal(true); };
+
+  const openAddModal = () => { setForm(emptyForm); setEditingId(null); setManualExpiry(false); setShowModal(true); };
   const openEditModal = () => {
     if (selected.length !== 1) { alert("Please select exactly one item to edit."); return; }
     const item = items.find((i) => i.id === selected[0]); if (!item) return;
-    setForm({ code: item.code, name: item.name, date: item.date, total: item.total, remaining: item.remaining, lastCheck: item.lastCheck, expiry: item.expiry, expiryColor: item.expiryColor, stock: item.stock, stockColor: item.stockColor });
-    setEditingId(item.id); setShowModal(true);
+    setForm({ code: item.code, name: item.name, type: item.type, date: item.date, total: item.total, remaining: item.remaining, lastCheck: item.lastCheck, expiry: item.expiry, expiryColor: item.expiryColor, stock: item.stock, stockColor: item.stockColor });
+    setEditingId(item.id); setManualExpiry(false); setShowModal(true);
   };
+
+  // Update expiry when type or date changes (unless manual override)
+  const handleTypeChange = (newType: string) => {
+    if (!manualExpiry) {
+      const calc = calculateExpiry(form.date, newType);
+      setForm({ ...form, type: newType, ...calc });
+    } else {
+      setForm({ ...form, type: newType });
+    }
+  };
+
+  const handleDateChange = (newDate: string) => {
+    if (!manualExpiry) {
+      const calc = calculateExpiry(newDate, form.type);
+      setForm({ ...form, date: newDate, ...calc });
+    } else {
+      setForm({ ...form, date: newDate });
+    }
+  };
+
   const handleSave = () => {
     if (!form.code || !form.name) { alert("Code and Product Name are required."); return; }
     if (editingId !== null) { setItems((prev) => prev.map((item) => item.id === editingId ? { ...item, ...form } : item)); }
     else { setItems((prev) => [...prev, { id: Date.now(), ...form }]); }
     setShowModal(false); setSelected([]);
   };
+
   const handleDelete = () => { if (selected.length === 0) { alert("Please select at least one item to delete."); return; } setShowDeleteConfirm(true); };
   const confirmDelete = () => { setItems((prev) => prev.filter((item) => !selected.includes(item.id))); setSelected([]); setShowDeleteConfirm(false); };
+
   const handleExport = () => {
-    const headers = ["Code", "Product Name", "Date Acquired", "Total Stock", "Remaining Stock", "Last Check By", "Expiry Status", "Stock Status"];
-    const rows = items.map((item) => [item.code, item.name, item.date, item.total, item.remaining, item.lastCheck, item.expiry, item.stock]);
+    const headers = ["Code", "Product Name", "Type", "Date Acquired", "Total Stock", "Remaining Stock", "Last Check By", "Expiry Status", "Stock Status"];
+    const rows = items.map((item) => [item.code, item.name, item.type, item.date, item.total, item.remaining, item.lastCheck, item.expiry, item.stock]);
     const csvContent = [headers, ...rows].map((row) => row.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv" }); const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = "inventory.csv"; a.click(); URL.revokeObjectURL(url);
   };
+
   const navigate = (label: string) => {
     if (label === "Dashboard") router.push("/dashboard");
     if (label === "Inventory Maintenance") router.push("/inventory");
     if (label === "Supplier Maintenance") router.push("/supplier");
     if (label === "Sales Reports") router.push("/sales");
+    if (label === "Transaction Logs") router.push("/transaction");
+    if (label === "Product Management") router.push("/product");
     if (label === "Account Management") router.push("/account");
     setShowMobileMenu(false);
   };
@@ -179,14 +232,16 @@ export default function InventoryMaintenancePage() {
               <button onClick={openEditModal} className="flex items-center gap-1 border border-gray-800 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-800 hover:bg-gray-100">✏️ Edit</button>
               <button onClick={openAddModal} className="flex items-center gap-1 bg-gray-900 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-white hover:bg-gray-700">+ Add</button>
             </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-max">
                 <thead>
                   <tr className="bg-indigo-900 text-white text-xs">
                     <th className="p-3 text-left w-8"><input type="checkbox" onChange={toggleAll} checked={selected.length === filtered.length && filtered.length > 0} /></th>
                     <th className="p-3 text-left">Code</th><th className="p-3 text-left">Product Name</th>
-                    <th className="p-3 text-left">Date Acquired</th><th className="p-3 text-left">Total Stock</th>
-                    <th className="p-3 text-left">Remaining Stock</th><th className="p-3 text-left">Last Check by</th>
+                    <th className="p-3 text-left">Type</th><th className="p-3 text-left">Date Acquired</th>
+                    <th className="p-3 text-left">Total Stock</th><th className="p-3 text-left">Remaining Stock</th>
+                    <th className="p-3 text-left">Last Check by</th>
                     <th className="p-3 text-left">Expiry Status</th><th className="p-3 text-left">Stock Status</th>
                   </tr>
                 </thead>
@@ -194,9 +249,12 @@ export default function InventoryMaintenancePage() {
                   {filtered.map((row) => (
                     <tr key={row.id} className={`border-b border-gray-100 hover:bg-gray-50 ${selected.includes(row.id) ? "bg-indigo-50" : ""}`}>
                       <td className="p-3"><input type="checkbox" checked={selected.includes(row.id)} onChange={() => toggleSelect(row.id)} /></td>
-                      <td className="p-3 text-gray-700">{row.code}</td><td className="p-3 text-gray-700">{row.name}</td>
+                      <td className="p-3 text-gray-700">{row.code}</td>
+                      <td className="p-3 text-gray-700">{row.name}</td>
+                      <td className="p-3"><span className={`px-2 py-1 rounded-full text-xs ${row.type === "Bottle" ? "bg-indigo-100 text-indigo-700" : "bg-teal-100 text-teal-700"}`}>{row.type}</span></td>
                       <td className="p-3"><span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">{row.date}</span></td>
-                      <td className="p-3 text-gray-700">{row.total}</td><td className="p-3 text-gray-700">{row.remaining}</td>
+                      <td className="p-3 text-gray-700">{row.total}</td>
+                      <td className="p-3 text-gray-700">{row.remaining}</td>
                       <td className="p-3"><span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">{row.lastCheck}</span></td>
                       <td className="p-3"><span className={`px-3 py-1 rounded-full text-xs font-medium ${getExpiryBadge(row.expiryColor)}`}>{row.expiry}</span></td>
                       <td className="p-3"><span className={`px-3 py-1 rounded-full text-xs font-medium ${getStockBadge(row.stockColor)}`}>{row.stock}</span></td>
@@ -235,6 +293,7 @@ export default function InventoryMaintenancePage() {
         </div>
       </main>
 
+      {/* ADD / EDIT MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-screen overflow-y-auto">
@@ -242,18 +301,49 @@ export default function InventoryMaintenancePage() {
             <div className="flex flex-col gap-3">
               <div><label className="text-xs font-medium text-gray-600">Code</label><input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div><label className="text-xs font-medium text-gray-600">Product Name</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-              <div><label className="text-xs font-medium text-gray-600">Date Acquired</label><input value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="e.g. 06 Nov 2025" /></div>
+
+              {/* Type field */}
+              <div>
+                <label className="text-xs font-medium text-gray-600">Type</label>
+                <select value={form.type} onChange={(e) => handleTypeChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                  <option>Bottle</option>
+                  <option>Plastic Bottle</option>
+                </select>
+              </div>
+
+              {/* Date Acquired */}
+              <div>
+                <label className="text-xs font-medium text-gray-600">Date Acquired</label>
+                <input type="date" value={form.date} onChange={(e) => handleDateChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs font-medium text-gray-600">Total Stock</label><input type="number" min="0" value={form.total} onChange={(e) => setForm({ ...form, total: Math.max(0, Number(e.target.value)) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
                 <div><label className="text-xs font-medium text-gray-600">Remaining Stock</label><input type="number" min="0" value={form.remaining} onChange={(e) => setForm({ ...form, remaining: Math.max(0, Number(e.target.value)) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               </div>
+
               <div><label className="text-xs font-medium text-gray-600">Last Check By</label><input value={form.lastCheck} onChange={(e) => setForm({ ...form, lastCheck: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+
+              {/* Expiry Status - auto calculated but can override */}
               <div>
-                <label className="text-xs font-medium text-gray-600">Expiry Status</label>
-                <select value={form.expiry} onChange={(e) => { const val = e.target.value; const colorMap: Record<string, string> = { "Fresh/ Valid": "green", "Expired": "red", "Expiring Soon": "orange", "No Expiry": "blue", "Unknown": "gray" }; setForm({ ...form, expiry: val, expiryColor: colorMap[val] || "gray" }); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                  <option>Fresh/ Valid</option><option>Expired</option><option>Expiring Soon</option><option>No Expiry</option><option>Unknown</option>
-                </select>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-gray-600">Expiry Status</label>
+                  <label className="flex items-center gap-1 text-xs text-gray-400 cursor-pointer">
+                    <input type="checkbox" checked={manualExpiry} onChange={(e) => setManualExpiry(e.target.checked)} />
+                    Manual override
+                  </label>
+                </div>
+                {manualExpiry ? (
+                  <select value={form.expiry} onChange={(e) => { const val = e.target.value; const colorMap: Record<string, string> = { "Fresh/ Valid": "green", "Expired": "red", "Expiring Soon": "orange", "No Expiry": "blue", "Unknown": "gray" }; setForm({ ...form, expiry: val, expiryColor: colorMap[val] || "gray" }); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                    <option>Fresh/ Valid</option><option>Expired</option><option>Expiring Soon</option><option>No Expiry</option><option>Unknown</option>
+                  </select>
+                ) : (
+                  <div className={`mt-1 px-3 py-2 rounded-lg text-sm font-medium inline-block ${getExpiryBadge(form.expiryColor)}`}>
+                    {form.expiry} <span className="text-xs opacity-75">(auto)</span>
+                  </div>
+                )}
               </div>
+
               <div>
                 <label className="text-xs font-medium text-gray-600">Stock Status</label>
                 <select value={form.stock} onChange={(e) => { const val = e.target.value; const colorMap: Record<string, string> = { "In Stock": "green", "Out of Stock": "red", "Low Stock": "yellow" }; setForm({ ...form, stock: val, stockColor: colorMap[val] || "green" }); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
@@ -269,6 +359,7 @@ export default function InventoryMaintenancePage() {
         </div>
       )}
 
+      {/* DELETE MODAL */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
