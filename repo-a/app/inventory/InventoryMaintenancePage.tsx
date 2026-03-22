@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   PieChart, Pie, Cell, Tooltip,
@@ -13,20 +13,19 @@ type InventoryItem = {
   stock: string; stockColor: string;
 };
 
+type SortKey = "code" | "name" | "type" | "date" | "total" | "remaining" | "expiry" | "stock";
+type SortDir = "asc" | "desc";
+
 const calculateExpiry = (dateStr: string, type: string): { expiry: string; expiryColor: string } => {
   if (type === "Plastic Bottle") return { expiry: "No Expiry", expiryColor: "blue" };
   if (!dateStr) return { expiry: "Unknown", expiryColor: "gray" };
-
   try {
     const acquired = new Date(dateStr);
     if (isNaN(acquired.getTime())) return { expiry: "Unknown", expiryColor: "gray" };
-
     const now = new Date();
     const expiryDate = new Date(acquired);
     expiryDate.setFullYear(expiryDate.getFullYear() + 1);
-
     const daysLeft = Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
     if (daysLeft < 0) return { expiry: "Expired", expiryColor: "red" };
     if (daysLeft <= 30) return { expiry: "Expiring Soon", expiryColor: "orange" };
     return { expiry: "Fresh/ Valid", expiryColor: "green" };
@@ -35,14 +34,20 @@ const calculateExpiry = (dateStr: string, type: string): { expiry: string; expir
   }
 };
 
+const calculateStock = (remaining: number, total: number): { stock: string; stockColor: string } => {
+  if (remaining === 0) return { stock: "Out of Stock", stockColor: "red" };
+  if (total > 0 && remaining / total <= 0.3) return { stock: "Low Stock", stockColor: "yellow" };
+  return { stock: "In Stock", stockColor: "green" };
+};
+
 const initialData: InventoryItem[] = [
-  { id: 1, code: "COLA22", name: "Coca Cola", type: "Bottle", date: "2025-11-08", total: 30, remaining: 10, lastCheck: "Rjay Salinas", ...calculateExpiry("2025-11-08", "Bottle"), stock: "Low Stock", stockColor: "yellow" },
-  { id: 2, code: "RC22", name: "RC", type: "Plastic Bottle", date: "2025-11-06", total: 30, remaining: 0, lastCheck: "Rjay Salinas", ...calculateExpiry("2025-11-06", "Plastic Bottle"), stock: "Out of Stock", stockColor: "red" },
-  { id: 3, code: "PEP12", name: "Pepsi", type: "Bottle", date: "2025-11-06", total: 30, remaining: 15, lastCheck: "Rjay Salinas", ...calculateExpiry("2025-11-06", "Bottle"), stock: "In Stock", stockColor: "green" },
-  { id: 4, code: "GATO22", name: "Gatorade", type: "Plastic Bottle", date: "2025-11-06", total: 15, remaining: 15, lastCheck: "Rjay Salinas", ...calculateExpiry("2025-11-06", "Plastic Bottle"), stock: "In Stock", stockColor: "green" },
-  { id: 5, code: "COB25", name: "Cobra", type: "Bottle", date: "2024-11-06", total: 30, remaining: 27, lastCheck: "Rjay Salinas", ...calculateExpiry("2024-11-06", "Bottle"), stock: "In Stock", stockColor: "green" },
-  { id: 6, code: "COB25", name: "Cobra", type: "Bottle", date: "2025-03-01", total: 30, remaining: 27, lastCheck: "Rjay Salinas", ...calculateExpiry("2025-03-01", "Bottle"), stock: "In Stock", stockColor: "green" },
-  { id: 7, code: "COB25", name: "Cobra", type: "Plastic Bottle", date: "2025-11-06", total: 30, remaining: 27, lastCheck: "Rjay Salinas", ...calculateExpiry("2025-11-06", "Plastic Bottle"), stock: "In Stock", stockColor: "green" },
+  { id: 1, code: "COLA22", name: "Coca Cola", type: "Bottle", date: "2025-11-08", total: 30, remaining: 10, lastCheck: "Rjay Salinas", ...calculateExpiry("2025-11-08", "Bottle"), ...calculateStock(10, 30) },
+  { id: 2, code: "RC22", name: "RC", type: "Plastic Bottle", date: "2025-11-06", total: 30, remaining: 0, lastCheck: "Rjay Salinas", ...calculateExpiry("2025-11-06", "Plastic Bottle"), ...calculateStock(0, 30) },
+  { id: 3, code: "PEP12", name: "Pepsi", type: "Bottle", date: "2025-11-06", total: 30, remaining: 15, lastCheck: "Rjay Salinas", ...calculateExpiry("2025-11-06", "Bottle"), ...calculateStock(15, 30) },
+  { id: 4, code: "GATO22", name: "Gatorade", type: "Plastic Bottle", date: "2025-11-06", total: 15, remaining: 15, lastCheck: "Rjay Salinas", ...calculateExpiry("2025-11-06", "Plastic Bottle"), ...calculateStock(15, 15) },
+  { id: 5, code: "COB25", name: "Cobra", type: "Bottle", date: "2024-11-06", total: 30, remaining: 27, lastCheck: "Rjay Salinas", ...calculateExpiry("2024-11-06", "Bottle"), ...calculateStock(27, 30) },
+  { id: 6, code: "COB25B", name: "Cobra Zero", type: "Bottle", date: "2025-03-01", total: 30, remaining: 27, lastCheck: "Rjay Salinas", ...calculateExpiry("2025-03-01", "Bottle"), ...calculateStock(27, 30) },
+  { id: 7, code: "COB25P", name: "Cobra Energy", type: "Plastic Bottle", date: "2025-11-06", total: 30, remaining: 27, lastCheck: "Rjay Salinas", ...calculateExpiry("2025-11-06", "Plastic Bottle"), ...calculateStock(27, 30) },
 ];
 
 const categoryData = [
@@ -62,6 +67,8 @@ const navItems = [
   { label: "Product Management", icon: "🗒️" },
   { label: "Account Management", icon: "👤" },
 ];
+
+const ITEMS_PER_PAGE = 5;
 
 const getExpiryBadge = (color: string) => {
   const map: Record<string, string> = { green: "bg-green-500 text-white", red: "bg-red-500 text-white", gray: "bg-gray-400 text-white", blue: "bg-blue-400 text-white", orange: "bg-orange-400 text-white" };
@@ -96,21 +103,122 @@ export default function InventoryMaintenancePage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [manualExpiry, setManualExpiry] = useState(false);
+  const [isDirty, setIsDirty] = useState(false); // ✅ tracks unsaved changes
 
-  const filtered = items.filter((row) => row.name.toLowerCase().includes(search.toLowerCase()) || row.code.toLowerCase().includes(search.toLowerCase()));
+  // Filter states
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // ✅ Sorting
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  // ✅ Refs for closing dropdowns on outside click
+  const categoryRef = useRef<HTMLDivElement>(null);
+  const statusRef = useRef<HTMLDivElement>(null);
+
+  // ✅ Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (categoryRef.current && !categoryRef.current.contains(e.target as Node)) {
+        setShowCategoryDropdown(false);
+      }
+      if (statusRef.current && !statusRef.current.contains(e.target as Node)) {
+        setShowStatusDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // ✅ Summary card counts
+  const totalItems = items.length;
+  const inStockCount = items.filter((i) => i.stock === "In Stock").length;
+  const lowStockCount = items.filter((i) => i.stock === "Low Stock").length;
+  const outOfStockCount = items.filter((i) => i.stock === "Out of Stock").length;
+
+  // ✅ Filter + Sort logic
+  const filtered = useMemo(() => {
+    const f = items.filter((row) => {
+      const matchSearch = row.name.toLowerCase().includes(search.toLowerCase()) || row.code.toLowerCase().includes(search.toLowerCase());
+      const matchCategory = categoryFilter === "All" || row.type === categoryFilter;
+      const matchStatus = statusFilter === "All" || row.stock === statusFilter;
+      return matchSearch && matchCategory && matchStatus;
+    });
+
+    f.sort((a, b) => {
+      const aVal = a[sortKey];
+      const bVal = b[sortKey];
+      if (typeof aVal === "number" && typeof bVal === "number") {
+        return sortDir === "asc" ? aVal - bVal : bVal - aVal;
+      }
+      return sortDir === "asc"
+        ? String(aVal).localeCompare(String(bVal))
+        : String(bVal).localeCompare(String(aVal));
+    });
+
+    return f;
+  }, [items, search, categoryFilter, statusFilter, sortKey, sortDir]);
+
+  // Pagination
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  const handleSearch = (val: string) => { setSearch(val); setCurrentPage(1); };
+  const handleCategoryFilter = (val: string) => { setCategoryFilter(val); setCurrentPage(1); setShowCategoryDropdown(false); };
+  const handleStatusFilter = (val: string) => { setStatusFilter(val); setCurrentPage(1); setShowStatusDropdown(false); };
+
+  // ✅ Sort handler
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  const sortIcon = (key: SortKey) => {
+    if (sortKey !== key) return <span className="ml-1 opacity-30">↕</span>;
+    return <span className="ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>;
+  };
+
   const topSellingData = items.slice(0, 5).map((item) => ({ name: item.name, units: item.total }));
-  const toggleSelect = (id: number) => setSelected((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
-  const toggleAll = () => selected.length === filtered.length ? setSelected([]) : setSelected(filtered.map((r) => r.id));
 
-  const openAddModal = () => { setForm(emptyForm); setEditingId(null); setManualExpiry(false); setShowModal(true); };
+  // ✅ Fixed: select all only affects current page items, tracked globally
+  const allPageSelected = paginated.length > 0 && paginated.every((r) => selected.includes(r.id));
+  const toggleSelect = (id: number) => setSelected((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
+  const toggleAll = () => {
+    if (allPageSelected) {
+      setSelected((prev) => prev.filter((id) => !paginated.map((r) => r.id).includes(id)));
+    } else {
+      setSelected((prev) => [...new Set([...prev, ...paginated.map((r) => r.id)])]);
+    }
+  };
+
+  const openAddModal = () => { setForm(emptyForm); setEditingId(null); setManualExpiry(false); setIsDirty(false); setShowModal(true); };
   const openEditModal = () => {
     if (selected.length !== 1) { alert("Please select exactly one item to edit."); return; }
     const item = items.find((i) => i.id === selected[0]); if (!item) return;
     setForm({ code: item.code, name: item.name, type: item.type, date: item.date, total: item.total, remaining: item.remaining, lastCheck: item.lastCheck, expiry: item.expiry, expiryColor: item.expiryColor, stock: item.stock, stockColor: item.stockColor });
-    setEditingId(item.id); setManualExpiry(false); setShowModal(true);
+    setEditingId(item.id); setManualExpiry(false); setIsDirty(false); setShowModal(true);
+  };
+
+  // ✅ Confirm before closing modal if unsaved changes
+  const handleCloseModal = () => {
+    if (isDirty) {
+      if (!confirm("You have unsaved changes. Are you sure you want to close?")) return;
+    }
+    setShowModal(false);
   };
 
   const handleTypeChange = (newType: string) => {
+    setIsDirty(true);
     if (!manualExpiry) {
       const calc = calculateExpiry(form.date, newType);
       setForm({ ...form, type: newType, ...calc });
@@ -120,6 +228,7 @@ export default function InventoryMaintenancePage() {
   };
 
   const handleDateChange = (newDate: string) => {
+    setIsDirty(true);
     if (!manualExpiry) {
       const calc = calculateExpiry(newDate, form.type);
       setForm({ ...form, date: newDate, ...calc });
@@ -128,11 +237,28 @@ export default function InventoryMaintenancePage() {
     }
   };
 
+  const handleRemainingChange = (val: number) => {
+    setIsDirty(true);
+    const remaining = Math.max(0, val);
+    const stockCalc = calculateStock(remaining, form.total);
+    setForm({ ...form, remaining, ...stockCalc });
+  };
+
+  const handleTotalChange = (val: number) => {
+    setIsDirty(true);
+    const total = Math.max(0, val);
+    const stockCalc = calculateStock(form.remaining, total);
+    setForm({ ...form, total, ...stockCalc });
+  };
+
   const handleSave = () => {
     if (!form.code || !form.name) { alert("Code and Product Name are required."); return; }
-    if (editingId !== null) { setItems((prev) => prev.map((item) => item.id === editingId ? { ...item, ...form } : item)); }
-    else { setItems((prev) => [...prev, { id: Date.now(), ...form }]); }
-    setShowModal(false); setSelected([]);
+    if (editingId !== null) {
+      setItems((prev) => prev.map((item) => item.id === editingId ? { ...item, ...form } : item));
+    } else {
+      setItems((prev) => [...prev, { id: Date.now(), ...form }]);
+    }
+    setShowModal(false); setSelected([]); setIsDirty(false);
   };
 
   const handleDelete = () => { if (selected.length === 0) { alert("Please select at least one item to delete."); return; } setShowDeleteConfirm(true); };
@@ -142,8 +268,15 @@ export default function InventoryMaintenancePage() {
     const headers = ["Code", "Product Name", "Type", "Date Acquired", "Total Stock", "Remaining Stock", "Last Check By", "Expiry Status", "Stock Status"];
     const rows = items.map((item) => [item.code, item.name, item.type, item.date, item.total, item.remaining, item.lastCheck, item.expiry, item.stock]);
     const csvContent = [headers, ...rows].map((row) => row.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv" }); const url = URL.createObjectURL(blob);
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = "inventory.csv"; a.click(); URL.revokeObjectURL(url);
+  };
+
+  const handleLogout = () => {
+    document.cookie = "token=; path=/; max-age=0";
+    localStorage.removeItem("employee");
+    router.push("/");
   };
 
   const navigate = (label: string) => {
@@ -155,12 +288,6 @@ export default function InventoryMaintenancePage() {
     if (label === "Product Management") router.push("/product");
     if (label === "Account Management") router.push("/account");
     setShowMobileMenu(false);
-  };
-
-  const handleLogout = () => {
-    document.cookie = 'token=; path=/; max-age=0';
-    localStorage.removeItem('employee');
-    router.push('/');
   };
 
   return (
@@ -222,53 +349,184 @@ export default function InventoryMaintenancePage() {
         )}
 
         <div className="flex-1 p-3 md:p-4 bg-green-50">
+
+          {/* ✅ Summary Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-lg">📦</div>
+              <div>
+                <p className="text-xs text-gray-400">Total Items</p>
+                <p className="text-xl font-bold text-gray-800">{totalItems}</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-lg">✅</div>
+              <div>
+                <p className="text-xs text-gray-400">In Stock</p>
+                <p className="text-xl font-bold text-green-600">{inStockCount}</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-lg">⚠️</div>
+              <div>
+                <p className="text-xs text-gray-400">Low Stock</p>
+                <p className="text-xl font-bold text-yellow-500">{lowStockCount}</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-lg">❌</div>
+              <div>
+                <p className="text-xs text-gray-400">Out of Stock</p>
+                <p className="text-xl font-bold text-red-500">{outOfStockCount}</p>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm mb-4">
+            {/* Filter bar */}
             <div className="flex items-center gap-2 mb-4 flex-wrap">
               <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-40 md:w-48">
                 <span className="text-gray-400 text-sm">🔍</span>
-                <input type="text" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} className="outline-none text-sm text-gray-700 w-full" />
+                <input type="text" placeholder="Search" value={search} onChange={(e) => handleSearch(e.target.value)} className="outline-none text-sm text-gray-700 w-full" />
               </div>
-              <button className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-600 hover:bg-gray-50">👤 Category ▾</button>
-              <button className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-600 hover:bg-gray-50">🔖 Status ▾</button>
-              <button className="hidden md:flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">📅 Date ▾</button>
+
+              {/* ✅ Category Filter with outside click close */}
+              <div className="relative" ref={categoryRef}>
+                <button
+                  onClick={() => { setShowCategoryDropdown(!showCategoryDropdown); setShowStatusDropdown(false); }}
+                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${categoryFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                >
+                  👤 {categoryFilter === "All" ? "Category" : categoryFilter} ▾
+                </button>
+                {showCategoryDropdown && (
+                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44">
+                    {["All", "Bottle", "Plastic Bottle"].map((opt) => (
+                      <button key={opt} onClick={() => handleCategoryFilter(opt)}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${categoryFilter === opt ? "text-indigo-600 font-semibold" : "text-gray-600"}`}>
+                        {opt === "All" ? "All Categories" : opt}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ✅ Status Filter with outside click close */}
+              <div className="relative" ref={statusRef}>
+                <button
+                  onClick={() => { setShowStatusDropdown(!showStatusDropdown); setShowCategoryDropdown(false); }}
+                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${statusFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                >
+                  🔖 {statusFilter === "All" ? "Status" : statusFilter} ▾
+                </button>
+                {showStatusDropdown && (
+                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44">
+                    {["All", "In Stock", "Low Stock", "Out of Stock"].map((opt) => (
+                      <button key={opt} onClick={() => handleStatusFilter(opt)}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${statusFilter === opt ? "text-indigo-600 font-semibold" : "text-gray-600"}`}>
+                        {opt === "All" ? "All Statuses" : opt}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {(categoryFilter !== "All" || statusFilter !== "All") && (
+                <button onClick={() => { setCategoryFilter("All"); setStatusFilter("All"); setCurrentPage(1); }}
+                  className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">
+                  ✕ Clear
+                </button>
+              )}
+
               <button onClick={handleExport} className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-600 hover:bg-gray-50 ml-auto">📤 Export</button>
               <button onClick={handleDelete} className="flex items-center gap-1 border border-red-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-red-500 hover:bg-red-50">🗑️ Delete</button>
               <button onClick={openEditModal} className="flex items-center gap-1 border border-gray-800 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-800 hover:bg-gray-100">✏️ Edit</button>
               <button onClick={openAddModal} className="flex items-center gap-1 bg-gray-900 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-white hover:bg-gray-700">+ Add</button>
             </div>
 
+            {/* Table */}
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-max">
                 <thead>
+                  {/* ✅ Sortable column headers */}
                   <tr className="bg-indigo-900 text-white text-xs">
-                    <th className="p-3 text-left w-8"><input type="checkbox" onChange={toggleAll} checked={selected.length === filtered.length && filtered.length > 0} /></th>
-                    <th className="p-3 text-left">Code</th><th className="p-3 text-left">Product Name</th>
-                    <th className="p-3 text-left">Type</th><th className="p-3 text-left">Date Acquired</th>
-                    <th className="p-3 text-left">Total Stock</th><th className="p-3 text-left">Remaining Stock</th>
+                    <th className="p-3 text-left w-8"><input type="checkbox" onChange={toggleAll} checked={allPageSelected} /></th>
+                    {[
+                      { key: "code", label: "Code" },
+                      { key: "name", label: "Product Name" },
+                      { key: "type", label: "Type" },
+                      { key: "date", label: "Date Acquired" },
+                      { key: "total", label: "Total Stock" },
+                      { key: "remaining", label: "Remaining Stock" },
+                    ].map(({ key, label }) => (
+                      <th key={key} className="p-3 text-left cursor-pointer hover:bg-indigo-800 select-none" onClick={() => handleSort(key as SortKey)}>
+                        {label}{sortIcon(key as SortKey)}
+                      </th>
+                    ))}
                     <th className="p-3 text-left">Last Check by</th>
-                    <th className="p-3 text-left">Expiry Status</th><th className="p-3 text-left">Stock Status</th>
+                    <th className="p-3 text-left cursor-pointer hover:bg-indigo-800 select-none" onClick={() => handleSort("expiry")}>Expiry Status{sortIcon("expiry")}</th>
+                    <th className="p-3 text-left cursor-pointer hover:bg-indigo-800 select-none" onClick={() => handleSort("stock")}>Stock Status{sortIcon("stock")}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((row) => (
-                    <tr key={row.id} className={`border-b border-gray-100 hover:bg-gray-50 ${selected.includes(row.id) ? "bg-indigo-50" : ""}`}>
-                      <td className="p-3"><input type="checkbox" checked={selected.includes(row.id)} onChange={() => toggleSelect(row.id)} /></td>
-                      <td className="p-3 text-gray-700">{row.code}</td>
-                      <td className="p-3 text-gray-700">{row.name}</td>
-                      <td className="p-3"><span className={`px-2 py-1 rounded-full text-xs ${row.type === "Bottle" ? "bg-indigo-100 text-indigo-700" : "bg-teal-100 text-teal-700"}`}>{row.type}</span></td>
-                      <td className="p-3"><span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">{row.date}</span></td>
-                      <td className="p-3 text-gray-700">{row.total}</td>
-                      <td className="p-3 text-gray-700">{row.remaining}</td>
-                      <td className="p-3"><span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">{row.lastCheck}</span></td>
-                      <td className="p-3"><span className={`px-3 py-1 rounded-full text-xs font-medium ${getExpiryBadge(row.expiryColor)}`}>{row.expiry}</span></td>
-                      <td className="p-3"><span className={`px-3 py-1 rounded-full text-xs font-medium ${getStockBadge(row.stockColor)}`}>{row.stock}</span></td>
+                  {/* ✅ Friendly empty state message */}
+                  {paginated.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="text-center py-10">
+                        <p className="text-gray-400 text-sm">
+                          {search ? `No results found for "${search}".` : "No items in inventory yet."}
+                        </p>
+                        {search && (
+                          <button onClick={() => handleSearch("")} className="mt-2 text-xs text-indigo-500 hover:underline">Clear search</button>
+                        )}
+                      </td>
                     </tr>
-                  ))}
+                  ) : (
+                    paginated.map((row) => (
+                      <tr key={row.id} className={`border-b border-gray-100 hover:bg-gray-50 ${selected.includes(row.id) ? "bg-indigo-50" : ""}`}>
+                        <td className="p-3"><input type="checkbox" checked={selected.includes(row.id)} onChange={() => toggleSelect(row.id)} /></td>
+                        <td className="p-3 text-gray-700">{row.code}</td>
+                        <td className="p-3 text-gray-700">{row.name}</td>
+                        <td className="p-3"><span className={`px-2 py-1 rounded-full text-xs ${row.type === "Bottle" ? "bg-indigo-100 text-indigo-700" : "bg-teal-100 text-teal-700"}`}>{row.type}</span></td>
+                        <td className="p-3"><span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">{row.date}</span></td>
+                        <td className="p-3 text-gray-700">{row.total}</td>
+                        <td className="p-3 text-gray-700">{row.remaining}</td>
+                        <td className="p-3"><span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">{row.lastCheck}</span></td>
+                        <td className="p-3"><span className={`px-3 py-1 rounded-full text-xs font-medium ${getExpiryBadge(row.expiryColor)}`}>{row.expiry}</span></td>
+                        <td className="p-3"><span className={`px-3 py-1 rounded-full text-xs font-medium ${getStockBadge(row.stockColor)}`}>{row.stock}</span></td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 px-1">
+                <p className="text-xs text-gray-400">
+                  Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} of {filtered.length} items
+                </p>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}
+                    className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                    ← Prev
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <button key={page} onClick={() => setCurrentPage(page)}
+                      className={`px-3 py-1 rounded-lg text-sm border transition-colors ${currentPage === page ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                      {page}
+                    </button>
+                  ))}
+                  <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+                    className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                    Next →
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
+          {/* Charts */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <h2 className="font-bold text-gray-800 mb-3">Top Selling Products</h2>
@@ -297,13 +555,14 @@ export default function InventoryMaintenancePage() {
         </div>
       </main>
 
+      {/* ADD / EDIT MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-screen overflow-y-auto">
             <h2 className="text-lg font-bold text-gray-800 mb-4">{editingId !== null ? "Edit Item" : "Add New Item"}</h2>
             <div className="flex flex-col gap-3">
-              <div><label className="text-xs font-medium text-gray-600">Code</label><input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-              <div><label className="text-xs font-medium text-gray-600">Product Name</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+              <div><label className="text-xs font-medium text-gray-600">Code</label><input value={form.code} onChange={(e) => { setForm({ ...form, code: e.target.value }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+              <div><label className="text-xs font-medium text-gray-600">Product Name</label><input value={form.name} onChange={(e) => { setForm({ ...form, name: e.target.value }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div>
                 <label className="text-xs font-medium text-gray-600">Type</label>
                 <select value={form.type} onChange={(e) => handleTypeChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
@@ -316,10 +575,10 @@ export default function InventoryMaintenancePage() {
                 <input type="date" value={form.date} onChange={(e) => handleDateChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs font-medium text-gray-600">Total Stock</label><input type="number" min="0" value={form.total} onChange={(e) => setForm({ ...form, total: Math.max(0, Number(e.target.value)) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-                <div><label className="text-xs font-medium text-gray-600">Remaining Stock</label><input type="number" min="0" value={form.remaining} onChange={(e) => setForm({ ...form, remaining: Math.max(0, Number(e.target.value)) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+                <div><label className="text-xs font-medium text-gray-600">Total Stock</label><input type="number" min="0" value={form.total} onChange={(e) => handleTotalChange(Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+                <div><label className="text-xs font-medium text-gray-600">Remaining Stock</label><input type="number" min="0" value={form.remaining} onChange={(e) => handleRemainingChange(Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               </div>
-              <div><label className="text-xs font-medium text-gray-600">Last Check By</label><input value={form.lastCheck} onChange={(e) => setForm({ ...form, lastCheck: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+              <div><label className="text-xs font-medium text-gray-600">Last Check By</label><input value={form.lastCheck} onChange={(e) => { setForm({ ...form, lastCheck: e.target.value }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div>
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-gray-600">Expiry Status</label>
@@ -329,7 +588,7 @@ export default function InventoryMaintenancePage() {
                   </label>
                 </div>
                 {manualExpiry ? (
-                  <select value={form.expiry} onChange={(e) => { const val = e.target.value; const colorMap: Record<string, string> = { "Fresh/ Valid": "green", "Expired": "red", "Expiring Soon": "orange", "No Expiry": "blue", "Unknown": "gray" }; setForm({ ...form, expiry: val, expiryColor: colorMap[val] || "gray" }); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                  <select value={form.expiry} onChange={(e) => { const val = e.target.value; const colorMap: Record<string, string> = { "Fresh/ Valid": "green", "Expired": "red", "Expiring Soon": "orange", "No Expiry": "blue", "Unknown": "gray" }; setForm({ ...form, expiry: val, expiryColor: colorMap[val] || "gray" }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
                     <option>Fresh/ Valid</option><option>Expired</option><option>Expiring Soon</option><option>No Expiry</option><option>Unknown</option>
                   </select>
                 ) : (
@@ -340,19 +599,21 @@ export default function InventoryMaintenancePage() {
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600">Stock Status</label>
-                <select value={form.stock} onChange={(e) => { const val = e.target.value; const colorMap: Record<string, string> = { "In Stock": "green", "Out of Stock": "red", "Low Stock": "yellow" }; setForm({ ...form, stock: val, stockColor: colorMap[val] || "green" }); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                  <option>In Stock</option><option>Out of Stock</option><option>Low Stock</option>
-                </select>
+                <div className={`mt-1 px-3 py-2 rounded-lg text-sm font-medium inline-block ${getStockBadge(form.stockColor)}`}>
+                  {form.stock} <span className="text-xs opacity-75">(auto)</span>
+                </div>
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowModal(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              {/* ✅ Cancel warns if unsaved changes */}
+              <button onClick={handleCloseModal} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
               <button onClick={handleSave} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700">{editingId !== null ? "Save Changes" : "Add Item"}</button>
             </div>
           </div>
         </div>
       )}
 
+      {/* DELETE MODAL */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
