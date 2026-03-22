@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { PieChart, Pie, Cell, Tooltip } from "recharts";
 
 const supplierData = [
@@ -29,13 +29,13 @@ const customers = [
 ];
 
 const navItems = [
-  { label: "Dashboard", icon: "🏠", active: true },
-  { label: "Inventory Maintenance", icon: "🛒" },
-  { label: "Supplier Maintenance", icon: "📊" },
-  { label: "Sales Reports", icon: "🌐" },
-  { label: "Transaction Logs", icon: "▦" },
-  { label: "Product Management", icon: "🗒️" },
-  { label: "Account Management", icon: "👤" },
+  { label: "Dashboard", icon: "🏠", path: "/dashboard" },
+  { label: "Inventory Maintenance", icon: "🛒", path: "/inventory" },
+  { label: "Supplier Maintenance", icon: "📊", path: "/supplier" },
+  { label: "Sales Reports", icon: "🌐", path: "/sales" },
+  { label: "Transaction Logs", icon: "▦", path: "/transaction" },
+  { label: "Product Management", icon: "🗒️", path: "/product" },
+  { label: "Account Management", icon: "👤", path: "/account" },
 ];
 
 const products = [
@@ -58,44 +58,60 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("Daily");
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+
+  // ✅ Real clock
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formattedTime = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const formattedDate = now.toLocaleDateString("en-US", { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+
   const router = useRouter();
+  const pathname = usePathname(); // ✅ Active sidebar highlight
 
   const handleLogout = () => {
     document.cookie = "token=; path=/; max-age=0";
     router.push("/");
   };
 
-  const navigate = (label: string) => {
-    if (label === "Dashboard") router.push("/dashboard");
-    if (label === "Inventory Maintenance") router.push("/inventory");
-    if (label === "Supplier Maintenance") router.push("/supplier");
-    if (label === "Sales Reports") router.push("/sales");
-    if (label === "Transaction Logs") router.push("/transaction");
-    if (label === "Product Management") router.push("/product");
-    if (label === "Account Management") router.push("/account");
+  // ✅ Fixed: all nav routes complete
+  const navigate = (path: string) => {
+    router.push(path);
     setShowMobileMenu(false);
   };
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
+
+      {/* Sidebar */}
       <aside className="hidden md:flex w-52 bg-white flex-col py-6 px-4 border-r border-gray-100 shrink-0">
         <div className="text-center mb-10">
           <p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide">JULIETA SOFTDRINKS<br />STORE</p>
         </div>
         <nav className="flex flex-col gap-1">
-          {navItems.map((item) => (
-            <div key={item.label} onClick={() => navigate(item.label)}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${item.active ? "text-indigo-700 font-semibold" : "text-gray-400 hover:text-gray-600"}`}>
-              <div className="relative flex items-center gap-2 w-full">
-                <span>{item.icon}</span><span>{item.label}</span>
-                {item.active && <div className="absolute -right-4 w-1 h-6 bg-green-500 rounded-full" />}
+          {navItems.map((item) => {
+            // ✅ Active highlight based on current URL
+            const isActive = pathname === item.path;
+            return (
+              <div key={item.label} onClick={() => navigate(item.path)}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${isActive ? "text-indigo-700 font-semibold bg-indigo-50" : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"}`}>
+                <div className="relative flex items-center gap-2 w-full">
+                  <span>{item.icon}</span>
+                  <span>{item.label}</span>
+                  {isActive && <div className="absolute -right-4 w-1 h-6 bg-green-500 rounded-full" />}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </nav>
       </aside>
 
       <main className="flex-1 flex flex-col overflow-auto">
+
+        {/* Header */}
         <header className="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-100">
           <button
             className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300"
@@ -104,7 +120,13 @@ export default function DashboardPage() {
           >
             {showMobileMenu ? "✕" : "☰"}
           </button>
-          <h1 className="text-xl md:text-2xl font-bold text-indigo-900">Dashboard</h1>
+
+          <div className="flex flex-col">
+            <h1 className="text-xl md:text-2xl font-bold text-indigo-900">Dashboard</h1>
+            {/* ✅ Live date and time */}
+            <p className="text-xs text-gray-400 hidden md:block">{formattedDate} &nbsp;·&nbsp; {formattedTime}</p>
+          </div>
+
           <div className="flex items-center gap-2 md:gap-3">
             <div className="relative">
               <span className="text-xl">🔔</span>
@@ -134,17 +156,22 @@ export default function DashboardPage() {
           </div>
         </header>
 
+        {/* Mobile menu */}
         {showMobileMenu && (
           <div className="md:hidden bg-white border-b border-gray-100 px-4 py-3 flex flex-col gap-1 z-40">
-            {navItems.map((item) => (
-              <div key={item.label} onClick={() => navigate(item.label)}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${item.active ? "text-indigo-700 font-semibold" : "text-gray-500"}`}>
-                <span>{item.icon}</span><span>{item.label}</span>
-              </div>
-            ))}
+            {navItems.map((item) => {
+              const isActive = pathname === item.path;
+              return (
+                <div key={item.label} onClick={() => navigate(item.path)}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${isActive ? "text-indigo-700 font-semibold" : "text-gray-500"}`}>
+                  <span>{item.icon}</span><span>{item.label}</span>
+                </div>
+              );
+            })}
           </div>
         )}
 
+        {/* Page content */}
         <div className="flex-1 p-3 md:p-4 bg-green-50">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-4">
             <div className="md:col-span-5 bg-white rounded-2xl p-4 shadow-sm">
@@ -174,7 +201,7 @@ export default function DashboardPage() {
                 <div className="bg-blue-50 rounded-xl p-3">
                   <p className="text-xs text-gray-500">Return Items</p>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xl md:text-2xl font-bold text-gray-800">$695</span>
+                    <span className="text-xl md:text-2xl font-bold text-gray-800">₱695</span>
                     <span className="text-xs text-green-500">+15.03% ↗</span>
                   </div>
                 </div>
@@ -252,7 +279,12 @@ export default function DashboardPage() {
             <div className="md:col-span-5 bg-white rounded-2xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-bold text-gray-800">Transaction Logs</h2>
-                <button className="text-xs border border-gray-300 rounded-full px-3 py-1 text-gray-500 hover:bg-gray-50">See more</button>
+                {/* ✅ See more now navigates to transaction page */}
+                <button
+                  onClick={() => router.push("/transaction")}
+                  className="text-xs border border-gray-300 rounded-full px-3 py-1 text-gray-500 hover:bg-gray-50 hover:border-indigo-300 hover:text-indigo-500 transition-colors">
+                  See more
+                </button>
               </div>
               <div className="flex gap-2">
                 {["Daily", "Weekly", "Monthly"].map((tab) => (
