@@ -14,9 +14,9 @@ const supplierData = [
 const inventoryData = [
   { name: "Soft Drinks", value: 47, color: "#60a5fa" },
   { name: "Beer", value: 27, color: "#7c3aed" },
-  { name: "Energy Drink", value: 7, color: "#f59e0b" },
-  { name: "Home & Kitchen", value: 6, color: "#f97316" },
-  { name: "Fitness", value: 13, color: "#22c55e" },
+  { name: "Energy Drink", value: 13, color: "#f59e0b" },
+  { name: "Water", value: 7, color: "#f97316" },
+  { name: "Juice", value: 6, color: "#22c55e" },
 ];
 
 const customers = [

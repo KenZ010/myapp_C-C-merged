@@ -13,7 +13,6 @@ type InventoryItem = {
   stock: string; stockColor: string;
 };
 
-// Auto calculate expiry based on date acquired and type
 const calculateExpiry = (dateStr: string, type: string): { expiry: string; expiryColor: string } => {
   if (type === "Plastic Bottle") return { expiry: "No Expiry", expiryColor: "blue" };
   if (!dateStr) return { expiry: "Unknown", expiryColor: "gray" };
@@ -49,9 +48,9 @@ const initialData: InventoryItem[] = [
 const categoryData = [
   { name: "Soft Drinks", value: 47, color: "#60a5fa" },
   { name: "Beer", value: 27, color: "#7c3aed" },
-  { name: "Energy Drink", value: 7, color: "#f59e0b" },
-  { name: "Home & Kitchen", value: 7, color: "#f97316" },
-  { name: "Fitness", value: 13, color: "#22c55e" },
+  { name: "Energy Drink", value: 13, color: "#f59e0b" },
+  { name: "Water", value: 7, color: "#f97316" },
+  { name: "Juice", value: 6, color: "#22c55e" },
 ];
 
 const navItems = [
@@ -111,7 +110,6 @@ export default function InventoryMaintenancePage() {
     setEditingId(item.id); setManualExpiry(false); setShowModal(true);
   };
 
-  // Update expiry when type or date changes (unless manual override)
   const handleTypeChange = (newType: string) => {
     if (!manualExpiry) {
       const calc = calculateExpiry(form.date, newType);
@@ -160,10 +158,10 @@ export default function InventoryMaintenancePage() {
   };
 
   const handleLogout = () => {
-  document.cookie = 'token=; path=/; max-age=0';
-  localStorage.removeItem('employee');
-  router.push('/');
-};
+    document.cookie = 'token=; path=/; max-age=0';
+    localStorage.removeItem('employee');
+    router.push('/');
+  };
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
@@ -299,7 +297,6 @@ export default function InventoryMaintenancePage() {
         </div>
       </main>
 
-      {/* ADD / EDIT MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-screen overflow-y-auto">
@@ -307,8 +304,6 @@ export default function InventoryMaintenancePage() {
             <div className="flex flex-col gap-3">
               <div><label className="text-xs font-medium text-gray-600">Code</label><input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div><label className="text-xs font-medium text-gray-600">Product Name</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-
-              {/* Type field */}
               <div>
                 <label className="text-xs font-medium text-gray-600">Type</label>
                 <select value={form.type} onChange={(e) => handleTypeChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
@@ -316,21 +311,15 @@ export default function InventoryMaintenancePage() {
                   <option>Plastic Bottle</option>
                 </select>
               </div>
-
-              {/* Date Acquired */}
               <div>
                 <label className="text-xs font-medium text-gray-600">Date Acquired</label>
                 <input type="date" value={form.date} onChange={(e) => handleDateChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs font-medium text-gray-600">Total Stock</label><input type="number" min="0" value={form.total} onChange={(e) => setForm({ ...form, total: Math.max(0, Number(e.target.value)) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
                 <div><label className="text-xs font-medium text-gray-600">Remaining Stock</label><input type="number" min="0" value={form.remaining} onChange={(e) => setForm({ ...form, remaining: Math.max(0, Number(e.target.value)) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               </div>
-
               <div><label className="text-xs font-medium text-gray-600">Last Check By</label><input value={form.lastCheck} onChange={(e) => setForm({ ...form, lastCheck: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-
-              {/* Expiry Status - auto calculated but can override */}
               <div>
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-gray-600">Expiry Status</label>
@@ -349,7 +338,6 @@ export default function InventoryMaintenancePage() {
                   </div>
                 )}
               </div>
-
               <div>
                 <label className="text-xs font-medium text-gray-600">Stock Status</label>
                 <select value={form.stock} onChange={(e) => { const val = e.target.value; const colorMap: Record<string, string> = { "In Stock": "green", "Out of Stock": "red", "Low Stock": "yellow" }; setForm({ ...form, stock: val, stockColor: colorMap[val] || "green" }); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
@@ -365,7 +353,6 @@ export default function InventoryMaintenancePage() {
         </div>
       )}
 
-      {/* DELETE MODAL */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
