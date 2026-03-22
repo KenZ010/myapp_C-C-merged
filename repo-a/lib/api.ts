@@ -23,6 +23,11 @@ export const api = {
     return res.json();
   },
 
+  getEmployee: async (id: string) => {
+    const res = await fetch(`${API_URL}/employees/${id}`);
+    return res.json();
+  },
+
   createEmployee: async (data: any, token: string) => {
     const res = await fetch(`${API_URL}/employees`, {
       method: 'POST',
@@ -35,11 +40,32 @@ export const api = {
     return res.json();
   },
 
+  updateEmployee: async (id: string, data: any) => {
+    const res = await fetch(`${API_URL}/employees/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
+
+  deleteEmployee: async (id: string) => {
+    const res = await fetch(`${API_URL}/employees/${id}`, {
+      method: 'DELETE'
+    });
+    return res.json();
+  },
+
   // ==================
   // SUPPLIERS
   // ==================
   getSuppliers: async () => {
     const res = await fetch(`${API_URL}/suppliers`);
+    return res.json();
+  },
+
+  getSupplier: async (id: string) => {
+    const res = await fetch(`${API_URL}/suppliers/${id}`);
     return res.json();
   },
 
@@ -52,8 +78,8 @@ export const api = {
     return res.json();
   },
 
-  updateSupplier: async (code: string, data: any) => {
-    const res = await fetch(`${API_URL}/suppliers/${code}`, {
+  updateSupplier: async (id: string, data: any) => {
+    const res = await fetch(`${API_URL}/suppliers/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -61,15 +87,48 @@ export const api = {
     return res.json();
   },
 
-  deleteSupplier: async (code: string) => {
-    const res = await fetch(`${API_URL}/suppliers/${code}`, {
+  deleteSupplier: async (id: string) => {
+    const res = await fetch(`${API_URL}/suppliers/${id}`, {
       method: 'DELETE'
     });
     return res.json();
   },
 
-  getSupplier: async (code: string) => {
-    const res = await fetch(`${API_URL}/suppliers/${code}`);
+  // ==================
+  // CUSTOMERS
+  // ==================
+  getCustomers: async () => {
+    const res = await fetch(`${API_URL}/customers`);
+    return res.json();
+  },
+
+  getCustomer: async (id: string) => {
+    const res = await fetch(`${API_URL}/customers/${id}`);
+    return res.json();
+  },
+
+  createCustomer: async (data: any) => {
+    const res = await fetch(`${API_URL}/customers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
+
+  updateCustomer: async (id: string, data: any) => {
+    const res = await fetch(`${API_URL}/customers/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
+
+  deleteCustomer: async (id: string) => {
+    const res = await fetch(`${API_URL}/customers/${id}`, {
+      method: 'DELETE'
+    });
     return res.json();
   },
 };

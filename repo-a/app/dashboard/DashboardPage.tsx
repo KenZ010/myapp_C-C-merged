@@ -6,7 +6,7 @@ import { PieChart, Pie, Cell, Tooltip } from "recharts";
 import { api } from "@/lib/api";
 
 type SupplierItem = {
-  code: string;
+  id: string;
   itemName: string;
   supplierName: string;
   contactNo: string;
@@ -15,7 +15,7 @@ type SupplierItem = {
 };
 
 type Employee = {
-  id: number;
+  id: string;
   name: string;
   role: string;
   userStatus: string;
@@ -110,6 +110,12 @@ export default function DashboardPage() {
     fetchEmployees();
   }, []);
 
+  const handleLogout = () => {
+  document.cookie = 'token=; path=/; max-age=0';
+  localStorage.removeItem('employee');
+  router.push('/');
+};
+
   const navigate = (label: string) => {
     if (label === "Dashboard") router.push("/dashboard");
     if (label === "Inventory Maintenance") router.push("/inventory");
@@ -167,7 +173,7 @@ export default function DashboardPage() {
               </button>
               {showUserMenu && (
                 <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-lg border border-gray-100 z-50">
-                  <button onClick={() => router.push("/")} className="flex items-center gap-2 w-full px-4 py-3 text-sm text-red-500 hover:bg-red-50 rounded-xl">
+                  <button onClick={handleLogout} className="flex items-center gap-2 w-full px-4 py-3 text-sm text-red-500 hover:bg-red-50 rounded-xl">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                     </svg>
@@ -299,7 +305,7 @@ export default function DashboardPage() {
                     <tr><td colSpan={5} className="py-4 text-center text-gray-400 text-xs">No suppliers found.</td></tr>
                   ) : (
                     suppliers.slice(0, 5).map((row, i) => (
-                      <tr key={row.code} className="border-b last:border-0 text-gray-600">
+                      <tr key={row.id} className="border-b last:border-0 text-gray-600">
                         <td className="py-2 text-gray-400">{i + 1}</td>
                         <td className="py-2">{row.itemName}</td>
                         <td className="py-2">{row.supplierName}</td>
