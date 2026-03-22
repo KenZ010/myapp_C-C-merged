@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -9,21 +10,47 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [userFocused, setUserFocused] = useState(false);
   const [passFocused, setPassFocused] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleLogin = () => {
-    if (username && password) {
-      document.cookie = "token=logged-in; path=/";
-      router.push("/dashboard");
-    } else {
-      alert("Please enter username and password.");
+  const handleLogin = async () => {
+    setError("");
+
+    if (!username || !password) {
+      setError("Please enter username and password.");
+      return;
     }
+
+    setLoading(true);
+
+    try {
+      const data = await api.login(username, password);
+
+      if (data.token) {
+        // ✅ Save real token from backend
+        document.cookie = `token=${data.token}; path=/; max-age=${60 * 60 * 24}`;
+        localStorage.setItem("employee", JSON.stringify(data.employee));
+        setTimeout(() => router.push("/dashboard"), 100);
+      } else {
+        // ❌ Show error from backend
+        setError(data.message || "Invalid credentials");
+      }
+    } catch (err) {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") handleLogin();
   };
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
 
-      {/* ✅ LEFT - Improved green side with decorative elements */}
+      {/* LEFT - Green side */}
       <div
         className="hidden md:flex md:w-1/2 items-center justify-center relative overflow-hidden"
         style={{
@@ -61,7 +88,6 @@ export default function LoginPage() {
       </div>
 
       {/* RIGHT - Login form */}
-      {/* ✅ Better vertical centering */}
       <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 bg-white min-h-screen">
 
         {/* Mobile logo */}
@@ -80,9 +106,17 @@ export default function LoginPage() {
           <h2 className="text-3xl font-bold text-gray-800 mb-1">Welcome Back!</h2>
           <p className="text-gray-400 text-sm mb-8">Login to your account</p>
 
+          {/* ✅ Error message */}
+          {error && (
+            <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-2">
+              <span>⚠️</span>
+              <span>{error}</span>
+            </div>
+          )}
+
           <div className="flex flex-col gap-5">
 
-            {/* ✅ Username with focus glow animation */}
+            {/* Username */}
             <div>
               <label className="text-xs font-semibold text-gray-600 mb-1 block">Username</label>
               <div
@@ -99,13 +133,14 @@ export default function LoginPage() {
                   onChange={(e) => setUsername(e.target.value)}
                   onFocus={() => setUserFocused(true)}
                   onBlur={() => setUserFocused(false)}
+                  onKeyDown={handleKeyDown}
                   placeholder="Enter your username"
                   className="flex-1 outline-none text-sm text-gray-900 bg-transparent"
                 />
               </div>
             </div>
 
-            {/* ✅ Password with focus glow + eye icon */}
+            {/* Password */}
             <div>
               <label className="text-xs font-semibold text-gray-600 mb-1 block">Password</label>
               <div
@@ -122,10 +157,10 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   onFocus={() => setPassFocused(true)}
                   onBlur={() => setPassFocused(false)}
+                  onKeyDown={handleKeyDown}
                   placeholder="Enter your password"
                   className="flex-1 outline-none text-sm text-gray-900 bg-transparent"
                 />
-                {/* ✅ Eye icon toggle */}
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
@@ -145,24 +180,31 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* ✅ Better Log In button with gradient + shadow + hover lift */}
+            {/* Login Button */}
             <button
               onClick={handleLogin}
-              className="w-full py-3 rounded-xl text-white text-sm font-semibold mt-1 transition-all duration-200 active:scale-95"
+              disabled={loading}
+              className="w-full py-3 rounded-xl text-white text-sm font-semibold mt-1 transition-all duration-200 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
               style={{
-                background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
-                boxShadow: "0 4px 15px rgba(79,70,229,0.4)",
+                background: loading
+                  ? "linear-gradient(135deg, #a5b4fc 0%, #c7d2fe 100%)"
+                  : "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
+                boxShadow: loading ? "none" : "0 4px 15px rgba(79,70,229,0.4)",
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 6px 20px rgba(79,70,229,0.6)";
-                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
+                if (!loading) {
+                  (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 6px 20px rgba(79,70,229,0.6)";
+                  (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
+                }
               }}
               onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 4px 15px rgba(79,70,229,0.4)";
-                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+                if (!loading) {
+                  (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 4px 15px rgba(79,70,229,0.4)";
+                  (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+                }
               }}
             >
-              Log In
+              {loading ? "Logging in..." : "Log In"}
             </button>
           </div>
         </div>
