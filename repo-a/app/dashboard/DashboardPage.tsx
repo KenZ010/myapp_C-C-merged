@@ -3,13 +3,31 @@
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { PieChart, Pie, Cell, Tooltip } from "recharts";
+import { api } from "@/lib/api";
 
-const supplierData = [
-  { name: "ASOS Ridley High Waist", price: "$79.49", quantity: 82, amount: "$6,518.18" },
-  { name: "Marco Lightweight Shirt", price: "$128.50", quantity: 37, amount: "$4,754.50" },
-  { name: "Half Sleeve Shirt", price: "$39.99", quantity: 64, amount: "$2,559.36" },
-  { name: "Lightweight Jacket", price: "$20.00", quantity: 184, amount: "$3,680.00" },
-];
+type Employee = {
+  id: string;
+  name: string;
+  role: string;
+  userStatus: string;
+  phone: string;
+};
+
+type Supplier = {
+  id: string;
+  supplierName: string;
+  contactNo: string;
+  lastOrdered: number | null;
+  status: string;
+};
+
+type Customer = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  userStatus: string;
+};
 
 const inventoryData = [
   { name: "Soft Drinks", value: 47, color: "#60a5fa" },
@@ -17,15 +35,6 @@ const inventoryData = [
   { name: "Energy Drink", value: 13, color: "#f59e0b" },
   { name: "Water", value: 7, color: "#f97316" },
   { name: "Juice", value: 6, color: "#22c55e" },
-];
-
-const customers = [
-  { name: "Natali Craig", img: "https://i.pravatar.cc/32?img=1" },
-  { name: "Drew Cano", img: "https://i.pravatar.cc/32?img=2" },
-  { name: "Andi Lane", img: "https://i.pravatar.cc/32?img=3" },
-  { name: "Koray Okumus", img: "https://i.pravatar.cc/32?img=4" },
-  { name: "Kate Morrison", img: "https://i.pravatar.cc/32?img=5" },
-  { name: "Melody Macy", img: "https://i.pravatar.cc/32?img=6" },
 ];
 
 const navItems = [
@@ -59,7 +68,15 @@ export default function DashboardPage() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
-  // ✅ Real clock
+  // Data states
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(true);
+  const [loadingSuppliers, setLoadingSuppliers] = useState(true);
+  const [loadingCustomers, setLoadingCustomers] = useState(true);
+
+  // Live clock
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -70,14 +87,65 @@ export default function DashboardPage() {
   const formattedDate = now.toLocaleDateString("en-US", { weekday: "short", year: "numeric", month: "short", day: "numeric" });
 
   const router = useRouter();
-  const pathname = usePathname(); // ✅ Active sidebar highlight
+  const pathname = usePathname();
+
+  // Fetch employees - CASHIER and STOCK_MANAGER only
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        setLoadingEmployees(true);
+        const data = await api.getEmployees();
+        const filtered = data.filter(
+          (emp: Employee) => emp.role === "CASHIER" || emp.role === "STOCK_MANAGER"
+        );
+        setEmployees(filtered);
+      } catch (err) {
+        console.error("Failed to fetch employees:", err);
+      } finally {
+        setLoadingEmployees(false);
+      }
+    };
+    fetchEmployees();
+  }, []);
+
+  // Fetch suppliers
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      try {
+        setLoadingSuppliers(true);
+        const data = await api.getSuppliers();
+        setSuppliers(data);
+      } catch (err) {
+        console.error("Failed to fetch suppliers:", err);
+      } finally {
+        setLoadingSuppliers(false);
+      }
+    };
+    fetchSuppliers();
+  }, []);
+
+  // Fetch customers
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        setLoadingCustomers(true);
+        const data = await api.getCustomers();
+        setCustomers(data);
+      } catch (err) {
+        console.error("Failed to fetch customers:", err);
+      } finally {
+        setLoadingCustomers(false);
+      }
+    };
+    fetchCustomers();
+  }, []);
 
   const handleLogout = () => {
     document.cookie = "token=; path=/; max-age=0";
+    localStorage.removeItem("employee");
     router.push("/");
   };
 
-  // ✅ Fixed: all nav routes complete
   const navigate = (path: string) => {
     router.push(path);
     setShowMobileMenu(false);
@@ -93,7 +161,6 @@ export default function DashboardPage() {
         </div>
         <nav className="flex flex-col gap-1">
           {navItems.map((item) => {
-            // ✅ Active highlight based on current URL
             const isActive = pathname === item.path;
             return (
               <div key={item.label} onClick={() => navigate(item.path)}
@@ -120,13 +187,10 @@ export default function DashboardPage() {
           >
             {showMobileMenu ? "✕" : "☰"}
           </button>
-
           <div className="flex flex-col">
             <h1 className="text-xl md:text-2xl font-bold text-indigo-900">Dashboard</h1>
-            {/* ✅ Live date and time */}
             <p className="text-xs text-gray-400 hidden md:block">{formattedDate} &nbsp;·&nbsp; {formattedTime}</p>
           </div>
-
           <div className="flex items-center gap-2 md:gap-3">
             <div className="relative">
               <span className="text-xl">🔔</span>
@@ -174,6 +238,8 @@ export default function DashboardPage() {
         {/* Page content */}
         <div className="flex-1 p-3 md:p-4 bg-green-50">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-4">
+
+            {/* Sales Report */}
             <div className="md:col-span-5 bg-white rounded-2xl p-4 shadow-sm">
               <h2 className="font-bold text-gray-800 mb-3">Sales Report</h2>
               <div className="grid grid-cols-2 gap-3">
@@ -207,49 +273,131 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
+
+            {/* ✅ Account Management - Employees from DB */}
             <div className="md:col-span-4 bg-white rounded-2xl p-4 shadow-sm">
-              <h2 className="font-bold text-gray-800 mb-3">Account Management</h2>
-            </div>
-            <div className="md:col-span-3 bg-white rounded-2xl p-4 shadow-sm">
-              <h2 className="font-bold text-gray-800 mb-3">Customer List</h2>
-              <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
-                {customers.map((c) => (
-                  <div key={c.name} className="flex items-center gap-2">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={c.img} alt={c.name} className="w-7 h-7 rounded-full" />
-                    <span className="text-sm text-gray-700">{c.name}</span>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-bold text-gray-800">Account Management</h2>
+                <span className="text-xs text-gray-400">{employees.length} staff</span>
               </div>
+              {loadingEmployees ? (
+                <p className="text-xs text-gray-400 text-center py-4">Loading employees...</p>
+              ) : employees.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-4">No employees found.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {employees.slice(0, 5).map((emp) => (
+                    <div key={emp.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs">
+                          {emp.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">{emp.name}</p>
+                          <p className="text-xs text-gray-400">{emp.phone}</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${emp.role === "CASHIER" ? "bg-blue-100 text-blue-600" : "bg-purple-100 text-purple-600"}`}>
+                          {emp.role}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs ${emp.userStatus === "ACTIVE" ? "bg-green-100 text-green-600" : "bg-yellow-100 text-yellow-600"}`}>
+                          {emp.userStatus}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {employees.length > 5 && (
+                    <button onClick={() => router.push("/account")} className="text-xs text-indigo-600 hover:underline mt-1 text-left">
+                      See all {employees.length} employees →
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* ✅ Customer List from DB */}
+            <div className="md:col-span-3 bg-white rounded-2xl p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-bold text-gray-800">Customer List</h2>
+                <span className="text-xs text-gray-400">{customers.length} total</span>
+              </div>
+              {loadingCustomers ? (
+                <p className="text-xs text-gray-400 text-center py-4">Loading...</p>
+              ) : customers.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-4">No customers found.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {customers.slice(0, 6).map((c) => (
+                    <div key={c.id} className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs shrink-0">
+                        {c.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm text-gray-700 truncate">{c.name}</p>
+                        <p className="text-xs text-gray-400 truncate">{c.email ?? c.phone ?? "-"}</p>
+                      </div>
+                      <span className={`ml-auto px-2 py-0.5 rounded-full text-xs shrink-0 ${c.userStatus === "ACTIVE" ? "bg-green-100 text-green-600" : "bg-yellow-100 text-yellow-600"}`}>
+                        {c.userStatus}
+                      </span>
+                    </div>
+                  ))}
+                  {customers.length > 6 && (
+                    <button onClick={() => router.push("/account")} className="text-xs text-indigo-600 hover:underline mt-1 text-left">
+                      See all {customers.length} customers →
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-4">
+
+            {/* ✅ Supplier Information from DB */}
             <div className="md:col-span-5 bg-white rounded-2xl p-4 shadow-sm overflow-x-auto">
-              <h2 className="font-bold text-gray-800 mb-3">Supplier Information</h2>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-bold text-gray-800">Supplier Information</h2>
+                <span className="text-xs text-gray-400">{suppliers.length} total</span>
+              </div>
               <table className="w-full text-sm min-w-max">
                 <thead>
                   <tr className="text-gray-400 text-xs border-b">
                     <th className="text-left pb-2">#</th>
-                    <th className="text-left pb-2">Name</th>
-                    <th className="text-right pb-2">Price</th>
-                    <th className="text-right pb-2">Qty</th>
-                    <th className="text-right pb-2">Amount</th>
+                    <th className="text-left pb-2">Supplier Name</th>
+                    <th className="text-right pb-2">Last Ordered</th>
+                    <th className="text-right pb-2">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {supplierData.map((row, i) => (
-                    <tr key={i} className="border-b last:border-0 text-gray-600">
-                      <td className="py-2 text-gray-400">{i + 1}</td>
-                      <td className="py-2">{row.name}</td>
-                      <td className="py-2 text-right">{row.price}</td>
-                      <td className="py-2 text-right">{row.quantity}</td>
-                      <td className="py-2 text-right">{row.amount}</td>
-                    </tr>
-                  ))}
+                  {loadingSuppliers ? (
+                    <tr><td colSpan={4} className="py-4 text-center text-gray-400 text-xs">Loading...</td></tr>
+                  ) : suppliers.length === 0 ? (
+                    <tr><td colSpan={4} className="py-4 text-center text-gray-400 text-xs">No suppliers found.</td></tr>
+                  ) : (
+                    suppliers.slice(0, 5).map((row, i) => (
+                      <tr key={row.id} className="border-b last:border-0 text-gray-600">
+                        <td className="py-2 text-gray-400">{i + 1}</td>
+                        <td className="py-2">{row.supplierName}</td>
+                        <td className="py-2 text-right">{row.lastOrdered ?? "-"}</td>
+                        <td className="py-2 text-right">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${row.status === "ACTIVE" ? "bg-green-100 text-green-600" : "bg-yellow-100 text-yellow-600"}`}>
+                            {row.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
+              {suppliers.length > 5 && (
+                <button onClick={() => router.push("/supplier")} className="mt-3 text-xs text-indigo-600 hover:underline">
+                  See all {suppliers.length} suppliers →
+                </button>
+              )}
             </div>
+
+            {/* Inventory Pie Chart */}
             <div className="md:col-span-7 bg-white rounded-2xl p-4 shadow-sm">
               <h2 className="font-bold text-green-500 mb-3">Inventory Maintenances</h2>
               <div className="flex justify-center overflow-x-auto">
@@ -279,7 +427,6 @@ export default function DashboardPage() {
             <div className="md:col-span-5 bg-white rounded-2xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-bold text-gray-800">Transaction Logs</h2>
-                {/* ✅ See more now navigates to transaction page */}
                 <button
                   onClick={() => router.push("/transaction")}
                   className="text-xs border border-gray-300 rounded-full px-3 py-1 text-gray-500 hover:bg-gray-50 hover:border-indigo-300 hover:text-indigo-500 transition-colors">

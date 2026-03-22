@@ -2,26 +2,58 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleLogin = () => {
-    if (username && password) {
-      document.cookie = "token=logged-in; path=/";
-      router.push("/dashboard");
-    } else {
-      alert("Please enter username and password.");
+  const handleLogin = async () => {
+    setError("");
+
+    // Basic validation
+    if (!username || !password) {
+      setError("Please enter username and password.");
+      return;
     }
+
+    setLoading(true);
+
+    try {
+      const data = await api.login(username, password);
+
+      if (data.token) {
+        // ✅ Save real token from backend
+        document.cookie = `token=${data.token}; path=/; max-age=${60 * 60 * 24}`;
+        localStorage.setItem("employee", JSON.stringify(data.employee));
+
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 100);
+      } else {
+        // ❌ Show error from backend
+        setError(data.message || "Invalid credentials");
+      }
+    } catch (err) {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Allow login on Enter key press
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") handleLogin();
   };
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
 
-      {/* LEFT - Green gradient (hidden on small, shown on md+) */}
+      {/* LEFT - Green gradient */}
       <div
         className="hidden md:flex md:w-1/2 items-center justify-center"
         style={{
@@ -29,7 +61,6 @@ export default function LoginPage() {
           borderRadius: "0 0 100px 0",
         }}
       >
-        {/* Logo */}
         <div className="flex flex-col items-center gap-4">
           <div className="w-32 h-32 rounded-full bg-orange-400 flex items-center justify-center shadow-xl">
             <div className="w-24 h-24 rounded-full bg-white flex items-center justify-center">
@@ -64,6 +95,13 @@ export default function LoginPage() {
           <h2 className="text-2xl font-bold text-gray-800 mb-1">Welcome Back!</h2>
           <p className="text-gray-400 text-sm mb-8">Login to your account</p>
 
+          {/* ✅ Error message */}
+          {error && (
+            <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm">
+              {error}
+            </div>
+          )}
+
           <div className="flex flex-col gap-4">
             <div>
               <label className="text-xs font-medium text-gray-600">Username</label>
@@ -71,6 +109,7 @@ export default function LoginPage() {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
+                onKeyDown={handleKeyDown}
                 placeholder="Enter your username"
                 className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
               />
@@ -82,8 +121,9 @@ export default function LoginPage() {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={handleKeyDown}
                   placeholder="Enter your password"
-                  className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
+                  className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900 pr-16"
                 />
                 <button
                   onClick={() => setShowPassword(!showPassword)}
@@ -95,10 +135,11 @@ export default function LoginPage() {
             </div>
             <button
               onClick={handleLogin}
-              className="w-full py-3 rounded-lg text-white text-sm font-semibold mt-2"
-              style={{ backgroundColor: "#4f46e5" }}
+              disabled={loading}
+              className="w-full py-3 rounded-lg text-white text-sm font-semibold mt-2 transition-opacity hover:opacity-90 disabled:opacity-60"
+              style={{ backgroundColor: loading ? "#a5b4fc" : "#4f46e5" }}
             >
-              Log In
+              {loading ? "Logging in..." : "Log In"}
             </button>
           </div>
         </div>
