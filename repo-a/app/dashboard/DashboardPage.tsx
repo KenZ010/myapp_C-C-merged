@@ -60,11 +60,19 @@ export default function DashboardPage() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const router = useRouter();
 
+  const handleLogout = () => {
+    document.cookie = "token=; path=/; max-age=0";
+    router.push("/");
+  };
+
   const navigate = (label: string) => {
     if (label === "Dashboard") router.push("/dashboard");
     if (label === "Inventory Maintenance") router.push("/inventory");
     if (label === "Supplier Maintenance") router.push("/supplier");
     if (label === "Sales Reports") router.push("/sales");
+    if (label === "Transaction Logs") router.push("/transaction");
+    if (label === "Product Management") router.push("/product");
+    if (label === "Account Management") router.push("/account");
     setShowMobileMenu(false);
   };
 
@@ -114,7 +122,7 @@ export default function DashboardPage() {
               </button>
               {showUserMenu && (
                 <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-lg border border-gray-100 z-50">
-                  <button onClick={() => router.push("/")} className="flex items-center gap-2 w-full px-4 py-3 text-sm text-red-500 hover:bg-red-50 rounded-xl">
+                  <button onClick={handleLogout} className="flex items-center gap-2 w-full px-4 py-3 text-sm text-red-500 hover:bg-red-50 rounded-xl">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                     </svg>
