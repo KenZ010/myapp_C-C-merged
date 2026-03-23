@@ -18,6 +18,7 @@ export const api = {
     });
     return res.json();
   },
+  
 
   // EMPLOYEES
   getEmployees: async () => {  // ← removed token parameter
@@ -159,4 +160,41 @@ export const api = {
     });
     return res.json();
   },
+
+  // PRODUCTS
+getProducts: async () => {
+  const res = await fetch(`${API_URL}/products`);
+  return res.json();
+},
+
+getProduct: async (id: string) => {
+  const res = await fetch(`${API_URL}/products/${id}`);
+  return res.json();
+},
+
+createProduct: async (data: any) => {
+  const res = await fetch(`${API_URL}/products`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  return res.json();
+},
+
+updateProduct: async (id: string, data: any) => {
+  const res = await fetch(`${API_URL}/products/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  return res.json();
+},
+
+deleteProduct: async (id: string) => {
+  const res = await fetch(`${API_URL}/products/${id}`, {
+    method: 'DELETE'
+  });
+  return res.json();
+},
 };
+
