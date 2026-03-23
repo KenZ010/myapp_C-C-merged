@@ -63,6 +63,12 @@ export default function AccountManagementPage() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
+  // Toast states
+  const [empSuccess, setEmpSuccess] = useState("");
+  const [empError, setEmpError] = useState("");
+  const [cusSuccess, setCusSuccess] = useState("");
+  const [cusError, setCusError] = useState("");
+
   // Employee state
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loadingEmp, setLoadingEmp] = useState(true);
@@ -91,7 +97,7 @@ export default function AccountManagementPage() {
   const fetchEmployees = async () => {
     try {
       setLoadingEmp(true);
-      const data = await api.getEmployees("");
+      const data = await api.getEmployees();
       setEmployees(data);
     } catch (err) {
       console.error("Failed to fetch employees:", err);
@@ -139,10 +145,17 @@ export default function AccountManagementPage() {
   const toggleEmp = (id: string) => setEmpSelected((p) => p.includes(id) ? p.filter((i) => i !== id) : [...p, id]);
   const toggleAllEmp = () => empSelected.length === paginatedEmp.length ? setEmpSelected([]) : setEmpSelected(paginatedEmp.map((e) => e.id));
 
-  const openAddEmp = () => { setEmpForm(emptyEmployee); setEmpEditingId(null); setShowEmpModal(true); };
+  const openAddEmp = () => {
+    setEmpForm(emptyEmployee);
+    setEmpEditingId(null);
+    setEmpError("");
+    setShowEmpModal(true);
+  };
+
   const openEditEmp = (emp: Employee) => {
     setEmpForm({ name: emp.name, phone: emp.phone, password: "", role: emp.role, userStatus: emp.userStatus });
     setEmpEditingId(emp.id);
+    setEmpError("");
     setShowEmpModal(true);
   };
 
@@ -150,15 +163,26 @@ export default function AccountManagementPage() {
     if (!empForm.name) { alert("Full name is required."); return; }
     try {
       if (empEditingId !== null) {
-        await api.updateEmployee(empEditingId, empForm);
+        const res = await api.updateEmployee(empEditingId, empForm);
+        if (res.message && !res.id) {
+          setEmpError(res.message || "Failed to update employee");
+          return;
+        }
+        setEmpSuccess("Employee updated successfully!");
       } else {
-        await api.createEmployee(empForm, "");
+        const res = await api.createEmployee(empForm);
+        if (res.message && !res.id) {
+          setEmpError(res.message || "Failed to create employee");
+          return;
+        }
+        setEmpSuccess("Employee created successfully!");
       }
       await fetchEmployees();
       setShowEmpModal(false);
       setEmpSelected([]);
+      setTimeout(() => setEmpSuccess(""), 3000);
     } catch (err) {
-      console.error("Failed to save employee:", err);
+      setEmpError("Something went wrong. Please try again.");
     }
   };
 
@@ -168,8 +192,10 @@ export default function AccountManagementPage() {
       await fetchEmployees();
       setEmpSelected([]);
       setShowEmpDelete(false);
+      setEmpSuccess("Employee deleted successfully!");
+      setTimeout(() => setEmpSuccess(""), 3000);
     } catch (err) {
-      console.error("Failed to delete employee:", err);
+      setEmpError("Failed to delete employee.");
     }
   };
 
@@ -192,10 +218,17 @@ export default function AccountManagementPage() {
   const toggleCus = (id: string) => setCusSelected((p) => p.includes(id) ? p.filter((i) => i !== id) : [...p, id]);
   const toggleAllCus = () => cusSelected.length === paginatedCus.length ? setCusSelected([]) : setCusSelected(paginatedCus.map((c) => c.id));
 
-  const openAddCus = () => { setCusForm(emptyCustomer); setCusEditingId(null); setShowCusModal(true); };
+  const openAddCus = () => {
+    setCusForm(emptyCustomer);
+    setCusEditingId(null);
+    setCusError("");
+    setShowCusModal(true);
+  };
+
   const openEditCus = (cus: Customer) => {
     setCusForm({ name: cus.name, email: cus.email || "", phone: cus.phone || "", address: cus.address || "", password: "", userStatus: cus.userStatus });
     setCusEditingId(cus.id);
+    setCusError("");
     setShowCusModal(true);
   };
 
@@ -203,15 +236,26 @@ export default function AccountManagementPage() {
     if (!cusForm.name) { alert("Full name is required."); return; }
     try {
       if (cusEditingId !== null) {
-        await api.updateCustomer(cusEditingId, cusForm);
+        const res = await api.updateCustomer(cusEditingId, cusForm);
+        if (res.message && !res.id) {
+          setCusError(res.message || "Failed to update customer");
+          return;
+        }
+        setCusSuccess("Customer updated successfully!");
       } else {
-        await api.createCustomer(cusForm);
+        const res = await api.createCustomer(cusForm);
+        if (res.message && !res.id) {
+          setCusError(res.message || "Failed to create customer");
+          return;
+        }
+        setCusSuccess("Customer created successfully!");
       }
       await fetchCustomers();
       setShowCusModal(false);
       setCusSelected([]);
+      setTimeout(() => setCusSuccess(""), 3000);
     } catch (err) {
-      console.error("Failed to save customer:", err);
+      setCusError("Something went wrong. Please try again.");
     }
   };
 
@@ -221,8 +265,10 @@ export default function AccountManagementPage() {
       await fetchCustomers();
       setCusSelected([]);
       setShowCusDelete(false);
+      setCusSuccess("Customer deleted successfully!");
+      setTimeout(() => setCusSuccess(""), 3000);
     } catch (err) {
-      console.error("Failed to delete customer:", err);
+      setCusError("Failed to delete customer.");
     }
   };
 
@@ -236,10 +282,10 @@ export default function AccountManagementPage() {
   };
 
   const handleLogout = () => {
-  document.cookie = 'token=; path=/; max-age=0';
-  localStorage.removeItem('employee');
-  router.push('/');
-};
+    document.cookie = 'token=; path=/; max-age=0';
+    localStorage.removeItem('employee');
+    router.push('/');
+  };
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
@@ -466,6 +512,16 @@ export default function AccountManagementPage() {
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-screen overflow-y-auto">
             <h2 className="text-lg font-bold text-gray-800 mb-4">{empEditingId !== null ? "Edit Employee" : "Add New Employee"}</h2>
+
+            {/* Error message inside modal */}
+            {empError && (
+              <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-2">
+                <span>⚠️</span>
+                <span>{empError}</span>
+                <button onClick={() => setEmpError("")} className="ml-auto text-red-400 hover:text-red-600">✕</button>
+              </div>
+            )}
+
             <div className="flex flex-col gap-3">
               <div><label className="text-xs font-medium text-gray-600">Full Name</label><input value={empForm.name} onChange={(e) => setEmpForm({ ...empForm, name: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div><label className="text-xs font-medium text-gray-600">Phone</label><input value={empForm.phone} onChange={(e) => setEmpForm({ ...empForm, phone: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
@@ -478,7 +534,6 @@ export default function AccountManagementPage() {
                 <select value={empForm.role} onChange={(e) => setEmpForm({ ...empForm, role: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
                   <option value="CASHIER">CASHIER</option>
                   <option value="STOCK_MANAGER">STOCK_MANAGER</option>
-                  <option value="ADMIN">ADMIN</option>
                 </select>
               </div>
               <div><label className="text-xs font-medium text-gray-600">Status</label>
@@ -490,7 +545,7 @@ export default function AccountManagementPage() {
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowEmpModal(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={() => { setShowEmpModal(false); setEmpError(""); }} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
               <button onClick={saveEmp} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700">{empEditingId !== null ? "Save Changes" : "Add Employee"}</button>
             </div>
           </div>
@@ -502,6 +557,16 @@ export default function AccountManagementPage() {
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-screen overflow-y-auto">
             <h2 className="text-lg font-bold text-gray-800 mb-4">{cusEditingId !== null ? "Edit Customer" : "Add New Customer"}</h2>
+
+            {/* Error message inside modal */}
+            {cusError && (
+              <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-2">
+                <span>⚠️</span>
+                <span>{cusError}</span>
+                <button onClick={() => setCusError("")} className="ml-auto text-red-400 hover:text-red-600">✕</button>
+              </div>
+            )}
+
             <div className="flex flex-col gap-3">
               <div><label className="text-xs font-medium text-gray-600">Full Name</label><input value={cusForm.name} onChange={(e) => setCusForm({ ...cusForm, name: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div><label className="text-xs font-medium text-gray-600">Email</label><input value={cusForm.email} onChange={(e) => setCusForm({ ...cusForm, email: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
@@ -521,7 +586,7 @@ export default function AccountManagementPage() {
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowCusModal(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={() => { setShowCusModal(false); setCusError(""); }} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
               <button onClick={saveCus} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700">{cusEditingId !== null ? "Save Changes" : "Add Customer"}</button>
             </div>
           </div>
@@ -555,6 +620,36 @@ export default function AccountManagementPage() {
               <button onClick={deleteCus} className="flex-1 bg-red-500 rounded-lg py-2 text-sm text-white hover:bg-red-600">Delete</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ✅ SUCCESS TOASTS */}
+      {empSuccess && (
+        <div className="fixed bottom-6 right-6 z-50 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
+          <span>✅</span>
+          <span className="text-sm font-medium">{empSuccess}</span>
+        </div>
+      )}
+      {cusSuccess && (
+        <div className="fixed bottom-6 right-6 z-50 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
+          <span>✅</span>
+          <span className="text-sm font-medium">{cusSuccess}</span>
+        </div>
+      )}
+
+      {/* ❌ ERROR TOASTS */}
+      {empError && !showEmpModal && (
+        <div className="fixed bottom-6 right-6 z-50 bg-red-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
+          <span>❌</span>
+          <span className="text-sm font-medium">{empError}</span>
+          <button onClick={() => setEmpError("")} className="ml-2 hover:text-red-200">✕</button>
+        </div>
+      )}
+      {cusError && !showCusModal && (
+        <div className="fixed bottom-6 right-6 z-50 bg-red-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
+          <span>❌</span>
+          <span className="text-sm font-medium">{cusError}</span>
+          <button onClick={() => setCusError("")} className="ml-2 hover:text-red-200">✕</button>
         </div>
       )}
     </div>
