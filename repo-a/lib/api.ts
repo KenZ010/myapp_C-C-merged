@@ -1,4 +1,4 @@
-const API_URL = 'backend-production-da89.up.railway.app/api';
+const API_URL = 'https://backend-production-da89.up.railway.app/api';
 
 // ✅ Get token from cookie automatically
 const getToken = () => {
