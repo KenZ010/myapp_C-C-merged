@@ -260,7 +260,7 @@ export default function SalesReportsPage() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} angle={-15} textAnchor="end" />
                     <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip formatter={(v: number) => `₱${v.toLocaleString()}`} />
+                    <Tooltip formatter={(v) => `₱${Number(v).toLocaleString()}`} />
                     <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} dot={false} name="Revenue (₱)" />
                   </LineChart>
                 </ResponsiveContainer>
@@ -385,7 +385,7 @@ export default function SalesReportsPage() {
                       <Pie data={pieData} cx={125} cy={85} outerRadius={75} dataKey="value">
                         {pieData.map((entry, index) => (<Cell key={index} fill={entry.color} />))}
                       </Pie>
-                      <Tooltip formatter={(value) => `${value}%`} />
+                      <Tooltip formatter={(v) => `₱${Number(v).toLocaleString()}`} />
                     </PieChart>
                   </div>
                   <div className="flex flex-wrap gap-2 justify-center mt-1">
