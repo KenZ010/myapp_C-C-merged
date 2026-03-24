@@ -33,49 +33,23 @@ export default function CashierLayout({
 
   return (
     <div
-      style={{
-        display: "flex",
-        height: "100vh",
-        overflow: "hidden",
-        background: "#f5f5f5",
-      }}
+      className="flex h-screen overflow-hidden"
+      style={{ background: "#f5f5f5" }}
     >
       {/* ── Sidebar ── */}
       <aside
-        style={{
-          width: "220px",
-          background: "#fff",
-          display: "flex",
-          flexDirection: "column",
-          flexShrink: 0,
-          borderRight: "1px solid #f0f0f0",
-        }}
+        className="w-[220px] flex flex-col shrink-0 bg-white"
+        style={{ borderRight: "1px solid #f0f0f0" }}
       >
         {/* Logo */}
         <div
-          style={{
-            padding: "24px 20px 20px",
-            borderBottom: "1px solid #f0f0f0",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: "4px",
-          }}
+          className="flex flex-col items-center gap-1 px-5 py-6"
+          style={{ borderBottom: "1px solid #f0f0f0" }}
         >
           <div
+            className="w-[72px] h-[72px] rounded-full flex items-center justify-center text-[11px] font-extrabold text-white text-center leading-snug"
             style={{
-              width: "72px",
-              height: "72px",
-              borderRadius: "50%",
               background: "linear-gradient(135deg, #ff6b35, #f5c842)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "11px",
-              fontWeight: 800,
-              color: "#fff",
-              textAlign: "center",
-              lineHeight: 1.3,
               border: "3px solid #1a3c2e",
             }}
           >
@@ -87,62 +61,43 @@ export default function CashierLayout({
 
         {/* User Info */}
         <div
-          style={{
-            padding: "16px 20px",
-            borderBottom: "1px solid #f0f0f0",
-            display: "flex",
-            alignItems: "center",
-            gap: "12px",
-          }}
+          className="flex items-center gap-3 px-5 py-4"
+          style={{ borderBottom: "1px solid #f0f0f0" }}
         >
           <div
-            style={{
-              width: "40px",
-              height: "40px",
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, #667eea, #764ba2)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "16px",
-              flexShrink: 0,
-            }}
+            className="w-10 h-10 rounded-full flex items-center justify-center text-base shrink-0"
+            style={{ background: "linear-gradient(135deg, #667eea, #764ba2)" }}
           >
             👤
           </div>
           <div>
-            <p style={{ fontSize: "13px", fontWeight: 700, color: "#1a1a1a" }}>
-              Rjay Salina
+            <p className="text-[13px] font-bold text-gray-900">Rjay Salina</p>
+            <p className="text-[11px]" style={{ color: "#aaa" }}>
+              Cashier
             </p>
-            <p style={{ fontSize: "11px", color: "#aaa" }}>Cashier</p>
           </div>
         </div>
 
         {/* Nav Links */}
-        <nav style={{ flex: 1, padding: "12px 0" }}>
+        <nav className="flex-1 py-3">
           {navLinks.map((link) => {
             const isActive = pathname === link.href;
             return (
               <Link
                 key={link.href}
                 href={link.href}
+                className="flex items-center gap-3 px-5 py-3 text-sm no-underline transition-all duration-150"
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "14px",
-                  padding: "13px 20px",
-                  fontSize: "14px",
-                  textDecoration: "none",
                   color: isActive ? "#1a3c2e" : "#555",
                   background: isActive ? "#f0faf2" : "transparent",
                   borderLeft: isActive
                     ? "3px solid #1a3c2e"
                     : "3px solid transparent",
                   fontWeight: isActive ? 600 : 400,
-                  transition: "all 0.15s",
+                  textDecoration: "none",
                 }}
               >
-                <span style={{ fontSize: "18px" }}>{link.icon}</span>
+                <span className="text-lg">{link.icon}</span>
                 {link.label}
               </Link>
             );
@@ -150,76 +105,53 @@ export default function CashierLayout({
         </nav>
 
         {/* Logout */}
-        <div style={{ padding: "16px 20px", borderTop: "1px solid #f0f0f0" }}>
+        <div className="px-5 py-4" style={{ borderTop: "1px solid #f0f0f0" }}>
           <Link
             href="/"
+            className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold no-underline"
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "14px",
-              padding: "12px 16px",
-              borderRadius: "12px",
-              textDecoration: "none",
               background: "#fff5f5",
               color: "#e53935",
-              fontSize: "14px",
-              fontWeight: 600,
+              textDecoration: "none",
             }}
           >
-            <span style={{ fontSize: "18px" }}>🚪</span>
+            <span className="text-lg">🚪</span>
             Log out
           </Link>
         </div>
       </aside>
 
       {/* ── Main ── */}
-      <main
-        style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-      >
+      <main className="flex-1 flex flex-col overflow-hidden">
         {/* Topbar */}
         <header
-          style={{
-            background: "#1a3c2e",
-            padding: "0 28px",
-            height: "56px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexShrink: 0,
-          }}
+          className="flex items-center justify-between px-7 shrink-0"
+          style={{ background: "#1a3c2e", height: "56px" }}
         >
           <div>
-            <p style={{ color: "#fff", fontSize: "16px", fontWeight: 600 }}>
-              {page.title}
-            </p>
+            <p className="text-white text-base font-semibold">{page.title}</p>
             {page.sub && (
-              <p style={{ color: "rgba(255,255,255,0.55)", fontSize: "11px" }}>
+              <p
+                className="text-[11px]"
+                style={{ color: "rgba(255,255,255,0.55)" }}
+              >
                 {page.sub}
               </p>
             )}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div
-              style={{
-                width: "8px",
-                height: "8px",
-                borderRadius: "50%",
-                background: "#4caf50",
-              }}
-            />
-            <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.7)" }}>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-green-400" />
+            <span
+              className="text-xs"
+              style={{ color: "rgba(255,255,255,0.7)" }}
+            >
               Online
             </span>
           </div>
         </header>
 
-        {/* Content */}
-        <div style={{ flex: 1, overflowY: "auto" }}>{children}</div>
+        {/* Page Content */}
+        <div className="flex-1 overflow-y-auto">{children}</div>
       </main>
     </div>
   );

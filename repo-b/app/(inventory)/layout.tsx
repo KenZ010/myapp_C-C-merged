@@ -5,6 +5,7 @@ import Link from "next/link";
 const navLinks = [
   { href: "/inventory/monitoring", label: "Inventory Monitoring", icon: "🏠" },
   { href: "/inventory/adjustment", label: "Inventory Adjustment", icon: "🛒" },
+  { href: "/inventory/purchase-order", label: "Purchase Order", icon: "📋" },
   { href: "/inventory/return", label: "Return", icon: "🔄" },
   { href: "/inventory/loss-report", label: "Loss Report", icon: "📄" },
   { href: "/inventory/restocking", label: "Restocking", icon: "🚚" },
@@ -18,6 +19,10 @@ const pageTitles: Record<string, { title: string; sub: string }> = {
   "/inventory/adjustment": {
     title: "Inventory Adjustment",
     sub: "Manage and update stock levels",
+  },
+  "/inventory/purchase-order": {
+    title: "Purchase Order",
+    sub: "Create and manage PO from suppliers",
   },
   "/inventory/return": { title: "Return", sub: "Manage product returns" },
   "/inventory/loss-report": {
@@ -201,6 +206,33 @@ export default function InventoryLayout({
                 {page.sub}
               </p>
             )}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div
+              style={{
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+                background: "#4caf50",
+              }}
+            />
+            <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.7)" }}>
+              Online
+            </span>
+            <div
+              style={{
+                width: "34px",
+                height: "34px",
+                borderRadius: "50%",
+                background: "rgba(255,255,255,0.15)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "15px",
+              }}
+            >
+              👤
+            </div>
           </div>
         </header>
 
