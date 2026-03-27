@@ -31,7 +31,7 @@ const emptyForm = {
   contactNo: "",
   address: "",
   email: "",
-  lastOrdered: 0,
+  lastOrdered: "" as string | number, // ✅ Allow empty string so 0 can be cleared
   lastCheckBy: "",
   dateChecked: "",
   status: "ACTIVE"
@@ -86,7 +86,7 @@ export default function SupplierMaintenancePage() {
       contactNo: item.contactNo,
       address: item.address || "",
       email: item.email || "",
-      lastOrdered: item.lastOrdered || 0,
+      lastOrdered: item.lastOrdered ?? "", // ✅ Use empty string if null
       lastCheckBy: item.lastCheckBy || "",
       dateChecked: item.dateChecked ? new Date(item.dateChecked).toISOString().split('T')[0] : "",
       status: item.status
@@ -98,10 +98,15 @@ export default function SupplierMaintenancePage() {
   const handleSave = async () => {
     if (!form.supplierName) { alert("Supplier Name is required."); return; }
     try {
+      // ✅ Convert empty string back to 0 when saving
+      const saveData = {
+        ...form,
+        lastOrdered: form.lastOrdered === "" ? 0 : Number(form.lastOrdered)
+      };
       if (editingId !== null) {
-        await api.updateSupplier(editingId, form);
+        await api.updateSupplier(editingId, saveData);
       } else {
-        await api.createSupplier(form);
+        await api.createSupplier(saveData);
       }
       await fetchSuppliers();
       setShowModal(false);
@@ -278,7 +283,17 @@ export default function SupplierMaintenancePage() {
               <div><label className="text-xs font-medium text-gray-600">Address</label><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div><label className="text-xs font-medium text-gray-600">Email</label><input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs font-medium text-gray-600">Last Ordered</label><input type="number" min="0" value={form.lastOrdered} onChange={(e) => setForm({ ...form, lastOrdered: Math.max(0, Number(e.target.value)) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+                {/* ✅ Fixed: 0 can now be cleared */}
+                <div>
+                  <label className="text-xs font-medium text-gray-600">Last Ordered</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.lastOrdered}
+                    onChange={(e) => setForm({ ...form, lastOrdered: e.target.value === "" ? "" : Math.max(0, Number(e.target.value)) })}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
+                  />
+                </div>
                 <div><label className="text-xs font-medium text-gray-600">Date Checked</label><input type="date" value={form.dateChecked} onChange={(e) => setForm({ ...form, dateChecked: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               </div>
               <div><label className="text-xs font-medium text-gray-600">Last Check By</label><input value={form.lastCheckBy} onChange={(e) => setForm({ ...form, lastCheckBy: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>

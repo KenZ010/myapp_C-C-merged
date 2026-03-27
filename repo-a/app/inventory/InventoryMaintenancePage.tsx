@@ -16,7 +16,6 @@ type InventoryItem = {
 type SortKey = "code" | "name" | "type" | "date" | "total" | "remaining" | "expiry" | "stock";
 type SortDir = "asc" | "desc";
 
-// ✅ Now shows actual expiry date for Bottle type
 const calculateExpiry = (dateStr: string, type: string): { expiry: string; expiryColor: string } => {
   if (type === "Plastic Bottle") return { expiry: "No Expiry", expiryColor: "blue" };
   if (!dateStr) return { expiry: "Unknown", expiryColor: "gray" };
@@ -26,13 +25,8 @@ const calculateExpiry = (dateStr: string, type: string): { expiry: string; expir
     const now = new Date();
     const expiryDate = new Date(acquired);
     expiryDate.setFullYear(expiryDate.getFullYear() + 1);
-
-    const formatted = expiryDate.toLocaleDateString("en-US", {
-      year: "numeric", month: "short", day: "numeric"
-    });
-
+    const formatted = expiryDate.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
     const daysLeft = Math.floor((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
     if (daysLeft < 0) return { expiry: "Expired", expiryColor: "red" };
     if (daysLeft <= 30) return { expiry: formatted, expiryColor: "orange" };
     return { expiry: formatted, expiryColor: "green" };
@@ -93,8 +87,9 @@ const renderLabel = (props: any) => {
   return <text x={x} y={y} fill="#555" fontSize={11} textAnchor={x > cx ? "start" : "end"}>{`${name}: ${value}%`}</text>;
 };
 
+// ✅ Use string type for number fields so they can be cleared
 const emptyForm = {
-  code: "", name: "", type: "Bottle", date: "", total: 0, remaining: 0,
+  code: "", name: "", type: "Bottle", date: "", total: "" as string | number, remaining: "" as string | number,
   lastCheck: "", expiry: "", expiryColor: "green", stock: "In Stock", stockColor: "green",
 };
 
@@ -193,7 +188,7 @@ export default function InventoryMaintenancePage() {
 
   const handleTypeChange = (newType: string) => {
     setIsDirty(true);
-    if (!manualExpiry) { const calc = calculateExpiry(form.date, newType); setForm({ ...form, type: newType, ...calc }); }
+    if (!manualExpiry) { const calc = calculateExpiry(form.date as string, newType); setForm({ ...form, type: newType, ...calc }); }
     else setForm({ ...form, type: newType });
   };
 
@@ -203,22 +198,37 @@ export default function InventoryMaintenancePage() {
     else setForm({ ...form, date: newDate });
   };
 
-  const handleRemainingChange = (val: number) => {
+  // ✅ Fixed: allows clearing to empty string
+  const handleRemainingChange = (val: string) => {
     setIsDirty(true);
-    const remaining = Math.max(0, val);
-    setForm({ ...form, remaining, ...calculateStock(remaining, form.total) });
+    if (val === "") {
+      setForm({ ...form, remaining: "" });
+      return;
+    }
+    const remaining = Math.max(0, Number(val));
+    setForm({ ...form, remaining, ...calculateStock(remaining, Number(form.total) || 0) });
   };
 
-  const handleTotalChange = (val: number) => {
+  const handleTotalChange = (val: string) => {
     setIsDirty(true);
-    const total = Math.max(0, val);
-    setForm({ ...form, total, ...calculateStock(form.remaining, total) });
+    if (val === "") {
+      setForm({ ...form, total: "" });
+      return;
+    }
+    const total = Math.max(0, Number(val));
+    setForm({ ...form, total, ...calculateStock(Number(form.remaining) || 0, total) });
   };
 
   const handleSave = () => {
     if (!form.code || !form.name) { alert("Code and Product Name are required."); return; }
-    if (editingId !== null) setItems((prev) => prev.map((item) => item.id === editingId ? { ...item, ...form } : item));
-    else setItems((prev) => [...prev, { id: Date.now(), ...form }]);
+    // ✅ Convert empty strings to 0 when saving
+    const saveData = {
+      ...form,
+      total: form.total === "" ? 0 : Number(form.total),
+      remaining: form.remaining === "" ? 0 : Number(form.remaining),
+    };
+    if (editingId !== null) setItems((prev) => prev.map((item) => item.id === editingId ? { ...item, ...saveData } : item));
+    else setItems((prev) => [...prev, { id: Date.now(), ...saveData } as InventoryItem]);
     setShowModal(false); setSelected([]); setIsDirty(false);
   };
 
@@ -226,7 +236,7 @@ export default function InventoryMaintenancePage() {
   const confirmDelete = () => { setItems((prev) => prev.filter((item) => !selected.includes(item.id))); setSelected([]); setShowDeleteConfirm(false); };
 
   const handleExport = () => {
-    const headers = ["Code", "Product Name", "Type", "Date Acquired", "Total Stock", "Remaining Stock", "Last Check By", "Expiry Status", "Stock Status"];
+    const headers = ["Code", "Product Name", "Type", "Date Acquired", "Total Stock", "Remaining Stock", "Last Check By", "Expiry Date", "Stock Status"];
     const rows = items.map((item) => [item.code, item.name, item.type, item.date, item.total, item.remaining, item.lastCheck, item.expiry, item.stock]);
     const csvContent = [headers, ...rows].map((row) => row.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv" });
@@ -298,8 +308,6 @@ export default function InventoryMaintenancePage() {
         )}
 
         <div className="flex-1 p-3 md:p-4 bg-green-50">
-
-          {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-lg">📦</div>
@@ -320,7 +328,6 @@ export default function InventoryMaintenancePage() {
           </div>
 
           <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm mb-4">
-            {/* Filter bar */}
             <div className="flex items-center gap-2 mb-4 flex-wrap">
               <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-40 md:w-48">
                 <span className="text-gray-400 text-sm">🔍</span>
@@ -359,8 +366,7 @@ export default function InventoryMaintenancePage() {
                 )}
               </div>
               {(categoryFilter !== "All" || statusFilter !== "All") && (
-                <button onClick={() => { setCategoryFilter("All"); setStatusFilter("All"); setCurrentPage(1); }}
-                  className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
+                <button onClick={() => { setCategoryFilter("All"); setStatusFilter("All"); setCurrentPage(1); }} className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
               )}
               <button onClick={handleExport} className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-600 hover:bg-gray-50 ml-auto">📤 Export</button>
               <button onClick={handleDelete} className="flex items-center gap-1 border border-red-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-red-500 hover:bg-red-50">🗑️ Delete</button>
@@ -368,23 +374,13 @@ export default function InventoryMaintenancePage() {
               <button onClick={openAddModal} className="flex items-center gap-1 bg-gray-900 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-white hover:bg-gray-700">+ Add</button>
             </div>
 
-            {/* Table */}
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-max">
                 <thead>
                   <tr className="bg-indigo-900 text-white text-xs">
                     <th className="p-3 text-left w-8"><input type="checkbox" onChange={toggleAll} checked={allPageSelected} /></th>
-                    {[
-                      { key: "code", label: "Code" },
-                      { key: "name", label: "Product Name" },
-                      { key: "type", label: "Type" },
-                      { key: "date", label: "Date Acquired" },
-                      { key: "total", label: "Total Stock" },
-                      { key: "remaining", label: "Remaining Stock" },
-                    ].map(({ key, label }) => (
-                      <th key={key} className="p-3 text-left cursor-pointer hover:bg-indigo-800 select-none" onClick={() => handleSort(key as SortKey)}>
-                        {label}{sortIcon(key as SortKey)}
-                      </th>
+                    {[{ key: "code", label: "Code" }, { key: "name", label: "Product Name" }, { key: "type", label: "Type" }, { key: "date", label: "Date Acquired" }, { key: "total", label: "Total Stock" }, { key: "remaining", label: "Remaining Stock" }].map(({ key, label }) => (
+                      <th key={key} className="p-3 text-left cursor-pointer hover:bg-indigo-800 select-none" onClick={() => handleSort(key as SortKey)}>{label}{sortIcon(key as SortKey)}</th>
                     ))}
                     <th className="p-3 text-left">Last Check by</th>
                     <th className="p-3 text-left cursor-pointer hover:bg-indigo-800 select-none" onClick={() => handleSort("expiry")}>Expiry Date{sortIcon("expiry")}</th>
@@ -393,12 +389,10 @@ export default function InventoryMaintenancePage() {
                 </thead>
                 <tbody>
                   {paginated.length === 0 ? (
-                    <tr>
-                      <td colSpan={10} className="text-center py-10">
-                        <p className="text-gray-400 text-sm">{search ? `No results found for "${search}".` : "No items in inventory yet."}</p>
-                        {search && <button onClick={() => handleSearch("")} className="mt-2 text-xs text-indigo-500 hover:underline">Clear search</button>}
-                      </td>
-                    </tr>
+                    <tr><td colSpan={10} className="text-center py-10">
+                      <p className="text-gray-400 text-sm">{search ? `No results found for "${search}".` : "No items in inventory yet."}</p>
+                      {search && <button onClick={() => handleSearch("")} className="mt-2 text-xs text-indigo-500 hover:underline">Clear search</button>}
+                    </td></tr>
                   ) : (
                     paginated.map((row) => (
                       <tr key={row.id} className={`border-b border-gray-100 hover:bg-gray-50 ${selected.includes(row.id) ? "bg-indigo-50" : ""}`}>
@@ -419,17 +413,13 @@ export default function InventoryMaintenancePage() {
               </table>
             </div>
 
-            {/* Pagination */}
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-4 px-1">
                 <p className="text-xs text-gray-400">Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} of {filtered.length} items</p>
                 <div className="flex items-center gap-1">
                   <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">← Prev</button>
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <button key={page} onClick={() => setCurrentPage(page)}
-                      className={`px-3 py-1 rounded-lg text-sm border transition-colors ${currentPage === page ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                      {page}
-                    </button>
+                    <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1 rounded-lg text-sm border transition-colors ${currentPage === page ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>{page}</button>
                   ))}
                   <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Next →</button>
                 </div>
@@ -437,7 +427,6 @@ export default function InventoryMaintenancePage() {
             )}
           </div>
 
-          {/* Charts */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <h2 className="font-bold text-gray-800 mb-3">Top Selling Products</h2>
@@ -466,7 +455,6 @@ export default function InventoryMaintenancePage() {
         </div>
       </main>
 
-      {/* ADD / EDIT MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-screen overflow-y-auto">
@@ -477,8 +465,7 @@ export default function InventoryMaintenancePage() {
               <div>
                 <label className="text-xs font-medium text-gray-600">Type</label>
                 <select value={form.type} onChange={(e) => handleTypeChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                  <option>Bottle</option>
-                  <option>Plastic Bottle</option>
+                  <option>Bottle</option><option>Plastic Bottle</option>
                 </select>
               </div>
               <div>
@@ -486,16 +473,22 @@ export default function InventoryMaintenancePage() {
                 <input type="date" value={form.date} onChange={(e) => handleDateChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs font-medium text-gray-600">Total Stock</label><input type="number" min="0" value={form.total} onChange={(e) => handleTotalChange(Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-                <div><label className="text-xs font-medium text-gray-600">Remaining Stock</label><input type="number" min="0" value={form.remaining} onChange={(e) => handleRemainingChange(Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+                {/* ✅ Fixed: 0 can now be cleared */}
+                <div>
+                  <label className="text-xs font-medium text-gray-600">Total Stock</label>
+                  <input type="number" min="0" value={form.total} onChange={(e) => handleTotalChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600">Remaining Stock</label>
+                  <input type="number" min="0" value={form.remaining} onChange={(e) => handleRemainingChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                </div>
               </div>
               <div><label className="text-xs font-medium text-gray-600">Last Check By</label><input value={form.lastCheck} onChange={(e) => { setForm({ ...form, lastCheck: e.target.value }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div>
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-gray-600">Expiry Date</label>
                   <label className="flex items-center gap-1 text-xs text-gray-400 cursor-pointer">
-                    <input type="checkbox" checked={manualExpiry} onChange={(e) => setManualExpiry(e.target.checked)} />
-                    Manual override
+                    <input type="checkbox" checked={manualExpiry} onChange={(e) => setManualExpiry(e.target.checked)} /> Manual override
                   </label>
                 </div>
                 {manualExpiry ? (
@@ -523,7 +516,6 @@ export default function InventoryMaintenancePage() {
         </div>
       )}
 
-      {/* DELETE MODAL */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
