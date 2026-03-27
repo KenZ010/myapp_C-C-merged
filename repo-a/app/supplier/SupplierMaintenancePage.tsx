@@ -167,7 +167,7 @@ export default function SupplierMaintenancePage() {
   };
 
   const handleExport = () => {
-    const headers = ["ID", "Supplier Name", "Contact No", "Address", "Email", "Last Ordered", "Last Check By", "Date Checked", "Status"];
+    const headers = ["ID", "Company Name", "Contact No", "Address", "Email", "Last Ordered", "Last Check By", "Date Checked", "Status"];
     const rows = items.map((item) => [item.id, item.supplierName, item.contactNo, item.address, item.email, item.lastOrdered, item.lastCheckBy, item.dateChecked, item.status]);
     const csvContent = [headers, ...rows].map((row) => row.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv" });
@@ -298,7 +298,7 @@ export default function SupplierMaintenancePage() {
                   <tr className="bg-indigo-900 text-white text-xs">
                     <th className="p-3 text-left w-8"><input type="checkbox" onChange={toggleAll} checked={selected.length === filtered.length && filtered.length > 0} /></th>
                     <th className="p-3 text-left">ID</th>
-                    <th className="p-3 text-left">Supplier Name</th>
+                    <th className="p-3 text-left">Company Name</th>
                     <th className="p-3 text-left">Last Check By</th>
                     <th className="p-3 text-left">Status</th>
                     <th className="p-3 text-left">Actions</th>
@@ -396,7 +396,7 @@ export default function SupplierMaintenancePage() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-screen overflow-y-auto">
             <h2 className="text-lg font-bold text-gray-800 mb-4">{editingId !== null ? "Edit Supplier" : "Add New Supplier"}</h2>
             <div className="flex flex-col gap-3">
-              <div><label className="text-xs font-medium text-gray-600">Supplier Name</label><input value={form.supplierName} onChange={(e) => setForm({ ...form, supplierName: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+              <div><label className="text-xs font-medium text-gray-600">Company Name</label><input value={form.supplierName} onChange={(e) => setForm({ ...form, supplierName: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div><label className="text-xs font-medium text-gray-600">Contact No.</label><input value={form.contactNo} onChange={(e) => setForm({ ...form, contactNo: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div><label className="text-xs font-medium text-gray-600">Address</label><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div><label className="text-xs font-medium text-gray-600">Email</label><input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
