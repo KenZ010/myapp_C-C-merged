@@ -72,7 +72,7 @@ const navItems = [
 const ITEMS_PER_PAGE = 5;
 
 const getExpiryBadge = (color: string) => {
-  const map: Record<string, string> = { green: "bg-green-500 text-white", red: "bg-red-500 text-white", gray: "bg-gray-400 text-white", blue: "bg-blue-400 text-white", orange: "bg-orange-400 text-white" };
+  const map: Record<string, string> = { green: "bg-green-500 text-white", red: "bg-red-500 text-white", gray: "bg-gray-400 text-white", orange: "bg-orange-400 text-white" };
   return map[color] || "bg-gray-300 text-white";
 };
 
@@ -87,7 +87,6 @@ const renderLabel = (props: any) => {
   return <text x={x} y={y} fill="#555" fontSize={11} textAnchor={x > cx ? "start" : "end"}>{`${name}: ${value}%`}</text>;
 };
 
-// ✅ Use string type for number fields so they can be cleared
 const emptyForm = {
   code: "", name: "", type: "Bottle", date: "", total: "" as string | number, remaining: "" as string | number,
   lastCheck: "", expiry: "", expiryColor: "green", stock: "In Stock", stockColor: "green",
@@ -198,7 +197,6 @@ export default function InventoryMaintenancePage() {
     else setForm({ ...form, date: newDate });
   };
 
-  // ✅ Fixed: allows clearing to empty string
   const handleRemainingChange = (val: string) => {
     setIsDirty(true);
     if (val === "") {
@@ -221,7 +219,6 @@ export default function InventoryMaintenancePage() {
 
   const handleSave = () => {
     if (!form.code || !form.name) { alert("Code and Product Name are required."); return; }
-    // ✅ Convert empty strings to 0 when saving
     const saveData = {
       ...form,
       total: form.total === "" ? 0 : Number(form.total),
@@ -473,7 +470,6 @@ export default function InventoryMaintenancePage() {
                 <input type="date" value={form.date} onChange={(e) => handleDateChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                {/* ✅ Fixed: 0 can now be cleared */}
                 <div>
                   <label className="text-xs font-medium text-gray-600">Total Stock</label>
                   <input type="number" min="0" value={form.total} onChange={(e) => handleTotalChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
@@ -492,8 +488,8 @@ export default function InventoryMaintenancePage() {
                   </label>
                 </div>
                 {manualExpiry ? (
-                  <select value={form.expiry} onChange={(e) => { const val = e.target.value; const colorMap: Record<string, string> = { "Fresh/ Valid": "green", "Expired": "red", "Expiring Soon": "orange", "No Expiry": "blue", "Unknown": "gray" }; setForm({ ...form, expiry: val, expiryColor: colorMap[val] || "gray" }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                    <option>Fresh/ Valid</option><option>Expired</option><option>Expiring Soon</option><option>No Expiry</option><option>Unknown</option>
+                  <select value={form.expiry} onChange={(e) => { const val = e.target.value; const colorMap: Record<string, string> = { "Fresh/ Valid": "green", "Expired": "red", "Expiring Soon": "orange", "Unknown": "gray" }; setForm({ ...form, expiry: val, expiryColor: colorMap[val] || "gray" }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                    <option>Fresh/ Valid</option><option>Expired</option><option>Expiring Soon</option><option>Unknown</option>
                   </select>
                 ) : (
                   <div className={`mt-1 px-3 py-2 rounded-lg text-sm font-medium inline-block ${getExpiryBadge(form.expiryColor)}`}>
