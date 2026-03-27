@@ -16,6 +16,8 @@ type InventoryItem = {
 type SortKey = "code" | "name" | "type" | "date" | "total" | "remaining" | "expiry" | "stock";
 type SortDir = "asc" | "desc";
 
+const CHECKERS = ["Rjay Salinas", "Ray Teodoro"];
+
 const calculateExpiry = (dateStr: string, type: string): { expiry: string; expiryColor: string } => {
   if (type === "Plastic Bottle") return { expiry: "No Expiry", expiryColor: "blue" };
   if (!dateStr) return { expiry: "Unknown", expiryColor: "gray" };
@@ -107,8 +109,10 @@ export default function InventoryMaintenancePage() {
   const [manualExpiry, setManualExpiry] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [checkerFilter, setCheckerFilter] = useState("All");
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [showCheckerDropdown, setShowCheckerDropdown] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -116,11 +120,13 @@ export default function InventoryMaintenancePage() {
 
   const categoryRef = useRef<HTMLDivElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
+  const checkerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (categoryRef.current && !categoryRef.current.contains(e.target as Node)) setShowCategoryDropdown(false);
       if (statusRef.current && !statusRef.current.contains(e.target as Node)) setShowStatusDropdown(false);
+      if (checkerRef.current && !checkerRef.current.contains(e.target as Node)) setShowCheckerDropdown(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -136,7 +142,8 @@ export default function InventoryMaintenancePage() {
       const matchSearch = row.name.toLowerCase().includes(search.toLowerCase()) || row.code.toLowerCase().includes(search.toLowerCase());
       const matchCategory = categoryFilter === "All" || row.type === categoryFilter;
       const matchStatus = statusFilter === "All" || row.stock === statusFilter;
-      return matchSearch && matchCategory && matchStatus;
+      const matchChecker = checkerFilter === "All" || row.lastCheck === checkerFilter;
+      return matchSearch && matchCategory && matchStatus && matchChecker;
     });
     f.sort((a, b) => {
       const aVal = a[sortKey];
@@ -145,7 +152,7 @@ export default function InventoryMaintenancePage() {
       return sortDir === "asc" ? String(aVal).localeCompare(String(bVal)) : String(bVal).localeCompare(String(aVal));
     });
     return f;
-  }, [items, search, categoryFilter, statusFilter, sortKey, sortDir]);
+  }, [items, search, categoryFilter, statusFilter, checkerFilter, sortKey, sortDir]);
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
@@ -153,6 +160,7 @@ export default function InventoryMaintenancePage() {
   const handleSearch = (val: string) => { setSearch(val); setCurrentPage(1); };
   const handleCategoryFilter = (val: string) => { setCategoryFilter(val); setCurrentPage(1); setShowCategoryDropdown(false); };
   const handleStatusFilter = (val: string) => { setStatusFilter(val); setCurrentPage(1); setShowStatusDropdown(false); };
+  const handleCheckerFilter = (val: string) => { setCheckerFilter(val); setCurrentPage(1); setShowCheckerDropdown(false); };
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => d === "asc" ? "desc" : "asc");
@@ -199,20 +207,14 @@ export default function InventoryMaintenancePage() {
 
   const handleRemainingChange = (val: string) => {
     setIsDirty(true);
-    if (val === "") {
-      setForm({ ...form, remaining: "" });
-      return;
-    }
+    if (val === "") { setForm({ ...form, remaining: "" }); return; }
     const remaining = Math.max(0, Number(val));
     setForm({ ...form, remaining, ...calculateStock(remaining, Number(form.total) || 0) });
   };
 
   const handleTotalChange = (val: string) => {
     setIsDirty(true);
-    if (val === "") {
-      setForm({ ...form, total: "" });
-      return;
-    }
+    if (val === "") { setForm({ ...form, total: "" }); return; }
     const total = Math.max(0, Number(val));
     setForm({ ...form, total, ...calculateStock(Number(form.remaining) || 0, total) });
   };
@@ -243,6 +245,8 @@ export default function InventoryMaintenancePage() {
 
   const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("employee"); router.push("/"); };
   const navigate = (path: string) => { router.push(path); setShowMobileMenu(false); };
+
+  const hasActiveFilters = categoryFilter !== "All" || statusFilter !== "All" || checkerFilter !== "All";
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
@@ -330,8 +334,10 @@ export default function InventoryMaintenancePage() {
                 <span className="text-gray-400 text-sm">🔍</span>
                 <input type="text" placeholder="Search" value={search} onChange={(e) => handleSearch(e.target.value)} className="outline-none text-sm text-gray-700 w-full" />
               </div>
+
+              {/* Category Filter */}
               <div className="relative" ref={categoryRef}>
-                <button onClick={() => { setShowCategoryDropdown(!showCategoryDropdown); setShowStatusDropdown(false); }}
+                <button onClick={() => { setShowCategoryDropdown(!showCategoryDropdown); setShowStatusDropdown(false); setShowCheckerDropdown(false); }}
                   className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${categoryFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
                   👤 {categoryFilter === "All" ? "Category" : categoryFilter} ▾
                 </button>
@@ -346,8 +352,10 @@ export default function InventoryMaintenancePage() {
                   </div>
                 )}
               </div>
+
+              {/* Status Filter */}
               <div className="relative" ref={statusRef}>
-                <button onClick={() => { setShowStatusDropdown(!showStatusDropdown); setShowCategoryDropdown(false); }}
+                <button onClick={() => { setShowStatusDropdown(!showStatusDropdown); setShowCategoryDropdown(false); setShowCheckerDropdown(false); }}
                   className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${statusFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
                   🔖 {statusFilter === "All" ? "Status" : statusFilter} ▾
                 </button>
@@ -362,8 +370,27 @@ export default function InventoryMaintenancePage() {
                   </div>
                 )}
               </div>
-              {(categoryFilter !== "All" || statusFilter !== "All") && (
-                <button onClick={() => { setCategoryFilter("All"); setStatusFilter("All"); setCurrentPage(1); }} className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
+
+              {/* Checker Filter */}
+              <div className="relative" ref={checkerRef}>
+                <button onClick={() => { setShowCheckerDropdown(!showCheckerDropdown); setShowCategoryDropdown(false); setShowStatusDropdown(false); }}
+                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${checkerFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                  🧑 {checkerFilter === "All" ? "Last Check By" : checkerFilter} ▾
+                </button>
+                {showCheckerDropdown && (
+                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44">
+                    {["All", ...CHECKERS].map((opt) => (
+                      <button key={opt} onClick={() => handleCheckerFilter(opt)}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${checkerFilter === opt ? "text-indigo-600 font-semibold" : "text-gray-600"}`}>
+                        {opt === "All" ? "All Checkers" : opt}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {hasActiveFilters && (
+                <button onClick={() => { setCategoryFilter("All"); setStatusFilter("All"); setCheckerFilter("All"); setCurrentPage(1); }} className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
               )}
               <button onClick={handleExport} className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-600 hover:bg-gray-50 ml-auto">📤 Export</button>
               <button onClick={handleDelete} className="flex items-center gap-1 border border-red-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-red-500 hover:bg-red-50">🗑️ Delete</button>
@@ -479,7 +506,16 @@ export default function InventoryMaintenancePage() {
                   <input type="number" min="0" value={form.remaining} onChange={(e) => handleRemainingChange(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
                 </div>
               </div>
-              <div><label className="text-xs font-medium text-gray-600">Last Check By</label><input value={form.lastCheck} onChange={(e) => { setForm({ ...form, lastCheck: e.target.value }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+
+              {/* Last Check By Dropdown */}
+              <div>
+                <label className="text-xs font-medium text-gray-600">Last Check By</label>
+                <select value={form.lastCheck} onChange={(e) => { setForm({ ...form, lastCheck: e.target.value }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                  <option value="">-- Select --</option>
+                  {CHECKERS.map((name) => <option key={name} value={name}>{name}</option>)}
+                </select>
+              </div>
+
               <div>
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-gray-600">Expiry Date</label>

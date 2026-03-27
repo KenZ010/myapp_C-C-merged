@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 
@@ -15,6 +15,8 @@ type SupplierItem = {
   dateChecked: string | null;
   status: string;
 };
+
+const CHECKERS = ["Rjay Salinas", "Ray Teodoro"];
 
 const navItems = [
   { label: "Dashboard", icon: "🏠" },
@@ -31,7 +33,7 @@ const emptyForm = {
   contactNo: "",
   address: "",
   email: "",
-  lastOrdered: "" as string | number, // ✅ Allow empty string so 0 can be cleared
+  lastOrdered: "" as string | number,
   lastCheckBy: "",
   dateChecked: "",
   status: "ACTIVE"
@@ -49,6 +51,18 @@ export default function SupplierMaintenancePage() {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [checkerFilter, setCheckerFilter] = useState("All");
+  const [showCheckerDropdown, setShowCheckerDropdown] = useState(false);
+
+  const checkerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (checkerRef.current && !checkerRef.current.contains(e.target as Node)) setShowCheckerDropdown(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const fetchSuppliers = async () => {
     try {
@@ -66,11 +80,14 @@ export default function SupplierMaintenancePage() {
     fetchSuppliers();
   }, []);
 
-  const filtered = items.filter((row) =>
-    row.supplierName.toLowerCase().includes(search.toLowerCase()) ||
-    row.id.toLowerCase().includes(search.toLowerCase()) ||
-    row.contactNo.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = items.filter((row) => {
+    const matchSearch =
+      row.supplierName.toLowerCase().includes(search.toLowerCase()) ||
+      row.id.toLowerCase().includes(search.toLowerCase()) ||
+      row.contactNo.toLowerCase().includes(search.toLowerCase());
+    const matchChecker = checkerFilter === "All" || row.lastCheckBy === checkerFilter;
+    return matchSearch && matchChecker;
+  });
 
   const toggleSelect = (id: string) => setSelected((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
   const toggleAll = () => selected.length === filtered.length ? setSelected([]) : setSelected(filtered.map((r) => r.id));
@@ -86,7 +103,7 @@ export default function SupplierMaintenancePage() {
       contactNo: item.contactNo,
       address: item.address || "",
       email: item.email || "",
-      lastOrdered: item.lastOrdered ?? "", // ✅ Use empty string if null
+      lastOrdered: item.lastOrdered ?? "",
       lastCheckBy: item.lastCheckBy || "",
       dateChecked: item.dateChecked ? new Date(item.dateChecked).toISOString().split('T')[0] : "",
       status: item.status
@@ -98,7 +115,6 @@ export default function SupplierMaintenancePage() {
   const handleSave = async () => {
     if (!form.supplierName) { alert("Supplier Name is required."); return; }
     try {
-      // ✅ Convert empty string back to 0 when saving
       const saveData = {
         ...form,
         lastOrdered: form.lastOrdered === "" ? 0 : Number(form.lastOrdered)
@@ -224,13 +240,38 @@ export default function SupplierMaintenancePage() {
               <button onClick={openEditModal} className="flex items-center gap-1 border border-gray-800 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-800 hover:bg-gray-100">✏️ Edit</button>
               <button onClick={openAddModal} className="flex items-center gap-1 bg-gray-900 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-white hover:bg-gray-700">+ Add Supplier</button>
             </div>
+
             <div className="flex items-center gap-2 mb-4 flex-wrap">
               <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-40 md:w-48">
                 <span className="text-gray-400 text-sm">🔍</span>
                 <input type="text" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} className="outline-none text-sm text-gray-700 w-full" />
               </div>
+
               <button className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-600 hover:bg-gray-50">🔖 Status ▾</button>
+
+              {/* Checker Filter */}
+              <div className="relative" ref={checkerRef}>
+                <button onClick={() => setShowCheckerDropdown(!showCheckerDropdown)}
+                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${checkerFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                  🧑 {checkerFilter === "All" ? "Last Check By" : checkerFilter} ▾
+                </button>
+                {showCheckerDropdown && (
+                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44">
+                    {["All", ...CHECKERS].map((opt) => (
+                      <button key={opt} onClick={() => { setCheckerFilter(opt); setShowCheckerDropdown(false); }}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${checkerFilter === opt ? "text-indigo-600 font-semibold" : "text-gray-600"}`}>
+                        {opt === "All" ? "All Checkers" : opt}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {checkerFilter !== "All" && (
+                <button onClick={() => setCheckerFilter("All")} className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
+              )}
             </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-max">
                 <thead>
@@ -283,7 +324,6 @@ export default function SupplierMaintenancePage() {
               <div><label className="text-xs font-medium text-gray-600">Address</label><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div><label className="text-xs font-medium text-gray-600">Email</label><input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div className="grid grid-cols-2 gap-3">
-                {/* ✅ Fixed: 0 can now be cleared */}
                 <div>
                   <label className="text-xs font-medium text-gray-600">Last Ordered</label>
                   <input
@@ -296,7 +336,16 @@ export default function SupplierMaintenancePage() {
                 </div>
                 <div><label className="text-xs font-medium text-gray-600">Date Checked</label><input type="date" value={form.dateChecked} onChange={(e) => setForm({ ...form, dateChecked: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               </div>
-              <div><label className="text-xs font-medium text-gray-600">Last Check By</label><input value={form.lastCheckBy} onChange={(e) => setForm({ ...form, lastCheckBy: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+
+              {/* Last Check By Dropdown */}
+              <div>
+                <label className="text-xs font-medium text-gray-600">Last Check By</label>
+                <select value={form.lastCheckBy} onChange={(e) => setForm({ ...form, lastCheckBy: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                  <option value="">-- Select --</option>
+                  {CHECKERS.map((name) => <option key={name} value={name}>{name}</option>)}
+                </select>
+              </div>
+
               <div>
                 <label className="text-xs font-medium text-gray-600">Status</label>
                 <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
