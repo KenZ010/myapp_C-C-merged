@@ -341,7 +341,7 @@ export default function SupplierMaintenancePage() {
               <div>
                 <label className="text-xs font-medium text-gray-600">Last Check By</label>
                 <select value={form.lastCheckBy} onChange={(e) => setForm({ ...form, lastCheckBy: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                  <option value="">-- Select --</option>
+                  <option value=""> Select </option>
                   {CHECKERS.map((name) => <option key={name} value={name}>{name}</option>)}
                 </select>
               </div>

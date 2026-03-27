@@ -511,7 +511,7 @@ export default function InventoryMaintenancePage() {
               <div>
                 <label className="text-xs font-medium text-gray-600">Last Check By</label>
                 <select value={form.lastCheck} onChange={(e) => { setForm({ ...form, lastCheck: e.target.value }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                  <option value="">-- Select --</option>
+                  <option value="">Select</option>
                   {CHECKERS.map((name) => <option key={name} value={name}>{name}</option>)}
                 </select>
               </div>
