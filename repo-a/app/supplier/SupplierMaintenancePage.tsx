@@ -53,6 +53,7 @@ export default function SupplierMaintenancePage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [checkerFilter, setCheckerFilter] = useState("All");
   const [showCheckerDropdown, setShowCheckerDropdown] = useState(false);
+  const [viewItem, setViewItem] = useState<SupplierItem | null>(null);
 
   const checkerRef = useRef<HTMLDivElement>(null);
 
@@ -112,8 +113,25 @@ export default function SupplierMaintenancePage() {
     setShowModal(true);
   };
 
+  const openEditFromView = (item: SupplierItem) => {
+    setViewItem(null);
+    setForm({
+      supplierName: item.supplierName,
+      contactNo: item.contactNo,
+      address: item.address || "",
+      email: item.email || "",
+      lastOrdered: item.lastOrdered ?? "",
+      lastCheckBy: item.lastCheckBy || "",
+      dateChecked: item.dateChecked ? new Date(item.dateChecked).toISOString().split('T')[0] : "",
+      status: item.status
+    });
+    setSelected([item.id]);
+    setEditingId(item.id);
+    setShowModal(true);
+  };
+
   const handleSave = async () => {
-    if (!form.supplierName) { alert("Company Name is required."); return; }
+    if (!form.supplierName) { alert("Supplier Name is required."); return; }
     try {
       const saveData = {
         ...form,
@@ -149,7 +167,7 @@ export default function SupplierMaintenancePage() {
   };
 
   const handleExport = () => {
-    const headers = ["ID", "Company Name", "Contact No", "Address", "Email", "Last Ordered", "Last Check By", "Date Checked", "Status"];
+    const headers = ["ID", "Supplier Name", "Contact No", "Address", "Email", "Last Ordered", "Last Check By", "Date Checked", "Status"];
     const rows = items.map((item) => [item.id, item.supplierName, item.contactNo, item.address, item.email, item.lastOrdered, item.lastCheckBy, item.dateChecked, item.status]);
     const csvContent = [headers, ...rows].map((row) => row.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv" });
@@ -234,6 +252,8 @@ export default function SupplierMaintenancePage() {
 
         <div className="flex-1 p-3 md:p-4 bg-green-50">
           <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm">
+
+            {/* Top action buttons */}
             <div className="flex items-center gap-2 mb-4 flex-wrap justify-end">
               <button onClick={handleExport} className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-600 hover:bg-gray-50">📤 Export</button>
               <button onClick={handleDelete} className="flex items-center gap-1 border border-red-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-red-500 hover:bg-red-50">🗑️ Delete</button>
@@ -241,12 +261,12 @@ export default function SupplierMaintenancePage() {
               <button onClick={openAddModal} className="flex items-center gap-1 bg-gray-900 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-white hover:bg-gray-700">+ Add Supplier</button>
             </div>
 
+            {/* Search & Filters */}
             <div className="flex items-center gap-2 mb-4 flex-wrap">
               <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-40 md:w-48">
                 <span className="text-gray-400 text-sm">🔍</span>
                 <input type="text" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} className="outline-none text-sm text-gray-700 w-full" />
               </div>
-
               <button className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-600 hover:bg-gray-50">🔖 Status ▾</button>
 
               {/* Checker Filter */}
@@ -266,44 +286,45 @@ export default function SupplierMaintenancePage() {
                   </div>
                 )}
               </div>
-
               {checkerFilter !== "All" && (
                 <button onClick={() => setCheckerFilter("All")} className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
               )}
             </div>
 
+            {/* Simplified Table */}
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-max">
                 <thead>
                   <tr className="bg-indigo-900 text-white text-xs">
                     <th className="p-3 text-left w-8"><input type="checkbox" onChange={toggleAll} checked={selected.length === filtered.length && filtered.length > 0} /></th>
                     <th className="p-3 text-left">ID</th>
-                    <th className="p-3 text-left">Company Name</th>
-                    <th className="p-3 text-left">Contact No.</th>
-                    <th className="p-3 text-left">Address</th>
-                    <th className="p-3 text-left">Last Ordered</th>
+                    <th className="p-3 text-left">Supplier Name</th>
                     <th className="p-3 text-left">Last Check By</th>
-                    <th className="p-3 text-left">Date Checked</th>
                     <th className="p-3 text-left">Status</th>
+                    <th className="p-3 text-left">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={9} className="p-6 text-center text-gray-400">Loading suppliers...</td></tr>
+                    <tr><td colSpan={6} className="p-6 text-center text-gray-400">Loading suppliers...</td></tr>
                   ) : filtered.length === 0 ? (
-                    <tr><td colSpan={9} className="p-6 text-center text-gray-400">No suppliers found.</td></tr>
+                    <tr><td colSpan={6} className="p-6 text-center text-gray-400">No suppliers found.</td></tr>
                   ) : (
                     filtered.map((row) => (
                       <tr key={row.id} className={`border-b border-gray-100 hover:bg-gray-50 ${selected.includes(row.id) ? "bg-indigo-50" : ""}`}>
                         <td className="p-3"><input type="checkbox" checked={selected.includes(row.id)} onChange={() => toggleSelect(row.id)} /></td>
                         <td className="p-3 text-gray-500 text-xs">{row.id}</td>
                         <td className="p-3"><span className="bg-gray-700 text-white px-3 py-1 rounded-full text-xs">{row.supplierName}</span></td>
-                        <td className="p-3 text-gray-700">{row.contactNo}</td>
-                        <td className="p-3 text-gray-500">{row.address ?? "-"}</td>
-                        <td className="p-3 text-gray-700">{row.lastOrdered ?? "-"}</td>
                         <td className="p-3"><span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">{row.lastCheckBy ?? "-"}</span></td>
-                        <td className="p-3"><span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">{row.dateChecked ? new Date(row.dateChecked).toLocaleDateString() : "-"}</span></td>
                         <td className="p-3"><span className={`px-3 py-1 rounded-full text-xs font-medium ${row.status === "ACTIVE" ? "bg-green-500 text-white" : "bg-yellow-400 text-black"}`}>{row.status}</span></td>
+                        <td className="p-3">
+                          <button
+                            onClick={() => setViewItem(row)}
+                            className="flex items-center gap-1 border border-indigo-300 text-indigo-600 hover:bg-indigo-50 rounded-lg px-3 py-1 text-xs font-medium transition-colors"
+                          >
+                            👁️ View Details
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -314,12 +335,68 @@ export default function SupplierMaintenancePage() {
         </div>
       </main>
 
+      {/* ── View Details Modal ── */}
+      {viewItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h2 className="text-lg font-bold text-gray-800">{viewItem.supplierName}</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Supplier ID: {viewItem.id}</p>
+              </div>
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${viewItem.status === "ACTIVE" ? "bg-green-500 text-white" : "bg-yellow-400 text-black"}`}>
+                {viewItem.status}
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400 mb-1">Contact No.</p>
+                  <p className="text-sm font-medium text-gray-800">{viewItem.contactNo || "—"}</p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400 mb-1">Email</p>
+                  <p className="text-sm font-medium text-gray-800 break-all">{viewItem.email || "—"}</p>
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-xs text-gray-400 mb-1">Address</p>
+                <p className="text-sm font-medium text-gray-800">{viewItem.address || "—"}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400 mb-1">Last Ordered</p>
+                  <p className="text-sm font-medium text-gray-800">{viewItem.lastOrdered ?? "—"}</p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400 mb-1">Date Checked</p>
+                  <p className="text-sm font-medium text-gray-800">
+                    {viewItem.dateChecked ? new Date(viewItem.dateChecked).toLocaleDateString() : "—"}
+                  </p>
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-xs text-gray-400 mb-1">Last Check By</p>
+                <p className="text-sm font-medium text-gray-800">{viewItem.lastCheckBy || "—"}</p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setViewItem(null)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Close</button>
+              <button onClick={() => openEditFromView(viewItem)} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700">✏️ Edit</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add / Edit Modal ── */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-screen overflow-y-auto">
             <h2 className="text-lg font-bold text-gray-800 mb-4">{editingId !== null ? "Edit Supplier" : "Add New Supplier"}</h2>
             <div className="flex flex-col gap-3">
-              <div><label className="text-xs font-medium text-gray-600">Company Name</label><input value={form.supplierName} onChange={(e) => setForm({ ...form, supplierName: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+              <div><label className="text-xs font-medium text-gray-600">Supplier Name</label><input value={form.supplierName} onChange={(e) => setForm({ ...form, supplierName: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div><label className="text-xs font-medium text-gray-600">Contact No.</label><input value={form.contactNo} onChange={(e) => setForm({ ...form, contactNo: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div><label className="text-xs font-medium text-gray-600">Address</label><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               <div><label className="text-xs font-medium text-gray-600">Email</label><input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
@@ -336,16 +413,13 @@ export default function SupplierMaintenancePage() {
                 </div>
                 <div><label className="text-xs font-medium text-gray-600">Date Checked</label><input type="date" value={form.dateChecked} onChange={(e) => setForm({ ...form, dateChecked: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
               </div>
-
-              {/* Last Check By Dropdown */}
               <div>
                 <label className="text-xs font-medium text-gray-600">Last Check By</label>
                 <select value={form.lastCheckBy} onChange={(e) => setForm({ ...form, lastCheckBy: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                  <option value=""> Select </option>
+                  <option value="">-- Select --</option>
                   {CHECKERS.map((name) => <option key={name} value={name}>{name}</option>)}
                 </select>
               </div>
-
               <div>
                 <label className="text-xs font-medium text-gray-600">Status</label>
                 <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
@@ -362,6 +436,7 @@ export default function SupplierMaintenancePage() {
         </div>
       )}
 
+      {/* ── Delete Confirm Modal ── */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
