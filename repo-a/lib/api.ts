@@ -21,9 +21,9 @@ export const api = {
   
 
   // EMPLOYEES
-  getEmployees: async () => {  // ← removed token parameter
+  getEmployees: async () => {
     const res = await fetch(`${API_URL}/employees`, {
-      headers: { Authorization: `Bearer ${getToken()}` }  // ← uses getToken()
+      headers: { Authorization: `Bearer ${getToken()}` }
     });
     return res.json();
   },
@@ -35,7 +35,7 @@ export const api = {
     return res.json();
   },
 
-  createEmployee: async (data: any) => {  // ← removed token parameter
+  createEmployee: async (data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/employees`, {
       method: 'POST',
       headers: {
@@ -47,7 +47,7 @@ export const api = {
     return res.json();
   },
 
-  updateEmployee: async (id: string, data: any) => {
+  updateEmployee: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/employees/${id}`, {
       method: 'PUT',
       headers: {
@@ -82,7 +82,7 @@ export const api = {
     return res.json();
   },
 
-  createSupplier: async (data: any) => {
+  createSupplier: async (data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/suppliers`, {
       method: 'POST',
       headers: {
@@ -94,7 +94,7 @@ export const api = {
     return res.json();
   },
 
-  updateSupplier: async (id: string, data: any) => {
+  updateSupplier: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/suppliers/${id}`, {
       method: 'PUT',
       headers: {
@@ -129,7 +129,7 @@ export const api = {
     return res.json();
   },
 
-  createCustomer: async (data: any) => {
+  createCustomer: async (data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/customers`, {
       method: 'POST',
       headers: {
@@ -141,7 +141,7 @@ export const api = {
     return res.json();
   },
 
-  updateCustomer: async (id: string, data: any) => {
+  updateCustomer: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/customers/${id}`, {
       method: 'PUT',
       headers: {
@@ -162,33 +162,33 @@ export const api = {
   },
 
   // PRODUCTS
-getProducts: async () => {
-  const res = await fetch(`${API_URL}/products`);
-  return res.json();
-},
+  getProducts: async () => {
+    const res = await fetch(`${API_URL}/products`);
+    return res.json();
+  },
 
-getProduct: async (id: string) => {
-  const res = await fetch(`${API_URL}/products/${id}`);
-  return res.json();
-},
+  getProduct: async (id: string) => {
+    const res = await fetch(`${API_URL}/products/${id}`);
+    return res.json();
+  },
 
-createProduct: async (data: any) => {
-  const res = await fetch(`${API_URL}/products`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  });
-  return res.json();
-},
+  createProduct: async (data: Record<string, unknown>) => {
+    const res = await fetch(`${API_URL}/products`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
 
-updateProduct: async (id: string, data: any) => {
-  const res = await fetch(`${API_URL}/products/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  });
-  return res.json();
-},
+  updateProduct: async (id: string, data: Record<string, unknown>) => {
+    const res = await fetch(`${API_URL}/products/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
 
   deleteProduct: async (id: string) => {
     const res = await fetch(`${API_URL}/products/${id}`, {
@@ -212,7 +212,7 @@ updateProduct: async (id: string, data: any) => {
     return res.json();
   },
 
-  createPurchaseOrder: async (data: any) => {
+  createPurchaseOrder: async (data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/purchase-orders`, {
       method: 'POST',
       headers: {
@@ -224,7 +224,7 @@ updateProduct: async (id: string, data: any) => {
     return res.json();
   },
 
-  updatePurchaseOrder: async (id: string, data: any) => {
+  updatePurchaseOrder: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/purchase-orders/${id}`, {
       method: 'PUT',
       headers: {
@@ -256,4 +256,3 @@ updateProduct: async (id: string, data: any) => {
     return res.json();
   },
 };
-
