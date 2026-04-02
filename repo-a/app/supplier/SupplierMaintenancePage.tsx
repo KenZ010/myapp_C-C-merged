@@ -158,6 +158,12 @@ export default function SupplierMaintenancePage() {
     }
   };
 
+  const openViewModal = async (supplierId: string) => {
+  const supplier = await api.getSupplier(supplierId); // includes products
+  setViewItem(supplier);
+};
+
+
   const handleDelete = () => {
     if (selected.length === 0) { alert("Please select at least one item."); return; }
     setShowDeleteConfirm(true);
@@ -328,7 +334,7 @@ export default function SupplierMaintenancePage() {
                         <td className="p-3"><span className={`px-3 py-1 rounded-full text-xs font-medium ${row.status === "ACTIVE" ? "bg-green-500 text-white" : "bg-yellow-400 text-black"}`}>{row.status}</span></td>
                         <td className="p-3">
                           <button
-                            onClick={() => setViewItem(row)}
+                            onClick={() => openViewModal(row.id)}
                             className="flex items-center gap-1 border border-indigo-300 text-indigo-600 hover:bg-indigo-50 rounded-lg px-3 py-1 text-xs font-medium transition-colors"
                           >
                             👁️ View Details
