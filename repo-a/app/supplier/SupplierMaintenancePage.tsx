@@ -4,6 +4,11 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 
+type ProductItem = {
+  id: string;
+  productName: string;
+};
+
 type SupplierItem = {
   id: string;
   supplierName: string;
@@ -14,6 +19,8 @@ type SupplierItem = {
   lastCheckBy: string | null;
   dateChecked: string | null;
   status: string;
+
+  products?: ProductItem[];
 };
 
 const CHECKERS = ["Rjay Salinas", "Ray Teodoro"];
@@ -383,6 +390,33 @@ export default function SupplierMaintenancePage() {
                 <p className="text-sm font-medium text-gray-800">{viewItem.lastCheckBy || "—"}</p>
               </div>
             </div>
+
+            {/* ── Products under Supplier ── */}
+<div className="mt-4">
+  <p className="text-sm font-semibold text-gray-700 mb-2">Products</p>
+
+  {viewItem.products && viewItem.products.length > 0 ? (
+    <div className="max-h-40 overflow-y-auto flex flex-col gap-2">
+      {viewItem.products.map((product) => (
+        <div
+          key={product.id}
+          className="bg-gray-50 rounded-xl p-3"
+        >
+          <p className="text-sm font-medium text-gray-800">
+            {product.productName}
+          </p>
+          <p className="text-xs text-gray-400">
+            ID: {product.id}
+          </p>
+        </div>
+      ))}
+    </div>
+  ) : (
+    <div className="bg-gray-50 rounded-xl p-3 text-sm text-gray-400 text-center">
+      No products found
+    </div>
+  )}
+</div>
 
             <div className="flex gap-3 mt-5">
               <button onClick={() => setViewItem(null)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Close</button>
