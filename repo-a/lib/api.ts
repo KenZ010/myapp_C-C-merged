@@ -255,4 +255,50 @@ export const api = {
     });
     return res.json();
   },
+
+  getDeliveries: async () => {
+    const res = await fetch(`${API_URL}/deliveries`, {
+      headers: { Authorization: `Bearer ${getToken()}` }
+    });
+    return res.json();
+  },
+
+  getDelivery: async (id: string) => {
+    const res = await fetch(`${API_URL}/deliveries/${id}`, {
+      headers: { Authorization: `Bearer ${getToken()}` }
+    });
+    return res.json();
+  },
+
+  createDelivery: async (data: Record<string, unknown>) => {
+    const res = await fetch(`${API_URL}/deliveries`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getToken()}`
+      },
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
+
+  updateDelivery: async (id: string, data: Record<string, unknown>) => {
+    const res = await fetch(`${API_URL}/deliveries/${id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getToken()}`
+      },
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
+
+  deleteDelivery: async (id: string) => {
+    const res = await fetch(`${API_URL}/deliveries/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${getToken()}` }
+    });
+    return res.json();
+  },
 };

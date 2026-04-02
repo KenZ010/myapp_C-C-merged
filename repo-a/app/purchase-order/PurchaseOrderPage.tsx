@@ -25,6 +25,14 @@ type PurchaseOrder = {
   completedAt?: string;
 };
 
+type DeliveryForm = {
+  supplierId: string;
+  orderDate: string;
+  lineItems: LineItem[];
+  notes?: string;
+};
+
+
 type Supplier = { id: string; supplierName: string };
 type Product  = { id: string; productName: string; unitPrice: number };
 
@@ -48,11 +56,13 @@ const navItems = [
 
 const ITEMS_PER_PAGE = 8;
 const emptyLineItem  = (): LineItem => ({ productId: "", productName: "", quantity: 1, unitPrice: 0 });
-const makeEmptyForm  = () => ({
+const makeEmptyForm = () => ({
   supplierId: "",
-  orderDate:  new Date().toISOString().split("T")[0],
-  lineItems:  [emptyLineItem()] as LineItem[],
+  orderDate: new Date().toISOString().split("T")[0],
+  lineItems: [emptyLineItem()] as LineItem[],
+  notes: "", // <-- add this
 });
+
 
 type Tab = "create" | "receiving" | "history";
 
@@ -60,6 +70,7 @@ export default function PurchaseOrderPage() {
   const router   = useRouter();
   const pathname = usePathname();
 
+  
   const [activeTab,      setActiveTab]      = useState<Tab>("create");
   const [showUserMenu,   setShowUserMenu]   = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -67,7 +78,7 @@ export default function PurchaseOrderPage() {
   const [loading,        setLoading]        = useState(true);
   const [suppliers,      setSuppliers]      = useState<Supplier[]>([]);
   const [products,       setProducts]       = useState<Product[]>([]);
-  const [form,           setForm]           = useState(makeEmptyForm());
+  const [form, setForm] = useState<DeliveryForm>(makeEmptyForm());
   const [saving,         setSaving]         = useState(false);
 
   // History
@@ -119,34 +130,49 @@ export default function PurchaseOrderPage() {
 
   // ── CREATE ──────────────────────────────────────────────────────────────────
   const handleSave = async () => {
-    if (!form.supplierId)        { alert("Please select a supplier.");          return; }
-    if (validLineItems.length === 0) { alert("Please add at least one line item."); return; }
-    try {
-      setSaving(true);
-      const employee = JSON.parse(localStorage.getItem("employee") || "{}");
-      const saveData = {
-        supplierId:  form.supplierId,
-        orderDate:   form.orderDate,
-        lineItems:   validLineItems.map((i) => ({
-          ...i, quantity: Number(i.quantity) || 1, unitPrice: Number(i.unitPrice) || 0,
-        })),
-        totalAmount: calculateTotal(validLineItems),
-        createdBy:   employee?.id || employee?.employeeId || "",
-      };
-      const result = await api.createPurchaseOrder(saveData);
-      if (result?.error || (result?.message && result.message.toLowerCase().includes("error"))) {
-        alert(result.message || "Failed to create order."); return;
-      }
-      setForm(makeEmptyForm());
-      await fetchAll();
-      alert("Purchase order created successfully!");
-    } catch (err) {
-      console.error(err);
-      alert("Failed to create order. Please try again.");
-    } finally {
-      setSaving(false);
+  if (!form.supplierId) {
+    alert("Please select a supplier.");
+    return;
+  }
+  if (validLineItems.length === 0) {
+    alert("Please add at least one line item.");
+    return;
+  }
+
+  try {
+    setSaving(true);
+    const employee = JSON.parse(localStorage.getItem("employee") || "{}");
+
+    const saveData = {
+      supplierId: form.supplierId,
+      deliveryDate: form.orderDate,
+      totalItems: validLineItems.reduce((sum, i) => sum + Number(i.quantity), 0),
+      notes: form.notes || "",
+      items: validLineItems.map((i) => ({
+        productId: i.productId,
+        quantity: Number(i.quantity) || 1,
+        costPrice: Number(i.unitPrice) || 0,
+      })),
+    };
+
+    const result = await api.createDelivery(saveData);
+
+    if (result?.error || (result?.message && result.message.toLowerCase().includes("error"))) {
+      alert(result.message || "Failed to create delivery.");
+      return;
     }
-  };
+
+    setForm(makeEmptyForm());
+    await fetchAll(); // refresh deliveries
+    alert("Delivery created successfully!");
+  } catch (err) {
+    console.error(err);
+    alert("Failed to create delivery. Please try again.");
+  } finally {
+    setSaving(false);
+  }
+};
+
 
   const addLineItem    = () => setForm({ ...form, lineItems: [...form.lineItems, emptyLineItem()] });
   const removeLineItem = (idx: number) => setForm({ ...form, lineItems: form.lineItems.filter((_, i) => i !== idx) });
@@ -349,147 +375,159 @@ export default function PurchaseOrderPage() {
         <div className="flex-1 p-3 md:p-5 bg-green-50">
 
           {/* ══════════════════════════════════════════════════════════════════
-              TAB: CREATE ORDER
+              TAB: CREATE DELIVERY
           ═══════════════════════════════════════════════════════════════════ */}
-          {activeTab === "create" && (
-            <div className="flex flex-col lg:flex-row gap-4">
+{activeTab === "create" && (
+  <div className="flex flex-col lg:flex-row gap-4">
 
-              {/* Form side */}
-              <div className="flex-1 flex flex-col gap-4">
+    {/* Form side */}
+    <div className="flex-1 flex flex-col gap-4">
 
-                {/* Supplier & Date */}
-                <div className="bg-white rounded-2xl p-5 shadow-sm">
-                  <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">🏢 Select Supplier / Company</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-medium text-gray-500 mb-1 block">Supplier</label>
-                      <select
-                        value={form.supplierId}
-                        onChange={(e) => setForm({ ...form, supplierId: e.target.value })}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white"
-                      >
-                        <option value="">Select a supplier...</option>
-                        {suppliers.map((s) => <option key={s.id} value={s.id}>{s.supplierName}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-gray-500 mb-1 block">Order Date</label>
-                      <input type="date" value={form.orderDate}
-                        onChange={(e) => setForm({ ...form, orderDate: e.target.value })}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white" />
-                    </div>
-                  </div>
-                </div>
+      {/* Supplier & Date */}
+      <div className="bg-white rounded-2xl p-5 shadow-sm">
+        <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">🏢 Select Supplier / Company</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-medium text-gray-500 mb-1 block">Supplier</label>
+            <select
+              value={form.supplierId}
+              onChange={(e) => setForm({ ...form, supplierId: e.target.value })}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white"
+            >
+              <option value="">Select a supplier...</option>
+              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.supplierName}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-500 mb-1 block">Delivery Date</label>
+            <input type="date" value={form.orderDate}
+              onChange={(e) => setForm({ ...form, orderDate: e.target.value })}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white" />
+          </div>
+        </div>
+      </div>
 
-                {/* Products */}
-                <div className="bg-white rounded-2xl p-5 shadow-sm">
-                  <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-sm font-bold text-gray-700">🛒 Products</h2>
-                    <button onClick={addLineItem}
-                      className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50">
-                      + Add Item
-                    </button>
-                  </div>
+      {/* Notes */}
+      <div className="bg-white rounded-2xl p-5 shadow-sm">
+        <label className="text-xs font-medium text-gray-500 mb-1 block">Notes</label>
+        <textarea
+          value={form.notes}
+          onChange={(e) => setForm({ ...form, notes: e.target.value })}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white"
+          placeholder="Optional notes about this delivery..."
+        />
+      </div>
 
-                  {form.lineItems.length === 0 ? (
-                    <p className="text-sm text-gray-400 text-center py-6">No items added yet.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-400 px-1">
-                        <div className="col-span-5">Product</div>
-                        <div className="col-span-2 text-center">Qty</div>
-                        <div className="col-span-3">Unit Price</div>
-                        <div className="col-span-2 text-right">Subtotal</div>
-                      </div>
-                      {form.lineItems.map((item, idx) => (
-                        <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-gray-50 rounded-xl p-2">
-                          <div className="col-span-5">
-                            <select value={item.productId}
-                              onChange={(e) => updateLineItem(idx, "productId", e.target.value)}
-                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white">
-                              <option value="">-- Select Product --</option>
-                              {products.map((p) => <option key={p.id} value={p.id}>{p.productName}</option>)}
-                            </select>
-                          </div>
-                          <div className="col-span-2">
-                            <input type="number" min="1" value={item.quantity}
-                              onChange={(e) => updateLineItem(idx, "quantity", e.target.value === "" ? "" : Number(e.target.value))}
-                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-center text-gray-900 bg-white"
-                              placeholder="Qty" />
-                          </div>
-                          <div className="col-span-3">
-                            <input type="number" min="0" step="0.01" value={item.unitPrice}
-                              onChange={(e) => updateLineItem(idx, "unitPrice", e.target.value === "" ? "" : Number(e.target.value))}
-                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white"
-                              placeholder="₱0.00" />
-                          </div>
-                          <div className="col-span-2 flex items-center justify-end gap-1">
-                            <span className="text-xs font-medium text-gray-700">
-                              ₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
-                            </span>
-                            {form.lineItems.length > 1 && (
-                              <button onClick={() => removeLineItem(idx)} className="text-red-400 hover:text-red-600 ml-1 text-sm">✕</button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
+      {/* Products */}
+      <div className="bg-white rounded-2xl p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-bold text-gray-700">🛒 Products</h2>
+          <button onClick={addLineItem}
+            className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50">
+            + Add Item
+          </button>
+        </div>
 
-              {/* Order List sidebar */}
-              <div className="w-full lg:w-72 shrink-0">
-                <div className="bg-white rounded-2xl p-5 shadow-sm sticky top-4">
-                  <h2 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">📋 Order List</h2>
-
-                  {validLineItems.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-10 text-center">
-                      <span className="text-4xl mb-3">📋</span>
-                      <p className="text-xs text-gray-400">No items yet. Select a supplier and add products.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2 mb-4">
-                      {validLineItems.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-start py-2 border-b border-gray-50">
-                          <div>
-                            <p className="font-medium text-gray-800 text-xs">{item.productName}</p>
-                            <p className="text-xs text-gray-400">{item.quantity} × ₱{Number(item.unitPrice).toLocaleString()}</p>
-                          </div>
-                          <span className="text-xs font-semibold text-indigo-700">
-                            ₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
-                          </span>
-                        </div>
-                      ))}
-                      <div className="pt-2 flex justify-between items-center">
-                        <span className="text-sm font-semibold text-gray-600">Total</span>
-                        <span className="text-base font-bold text-indigo-900">
-                          ₱{calculateTotal(validLineItems).toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {form.supplierId && (
-                    <div className="mb-3 p-2.5 bg-gray-50 rounded-xl">
-                      <p className="text-xs text-gray-400">Supplier</p>
-                      <p className="text-sm font-medium text-gray-800">
-                        {suppliers.find((s) => s.id === form.supplierId)?.supplierName || "—"}
-                      </p>
-                    </div>
-                  )}
-
-                  <button onClick={handleSave}
-                    disabled={saving || validLineItems.length === 0 || !form.supplierId}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2">
-                    {saving
-                      ? <><span className="animate-spin inline-block">⏳</span> Submitting...</>
-                      : <><span>📤</span> Submit Purchase Order</>}
-                  </button>
-                </div>
-              </div>
+        {form.lineItems.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-6">No items added yet.</p>
+        ) : (
+          <div className="space-y-2">
+            <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-400 px-1">
+              <div className="col-span-5">Product</div>
+              <div className="col-span-2 text-center">Qty</div>
+              <div className="col-span-3">Unit Price</div>
+              <div className="col-span-2 text-right">Subtotal</div>
             </div>
-          )}
+            {form.lineItems.map((item, idx) => (
+              <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-gray-50 rounded-xl p-2">
+                <div className="col-span-5">
+                  <select value={item.productId}
+                    onChange={(e) => updateLineItem(idx, "productId", e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white">
+                    <option value="">-- Select Product --</option>
+                    {products.map((p) => <option key={p.id} value={p.id}>{p.productName}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <input type="number" min="1" value={item.quantity}
+                    onChange={(e) => updateLineItem(idx, "quantity", e.target.value === "" ? "" : Number(e.target.value))}
+                    className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-center text-gray-900 bg-white"
+                    placeholder="Qty" />
+                </div>
+                <div className="col-span-3">
+                  <input type="number" min="0" step="0.01" value={item.unitPrice}
+                    onChange={(e) => updateLineItem(idx, "unitPrice", e.target.value === "" ? "" : Number(e.target.value))}
+                    className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white"
+                    placeholder="₱0.00" />
+                </div>
+                <div className="col-span-2 flex items-center justify-end gap-1">
+                  <span className="text-xs font-medium text-gray-700">
+                    ₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
+                  </span>
+                  {form.lineItems.length > 1 && (
+                    <button onClick={() => removeLineItem(idx)} className="text-red-400 hover:text-red-600 ml-1 text-sm">✕</button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+
+    {/* Order List sidebar */}
+    <div className="w-full lg:w-72 shrink-0">
+      <div className="bg-white rounded-2xl p-5 shadow-sm sticky top-4">
+        <h2 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">📋 Order List</h2>
+
+        {validLineItems.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <span className="text-4xl mb-3">📋</span>
+            <p className="text-xs text-gray-400">No items yet. Select a supplier and add products.</p>
+          </div>
+        ) : (
+          <div className="space-y-2 mb-4">
+            {validLineItems.map((item, idx) => (
+              <div key={idx} className="flex justify-between items-start py-2 border-b border-gray-50">
+                <div>
+                  <p className="font-medium text-gray-800 text-xs">{item.productName}</p>
+                  <p className="text-xs text-gray-400">{item.quantity} × ₱{Number(item.unitPrice).toLocaleString()}</p>
+                </div>
+                <span className="text-xs font-semibold text-indigo-700">
+                  ₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
+                </span>
+              </div>
+            ))}
+            <div className="pt-2 flex justify-between items-center">
+              <span className="text-sm font-semibold text-gray-600">Total</span>
+              <span className="text-base font-bold text-indigo-900">
+                ₱{calculateTotal(validLineItems).toLocaleString()}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {form.supplierId && (
+          <div className="mb-3 p-2.5 bg-gray-50 rounded-xl">
+            <p className="text-xs text-gray-400">Supplier</p>
+            <p className="text-sm font-medium text-gray-800">
+              {suppliers.find((s) => s.id === form.supplierId)?.supplierName || "—"}
+            </p>
+          </div>
+        )}
+
+        <button onClick={handleSave}
+          disabled={saving || validLineItems.length === 0 || !form.supplierId}
+          className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2">
+          {saving
+            ? <><span className="animate-spin inline-block">⏳</span> Submitting...</>
+            : <><span>📤</span> Submit Delivery</>}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
 
           {/* ══════════════════════════════════════════════════════════════════
               TAB: RECEIVING
