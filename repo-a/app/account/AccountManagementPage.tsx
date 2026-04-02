@@ -12,6 +12,7 @@ const navItems = [
   { label: "Transaction Logs", icon: "▦" },
   { label: "Product Management", icon: "🗒️" },
   { label: "Account Management", icon: "👤", active: true },
+  { label: "Purchase Order", icon: "📋" },
 ];
 
 type Employee = {
@@ -132,6 +133,7 @@ export default function AccountManagementPage() {
     if (label === "Transaction Logs") router.push("/transaction");
     if (label === "Product Management") router.push("/product");
     if (label === "Account Management") router.push("/account");
+    if (label === "Purchase Order") router.push("/purchase-order");
     setShowMobileMenu(false);
   };
 

@@ -26,6 +26,7 @@ const navItems = [
   { label: "Transaction Logs", icon: "▦" },
   { label: "Product Management", icon: "🗒️" },
   { label: "Account Management", icon: "👤" },
+  { label: "Purchase Order", icon: "📋" },
 ];
 
 const emptyForm = {
@@ -189,6 +190,7 @@ export default function SupplierMaintenancePage() {
     if (label === "Transaction Logs") router.push("/transaction");
     if (label === "Product Management") router.push("/product");
     if (label === "Account Management") router.push("/account");
+    if (label === "Purchase Order") router.push("/purchase-order");
     setShowMobileMenu(false);
   };
 

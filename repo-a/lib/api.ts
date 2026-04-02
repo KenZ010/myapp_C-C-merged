@@ -190,11 +190,70 @@ updateProduct: async (id: string, data: any) => {
   return res.json();
 },
 
-deleteProduct: async (id: string) => {
-  const res = await fetch(`${API_URL}/products/${id}`, {
-    method: 'DELETE'
-  });
-  return res.json();
-},
+  deleteProduct: async (id: string) => {
+    const res = await fetch(`${API_URL}/products/${id}`, {
+      method: 'DELETE'
+    });
+    return res.json();
+  },
+
+  // PURCHASE ORDERS
+  getPurchaseOrders: async () => {
+    const res = await fetch(`${API_URL}/purchase-orders`, {
+      headers: { Authorization: `Bearer ${getToken()}` }
+    });
+    return res.json();
+  },
+
+  getPurchaseOrder: async (id: string) => {
+    const res = await fetch(`${API_URL}/purchase-orders/${id}`, {
+      headers: { Authorization: `Bearer ${getToken()}` }
+    });
+    return res.json();
+  },
+
+  createPurchaseOrder: async (data: any) => {
+    const res = await fetch(`${API_URL}/purchase-orders`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${getToken()}`
+      },
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
+
+  updatePurchaseOrder: async (id: string, data: any) => {
+    const res = await fetch(`${API_URL}/purchase-orders/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${getToken()}`
+      },
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
+
+  updatePurchaseOrderStatus: async (id: string, status: string) => {
+    const res = await fetch(`${API_URL}/purchase-orders/${id}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${getToken()}`
+      },
+      body: JSON.stringify({ status })
+    });
+    return res.json();
+  },
+
+  deletePurchaseOrder: async (id: string) => {
+    const res = await fetch(`${API_URL}/purchase-orders/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${getToken()}` }
+    });
+    return res.json();
+  },
 };
 

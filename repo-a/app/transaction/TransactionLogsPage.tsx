@@ -11,6 +11,7 @@ const navItems = [
   { label: "Transaction Logs", icon: "▦", active: true },
   { label: "Product Management", icon: "🗒️" },
   { label: "Account Management", icon: "👤" },
+  { label: "Purchase Order", icon: "📋" },
 ];
 
 type Transaction = {
@@ -53,6 +54,7 @@ export default function TransactionLogsPage() {
     if (label === "Transaction Logs") router.push("/transaction");
     if (label === "Product Management") router.push("/product");
     if (label === "Account Management") router.push("/account");
+    if (label === "Purchase Order") router.push("/purchase-order");
     setShowMobileMenu(false);
   };
 
