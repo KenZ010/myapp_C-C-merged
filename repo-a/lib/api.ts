@@ -188,14 +188,28 @@ export const api = {
     });
     return res.json();
   },
-  receiveDelivery: async (id: string, employeeId: string, items: { deliveryItemId: string; receivedQty: number }[]) => {
-    const res = await fetch(`${API_URL}/deliveries/${id}/receive`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify({ employeeId, items })
-    });
-    return res.json();
-  },
+ receiveDelivery: async (
+  id: string,
+  employeeId: string,
+  items: { deliveryItemId: string; receivedQty: number }[]
+) => {
+  const res = await fetch(`${API_URL}/deliveries/${id}/receive`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${getToken()}`
+    },
+    body: JSON.stringify({ employeeId, items })
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to receive delivery"); // 👈 IMPORTANT
+  }
+
+  return data;
+},
   deleteDelivery: async (id: string) => {
     const res = await fetch(`${API_URL}/deliveries/${id}`, {
       method: 'DELETE',

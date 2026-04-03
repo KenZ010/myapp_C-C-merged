@@ -208,32 +208,36 @@ export default function PurchaseOrderPage() {
   };
 
   const handleReceive = async () => {
-    if (!receivingDelivery) return;
-    const employee = JSON.parse(localStorage.getItem("employee") || "{}");
-    if (!employee?.id) { alert("Employee not found. Please log in again."); return; }
+  if (!receivingDelivery) return;
 
-    try {
-      setReceiving(true);
-      const result = await api.receiveDelivery(
-        receivingDelivery.id,
-        employee.id,
-        receiveQtys.filter((r) => r.receivedQty > 0)
-      );
-      if (result?.message?.toLowerCase().includes("error")) {
-        alert(result.message);
-        return;
-      }
-      setReceivingDelivery(null);
-      await fetchAll();
-      alert("Items received and stock updated!");
-    } catch (err) {
-      console.error(err);
-      alert("Failed to receive items.");
-    } finally {
-      setReceiving(false);
-    }
-  };
+  const employee = JSON.parse(localStorage.getItem("employee") || "{}");
+  if (!employee?.id) {
+    alert("Employee not found. Please log in again.");
+    return;
+  }
 
+  try {
+    setReceiving(true);
+
+    await api.receiveDelivery(
+      receivingDelivery.id,
+      employee.id,
+      receiveQtys.filter((r) => r.receivedQty > 0)
+    );
+
+    setReceivingDelivery(null);
+    await fetchAll();
+
+    alert("Items received and stock updated!");
+  } catch (err: any) {
+    console.error("RECEIVE ERROR:", err);
+
+    // ✅ SHOW REAL ERROR MESSAGE
+    alert(err.message || "Failed to receive items.");
+  } finally {
+    setReceiving(false);
+  }
+};
   const handleCancel = async (id: string) => {
     if (!confirm("Cancel this delivery?")) return;
     try {
