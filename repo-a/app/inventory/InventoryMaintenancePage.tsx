@@ -365,71 +365,80 @@ export default function InventoryMaintenancePage() {
               <button onClick={() => router.push("/product")} className="flex items-center gap-1 bg-gray-900 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-white hover:bg-gray-700">+ Add</button>
             </div>
 
-            <div className="p-6">
-  {/* Summary counts */}
-  <div className="flex gap-4 mb-6">
-    <div className="p-3 bg-green-100 rounded">In Stock: {inStockCount}</div>
-    <div className="p-3 bg-yellow-100 rounded">Low Stock: {lowStockCount}</div>
-    <div className="p-3 bg-red-100 rounded">Out of Stock: {outOfStockCount}</div>
-  </div>
+            {/* Table */}
+            {loading ? (
+              <div className="text-center py-10 text-gray-400 text-sm">Loading inventory...</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-max">
+                  <thead>
+                    <tr className="bg-indigo-900 text-white text-xs">
+                      <th className="p-3 text-left w-8">
+                        <input type="checkbox" onChange={toggleAll} checked={allPageSelected} />
+                      </th>
+                      {([
+                        { key: "barcode",     label: "Barcode"       },
+                        { key: "productName", label: "Product Name"  },
+                        { key: "category",    label: "Category"      },
+                        { key: "expiryDate",  label: "Expiry Date"   },
+                        { key: "stock",       label: "Stock"         },
+                        { key: "status",      label: "Stock Status"  },
+                      ] as { key: SortKey; label: string }[]).map(({ key, label }) => (
+                        <th key={key} className="p-3 text-left cursor-pointer hover:bg-indigo-800 select-none"
+                          onClick={() => handleSort(key)}>
+                          {label}{sortIcon(key)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginated.length === 0 ? (
+                      <tr><td colSpan={7} className="text-center py-10">
+                        <p className="text-gray-400 text-sm">{search ? `No results for "${search}".` : "No items in inventory yet."}</p>
+                      </td></tr>
+                    ) : paginated.map(row => {
+                      const { label, color } = calculateStockStatus(row.stock);
+                      return (
+                        <tr key={row.id} className={`border-b border-gray-100 hover:bg-gray-50 ${selected.includes(row.id) ? "bg-indigo-50" : ""}`}>
+                          <td className="p-3"><input type="checkbox" checked={selected.includes(row.id)} onChange={() => toggleSelect(row.id)} /></td>
+                          <td className="p-3 text-gray-700">{row.barcode}</td>
+                          <td className="p-3 text-gray-700">{row.productName}</td>
+                          <td className="p-3">
+                            <span className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full text-xs">{row.category}</span>
+                          </td>
+                          <td className="p-3"><span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">{row.expiryDate}</span></td>
+                          <td className="p-3 text-gray-700">{row.stock}</td>
+                          <td className="p-3">
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStockBadge(color)}`}>{label}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
-  {/* Products table without barcode */}
-  <table className="w-full border-collapse border border-gray-200 text-sm">
-    <thead className="bg-gray-100">
-      <tr>
-        <th className="border px-3 py-2 cursor-pointer" onClick={() => handleSort("productName")}>
-          Product Name {sortIcon("productName")}
-        </th>
-        <th className="border px-3 py-2 cursor-pointer" onClick={() => handleSort("category")}>
-          Category {sortIcon("category")}
-        </th>
-        <th className="border px-3 py-2 cursor-pointer" onClick={() => handleSort("expiryDate")}>
-          Expiry Date {sortIcon("expiryDate")}
-        </th>
-        <th className="border px-3 py-2 cursor-pointer" onClick={() => handleSort("stock")}>
-          Stock {sortIcon("stock")}
-        </th>
-        <th className="border px-3 py-2">Status</th>
-      </tr>
-    </thead>
-    <tbody>
-      {paginated.map(item => {
-        const status = calculateStockStatus(item.stock);
-        return (
-          <tr key={item.id}>
-            <td className="border px-3 py-2">{item.productName}</td>
-            <td className="border px-3 py-2">{item.category}</td>
-            <td className="border px-3 py-2">{item.expiryDate}</td>
-            <td className="border px-3 py-2 font-semibold">{item.stock}</td>
-            <td className={`border px-3 py-2 ${getStockBadge(status.color)}`}>
-              {status.label}
-            </td>
-          </tr>
-        );
-      })}
-    </tbody>
-  </table>
-
-  {/* Pagination */}
-  <div className="flex justify-between items-center mt-4">
-    <button
-      disabled={currentPage === 1}
-      onClick={() => setCurrentPage(p => p - 1)}
-      className="px-3 py-1 border rounded disabled:opacity-50"
-    >
-      Prev
-    </button>
-    <span>Page {currentPage} of {totalPages}</span>
-    <button
-      disabled={currentPage === totalPages}
-      onClick={() => setCurrentPage(p => p + 1)}
-      className="px-3 py-1 border rounded disabled:opacity-50"
-    >
-      Next
-    </button>
-  </div>
-</div>
-
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 px-1">
+                <p className="text-xs text-gray-400">
+                  Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} of {filtered.length} items
+                </p>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
+                    className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">← Prev</button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                    <button key={page} onClick={() => setCurrentPage(page)}
+                      className={`px-3 py-1 rounded-lg text-sm border transition-colors ${currentPage === page ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                      {page}
+                    </button>
+                  ))}
+                  <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+                    className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Next →</button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Charts */}
