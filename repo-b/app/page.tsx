@@ -14,34 +14,49 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleLogin = async () => {
-    setError("");
+  // LoginPage.tsx
 
-    if (!username || !password) {
-      setError("Please enter username and password.");
-      return;
-    }
+const handleLogin = async () => {
+  setError("");
 
-    setLoading(true);
+  if (!username || !password) {
+    setError("Please enter username and password.");
+    return;
+  }
 
-    try {
-      const data = await api.login(username, password);
+  setLoading(true);
 
-      if (data.token) {
-        // ✅ Save real token from backend
-        document.cookie = `token=${data.token}; path=/; max-age=${60 * 60 * 24}`;
-        localStorage.setItem("employee", JSON.stringify(data.employee));
-        setTimeout(() => router.push("/dashboard"), 100);
+  try {
+    const data = await api.login(username, password);
+
+    if (data.token) {
+      // Save token & employee info
+      document.cookie = `token=${data.token}; path=/; max-age=${60 * 60 * 24}`;
+      localStorage.setItem("employee", JSON.stringify(data.employee));
+
+      // ✅ Redirect based on role
+      const role = data.employee.role;
+      if (role === "ADMIN") {
+        // Prevent admin login or send back to login
+        router.push("/login");
+      } else if (role === "CASHIER") {
+        router.push("/ordering");
+      } else if (role === "STOCK_MANAGER") {
+        router.push("/monitoring");
+      } else if (role === "CUSTOMER") {
+        router.push("/home");
       } else {
-        // ❌ Show error from backend
-        setError(data.message || "Invalid credentials");
+        router.push("/login"); // fallback
       }
-    } catch (err) {
-      setError("Something went wrong. Please try again.");
-    } finally {
-      setLoading(false);
+    } else {
+      setError(data.message || "Invalid credentials");
     }
-  };
+  } catch (err) {
+    setError("Something went wrong. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleLogin();
