@@ -1,6 +1,5 @@
 const API_URL = 'https://backend-production-da89.up.railway.app/api';
 
-// ✅ Get token from cookie automatically
 const getToken = () => {
   if (typeof document === 'undefined') return '';
   const cookies = document.cookie.split(';');
@@ -18,7 +17,6 @@ export const api = {
     });
     return res.json();
   },
-  
 
   // EMPLOYEES
   getEmployees: async () => {
@@ -27,38 +25,28 @@ export const api = {
     });
     return res.json();
   },
-
   getEmployee: async (id: string) => {
     const res = await fetch(`${API_URL}/employees/${id}`, {
       headers: { Authorization: `Bearer ${getToken()}` }
     });
     return res.json();
   },
-
   createEmployee: async (data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/employees`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${getToken()}`
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify(data)
     });
     return res.json();
   },
-
   updateEmployee: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/employees/${id}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${getToken()}`
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify(data)
     });
     return res.json();
   },
-
   deleteEmployee: async (id: string) => {
     const res = await fetch(`${API_URL}/employees/${id}`, {
       method: 'DELETE',
@@ -74,38 +62,28 @@ export const api = {
     });
     return res.json();
   },
-
   getSupplier: async (id: string) => {
     const res = await fetch(`${API_URL}/suppliers/${id}`, {
       headers: { Authorization: `Bearer ${getToken()}` }
     });
     return res.json();
   },
-
   createSupplier: async (data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/suppliers`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${getToken()}`
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify(data)
     });
     return res.json();
   },
-
   updateSupplier: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/suppliers/${id}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${getToken()}`
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify(data)
     });
     return res.json();
   },
-
   deleteSupplier: async (id: string) => {
     const res = await fetch(`${API_URL}/suppliers/${id}`, {
       method: 'DELETE',
@@ -121,38 +99,28 @@ export const api = {
     });
     return res.json();
   },
-
   getCustomer: async (id: string) => {
     const res = await fetch(`${API_URL}/customers/${id}`, {
       headers: { Authorization: `Bearer ${getToken()}` }
     });
     return res.json();
   },
-
   createCustomer: async (data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/customers`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${getToken()}`
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify(data)
     });
     return res.json();
   },
-
   updateCustomer: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/customers/${id}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${getToken()}`
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify(data)
     });
     return res.json();
   },
-
   deleteCustomer: async (id: string) => {
     const res = await fetch(`${API_URL}/customers/${id}`, {
       method: 'DELETE',
@@ -166,12 +134,10 @@ export const api = {
     const res = await fetch(`${API_URL}/products`);
     return res.json();
   },
-
   getProduct: async (id: string) => {
     const res = await fetch(`${API_URL}/products/${id}`);
     return res.json();
   },
-
   createProduct: async (data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/products`, {
       method: 'POST',
@@ -180,7 +146,6 @@ export const api = {
     });
     return res.json();
   },
-
   updateProduct: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/products/${id}`, {
       method: 'PUT',
@@ -189,114 +154,51 @@ export const api = {
     });
     return res.json();
   },
-
   deleteProduct: async (id: string) => {
-    const res = await fetch(`${API_URL}/products/${id}`, {
-      method: 'DELETE'
-    });
+    const res = await fetch(`${API_URL}/products/${id}`, { method: 'DELETE' });
     return res.json();
   },
 
-  // PURCHASE ORDERS
-  getPurchaseOrders: async () => {
-    const res = await fetch(`${API_URL}/purchase-orders`, {
-      headers: { Authorization: `Bearer ${getToken()}` }
-    });
-    return res.json();
-  },
-
-  getPurchaseOrder: async (id: string) => {
-    const res = await fetch(`${API_URL}/purchase-orders/${id}`, {
-      headers: { Authorization: `Bearer ${getToken()}` }
-    });
-    return res.json();
-  },
-
-  createPurchaseOrder: async (data: Record<string, unknown>) => {
-    const res = await fetch(`${API_URL}/purchase-orders`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${getToken()}`
-      },
-      body: JSON.stringify(data)
-    });
-    return res.json();
-  },
-
-  updatePurchaseOrder: async (id: string, data: Record<string, unknown>) => {
-    const res = await fetch(`${API_URL}/purchase-orders/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${getToken()}`
-      },
-      body: JSON.stringify(data)
-    });
-    return res.json();
-  },
-
-  updatePurchaseOrderStatus: async (id: string, status: string) => {
-    const res = await fetch(`${API_URL}/purchase-orders/${id}/status`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${getToken()}`
-      },
-      body: JSON.stringify({ status })
-    });
-    return res.json();
-  },
-
-  deletePurchaseOrder: async (id: string) => {
-    const res = await fetch(`${API_URL}/purchase-orders/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${getToken()}` }
-    });
-    return res.json();
-  },
-
+  // DELIVERIES (replaces purchase-orders)
   getDeliveries: async () => {
     const res = await fetch(`${API_URL}/deliveries`, {
       headers: { Authorization: `Bearer ${getToken()}` }
     });
     return res.json();
   },
-
   getDelivery: async (id: string) => {
     const res = await fetch(`${API_URL}/deliveries/${id}`, {
       headers: { Authorization: `Bearer ${getToken()}` }
     });
     return res.json();
   },
-
   createDelivery: async (data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/deliveries`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`
-      },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify(data)
     });
     return res.json();
   },
-
   updateDelivery: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/deliveries/${id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`
-      },
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify(data)
     });
     return res.json();
   },
-
+  receiveDelivery: async (id: string, employeeId: string, items: { deliveryItemId: string; receivedQty: number }[]) => {
+    const res = await fetch(`${API_URL}/deliveries/${id}/receive`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({ employeeId, items })
+    });
+    return res.json();
+  },
   deleteDelivery: async (id: string) => {
     const res = await fetch(`${API_URL}/deliveries/${id}`, {
-      method: "DELETE",
+      method: 'DELETE',
       headers: { Authorization: `Bearer ${getToken()}` }
     });
     return res.json();
