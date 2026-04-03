@@ -15,39 +15,33 @@ export default function LoginPage() {
   const router = useRouter();
 
   // LoginPage.tsx
+  const [userType, setUserType] = useState<"EMPLOYEE" | "CUSTOMER">("EMPLOYEE");
 
 const handleLogin = async () => {
   setError("");
-
   if (!username || !password) {
     setError("Please enter username and password.");
     return;
   }
 
   setLoading(true);
-
   try {
-    const data = await api.login(username, password);
+    let data;
+    if (userType === "EMPLOYEE") {
+      data = await api.login(username, password);
+    } else {
+      data = await api.loginCustomer(username, password);
+    }
 
     if (data.token) {
-      // Save token & employee info
       document.cookie = `token=${data.token}; path=/; max-age=${60 * 60 * 24}`;
-      localStorage.setItem("employee", JSON.stringify(data.employee));
+      localStorage.setItem("user", JSON.stringify(data.employee || data.customer));
 
-      // ✅ Redirect based on role
-      const role = data.employee.role;
-      if (role === "ADMIN") {
-        // Prevent admin login or send back to login
-        router.push("/login");
-      } else if (role === "CASHIER") {
-        router.push("/ordering");
-      } else if (role === "STOCK_MANAGER") {
-        router.push("/monitoring");
-      } else if (role === "CUSTOMER") {
-        router.push("/HomePage");
-      } else {
-        router.push("/login"); // fallback
-      }
+      const role = (data.employee || data.customer).role;
+      if (role === "CASHIER") router.push("/cashier/ordering");
+      else if (role === "STOCK_MANAGER") router.push("/inventory/monitoring");
+      else if (role === "CUSTOMER") router.push("/customer/HomePage");
+      else router.push("/login");
     } else {
       setError(data.message || "Invalid credentials");
     }

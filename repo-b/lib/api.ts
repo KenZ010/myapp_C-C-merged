@@ -17,6 +17,14 @@ export const api = {
     });
     return res.json();
   },
+  loginCustomer: async (name: string, password: string) => {
+  const res = await fetch(`${API_URL}/customers/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, password })
+  });
+  return res.json();
+},
 
   // EMPLOYEES
   getEmployees: async () => {
