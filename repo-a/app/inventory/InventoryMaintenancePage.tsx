@@ -1,55 +1,45 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { api } from "@/lib/api";
+import {
+  PieChart, Pie, Cell, Tooltip,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer
+} from "recharts";
 
-// ── Types ────────────────────────────────────────────────────────────────────
-type DeliveryItem = {
+type InventoryItem = {
   id: string;
-  productId: string;
-  orderedQty: number;
-  receivedQty: number;
-  returnedQty: number;
-  costPrice: number;
-  product?: { id: string; productName: string; price: number };
-};
-
-type Delivery = {
-  id: string;
-  supplierId: string;
-  deliveryDate: string;
-  status: "PENDING" | "PARTIALLY_RECEIVED" | "DELIVERED" | "CANCELLED";
-  totalItems: number;
-  notes?: string;
-  createdAt: string;
-  supplier?: { id: string; supplierName: string };
-  items: DeliveryItem[];
-};
-
-type LineItem = {
-  productId: string;
+  barcode: string;
   productName: string;
-  quantity: number | string;
-  unitPrice: number | string;
+  category: string;
+  expiryDate: string;
+  stock: number;
+  status: string;
 };
 
-type DeliveryForm = {
-  supplierId: string;
-  deliveryDate: string;
-  lineItems: LineItem[];
-  notes: string;
+type Employee = {
+  id: string;
+  name: string;
 };
 
-type Supplier = { id: string; supplierName: string };
-type Product  = { id: string; productName: string; price: number; supplierId: string };
-type ReceiveQty = { deliveryItemId: string; receivedQty: number };
+type SortKey = "barcode" | "productName" | "category" | "expiryDate" | "stock" | "status";
+type SortDir = "asc" | "desc";
 
-const STATUS_CONFIG: Record<string, { bg: string; text: string }> = {
-  PENDING:            { bg: "bg-yellow-100", text: "text-yellow-800" },
-  PARTIALLY_RECEIVED: { bg: "bg-blue-100",   text: "text-blue-800"   },
-  DELIVERED:          { bg: "bg-green-100",  text: "text-green-800"  },
-  CANCELLED:          { bg: "bg-red-100",    text: "text-red-700"    },
+const calculateStockStatus = (stock: number): { label: string; color: string } => {
+  if (stock === 0) return { label: "Out of Stock", color: "red" };
+  if (stock <= 10)  return { label: "Low Stock",    color: "yellow" };
+  return { label: "In Stock", color: "green" };
+};
+
+const ITEMS_PER_PAGE = 5;
+
+const getStockBadge = (color: string) => {
+  const map: Record<string, string> = {
+    green:  "bg-green-500 text-white",
+    red:    "bg-red-500 text-white",
+    yellow: "bg-yellow-400 text-black",
+  };
+  return map[color] || "bg-gray-300 text-white";
 };
 
 const navItems = [
@@ -63,258 +53,183 @@ const navItems = [
   { label: "Purchase Order",        icon: "📋", path: "/purchase-order" },
 ];
 
-const ITEMS_PER_PAGE = 8;
-const emptyLineItem  = (): LineItem => ({ productId: "", productName: "", quantity: 1, unitPrice: 0 });
-const makeEmptyForm  = (): DeliveryForm => ({
-  supplierId:   "",
-  deliveryDate: new Date().toISOString().split("T")[0],
-  lineItems:    [emptyLineItem()],
-  notes:        "",
-});
-
-type Tab = "create" | "receiving" | "history";
-
-export default function PurchaseOrderPage() {
+export default function InventoryMaintenancePage() {
   const router   = useRouter();
   const pathname = usePathname();
 
-  const [activeTab,       setActiveTab]       = useState<Tab>("create");
-  const [showUserMenu,    setShowUserMenu]    = useState(false);
-  const [showMobileMenu,  setShowMobileMenu]  = useState(false);
-  const [deliveries,      setDeliveries]      = useState<Delivery[]>([]);
-  const [loading,         setLoading]         = useState(true);
-  const [suppliers,       setSuppliers]       = useState<Supplier[]>([]);
-  const [products,        setProducts]        = useState<Product[]>([]);
-  const [form,            setForm]            = useState<DeliveryForm>(makeEmptyForm());
-  const [saving,          setSaving]          = useState(false);
+  const [items,    setItems]    = useState<InventoryItem[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading,  setLoading]  = useState(true);
 
-  // History
-  const [historySearch,         setHistorySearch]         = useState("");
-  const [historyStatus,         setHistoryStatus]         = useState("All");
-  const [historyPage,           setHistoryPage]           = useState(1);
-  const [viewDelivery,          setViewDelivery]          = useState<Delivery | null>(null);
-  const [showHistoryStatusDrop, setShowHistoryStatusDrop] = useState(false);
-  const historyStatusRef = useRef<HTMLDivElement>(null);
+  const [showUserMenu,   setShowUserMenu]   = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [search,         setSearch]         = useState("");
+  const [selected,       setSelected]       = useState<string[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [statusFilter,   setStatusFilter]   = useState("All");
+  const [currentPage,    setCurrentPage]    = useState(1);
+  const [sortKey,        setSortKey]        = useState<SortKey>("productName");
+  const [sortDir,        setSortDir]        = useState<SortDir>("asc");
 
-  // Receiving
-  const [receivingSearch,   setReceivingSearch]   = useState("");
-  const [receivePage,       setReceivePage]       = useState(1);
-  const [receivingDelivery, setReceivingDelivery] = useState<Delivery | null>(null);
-  const [receiveQtys,       setReceiveQtys]       = useState<ReceiveQty[]>([]);
-  const [receiving,         setReceiving]         = useState(false);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [showStatusDropdown,   setShowStatusDropdown]   = useState(false);
+  const [showDeleteConfirm,    setShowDeleteConfirm]    = useState(false);
 
+  const categoryRef = useRef<HTMLDivElement>(null);
+  const statusRef   = useRef<HTMLDivElement>(null);
+
+  // Fetch products from your API
   useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (historyStatusRef.current && !historyStatusRef.current.contains(e.target as Node))
-        setShowHistoryStatusDrop(false);
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/products`);
+        const data = await res.json();
+        setItems(data.map((p: any) => ({
+          id:          p.id,
+          barcode:     p.barcode     ?? "—",
+          productName: p.productName,
+          category:    p.category,
+          expiryDate:  p.expiryDate  ? new Date(p.expiryDate).toISOString().split("T")[0] : "—",
+          stock:       p.stock       ?? 0,
+          status:      p.status,
+        })));
+      } catch (err) {
+        console.error("Failed to fetch products", err);
+      } finally {
+        setLoading(false);
+      }
     };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
+    fetchData();
   }, []);
 
-  const fetchAll = async () => {
-    try {
-      setLoading(true);
-      const [deliveriesData, suppliersData, productsData] = await Promise.all([
-        api.getDeliveries(),
-        api.getSuppliers(),
-        api.getProducts(),
-      ]);
-      setDeliveries(Array.isArray(deliveriesData) ? deliveriesData : []);
-      setSuppliers(Array.isArray(suppliersData) ? suppliersData : []);
-      setProducts(Array.isArray(productsData) ? productsData : []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Fetch employees for checker filter
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/employees`);
+        const data = await res.json();
+        setEmployees(data);
+      } catch (err) {
+        console.error("Failed to fetch employees", err);
+      }
+    };
+    fetchEmployees();
+  }, []);
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (categoryRef.current && !categoryRef.current.contains(e.target as Node)) setShowCategoryDropdown(false);
+      if (statusRef.current   && !statusRef.current.contains(e.target as Node))   setShowStatusDropdown(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
-  // Products filtered by selected supplier
-  const supplierProducts = form.supplierId
-    ? products.filter((p) => p.supplierId === form.supplierId)
-    : [];
+  // Summary counts
+  const totalItems      = items.length;
+  const inStockCount    = items.filter(i => calculateStockStatus(i.stock).label === "In Stock").length;
+  const lowStockCount   = items.filter(i => calculateStockStatus(i.stock).label === "Low Stock").length;
+  const outOfStockCount = items.filter(i => calculateStockStatus(i.stock).label === "Out of Stock").length;
 
-  const calculateTotal = (items: LineItem[]) =>
-    items.reduce((sum, i) => sum + Number(i.quantity) * Number(i.unitPrice), 0);
+  // Category breakdown for pie chart (dynamic)
+  const categoryData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    items.forEach(i => { counts[i.category] = (counts[i.category] ?? 0) + 1; });
+    const colors = ["#60a5fa","#7c3aed","#f59e0b","#f97316","#22c55e","#ec4899"];
+    return Object.entries(counts).map(([name, value], idx) => ({
+      name,
+      value: Math.round((value / items.length) * 100),
+      color: colors[idx % colors.length]
+    }));
+  }, [items]);
 
-  const validLineItems = form.lineItems.filter((i) => i.productId);
+  // Top selling for bar chart (by stock, replace with actual sales data later)
+  const topSellingData = useMemo(() =>
+    [...items].sort((a, b) => b.stock - a.stock).slice(0, 5).map(p => ({
+      name: p.productName,
+      units: p.stock
+    }))
+  , [items]);
 
-  // ── CREATE ──────────────────────────────────────────────────────────────────
-  const handleSupplierChange = (supplierId: string) => {
-    setForm({
-      ...form,
-      supplierId,
-      lineItems: [emptyLineItem()], // reset items when supplier changes
+  const filtered = useMemo(() => {
+    const f = items.filter(row => {
+      const matchSearch   = row.productName.toLowerCase().includes(search.toLowerCase()) ||
+                            row.barcode.toLowerCase().includes(search.toLowerCase());
+      const matchCategory = categoryFilter === "All" || row.category === categoryFilter;
+      const matchStatus   = statusFilter   === "All" || calculateStockStatus(row.stock).label === statusFilter;
+      return matchSearch && matchCategory && matchStatus;
     });
+    f.sort((a, b) => {
+      const aVal = a[sortKey];
+      const bVal = b[sortKey];
+      if (typeof aVal === "number" && typeof bVal === "number") return sortDir === "asc" ? aVal - bVal : bVal - aVal;
+      return sortDir === "asc" ? String(aVal).localeCompare(String(bVal)) : String(bVal).localeCompare(String(aVal));
+    });
+    return f;
+  }, [items, search, categoryFilter, statusFilter, sortKey, sortDir]);
+
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paginated  = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("asc"); }
   };
 
-  const handleSave = async () => {
-    if (!form.supplierId) { alert("Please select a supplier."); return; }
-    if (validLineItems.length === 0) { alert("Please add at least one product."); return; }
+  const sortIcon = (key: SortKey) => {
+    if (sortKey !== key) return <span className="ml-1 opacity-30">↕</span>;
+    return <span className="ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>;
+  };
 
+  const allPageSelected = paginated.length > 0 && paginated.every(r => selected.includes(r.id));
+  const toggleSelect = (id: string) =>
+    setSelected(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  const toggleAll = () => {
+    if (allPageSelected) setSelected(prev => prev.filter(id => !paginated.map(r => r.id).includes(id)));
+    else setSelected(prev => [...new Set([...prev, ...paginated.map(r => r.id)])]);
+  };
+
+  const handleDelete = () => {
+    if (selected.length === 0) { alert("Please select at least one item to delete."); return; }
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
     try {
-      setSaving(true);
-      const saveData = {
-        supplierId:   form.supplierId,
-        deliveryDate: form.deliveryDate,
-        totalItems:   validLineItems.reduce((sum, i) => sum + Number(i.quantity), 0),
-        notes:        form.notes || "",
-        items:        validLineItems.map((i) => ({
-          productId: i.productId,
-          quantity:  Number(i.quantity) || 1,
-          costPrice: Number(i.unitPrice) || 0,
-        })),
-      };
-
-      const result = await api.createDelivery(saveData);
-      if (result?.error || result?.message?.toLowerCase().includes("error")) {
-        alert(result.message || "Failed to create delivery.");
-        return;
-      }
-
-      setForm(makeEmptyForm());
-      await fetchAll();
-      alert("Delivery created successfully!");
-    } catch (err) {
-      console.error(err);
-      alert("Failed to create delivery. Please try again.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const addLineItem    = () => setForm({ ...form, lineItems: [...form.lineItems, emptyLineItem()] });
-  const removeLineItem = (idx: number) => setForm({ ...form, lineItems: form.lineItems.filter((_, i) => i !== idx) });
-  const updateLineItem = (idx: number, field: keyof LineItem, value: string | number) => {
-    const items = [...form.lineItems];
-    if (field === "productId") {
-      const p = supplierProducts.find((p) => p.id === value);
-      items[idx] = {
-        ...items[idx],
-        productId:   String(value),
-        productName: p?.productName || "",
-        unitPrice:   p?.price || 0,
-      };
-    } else {
-      items[idx] = { ...items[idx], [field]: value };
-    }
-    setForm({ ...form, lineItems: items });
-  };
-
-  // ── RECEIVING ────────────────────────────────────────────────────────────────
-  const pendingDeliveries  = deliveries.filter((d) => d.status === "PENDING" || d.status === "PARTIALLY_RECEIVED");
-  const filteredReceiving  = pendingDeliveries.filter((d) =>
-    d.id.toLowerCase().includes(receivingSearch.toLowerCase()) ||
-    (d.supplier?.supplierName || "").toLowerCase().includes(receivingSearch.toLowerCase())
-  );
-  const receiveTotalPages  = Math.ceil(filteredReceiving.length / ITEMS_PER_PAGE);
-  const paginatedReceiving = filteredReceiving.slice((receivePage - 1) * ITEMS_PER_PAGE, receivePage * ITEMS_PER_PAGE);
-
-  const openReceiveModal = (delivery: Delivery) => {
-    setReceivingDelivery(delivery);
-    setReceiveQtys(
-      delivery.items.map((item) => ({
-        deliveryItemId: item.id,
-        receivedQty:    item.orderedQty - item.receivedQty, // default = remaining
-      }))
-    );
-  };
-
-  const handleReceive = async () => {
-    if (!receivingDelivery) return;
-    const employee = JSON.parse(localStorage.getItem("employee") || "{}");
-    if (!employee?.id) { alert("Employee not found. Please log in again."); return; }
-
-    try {
-      setReceiving(true);
-      const result = await api.receiveDelivery(
-        receivingDelivery.id,
-        employee.id,
-        receiveQtys.filter((r) => r.receivedQty > 0)
+      await Promise.all(
+        selected.map(id =>
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/products/${id}`, { method: "DELETE" })
+        )
       );
-      if (result?.message?.toLowerCase().includes("error")) {
-        alert(result.message);
-        return;
-      }
-      setReceivingDelivery(null);
-      await fetchAll();
-      alert("Items received! Stock has been updated in Inventory.");
+      setItems(prev => prev.filter(item => !selected.includes(item.id)));
+      setSelected([]);
     } catch (err) {
-      console.error(err);
-      alert("Failed to receive items.");
+      console.error("Failed to delete", err);
     } finally {
-      setReceiving(false);
+      setShowDeleteConfirm(false);
     }
   };
-
-  const handleCancel = async (id: string) => {
-    if (!confirm("Cancel this delivery?")) return;
-    try {
-      await api.updateDelivery(id, { status: "CANCELLED" });
-      await fetchAll();
-    } catch (err) { console.error(err); }
-  };
-
-  // ── HISTORY ──────────────────────────────────────────────────────────────────
-  const filteredHistory = deliveries.filter((d) => {
-    const ms = d.id.toLowerCase().includes(historySearch.toLowerCase()) ||
-               (d.supplier?.supplierName || "").toLowerCase().includes(historySearch.toLowerCase());
-    const ss = historyStatus === "All" || d.status === historyStatus;
-    return ms && ss;
-  });
-  const historyTotalPages = Math.ceil(filteredHistory.length / ITEMS_PER_PAGE);
-  const paginatedHistory  = filteredHistory.slice((historyPage - 1) * ITEMS_PER_PAGE, historyPage * ITEMS_PER_PAGE);
 
   const handleExport = () => {
-    const headers = ["ID","Supplier","Delivery Date","Total Items","Status","Notes"];
-    const rows    = deliveries.map((d) => [
-      d.id,
-      d.supplier?.supplierName || d.supplierId,
-      new Date(d.deliveryDate).toLocaleDateString(),
-      d.totalItems,
-      d.status,
-      d.notes || "",
-    ]);
-    const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-    const a   = document.createElement("a");
-    a.href    = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = "deliveries.csv";
-    a.click();
+    const headers = ["Barcode","Product Name","Category","Expiry Date","Stock","Status"];
+    const rows = items.map(item => [item.barcode, item.productName, item.category, item.expiryDate, item.stock, calculateStockStatus(item.stock).label]);
+    const csvContent = [headers, ...rows].map(row => row.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a"); a.href = url; a.download = "inventory.csv"; a.click(); URL.revokeObjectURL(url);
   };
 
-  const handleLogout = () => {
-    document.cookie = "token=; path=/; max-age=0";
-    localStorage.removeItem("employee");
-    router.push("/");
-  };
-
+  const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("employee"); router.push("/"); };
   const navigate = (path: string) => { router.push(path); setShowMobileMenu(false); };
+  const hasActiveFilters = categoryFilter !== "All" || statusFilter !== "All";
 
-  const PaginationBar = ({
-    page, totalPages, setPage, total, label,
-  }: { page: number; totalPages: number; setPage: (p: number) => void; total: number; label: string }) =>
-    totalPages > 1 ? (
-      <div className="flex items-center justify-between mt-4 px-1">
-        <p className="text-xs text-gray-400">
-          Showing {(page - 1) * ITEMS_PER_PAGE + 1}–{Math.min(page * ITEMS_PER_PAGE, total)} of {total} {label}
-        </p>
-        <div className="flex gap-1">
-          <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}
-            className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">← Prev</button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-            <button key={p} onClick={() => setPage(p)}
-              className={`px-3 py-1 rounded-lg text-sm border ${page === p ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>{p}</button>
-          ))}
-          <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages}
-            className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">Next →</button>
-        </div>
-      </div>
-    ) : null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const renderLabel = (props: any) => {
+    const { name, value, x, y, cx } = props;
+    return <text x={x} y={y} fill="#555" fontSize={11} textAnchor={x > cx ? "start" : "end"}>{`${name}: ${value}%`}</text>;
+  };
 
-  // ────────────────────────────────────────────────────────────────────────────
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
 
@@ -324,7 +239,7 @@ export default function PurchaseOrderPage() {
           <p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide">JULIETA SOFTDRINKS<br />STORE</p>
         </div>
         <nav className="flex flex-col gap-1">
-          {navItems.map((item) => {
+          {navItems.map(item => {
             const isActive = pathname === item.path;
             return (
               <div key={item.label} onClick={() => navigate(item.path)}
@@ -343,34 +258,25 @@ export default function PurchaseOrderPage() {
 
         {/* Header */}
         <header className="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-100">
-          <button className="md:hidden text-gray-600 text-xl mr-2" onClick={() => setShowMobileMenu(!showMobileMenu)}>
+          <button className="md:hidden text-gray-600 text-xl mr-2"
+            onClick={() => setShowMobileMenu(!showMobileMenu)}>
             {showMobileMenu ? "✕" : "☰"}
           </button>
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold text-gray-800">Purchase Order</h1>
-            <p className="text-xs text-gray-400 hidden md:block">Create and manage deliveries from suppliers</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-1">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-xs text-green-600 font-medium">Online</span>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-800">Inventory Maintenance</h1>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <span className="text-xl">🔔</span>
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" />
             </div>
             <div className="relative">
               <button onClick={() => setShowUserMenu(!showUserMenu)}
-                className={`flex items-center gap-2 px-2 py-1.5 rounded-xl transition-colors ${showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"}`}>
+                className={`flex items-center gap-2 px-2 py-2 rounded-xl transition-colors ${showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="https://i.pravatar.cc/40?img=8" alt="User" className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover" />
-                <div className="hidden md:block text-left">
-                  <p className="text-sm font-semibold text-gray-800">Ray Teodoro</p>
-                  <p className="text-xs text-green-500">Admin</p>
-                </div>
               </button>
               {showUserMenu && (
                 <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-lg border border-gray-100 z-50">
                   <button onClick={handleLogout} className="flex items-center gap-2 w-full px-4 py-3 text-sm text-red-500 hover:bg-red-50 rounded-xl">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
                     Log Out
                   </button>
                 </div>
@@ -379,537 +285,202 @@ export default function PurchaseOrderPage() {
           </div>
         </header>
 
-        {showMobileMenu && (
-          <div className="md:hidden bg-white border-b border-gray-100 px-4 py-3 flex flex-col gap-1 z-40">
-            {navItems.map((item) => {
-              const isActive = pathname === item.path;
-              return (
-                <div key={item.label} onClick={() => navigate(item.path)}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${isActive ? "text-indigo-700 font-semibold" : "text-gray-500"}`}>
-                  <span>{item.icon}</span><span>{item.label}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <div className="flex-1 p-3 md:p-4 bg-green-50">
 
-        {/* Tab Bar */}
-        <div className="bg-white border-b border-gray-100 px-4 md:px-6">
-          <div className="flex">
-            {([
-              { key: "create",    label: "Create Order", icon: "📋" },
-              { key: "receiving", label: "Receiving",     icon: "📦" },
-              { key: "history",   label: "PO History",   icon: "🕐" },
-            ] as { key: Tab; label: string; icon: string }[]).map((tab) => (
-              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-2 px-4 md:px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab.key
-                    ? "border-indigo-600 text-indigo-700 bg-indigo-50"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                }`}>
-                <span>{tab.icon}</span>
-                <span>{tab.label}</span>
-                {tab.key === "receiving" && pendingDeliveries.length > 0 && (
-                  <span className="bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none ml-1">
-                    {pendingDeliveries.length}
-                  </span>
+          {/* Summary Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-lg">📦</div>
+              <div><p className="text-xs text-gray-400">Total Items</p><p className="text-xl font-bold text-gray-800">{totalItems}</p></div>
+            </div>
+            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-lg">✅</div>
+              <div><p className="text-xs text-gray-400">In Stock</p><p className="text-xl font-bold text-green-600">{inStockCount}</p></div>
+            </div>
+            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-lg">⚠️</div>
+              <div><p className="text-xs text-gray-400">Low Stock</p><p className="text-xl font-bold text-yellow-500">{lowStockCount}</p></div>
+            </div>
+            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-lg">❌</div>
+              <div><p className="text-xs text-gray-400">Out of Stock</p><p className="text-xl font-bold text-red-500">{outOfStockCount}</p></div>
+            </div>
+          </div>
+
+          {/* Table Card */}
+          <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm mb-4">
+
+            {/* Toolbar */}
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-40 md:w-48">
+                <span className="text-gray-400 text-sm">🔍</span>
+                <input type="text" placeholder="Search" value={search}
+                  onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
+                  className="outline-none text-sm text-gray-700 w-full bg-transparent" />
+              </div>
+
+              {/* Category Filter */}
+              <div className="relative" ref={categoryRef}>
+                <button onClick={() => { setShowCategoryDropdown(!showCategoryDropdown); setShowStatusDropdown(false); }}
+                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${categoryFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                  📦 {categoryFilter === "All" ? "Category" : categoryFilter} ▾
+                </button>
+                {showCategoryDropdown && (
+                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44">
+                    {["All", ...Array.from(new Set(items.map(i => i.category)))].map(opt => (
+                      <button key={opt} onClick={() => { setCategoryFilter(opt); setCurrentPage(1); setShowCategoryDropdown(false); }}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${categoryFilter === opt ? "text-indigo-600 font-semibold" : "text-gray-600"}`}>
+                        {opt === "All" ? "All Categories" : opt}
+                      </button>
+                    ))}
+                  </div>
                 )}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex-1 p-3 md:p-5 bg-green-50">
-
-          {/* ══ TAB: CREATE ══ */}
-          {activeTab === "create" && (
-            <div className="flex flex-col lg:flex-row gap-4">
-              <div className="flex-1 flex flex-col gap-4">
-
-                {/* Supplier & Date */}
-                <div className="bg-white rounded-2xl p-5 shadow-sm">
-                  <h2 className="text-sm font-bold text-gray-700 mb-3">🏢 Select Supplier / Company</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-medium text-gray-500 mb-1 block">Supplier</label>
-                      <select
-                        value={form.supplierId}
-                        onChange={(e) => handleSupplierChange(e.target.value)}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white">
-                        <option value="">Select a supplier...</option>
-                        {suppliers.map((s) => (
-                          <option key={s.id} value={s.id}>{s.supplierName}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-gray-500 mb-1 block">Delivery Date</label>
-                      <input type="date" value={form.deliveryDate}
-                        onChange={(e) => setForm({ ...form, deliveryDate: e.target.value })}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white" />
-                    </div>
-                  </div>
-
-                  {/* Supplier info hint */}
-                  {form.supplierId && (
-                    <div className="mt-3 p-3 bg-indigo-50 rounded-xl flex items-center gap-2">
-                      <span className="text-indigo-500 text-sm">ℹ️</span>
-                      <p className="text-xs text-indigo-700">
-                        Showing <span className="font-semibold">{supplierProducts.length}</span> product(s) from{" "}
-                        <span className="font-semibold">{suppliers.find(s => s.id === form.supplierId)?.supplierName}</span>
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Notes */}
-                <div className="bg-white rounded-2xl p-5 shadow-sm">
-                  <label className="text-xs font-medium text-gray-500 mb-1 block">Notes</label>
-                  <textarea value={form.notes}
-                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                    rows={3}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white resize-none"
-                    placeholder="Optional notes about this delivery..." />
-                </div>
-
-                {/* Products */}
-                <div className="bg-white rounded-2xl p-5 shadow-sm">
-                  <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-sm font-bold text-gray-700">🛒 Products</h2>
-                    <button onClick={addLineItem}
-                      disabled={!form.supplierId}
-                      className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed">
-                      + Add Item
-                    </button>
-                  </div>
-
-                  {!form.supplierId ? (
-                    <div className="flex flex-col items-center justify-center py-8 text-center">
-                      <span className="text-3xl mb-2">🏢</span>
-                      <p className="text-sm text-gray-400">Please select a supplier first to see their products.</p>
-                    </div>
-                  ) : supplierProducts.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-8 text-center">
-                      <span className="text-3xl mb-2">📭</span>
-                      <p className="text-sm text-gray-400">No products found for this supplier.</p>
-                      <p className="text-xs text-gray-400 mt-1">Add products linked to this supplier in Product Management.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-400 px-1">
-                        <div className="col-span-5">Product</div>
-                        <div className="col-span-2 text-center">Qty</div>
-                        <div className="col-span-3">Cost Price</div>
-                        <div className="col-span-2 text-right">Subtotal</div>
-                      </div>
-                      {form.lineItems.map((item, idx) => (
-                        <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-gray-50 rounded-xl p-2">
-                          <div className="col-span-5">
-                            <select value={item.productId}
-                              onChange={(e) => updateLineItem(idx, "productId", e.target.value)}
-                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white">
-                              <option value="">-- Select Product --</option>
-                              {supplierProducts.map((p) => (
-                                <option key={p.id} value={p.id}>{p.productName}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="col-span-2">
-                            <input type="number" min="1" value={item.quantity}
-                              onChange={(e) => updateLineItem(idx, "quantity", e.target.value)}
-                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-center text-gray-900 bg-white" />
-                          </div>
-                          <div className="col-span-3">
-                            <input type="number" min="0" step="0.01" value={item.unitPrice}
-                              onChange={(e) => updateLineItem(idx, "unitPrice", e.target.value)}
-                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white"
-                              placeholder="₱0.00" />
-                          </div>
-                          <div className="col-span-2 flex items-center justify-end gap-1">
-                            <span className="text-xs font-medium text-gray-700">
-                              ₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
-                            </span>
-                            {form.lineItems.length > 1 && (
-                              <button onClick={() => removeLineItem(idx)}
-                                className="text-red-400 hover:text-red-600 ml-1 text-sm">✕</button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
               </div>
 
-              {/* Order summary sidebar */}
-              <div className="w-full lg:w-72 shrink-0">
-                <div className="bg-white rounded-2xl p-5 shadow-sm sticky top-4">
-                  <h2 className="text-sm font-bold text-gray-700 mb-4">📋 Order List</h2>
-
-                  {validLineItems.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-10 text-center">
-                      <span className="text-4xl mb-3">📋</span>
-                      <p className="text-xs text-gray-400">No items yet. Select a supplier and add products.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2 mb-4">
-                      {validLineItems.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-start py-2 border-b border-gray-50">
-                          <div>
-                            <p className="font-medium text-gray-800 text-xs">{item.productName}</p>
-                            <p className="text-xs text-gray-400">{item.quantity} × ₱{Number(item.unitPrice).toLocaleString()}</p>
-                          </div>
-                          <span className="text-xs font-semibold text-indigo-700">
-                            ₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
-                          </span>
-                        </div>
-                      ))}
-                      <div className="pt-2 flex justify-between items-center">
-                        <span className="text-sm font-semibold text-gray-600">Total</span>
-                        <span className="text-base font-bold text-indigo-900">
-                          ₱{calculateTotal(validLineItems).toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {form.supplierId && (
-                    <div className="mb-3 p-2.5 bg-gray-50 rounded-xl">
-                      <p className="text-xs text-gray-400">Supplier</p>
-                      <p className="text-sm font-medium text-gray-800">
-                        {suppliers.find((s) => s.id === form.supplierId)?.supplierName || "—"}
-                      </p>
-                    </div>
-                  )}
-
-                  <button onClick={handleSave}
-                    disabled={saving || validLineItems.length === 0 || !form.supplierId}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2">
-                    {saving
-                      ? <><span className="animate-spin inline-block">⏳</span> Submitting...</>
-                      : <><span>📤</span> Submit Delivery</>}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ══ TAB: RECEIVING ══ */}
-          {activeTab === "receiving" && (
-            <div className="flex flex-col lg:flex-row gap-4">
-              <div className="flex-1">
-                <div className="bg-white rounded-2xl p-5 shadow-sm">
-                  <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                    <h2 className="text-sm font-bold text-gray-700">📦 Pending Deliveries — Ready to Receive</h2>
-                    <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-44">
-                      <span className="text-gray-400 text-sm">🔍</span>
-                      <input type="text" placeholder="Search..." value={receivingSearch}
-                        onChange={(e) => { setReceivingSearch(e.target.value); setReceivePage(1); }}
-                        className="outline-none text-sm text-gray-700 w-full bg-transparent" />
-                    </div>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm min-w-max">
-                      <thead>
-                        <tr className="bg-indigo-900 text-white text-xs">
-                          <th className="p-3 text-left">Delivery ID</th>
-                          <th className="p-3 text-left">Supplier</th>
-                          <th className="p-3 text-left">Date</th>
-                          <th className="p-3 text-left">Items</th>
-                          <th className="p-3 text-left">Status</th>
-                          <th className="p-3 text-left">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {loading ? (
-                          <tr><td colSpan={6} className="p-6 text-center text-gray-400">Loading...</td></tr>
-                        ) : paginatedReceiving.length === 0 ? (
-                          <tr><td colSpan={6} className="p-10 text-center">
-                            <div className="flex flex-col items-center gap-2">
-                              <span className="text-3xl">📭</span>
-                              <p className="text-gray-400 text-sm">No pending deliveries.</p>
-                            </div>
-                          </td></tr>
-                        ) : paginatedReceiving.map((row) => (
-                          <tr key={row.id} className={`border-b border-gray-100 hover:bg-gray-50 ${receivingDelivery?.id === row.id ? "bg-indigo-50" : ""}`}>
-                            <td className="p-3">
-                              <span className="bg-gray-700 text-white px-3 py-1 rounded-full text-xs font-mono">{row.id.slice(0, 8)}...</span>
-                            </td>
-                            <td className="p-3 text-gray-700">{row.supplier?.supplierName || row.supplierId}</td>
-                            <td className="p-3 text-gray-500 text-xs">{new Date(row.deliveryDate).toLocaleDateString()}</td>
-                            <td className="p-3 text-center text-gray-700">{row.items?.length || 0}</td>
-                            <td className="p-3">
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_CONFIG[row.status]?.bg} ${STATUS_CONFIG[row.status]?.text}`}>
-                                {row.status}
-                              </span>
-                            </td>
-                            <td className="p-3">
-                              <div className="flex gap-1">
-                                <button onClick={() => openReceiveModal(row)}
-                                  className="border border-green-300 text-green-600 hover:bg-green-50 rounded-lg px-2 py-1 text-xs font-medium">
-                                  ✓ Receive
-                                </button>
-                                <button onClick={() => handleCancel(row.id)}
-                                  className="border border-red-200 text-red-500 hover:bg-red-50 rounded-lg px-2 py-1 text-xs font-medium">
-                                  Cancel
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <PaginationBar page={receivePage} totalPages={receiveTotalPages} setPage={setReceivePage} total={filteredReceiving.length} label="deliveries" />
-                </div>
-              </div>
-
-              {/* Receive detail sidebar */}
-              <div className="w-full lg:w-80 shrink-0">
-                <div className="bg-white rounded-2xl p-5 shadow-sm sticky top-4">
-                  <h2 className="text-sm font-bold text-gray-700 mb-4">Receive Items</h2>
-                  {!receivingDelivery ? (
-                    <div className="flex flex-col items-center justify-center py-10 text-center">
-                      <span className="text-3xl mb-2">👆</span>
-                      <p className="text-xs text-gray-400">Click Receive on a delivery to confirm quantities</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="bg-gray-50 rounded-xl p-3">
-                        <p className="text-xs text-gray-400">Supplier</p>
-                        <p className="text-sm font-medium text-gray-800">{receivingDelivery.supplier?.supplierName}</p>
-                      </div>
-                      <div className="bg-gray-50 rounded-xl p-3">
-                        <p className="text-xs text-gray-400 mb-2">Confirm received quantities</p>
-                        <div className="space-y-2">
-                          {receivingDelivery.items.map((item, i) => {
-                            const rq        = receiveQtys.find((r) => r.deliveryItemId === item.id);
-                            const remaining = item.orderedQty - item.receivedQty;
-                            return (
-                              <div key={i} className="py-1.5 border-b border-gray-100 last:border-0">
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-xs font-medium text-gray-700 truncate">
-                                      {item.product?.productName || item.productId}
-                                    </p>
-                                    <p className="text-xs text-gray-400">
-                                      Ordered: {item.orderedQty} | Got: {item.receivedQty} | Left: {remaining}
-                                    </p>
-                                  </div>
-                                  <input
-                                    type="number" min="0" max={remaining}
-                                    value={rq?.receivedQty ?? 0}
-                                    onChange={(e) => setReceiveQtys((prev) =>
-                                      prev.map((r) => r.deliveryItemId === item.id
-                                        ? { ...r, receivedQty: Math.min(Number(e.target.value), remaining) }
-                                        : r
-                                      )
-                                    )}
-                                    className="w-16 border border-gray-200 rounded-lg px-2 py-1 text-sm text-center outline-none focus:border-indigo-400 shrink-0"
-                                  />
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="p-3 bg-green-50 rounded-xl">
-                        <p className="text-xs text-green-700 font-medium">
-                          ✅ Stock will be updated automatically in Inventory Maintenance after confirming.
-                        </p>
-                      </div>
-
-                      <button onClick={handleReceive} disabled={receiving}
-                        className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2">
-                        {receiving
-                          ? <><span className="animate-spin">⏳</span> Processing...</>
-                          : "✓ Confirm Receipt & Update Stock"}
+              {/* Status Filter */}
+              <div className="relative" ref={statusRef}>
+                <button onClick={() => { setShowStatusDropdown(!showStatusDropdown); setShowCategoryDropdown(false); }}
+                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${statusFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                  🔖 {statusFilter === "All" ? "Status" : statusFilter} ▾
+                </button>
+                {showStatusDropdown && (
+                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44">
+                    {["All","In Stock","Low Stock","Out of Stock"].map(opt => (
+                      <button key={opt} onClick={() => { setStatusFilter(opt); setCurrentPage(1); setShowStatusDropdown(false); }}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${statusFilter === opt ? "text-indigo-600 font-semibold" : "text-gray-600"}`}>
+                        {opt === "All" ? "All Statuses" : opt}
                       </button>
-                      <button onClick={() => setReceivingDelivery(null)}
-                        className="w-full border border-gray-200 text-gray-600 rounded-xl py-2 text-sm hover:bg-gray-50">
-                        Close
-                      </button>
-                    </div>
-                  )}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
+
+              {hasActiveFilters && (
+                <button onClick={() => { setCategoryFilter("All"); setStatusFilter("All"); setCurrentPage(1); }}
+                  className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
+              )}
+
+              <button onClick={handleExport} className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-600 hover:bg-gray-50 ml-auto">📤 Export</button>
+              <button onClick={handleDelete} className="flex items-center gap-1 border border-red-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-red-500 hover:bg-red-50">🗑️ Delete</button>
+              <button onClick={() => router.push("/product")} className="flex items-center gap-1 bg-gray-900 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-white hover:bg-gray-700">+ Add</button>
             </div>
-          )}
 
-          {/* ══ TAB: HISTORY ══ */}
-          {activeTab === "history" && (
-            <div className="bg-white rounded-2xl p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                <h2 className="text-sm font-bold text-gray-700">🕐 Delivery History</h2>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-44">
-                    <span className="text-gray-400 text-sm">🔍</span>
-                    <input type="text" placeholder="Search..." value={historySearch}
-                      onChange={(e) => { setHistorySearch(e.target.value); setHistoryPage(1); }}
-                      className="outline-none text-sm text-gray-700 w-full bg-transparent" />
-                  </div>
-
-                  <div className="relative" ref={historyStatusRef}>
-                    <button onClick={() => setShowHistoryStatusDrop(!showHistoryStatusDrop)}
-                      className={`flex items-center gap-1 border rounded-lg px-3 py-2 text-xs transition-colors ${historyStatus !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                      🔖 {historyStatus === "All" ? "All Status" : historyStatus} ▾
-                    </button>
-                    {showHistoryStatusDrop && (
-                      <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-52">
-                        {["All","PENDING","PARTIALLY_RECEIVED","DELIVERED","CANCELLED"].map((opt) => (
-                          <button key={opt} onClick={() => { setHistoryStatus(opt); setHistoryPage(1); setShowHistoryStatusDrop(false); }}
-                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${historyStatus === opt ? "text-indigo-600 font-semibold" : "text-gray-600"}`}>
-                            {opt === "All" ? "All Status" : opt}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {historyStatus !== "All" && (
-                    <button onClick={() => { setHistoryStatus("All"); setHistoryPage(1); }}
-                      className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
-                  )}
-
-                  <button onClick={handleExport}
-                    className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 hover:bg-gray-50">
-                    📤 Export
-                  </button>
-                </div>
-              </div>
-
-              {/* Summary pills */}
-              <div className="flex gap-2 mb-4 flex-wrap">
-                {[
-                  { label: "Total",     count: deliveries.length,                                              color: "bg-indigo-100 text-indigo-700" },
-                  { label: "Pending",   count: deliveries.filter(d => d.status === "PENDING").length,           color: "bg-yellow-100 text-yellow-800" },
-                  { label: "Partial",   count: deliveries.filter(d => d.status === "PARTIALLY_RECEIVED").length, color: "bg-blue-100 text-blue-800"    },
-                  { label: "Delivered", count: deliveries.filter(d => d.status === "DELIVERED").length,         color: "bg-green-100 text-green-800"   },
-                  { label: "Cancelled", count: deliveries.filter(d => d.status === "CANCELLED").length,         color: "bg-red-100 text-red-700"       },
-                ].map((s) => (
-                  <span key={s.label} className={`${s.color} rounded-full px-3 py-1 text-xs font-semibold`}>
-                    {s.label}: {s.count}
-                  </span>
-                ))}
-              </div>
-
+            {/* Table */}
+            {loading ? (
+              <div className="text-center py-10 text-gray-400 text-sm">Loading inventory...</div>
+            ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm min-w-max">
                   <thead>
                     <tr className="bg-indigo-900 text-white text-xs">
-                      <th className="p-3 text-left">ID</th>
-                      <th className="p-3 text-left">Supplier</th>
-                      <th className="p-3 text-left">Delivery Date</th>
-                      <th className="p-3 text-left">Items</th>
-                      <th className="p-3 text-left">Status</th>
-                      <th className="p-3 text-left">Actions</th>
+                      <th className="p-3 text-left w-8">
+                        <input type="checkbox" onChange={toggleAll} checked={allPageSelected} />
+                      </th>
+                      {([
+                        { key: "barcode",     label: "Barcode"       },
+                        { key: "productName", label: "Product Name"  },
+                        { key: "category",    label: "Category"      },
+                        { key: "expiryDate",  label: "Expiry Date"   },
+                        { key: "stock",       label: "Stock"         },
+                        { key: "status",      label: "Stock Status"  },
+                      ] as { key: SortKey; label: string }[]).map(({ key, label }) => (
+                        <th key={key} className="p-3 text-left cursor-pointer hover:bg-indigo-800 select-none"
+                          onClick={() => handleSort(key)}>
+                          {label}{sortIcon(key)}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {loading ? (
-                      <tr><td colSpan={6} className="p-6 text-center text-gray-400">Loading...</td></tr>
-                    ) : paginatedHistory.length === 0 ? (
-                      <tr><td colSpan={6} className="p-10 text-center">
-                        <div className="flex flex-col items-center gap-2">
-                          <span className="text-3xl">📭</span>
-                          <p className="text-gray-400 text-sm">No deliveries found.</p>
-                        </div>
+                    {paginated.length === 0 ? (
+                      <tr><td colSpan={7} className="text-center py-10">
+                        <p className="text-gray-400 text-sm">{search ? `No results for "${search}".` : "No items in inventory yet."}</p>
                       </td></tr>
-                    ) : paginatedHistory.map((row) => (
-                      <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="p-3">
-                          <span className="bg-gray-700 text-white px-3 py-1 rounded-full text-xs font-mono">{row.id.slice(0, 8)}...</span>
-                        </td>
-                        <td className="p-3 text-gray-700">{row.supplier?.supplierName || row.supplierId}</td>
-                        <td className="p-3 text-gray-500 text-xs">{new Date(row.deliveryDate).toLocaleDateString()}</td>
-                        <td className="p-3 text-center text-gray-700">{row.items?.length || 0}</td>
-                        <td className="p-3">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${STATUS_CONFIG[row.status]?.bg} ${STATUS_CONFIG[row.status]?.text}`}>
-                            {row.status}
-                          </span>
-                        </td>
-                        <td className="p-3">
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => setViewDelivery(row)}
-                              className="border border-indigo-300 text-indigo-600 hover:bg-indigo-50 rounded-lg px-2 py-1 text-xs font-medium">View</button>
-                            {row.status !== "DELIVERED" && row.status !== "CANCELLED" && (
-                              <button onClick={() => handleCancel(row.id)}
-                                className="border border-red-200 text-red-500 hover:bg-red-50 rounded-lg px-2 py-1 text-xs font-medium">Cancel</button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    ) : paginated.map(row => {
+                      const { label, color } = calculateStockStatus(row.stock);
+                      return (
+                        <tr key={row.id} className={`border-b border-gray-100 hover:bg-gray-50 ${selected.includes(row.id) ? "bg-indigo-50" : ""}`}>
+                          <td className="p-3"><input type="checkbox" checked={selected.includes(row.id)} onChange={() => toggleSelect(row.id)} /></td>
+                          <td className="p-3 text-gray-700">{row.barcode}</td>
+                          <td className="p-3 text-gray-700">{row.productName}</td>
+                          <td className="p-3">
+                            <span className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full text-xs">{row.category}</span>
+                          </td>
+                          <td className="p-3"><span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">{row.expiryDate}</span></td>
+                          <td className="p-3 text-gray-700">{row.stock}</td>
+                          <td className="p-3">
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStockBadge(color)}`}>{label}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
-              <PaginationBar page={historyPage} totalPages={historyTotalPages} setPage={setHistoryPage} total={filteredHistory.length} label="deliveries" />
+            )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 px-1">
+                <p className="text-xs text-gray-400">
+                  Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} of {filtered.length} items
+                </p>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
+                    className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">← Prev</button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                    <button key={page} onClick={() => setCurrentPage(page)}
+                      className={`px-3 py-1 rounded-lg text-sm border transition-colors ${currentPage === page ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                      {page}
+                    </button>
+                  ))}
+                  <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+                    className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Next →</button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Charts */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <h2 className="font-bold text-gray-800 mb-3">Top Products by Stock</h2>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={topSellingData} margin={{ top: 5, right: 10, left: -20, bottom: 30 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-15} textAnchor="end" />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="units" fill="#3b82f6" radius={[4,4,0,0]} name="Stock" />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-          )}
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <h2 className="font-bold text-gray-800 mb-3">Inventory by Category</h2>
+              <div className="flex justify-center overflow-x-auto">
+                <PieChart width={320} height={220}>
+                  <Pie data={categoryData} cx={155} cy={100} outerRadius={90} dataKey="value" label={renderLabel} labelLine={true}>
+                    {categoryData.map((entry, index) => (<Cell key={index} fill={entry.color} />))}
+                  </Pie>
+                  <Tooltip formatter={value => `${value}%`} />
+                </PieChart>
+              </div>
+            </div>
+          </div>
         </div>
       </main>
 
-      {/* VIEW DELIVERY MODAL */}
-      {viewDelivery && (
-        <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h2 className="text-lg font-bold text-gray-800">Delivery Details</h2>
-                <p className="text-xs text-gray-400 font-mono mt-0.5">{viewDelivery.id}</p>
-              </div>
-              <span className={`px-3 py-1 rounded-full text-xs font-medium ${STATUS_CONFIG[viewDelivery.status]?.bg} ${STATUS_CONFIG[viewDelivery.status]?.text}`}>
-                {viewDelivery.status}
-              </span>
+      {/* DELETE CONFIRM MODAL */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
+            <p className="text-2xl mb-2">🗑️</p>
+            <h2 className="text-lg font-bold text-gray-800 mb-2">Delete Items?</h2>
+            <p className="text-sm text-gray-500 mb-5">Are you sure you want to delete {selected.length} item(s)? This cannot be undone.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={confirmDelete} className="flex-1 bg-red-500 rounded-lg py-2 text-sm text-white hover:bg-red-600">Delete</button>
             </div>
-            <div className="flex flex-col gap-3">
-              <div className="bg-gray-50 rounded-xl p-3">
-                <p className="text-xs text-gray-400 mb-1">Supplier</p>
-                <p className="text-sm font-medium text-gray-800">{viewDelivery.supplier?.supplierName || viewDelivery.supplierId}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-xs text-gray-400 mb-1">Delivery Date</p>
-                  <p className="text-sm font-medium text-gray-800">{new Date(viewDelivery.deliveryDate).toLocaleDateString()}</p>
-                </div>
-                <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-xs text-gray-400 mb-1">Total Items Ordered</p>
-                  <p className="text-sm font-medium text-gray-800">{viewDelivery.totalItems}</p>
-                </div>
-              </div>
-              {viewDelivery.notes && (
-                <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-xs text-gray-400 mb-1">Notes</p>
-                  <p className="text-sm text-gray-700">{viewDelivery.notes}</p>
-                </div>
-              )}
-              <div className="bg-gray-50 rounded-xl p-3">
-                <p className="text-xs text-gray-400 mb-2">Items</p>
-                <div className="space-y-2">
-                  {viewDelivery.items?.map((item, idx) => (
-                    <div key={idx} className="py-1.5 border-b border-gray-100 last:border-0">
-                      <div className="flex justify-between items-start">
-                        <p className="text-sm font-medium text-gray-700">
-                          {item.product?.productName || item.productId}
-                        </p>
-                        <span className="text-xs text-gray-500">₱{item.costPrice}</span>
-                      </div>
-                      <div className="flex gap-3 mt-1">
-                        <span className="text-xs text-gray-400">Ordered: <span className="font-medium text-gray-600">{item.orderedQty}</span></span>
-                        <span className="text-xs text-gray-400">Received: <span className="font-medium text-green-600">{item.receivedQty}</span></span>
-                        <span className="text-xs text-gray-400">Returned: <span className="font-medium text-red-500">{item.returnedQty}</span></span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <button onClick={() => setViewDelivery(null)}
-              className="w-full mt-5 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">
-              Close
-            </button>
           </div>
         </div>
       )}
