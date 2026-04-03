@@ -44,7 +44,7 @@ const handleLogin = async () => {
       } else if (role === "STOCK_MANAGER") {
         router.push("/monitoring");
       } else if (role === "CUSTOMER") {
-        router.push("/home");
+        router.push("/HomePage");
       } else {
         router.push("/login"); // fallback
       }
