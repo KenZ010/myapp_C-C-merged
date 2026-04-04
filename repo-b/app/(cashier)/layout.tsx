@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 
@@ -29,27 +30,77 @@ export default function CashierLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const page = pageTitles[pathname] ?? { title: "Cashier Panel", sub: "" };
 
   return (
     <div
-      className="flex h-screen overflow-hidden"
-      style={{ background: "#f5f5f5" }}
+      style={{
+        display: "flex",
+        height: "100vh",
+        overflow: "hidden",
+        background: "#f5f5f5",
+      }}
     >
+      {/* ── Mobile Overlay ── */}
+      {sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            zIndex: 40,
+            display: "block",
+          }}
+          className="lg:hidden"
+        />
+      )}
+
       {/* ── Sidebar ── */}
       <aside
-        className="w-[220px] flex flex-col shrink-0 bg-white"
-        style={{ borderRight: "1px solid #f0f0f0" }}
+        style={{
+          width: "220px",
+          background: "#fff",
+          display: "flex",
+          flexDirection: "column",
+          flexShrink: 0,
+          borderRight: "1px solid #f0f0f0",
+          position: "fixed",
+          top: 0,
+          left: 0,
+          height: "100%",
+          zIndex: 50,
+          transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)",
+          transition: "transform 0.25s cubic-bezier(0.4,0,0.2,1)",
+        }}
+        className="lg:relative lg:translate-x-0 lg:transform-none"
       >
         {/* Logo */}
         <div
-          className="flex flex-col items-center gap-1 px-5 py-6"
-          style={{ borderBottom: "1px solid #f0f0f0" }}
+          style={{
+            padding: "24px 20px 20px",
+            borderBottom: "1px solid #f0f0f0",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "4px",
+          }}
         >
           <div
-            className="w-[72px] h-[72px] rounded-full flex items-center justify-center text-[11px] font-extrabold text-white text-center leading-snug"
             style={{
+              width: "72px",
+              height: "72px",
+              borderRadius: "50%",
               background: "linear-gradient(135deg, #ff6b35, #f5c842)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "11px",
+              fontWeight: 800,
+              color: "#fff",
+              textAlign: "center",
+              lineHeight: 1.3,
               border: "3px solid #1a3c2e",
             }}
           >
@@ -61,43 +112,63 @@ export default function CashierLayout({
 
         {/* User Info */}
         <div
-          className="flex items-center gap-3 px-5 py-4"
-          style={{ borderBottom: "1px solid #f0f0f0" }}
+          style={{
+            padding: "16px 20px",
+            borderBottom: "1px solid #f0f0f0",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+          }}
         >
           <div
-            className="w-10 h-10 rounded-full flex items-center justify-center text-base shrink-0"
-            style={{ background: "linear-gradient(135deg, #667eea, #764ba2)" }}
+            style={{
+              width: "40px",
+              height: "40px",
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #667eea, #764ba2)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "16px",
+              flexShrink: 0,
+            }}
           >
             👤
           </div>
           <div>
-            <p className="text-[13px] font-bold text-gray-900">Rjay Salina</p>
-            <p className="text-[11px]" style={{ color: "#aaa" }}>
-              Cashier
+            <p style={{ fontSize: "13px", fontWeight: 700, color: "#1a1a1a" }}>
+              Rjay Salina
             </p>
+            <p style={{ fontSize: "11px", color: "#aaa" }}>Cashier</p>
           </div>
         </div>
 
         {/* Nav Links */}
-        <nav className="flex-1 py-3">
+        <nav style={{ flex: 1, padding: "12px 0" }}>
           {navLinks.map((link) => {
             const isActive = pathname === link.href;
             return (
               <Link
                 key={link.href}
                 href={link.href}
-                className="flex items-center gap-3 px-5 py-3 text-sm no-underline transition-all duration-150"
+                onClick={() => setSidebarOpen(false)}
                 style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "14px",
+                  padding: "13px 20px",
+                  fontSize: "14px",
+                  textDecoration: "none",
                   color: isActive ? "#1a3c2e" : "#555",
                   background: isActive ? "#f0faf2" : "transparent",
                   borderLeft: isActive
                     ? "3px solid #1a3c2e"
                     : "3px solid transparent",
                   fontWeight: isActive ? 600 : 400,
-                  textDecoration: "none",
+                  transition: "all 0.15s",
                 }}
               >
-                <span className="text-lg">{link.icon}</span>
+                <span style={{ fontSize: "18px" }}>{link.icon}</span>
                 {link.label}
               </Link>
             );
@@ -105,53 +176,122 @@ export default function CashierLayout({
         </nav>
 
         {/* Logout */}
-        <div className="px-5 py-4" style={{ borderTop: "1px solid #f0f0f0" }}>
+        <div style={{ padding: "16px 20px", borderTop: "1px solid #f0f0f0" }}>
           <Link
             href="/"
-            className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold no-underline"
             style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "14px",
+              padding: "12px 16px",
+              borderRadius: "12px",
+              textDecoration: "none",
               background: "#fff5f5",
               color: "#e53935",
-              textDecoration: "none",
+              fontSize: "14px",
+              fontWeight: 600,
             }}
           >
-            <span className="text-lg">🚪</span>
+            <span style={{ fontSize: "18px" }}>🚪</span>
             Log out
           </Link>
         </div>
       </aside>
 
       {/* ── Main ── */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+        className="lg:ml-[220px]"
+      >
         {/* Topbar */}
         <header
-          className="flex items-center justify-between px-7 shrink-0"
-          style={{ background: "#1a3c2e", height: "56px" }}
+          style={{
+            background: "#1a3c2e",
+            padding: "0 16px",
+            height: "56px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexShrink: 0,
+          }}
         >
-          <div>
-            <p className="text-white text-base font-semibold">{page.title}</p>
-            {page.sub && (
-              <p
-                className="text-[11px]"
-                style={{ color: "rgba(255,255,255,0.55)" }}
-              >
-                {page.sub}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-green-400" />
-            <span
-              className="text-xs"
-              style={{ color: "rgba(255,255,255,0.7)" }}
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {/* Hamburger — mobile only */}
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden"
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                gap: "5px",
+                padding: "6px",
+                borderRadius: "8px",
+                flexShrink: 0,
+              }}
             >
+              <div
+                style={{
+                  width: "22px",
+                  height: "2px",
+                  background: "#fff",
+                  borderRadius: "2px",
+                }}
+              />
+              <div
+                style={{
+                  width: "22px",
+                  height: "2px",
+                  background: "#fff",
+                  borderRadius: "2px",
+                }}
+              />
+              <div
+                style={{
+                  width: "22px",
+                  height: "2px",
+                  background: "#fff",
+                  borderRadius: "2px",
+                }}
+              />
+            </button>
+            <div>
+              <p style={{ color: "#fff", fontSize: "16px", fontWeight: 600 }}>
+                {page.title}
+              </p>
+              {page.sub && (
+                <p
+                  style={{ color: "rgba(255,255,255,0.55)", fontSize: "11px" }}
+                >
+                  {page.sub}
+                </p>
+              )}
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div
+              style={{
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+                background: "#4caf50",
+              }}
+            />
+            <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.7)" }}>
               Online
             </span>
           </div>
         </header>
 
-        {/* Page Content */}
-        <div className="flex-1 overflow-y-auto">{children}</div>
+        {/* Content */}
+        <div style={{ flex: 1, overflowY: "auto" }}>{children}</div>
       </main>
     </div>
   );
