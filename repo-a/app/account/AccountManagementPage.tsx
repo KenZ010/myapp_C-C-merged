@@ -13,6 +13,7 @@ const navItems = [
   { label: "Product Management", icon: "🗒️" },
   { label: "Account Management", icon: "👤", active: true },
   { label: "Purchase Order", icon: "📋" },
+  { label: "Promo Management", icon: "🎁", path: "/promo" },
 ];
 
 type Employee = {

@@ -34,6 +34,7 @@ const navItems = [
   { label: "Product Management", icon: "🗒️" },
   { label: "Account Management", icon: "👤" },
   { label: "Purchase Order", icon: "📋" },
+  { label: "Promo Management", icon: "🎁", path: "/promo" },
 ];
 
 const emptyForm = {
