@@ -45,7 +45,7 @@ export default function LoginPage() {
         const role = (data.employee || data.customer)?.role;
         if (role === "CASHIER") router.push("/cashier/ordering");
         else if (role === "STOCK_MANAGER") router.push("/inventory/monitoring");
-        else if (role === "CUSTOMER") router.push("/customer/HomePage");
+        else if (role === "CUSTOMER") router.push("/home");
         else setError("Unknown role. Contact your administrator.");
       } else {
         setError("Invalid credentials");
@@ -56,7 +56,7 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
-  
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleLogin();
   };
