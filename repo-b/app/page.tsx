@@ -17,45 +17,46 @@ export default function LoginPage() {
   // LoginPage.tsx
   const [userType, setUserType] = useState<"EMPLOYEE" | "CUSTOMER">("EMPLOYEE");
 
-const handleLogin = async () => {
-  setError("");
-  if (!username || !password) {
-    setError("Please enter username and password.");
-    return;
-  }
-
-  setLoading(true);
-  try {
-      // ✅ Try employee first, then customer — no toggle needed
-    let data = await api.login(username, password);
-
-    // If employee login fails, try customer login
-    if (!data.token) {
-      data = await api.loginCustomer(username, password);
+  const handleLogin = async () => {
+    setError("");
+    if (!username || !password) {
+      setError("Please enter username and password.");
+      return;
     }
 
-    if (data.token) {
-      // ✅ Save token to BOTH cookie and localStorage
-      document.cookie = `token=${data.token}; path=/; max-age=${60 * 60 * 24}`;
-      localStorage.setItem("token", data.token); // ← this was missing
-      localStorage.setItem("user", JSON.stringify(data.employee || data.customer));
+    setLoading(true);
+    try {
+      // ✅ Fire both at the same time, use whichever returns a token
+      const [employeeRes, customerRes] = await Promise.allSettled([
+        api.login(username, password),
+        api.loginCustomer(username, password),
+      ]);
 
-      const role = (data.employee || data.customer)?.role;
-      if (role === "CASHIER") router.push("/cashier/ordering");
-      else if (role === "STOCK_MANAGER") router.push("/inventory/monitoring");
-      else if (role === "CUSTOMER") router.push("/home");
-      else setError("Unknown role. Please contact your administrator.");
-    } else {
-      // ✅ Show the actual backend message
-      setError(data.message || "Invalid credentials");
+      const employeeData = employeeRes.status === "fulfilled" ? employeeRes.value : null;
+      const customerData = customerRes.status === "fulfilled" ? customerRes.value : null;
+
+      const data = employeeData?.token ? employeeData : customerData?.token ? customerData : null;
+
+      if (data?.token) {
+        document.cookie = `token=${data.token}; path=/; max-age=${60 * 60 * 24}`;
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("user", JSON.stringify(data.employee || data.customer));
+
+        const role = (data.employee || data.customer)?.role;
+        if (role === "CASHIER") router.push("/cashier/ordering");
+        else if (role === "STOCK_MANAGER") router.push("/inventory/monitoring");
+        else if (role === "CUSTOMER") router.push("/customer/HomePage");
+        else setError("Unknown role. Contact your administrator.");
+      } else {
+        setError("Invalid credentials");
+      }
+    } catch (err: any) {
+      setError(err?.message || "Something went wrong.");
+    } finally {
+      setLoading(false);
     }
-  } catch (err: any) {
-    console.log("Login error:", err); // ← check console if still failing
-    setError(err?.message || "Something went wrong. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+  
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleLogin();
   };
