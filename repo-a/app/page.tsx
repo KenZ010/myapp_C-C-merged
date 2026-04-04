@@ -27,7 +27,7 @@ const handleLogin = async () => {
   setLoading(true);
 
   try {
-    const data = await api.login(username, password);
+    const data = await api.loginAdmin(username, password);
 
     if (data.token) {
       // Save token + employee info
