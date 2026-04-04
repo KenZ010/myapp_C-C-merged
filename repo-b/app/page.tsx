@@ -43,7 +43,7 @@ const handleLogin = async () => {
       const role = (data.employee || data.customer)?.role;
       if (role === "CASHIER") router.push("/cashier/ordering");
       else if (role === "STOCK_MANAGER") router.push("/inventory/monitoring");
-      else if (role === "CUSTOMER") router.push("/customer/HomePage");
+      else if (role === "CUSTOMER") router.push("/home");
       else setError("Unknown role. Please contact your administrator.");
     } else {
       // ✅ Show the actual backend message
