@@ -1,21 +1,19 @@
 "use client";
 import { useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 import Link from "next/link";
 import Drawer from "@/components/Drawer";
 import { CartProvider, useCart } from "@/context/CartContext";
 
 const pageTitles: Record<string, { title: string; sub: string }> = {
-  "/home": { title: "Dashboard", sub: "Welcome back, KENDY" },
+  "/home": { title: "Dashboard", sub: "Welcome back" },
   "/products": { title: "Products", sub: "Browse our selection" },
   "/orders": { title: "My Orders", sub: "Track your transactions" },
   "/faqs": { title: "FAQs", sub: "Frequently Asked Questions" },
   "/contact": { title: "Contact Us", sub: "We're here to help" },
   "/about": { title: "About Us", sub: "Know more about our business" },
-  "/transactions": {
-    title: "Transaction History",
-    sub: "0 completed transaction(s)",
-  },
+  "/transactions": { title: "Transaction History", sub: "0 completed transaction(s)" },
   "/return-order": { title: "Return Order", sub: "Submit a return request" },
   "/settings": { title: "Settings", sub: "Manage your account information" },
   "/cart": { title: "Shopping Cart", sub: "Review your items" },
@@ -24,24 +22,29 @@ const pageTitles: Record<string, { title: string; sub: string }> = {
 };
 
 const hideSearchCart = [
-  "/contact",
-  "/about",
-  "/faqs",
-  "/home",
-  "/return-order",
-  "/transactions",
-  "/settings",
-  "/cart",
-  "/checkout",
-  "/order-placed",
+  "/contact", "/about", "/faqs", "/home", "/return-order",
+  "/transactions", "/settings", "/cart", "/checkout", "/order-placed",
 ];
 
-// Inner layout that can use useCart hook
 function DashboardInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter(); // ✅ moved inside the component
   const [drawerOpen, setDrawerOpen] = useState(false);
   const page = pageTitles[pathname] ?? { title: "Julieta Store", sub: "" };
   const { totalCount } = useCart();
+
+  // ✅ Get customer name from localStorage
+  const user = typeof window !== "undefined"
+    ? JSON.parse(localStorage.getItem("user") || "{}")
+    : {};
+  const displayName = user?.name || "Guest";
+
+  const handleLogout = () => {
+    document.cookie = "token=; path=/; max-age=0";
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    router.push("/login"); // ✅ router is now defined
+  };
 
   return (
     <div
@@ -58,7 +61,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
       <Drawer
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        customerName="KENDY"
+        customerName={displayName}
       />
 
       {/* Topbar */}
@@ -88,30 +91,9 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
               borderRadius: "8px",
             }}
           >
-            <div
-              style={{
-                width: "22px",
-                height: "2px",
-                background: "#fff",
-                borderRadius: "2px",
-              }}
-            />
-            <div
-              style={{
-                width: "22px",
-                height: "2px",
-                background: "#fff",
-                borderRadius: "2px",
-              }}
-            />
-            <div
-              style={{
-                width: "22px",
-                height: "2px",
-                background: "#fff",
-                borderRadius: "2px",
-              }}
-            />
+            <div style={{ width: "22px", height: "2px", background: "#fff", borderRadius: "2px" }} />
+            <div style={{ width: "22px", height: "2px", background: "#fff", borderRadius: "2px" }} />
+            <div style={{ width: "22px", height: "2px", background: "#fff", borderRadius: "2px" }} />
           </button>
           <div>
             <p style={{ color: "#fff", fontSize: "16px", fontWeight: 500 }}>
@@ -126,9 +108,9 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Right side */}
-        {!hideSearchCart.includes(pathname) && (
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            {/* Cart icon with live badge */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          {/* Cart icon — only on product pages */}
+          {!hideSearchCart.includes(pathname) && (
             <Link
               href="/cart"
               style={{
@@ -167,8 +149,28 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
                 </span>
               )}
             </Link>
-          </div>
-        )}
+          )}
+
+          {/* ✅ Logout button */}
+          <button
+            onClick={handleLogout}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "6px 12px",
+              borderRadius: "8px",
+              border: "none",
+              background: "rgba(255,255,255,0.15)",
+              color: "#fff",
+              fontSize: "13px",
+              fontWeight: 500,
+              cursor: "pointer",
+            }}
+          >
+            🚪 Logout
+          </button>
+        </div>
       </header>
 
       {/* Page Content */}
@@ -177,12 +179,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Outer layout wraps everything in CartProvider
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <CartProvider>
       <DashboardInner>{children}</DashboardInner>
