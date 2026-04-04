@@ -34,24 +34,27 @@ const handleLogin = async () => {
     }
 
     if (data.token) {
+      // ✅ Save token to BOTH cookie and localStorage
       document.cookie = `token=${data.token}; path=/; max-age=${60 * 60 * 24}`;
+      localStorage.setItem("token", data.token); // ← this was missing
       localStorage.setItem("user", JSON.stringify(data.employee || data.customer));
 
-      const role = (data.employee || data.customer).role;
+      const role = (data.employee || data.customer)?.role;
       if (role === "CASHIER") router.push("/cashier/ordering");
       else if (role === "STOCK_MANAGER") router.push("/inventory/monitoring");
       else if (role === "CUSTOMER") router.push("/customer/HomePage");
-      else router.push("/login");
+      else setError("Unknown role. Please contact your administrator.");
     } else {
+      // ✅ Show the actual backend message
       setError(data.message || "Invalid credentials");
     }
-  } catch (err) {
-    setError("Something went wrong. Please try again.");
+  } catch (err: any) {
+    console.log("Login error:", err); // ← check console if still failing
+    setError(err?.message || "Something went wrong. Please try again.");
   } finally {
     setLoading(false);
   }
 };
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleLogin();
   };
