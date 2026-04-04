@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 
-// ── Types matching your backend Delivery model ──────────────────────────────
+// ── Types ────────────────────────────────────────────────────────────────────
 type DeliveryItem = {
   id: string;
   productId: string;
@@ -42,9 +42,7 @@ type DeliveryForm = {
 };
 
 type Supplier = { id: string; supplierName: string };
-type Product  = { id: string; productName: string; price: number };
-
-// Receive modal state per item
+type Product  = { id: string; productName: string; price: number; supplierId: string; status?: string };
 type ReceiveQty = { deliveryItemId: string; receivedQty: number };
 
 const STATUS_CONFIG: Record<string, { bg: string; text: string }> = {
@@ -86,7 +84,7 @@ export default function PurchaseOrderPage() {
   const [deliveries,     setDeliveries]     = useState<Delivery[]>([]);
   const [loading,        setLoading]        = useState(true);
   const [suppliers,      setSuppliers]      = useState<Supplier[]>([]);
-  const [products,       setProducts]       = useState<Product[]>([]);
+  const [allProducts,    setAllProducts]    = useState<Product[]>([]);
   const [form,           setForm]           = useState<DeliveryForm>(makeEmptyForm());
   const [saving,         setSaving]         = useState(false);
 
@@ -99,11 +97,16 @@ export default function PurchaseOrderPage() {
   const historyStatusRef = useRef<HTMLDivElement>(null);
 
   // Receiving
-  const [receivingSearch,  setReceivingSearch]  = useState("");
-  const [receivePage,      setReceivePage]      = useState(1);
+  const [receivingSearch,   setReceivingSearch]   = useState("");
+  const [receivePage,       setReceivePage]       = useState(1);
   const [receivingDelivery, setReceivingDelivery] = useState<Delivery | null>(null);
-  const [receiveQtys,      setReceiveQtys]      = useState<ReceiveQty[]>([]);
-  const [receiving,        setReceiving]        = useState(false);
+  const [receiveQtys,       setReceiveQtys]       = useState<ReceiveQty[]>([]);
+  const [receiving,         setReceiving]         = useState(false);
+
+  // ── Derived: products filtered by selected supplier ──────────────────────
+  const supplierProducts = form.supplierId
+    ? allProducts.filter((p) => p.supplierId === form.supplierId && p.status !== "INACTIVE")
+    : [];
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -124,7 +127,7 @@ export default function PurchaseOrderPage() {
       ]);
       setDeliveries(Array.isArray(deliveriesData) ? deliveriesData : []);
       setSuppliers(Array.isArray(suppliersData) ? suppliersData : []);
-      setProducts(Array.isArray(productsData) ? productsData : []);
+      setAllProducts(Array.isArray(productsData) ? productsData : []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -134,12 +137,21 @@ export default function PurchaseOrderPage() {
 
   useEffect(() => { fetchAll(); }, []);
 
+  // ── When supplier changes, reset line items ──────────────────────────────
+  const handleSupplierChange = (supplierId: string) => {
+    setForm({
+      ...form,
+      supplierId,
+      lineItems: [emptyLineItem()], // reset products when supplier changes
+    });
+  };
+
   const calculateTotal = (items: LineItem[]) =>
     items.reduce((sum, i) => sum + Number(i.quantity) * Number(i.unitPrice), 0);
 
   const validLineItems = form.lineItems.filter((i) => i.productId);
 
-  // ── CREATE ──────────────────────────────────────────────────────────────────
+  // ── CREATE ────────────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!form.supplierId) { alert("Please select a supplier."); return; }
     if (validLineItems.length === 0) { alert("Please add at least one product."); return; }
@@ -175,12 +187,15 @@ export default function PurchaseOrderPage() {
     }
   };
 
-  const addLineItem    = () => setForm({ ...form, lineItems: [...form.lineItems, emptyLineItem()] });
+  const addLineItem    = () => {
+    if (!form.supplierId) { alert("Please select a supplier first."); return; }
+    setForm({ ...form, lineItems: [...form.lineItems, emptyLineItem()] });
+  };
   const removeLineItem = (idx: number) => setForm({ ...form, lineItems: form.lineItems.filter((_, i) => i !== idx) });
   const updateLineItem = (idx: number, field: keyof LineItem, value: string | number) => {
     const items = [...form.lineItems];
     if (field === "productId") {
-      const p = products.find((p) => p.id === value);
+      const p = supplierProducts.find((p) => p.id === value);
       items[idx] = { ...items[idx], productId: String(value), productName: p?.productName || "", unitPrice: p?.price || 0 };
     } else {
       items[idx] = { ...items[idx], [field]: value };
@@ -188,7 +203,7 @@ export default function PurchaseOrderPage() {
     setForm({ ...form, lineItems: items });
   };
 
-  // ── RECEIVING ────────────────────────────────────────────────────────────────
+  // ── RECEIVING ─────────────────────────────────────────────────────────────
   const pendingDeliveries   = deliveries.filter((d) => d.status === "PENDING" || d.status === "PARTIALLY_RECEIVED");
   const filteredReceiving   = pendingDeliveries.filter((d) =>
     d.id.toLowerCase().includes(receivingSearch.toLowerCase()) ||
@@ -202,42 +217,32 @@ export default function PurchaseOrderPage() {
     setReceiveQtys(
       delivery.items.map((item) => ({
         deliveryItemId: item.id,
-        receivedQty: item.orderedQty - item.receivedQty, // default = remaining qty
+        receivedQty: item.orderedQty - item.receivedQty,
       }))
     );
   };
 
   const handleReceive = async () => {
-  if (!receivingDelivery) return;
+    if (!receivingDelivery) return;
+    const employee = JSON.parse(localStorage.getItem("employee") || "{}");
+    if (!employee?.id) { alert("Employee not found. Please log in again."); return; }
+    try {
+      setReceiving(true);
+      await api.receiveDelivery(
+        receivingDelivery.id,
+        employee.id,
+        receiveQtys.filter((r) => r.receivedQty > 0)
+      );
+      setReceivingDelivery(null);
+      await fetchAll();
+      alert("Items received and stock updated!");
+    } catch (err: any) {
+      alert(err.message || "Failed to receive items.");
+    } finally {
+      setReceiving(false);
+    }
+  };
 
-  const employee = JSON.parse(localStorage.getItem("employee") || "{}");
-  if (!employee?.id) {
-    alert("Employee not found. Please log in again.");
-    return;
-  }
-
-  try {
-    setReceiving(true);
-
-    await api.receiveDelivery(
-      receivingDelivery.id,
-      employee.id,
-      receiveQtys.filter((r) => r.receivedQty > 0)
-    );
-
-    setReceivingDelivery(null);
-    await fetchAll();
-
-    alert("Items received and stock updated!");
-  } catch (err: any) {
-    console.error("RECEIVE ERROR:", err);
-
-    // ✅ SHOW REAL ERROR MESSAGE
-    alert(err.message || "Failed to receive items.");
-  } finally {
-    setReceiving(false);
-  }
-};
   const handleCancel = async (id: string) => {
     if (!confirm("Cancel this delivery?")) return;
     try {
@@ -246,7 +251,7 @@ export default function PurchaseOrderPage() {
     } catch (err) { console.error(err); }
   };
 
-  // ── HISTORY ──────────────────────────────────────────────────────────────────
+  // ── HISTORY ───────────────────────────────────────────────────────────────
   const filteredHistory = deliveries.filter((d) => {
     const ms = d.id.toLowerCase().includes(historySearch.toLowerCase()) ||
                (d.supplier?.supplierName || "").toLowerCase().includes(historySearch.toLowerCase());
@@ -259,12 +264,9 @@ export default function PurchaseOrderPage() {
   const handleExport = () => {
     const headers = ["ID","Supplier","Delivery Date","Total Items","Status","Notes"];
     const rows    = deliveries.map((d) => [
-      d.id,
-      d.supplier?.supplierName || d.supplierId,
+      d.id, d.supplier?.supplierName || d.supplierId,
       new Date(d.deliveryDate).toLocaleDateString(),
-      d.totalItems,
-      d.status,
-      d.notes || ""
+      d.totalItems, d.status, d.notes || ""
     ]);
     const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
     const a   = document.createElement("a");
@@ -275,6 +277,7 @@ export default function PurchaseOrderPage() {
 
   const handleLogout = () => {
     document.cookie = "token=; path=/; max-age=0";
+    localStorage.removeItem("token");
     localStorage.removeItem("employee");
     router.push("/");
   };
@@ -301,6 +304,9 @@ export default function PurchaseOrderPage() {
         </div>
       </div>
     ) : null;
+
+  // ── Selected supplier name ─────────────────────────────────────────────────
+  const selectedSupplierName = suppliers.find((s) => s.id === form.supplierId)?.supplierName;
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
@@ -413,18 +419,29 @@ export default function PurchaseOrderPage() {
             <div className="flex flex-col lg:flex-row gap-4">
               <div className="flex-1 flex flex-col gap-4">
 
-                {/* Supplier & Date */}
+                {/* Step 1 — Supplier & Date */}
                 <div className="bg-white rounded-2xl p-5 shadow-sm">
-                  <h2 className="text-sm font-bold text-gray-700 mb-3">🏢 Select Supplier / Company</h2>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold">1</div>
+                    <h2 className="text-sm font-bold text-gray-700">Select Supplier</h2>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-medium text-gray-500 mb-1 block">Supplier</label>
+                      <label className="text-xs font-medium text-gray-500 mb-1 block">Supplier <span className="text-red-400">*</span></label>
                       <select value={form.supplierId}
-                        onChange={(e) => setForm({ ...form, supplierId: e.target.value })}
+                        onChange={(e) => handleSupplierChange(e.target.value)}
                         className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white">
-                        <option value="">Select a supplier...</option>
+                        <option value="">— Select a supplier —</option>
                         {suppliers.map((s) => <option key={s.id} value={s.id}>{s.supplierName}</option>)}
                       </select>
+                      {/* Show product count hint after selecting */}
+                      {form.supplierId && (
+                        <p className="text-xs mt-1 text-indigo-500">
+                          {supplierProducts.length > 0
+                            ? `${supplierProducts.length} product${supplierProducts.length > 1 ? "s" : ""} available from ${selectedSupplierName}`
+                            : `⚠️ No active products found for ${selectedSupplierName}`}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="text-xs font-medium text-gray-500 mb-1 block">Delivery Date</label>
@@ -435,73 +452,133 @@ export default function PurchaseOrderPage() {
                   </div>
                 </div>
 
-                {/* Notes */}
-                <div className="bg-white rounded-2xl p-5 shadow-sm">
-                  <label className="text-xs font-medium text-gray-500 mb-1 block">Notes</label>
+                {/* Step 2 — Products (locked until supplier selected) */}
+                <div className={`bg-white rounded-2xl p-5 shadow-sm transition-opacity ${!form.supplierId ? "opacity-50 pointer-events-none" : ""}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-6 h-6 rounded-full text-white text-xs flex items-center justify-center font-bold ${form.supplierId ? "bg-indigo-600" : "bg-gray-300"}`}>2</div>
+                      <h2 className="text-sm font-bold text-gray-700">
+                        Select Products
+                        {form.supplierId && selectedSupplierName && (
+                          <span className="ml-2 text-xs font-normal text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">
+                            from {selectedSupplierName}
+                          </span>
+                        )}
+                      </h2>
+                    </div>
+                    <button onClick={addLineItem}
+                      disabled={!form.supplierId || supplierProducts.length === 0}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed">
+                      + Add Item
+                    </button>
+                  </div>
+
+                  {/* Empty state — no supplier selected */}
+                  {!form.supplierId && (
+                    <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-gray-200 rounded-xl">
+                      <span className="text-3xl mb-2">🏢</span>
+                      <p className="text-sm text-gray-400 font-medium">Select a supplier first</p>
+                      <p className="text-xs text-gray-300 mt-1">Products will appear based on the supplier you choose</p>
+                    </div>
+                  )}
+
+                  {/* Empty state — supplier selected but no products */}
+                  {form.supplierId && supplierProducts.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-yellow-200 rounded-xl bg-yellow-50">
+                      <span className="text-3xl mb-2">📦</span>
+                      <p className="text-sm text-yellow-700 font-medium">No products found for this supplier</p>
+                      <p className="text-xs text-yellow-500 mt-1">Add products linked to this supplier in Product Management</p>
+                    </div>
+                  )}
+
+                  {/* Line items */}
+                  {form.supplierId && supplierProducts.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-400 px-1">
+                        <div className="col-span-5">Product</div>
+                        <div className="col-span-2 text-center">Qty</div>
+                        <div className="col-span-3">Cost Price</div>
+                        <div className="col-span-2 text-right">Subtotal</div>
+                      </div>
+                      {form.lineItems.map((item, idx) => (
+                        <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-gray-50 rounded-xl p-2">
+                          <div className="col-span-5">
+                            <select value={item.productId}
+                              onChange={(e) => updateLineItem(idx, "productId", e.target.value)}
+                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white">
+                              <option value="">— Select Product —</option>
+                              {supplierProducts.map((p) => (
+                                <option
+                                  key={p.id}
+                                  value={p.id}
+                                  // disable if already selected in another row
+                                  disabled={form.lineItems.some((li, i) => i !== idx && li.productId === p.id)}>
+                                  {p.productName}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="col-span-2">
+                            <input type="number" min="1" value={item.quantity}
+                              onChange={(e) => updateLineItem(idx, "quantity", e.target.value)}
+                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-center text-gray-900 bg-white" />
+                          </div>
+                          <div className="col-span-3">
+                            <input type="number" min="0" step="0.01" value={item.unitPrice}
+                              onChange={(e) => updateLineItem(idx, "unitPrice", e.target.value)}
+                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white"
+                              placeholder="₱0.00" />
+                          </div>
+                          <div className="col-span-2 flex items-center justify-end gap-1">
+                            <span className="text-xs font-medium text-gray-700">
+                              ₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
+                            </span>
+                            {form.lineItems.length > 1 && (
+                              <button onClick={() => removeLineItem(idx)} className="text-red-400 hover:text-red-600 ml-1 text-sm">✕</button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Step 3 — Notes */}
+                <div className={`bg-white rounded-2xl p-5 shadow-sm transition-opacity ${!form.supplierId ? "opacity-50 pointer-events-none" : ""}`}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className={`w-6 h-6 rounded-full text-white text-xs flex items-center justify-center font-bold ${form.supplierId ? "bg-indigo-600" : "bg-gray-300"}`}>3</div>
+                    <h2 className="text-sm font-bold text-gray-700">Notes (Optional)</h2>
+                  </div>
                   <textarea value={form.notes}
                     onChange={(e) => setForm({ ...form, notes: e.target.value })}
                     rows={3}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white resize-none"
                     placeholder="Optional notes about this delivery..." />
                 </div>
-
-                {/* Products */}
-                <div className="bg-white rounded-2xl p-5 shadow-sm">
-                  <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-sm font-bold text-gray-700">🛒 Products</h2>
-                    <button onClick={addLineItem}
-                      className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50">
-                      + Add Item
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-400 px-1">
-                      <div className="col-span-5">Product</div>
-                      <div className="col-span-2 text-center">Qty</div>
-                      <div className="col-span-3">Cost Price</div>
-                      <div className="col-span-2 text-right">Subtotal</div>
-                    </div>
-                    {form.lineItems.map((item, idx) => (
-                      <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-gray-50 rounded-xl p-2">
-                        <div className="col-span-5">
-                          <select value={item.productId}
-                            onChange={(e) => updateLineItem(idx, "productId", e.target.value)}
-                            className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white">
-                            <option value="">-- Select Product --</option>
-                            {products.map((p) => <option key={p.id} value={p.id}>{p.productName}</option>)}
-                          </select>
-                        </div>
-                        <div className="col-span-2">
-                          <input type="number" min="1" value={item.quantity}
-                            onChange={(e) => updateLineItem(idx, "quantity", e.target.value)}
-                            className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-center text-gray-900 bg-white" />
-                        </div>
-                        <div className="col-span-3">
-                          <input type="number" min="0" step="0.01" value={item.unitPrice}
-                            onChange={(e) => updateLineItem(idx, "unitPrice", e.target.value)}
-                            className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white"
-                            placeholder="₱0.00" />
-                        </div>
-                        <div className="col-span-2 flex items-center justify-end gap-1">
-                          <span className="text-xs font-medium text-gray-700">
-                            ₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
-                          </span>
-                          {form.lineItems.length > 1 && (
-                            <button onClick={() => removeLineItem(idx)} className="text-red-400 hover:text-red-600 ml-1 text-sm">✕</button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               </div>
 
               {/* Order summary sidebar */}
               <div className="w-full lg:w-72 shrink-0">
                 <div className="bg-white rounded-2xl p-5 shadow-sm sticky top-4">
-                  <h2 className="text-sm font-bold text-gray-700 mb-4">📋 Order List</h2>
+                  <h2 className="text-sm font-bold text-gray-700 mb-4">📋 Order Summary</h2>
+
+                  {/* Supplier badge */}
+                  {form.supplierId ? (
+                    <div className="mb-4 flex items-center gap-2 p-2.5 bg-indigo-50 rounded-xl border border-indigo-100">
+                      <span className="text-lg">🏢</span>
+                      <div>
+                        <p className="text-xs text-indigo-400">Supplier</p>
+                        <p className="text-sm font-semibold text-indigo-800">{selectedSupplierName}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mb-4 p-2.5 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center">
+                      <p className="text-xs text-gray-400">No supplier selected</p>
+                    </div>
+                  )}
+
                   {validLineItems.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
                       <span className="text-4xl mb-3">📋</span>
                       <p className="text-xs text-gray-400">No items yet. Select a supplier and add products.</p>
                     </div>
@@ -526,14 +603,7 @@ export default function PurchaseOrderPage() {
                       </div>
                     </div>
                   )}
-                  {form.supplierId && (
-                    <div className="mb-3 p-2.5 bg-gray-50 rounded-xl">
-                      <p className="text-xs text-gray-400">Supplier</p>
-                      <p className="text-sm font-medium text-gray-800">
-                        {suppliers.find((s) => s.id === form.supplierId)?.supplierName || "—"}
-                      </p>
-                    </div>
-                  )}
+
                   <button onClick={handleSave}
                     disabled={saving || validLineItems.length === 0 || !form.supplierId}
                     className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2">
@@ -717,14 +787,13 @@ export default function PurchaseOrderPage() {
                 </div>
               </div>
 
-              {/* Summary pills */}
               <div className="flex gap-2 mb-4 flex-wrap">
                 {[
-                  { label: "Total",              count: deliveries.length,                                              color: "bg-indigo-100 text-indigo-700"  },
-                  { label: "Pending",            count: deliveries.filter(d => d.status==="PENDING").length,            color: "bg-yellow-100 text-yellow-800"  },
-                  { label: "Partial",            count: deliveries.filter(d => d.status==="PARTIALLY_RECEIVED").length, color: "bg-blue-100 text-blue-800"      },
-                  { label: "Delivered",          count: deliveries.filter(d => d.status==="DELIVERED").length,          color: "bg-green-100 text-green-800"    },
-                  { label: "Cancelled",          count: deliveries.filter(d => d.status==="CANCELLED").length,          color: "bg-red-100 text-red-700"        },
+                  { label: "Total",     count: deliveries.length,                                              color: "bg-indigo-100 text-indigo-700" },
+                  { label: "Pending",   count: deliveries.filter(d => d.status==="PENDING").length,            color: "bg-yellow-100 text-yellow-800" },
+                  { label: "Partial",   count: deliveries.filter(d => d.status==="PARTIALLY_RECEIVED").length, color: "bg-blue-100 text-blue-800"     },
+                  { label: "Delivered", count: deliveries.filter(d => d.status==="DELIVERED").length,          color: "bg-green-100 text-green-800"   },
+                  { label: "Cancelled", count: deliveries.filter(d => d.status==="CANCELLED").length,          color: "bg-red-100 text-red-700"       },
                 ].map((s) => (
                   <span key={s.label} className={`${s.color} rounded-full px-3 py-1 text-xs font-semibold`}>
                     {s.label}: {s.count}
