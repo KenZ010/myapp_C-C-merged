@@ -26,10 +26,11 @@ const handleLogin = async () => {
 
   setLoading(true);
   try {
-    let data;
-    if (userType === "EMPLOYEE") {
-      data = await api.login(username, password);
-    } else {
+      // ✅ Try employee first, then customer — no toggle needed
+    let data = await api.login(username, password);
+
+    // If employee login fails, try customer login
+    if (!data.token) {
       data = await api.loginCustomer(username, password);
     }
 
