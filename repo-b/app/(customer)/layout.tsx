@@ -43,7 +43,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
     document.cookie = "token=; path=/; max-age=0";
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    router.push("/login"); // ✅ router is now defined
+    router.push("/"); // ✅ router is now defined
   };
 
   return (
