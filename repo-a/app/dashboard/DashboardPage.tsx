@@ -90,18 +90,20 @@ export default function DashboardPage() {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Fetch employees - CASHIER and STOCK_MANAGER only
+    // Fetch employees
   useEffect(() => {
     const fetchEmployees = async () => {
       try {
         setLoadingEmployees(true);
         const data = await api.getEmployees();
-        const filtered = data.filter(
+        // ✅ Guard against non-array response (e.g. 403 error object)
+        const filtered = Array.isArray(data) ? data.filter(
           (emp: Employee) => emp.role === "CASHIER" || emp.role === "STOCK_MANAGER"
-        );
+        ) : [];
         setEmployees(filtered);
       } catch (err) {
         console.error("Failed to fetch employees:", err);
+        setEmployees([]);
       } finally {
         setLoadingEmployees(false);
       }
@@ -115,9 +117,11 @@ export default function DashboardPage() {
       try {
         setLoadingSuppliers(true);
         const data = await api.getSuppliers();
-        setSuppliers(data);
+        // ✅ Guard against non-array response
+        setSuppliers(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Failed to fetch suppliers:", err);
+        setSuppliers([]);
       } finally {
         setLoadingSuppliers(false);
       }
@@ -131,9 +135,11 @@ export default function DashboardPage() {
       try {
         setLoadingCustomers(true);
         const data = await api.getCustomers();
-        setCustomers(data);
+        // ✅ Guard against non-array response
+        setCustomers(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Failed to fetch customers:", err);
+        setCustomers([]);
       } finally {
         setLoadingCustomers(false);
       }

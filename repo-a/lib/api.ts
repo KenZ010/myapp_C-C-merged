@@ -4,7 +4,9 @@ const getToken = () => {
   if (typeof document === 'undefined') return '';
   const cookies = document.cookie.split(';');
   const tokenCookie = cookies.find(c => c.trim().startsWith('token='));
-  return tokenCookie ? tokenCookie.split('=')[1].trim() : '';
+  if (!tokenCookie) return '';
+  // ✅ slice instead of split to preserve all = characters in JWT
+  return tokenCookie.trim().slice('token='.length);
 };
 
 export const api = {
@@ -18,17 +20,17 @@ export const api = {
     return res.json();
   },
   loginAdmin: async (name: string, password: string) => {
-  const res = await fetch(`${API_URL}/employees/login-admin`, { // ← backtick here
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, password })
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw { response: { data: err } };
-  }
-  return res.json();
-},
+    const res = await fetch(`${API_URL}/employees/login-admin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, password })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw { response: { data: err } };
+    }
+    return res.json();
+  },
 
   // EMPLOYEES
   getEmployees: async () => {
@@ -171,7 +173,7 @@ export const api = {
     return res.json();
   },
 
-  // DELIVERIES (replaces purchase-orders)
+  // DELIVERIES
   getDeliveries: async () => {
     const res = await fetch(`${API_URL}/deliveries`, {
       headers: { Authorization: `Bearer ${getToken()}` }
@@ -200,28 +202,25 @@ export const api = {
     });
     return res.json();
   },
- receiveDelivery: async (
-  id: string,
-  employeeId: string,
-  items: { deliveryItemId: string; receivedQty: number }[]
-) => {
-  const res = await fetch(`${API_URL}/deliveries/${id}/receive`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${getToken()}`
-    },
-    body: JSON.stringify({ employeeId, items })
-  });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    throw new Error(data.message || "Failed to receive delivery"); // 👈 IMPORTANT
-  }
-
-  return data;
-},
+  receiveDelivery: async (
+    id: string,
+    employeeId: string,
+    items: { deliveryItemId: string; receivedQty: number }[]
+  ) => {
+    const res = await fetch(`${API_URL}/deliveries/${id}/receive`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${getToken()}`
+      },
+      body: JSON.stringify({ employeeId, items })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || "Failed to receive delivery");
+    }
+    return data;
+  },
   deleteDelivery: async (id: string) => {
     const res = await fetch(`${API_URL}/deliveries/${id}`, {
       method: 'DELETE',
