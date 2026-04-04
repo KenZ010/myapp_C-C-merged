@@ -1,11 +1,16 @@
 const API_URL = 'https://backend-production-da89.up.railway.app/api';
 
 const getToken = () => {
+  // ✅ Read from localStorage first (more reliable than cookies for JWTs)
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('token');
+    if (token) return token;
+  }
+  // Fallback to cookie (slice preserves = characters in JWT)
   if (typeof document === 'undefined') return '';
   const cookies = document.cookie.split(';');
   const tokenCookie = cookies.find(c => c.trim().startsWith('token='));
   if (!tokenCookie) return '';
-  // ✅ slice instead of split to preserve all = characters in JWT
   return tokenCookie.trim().slice('token='.length);
 };
 
@@ -217,7 +222,7 @@ export const api = {
     });
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data.message || "Failed to receive delivery");
+      throw new Error(data.message || 'Failed to receive delivery');
     }
     return data;
   },

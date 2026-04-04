@@ -77,29 +77,30 @@ export default function DashboardPage() {
   const [loadingSuppliers, setLoadingSuppliers] = useState(true);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
 
-  // Live clock
-  const [now, setNow] = useState(new Date());
+  // ✅ Fix hydration error — start null, only set on client
+  const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
+    setNow(new Date());
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const formattedTime = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  const formattedDate = now.toLocaleDateString("en-US", { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+  // ✅ Guard with optional chaining to avoid crash when null
+  const formattedTime = now?.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) ?? "";
+  const formattedDate = now?.toLocaleDateString("en-US", { weekday: "short", year: "numeric", month: "short", day: "numeric" }) ?? "";
 
   const router = useRouter();
   const pathname = usePathname();
 
-    // Fetch employees
+  // ✅ Fetch employees with Array guard
   useEffect(() => {
     const fetchEmployees = async () => {
       try {
         setLoadingEmployees(true);
         const data = await api.getEmployees();
-        // ✅ Guard against non-array response (e.g. 403 error object)
-        const filtered = Array.isArray(data) ? data.filter(
-          (emp: Employee) => emp.role === "CASHIER" || emp.role === "STOCK_MANAGER"
-        ) : [];
+        const filtered = Array.isArray(data)
+          ? data.filter((emp: Employee) => emp.role === "CASHIER" || emp.role === "STOCK_MANAGER")
+          : [];
         setEmployees(filtered);
       } catch (err) {
         console.error("Failed to fetch employees:", err);
@@ -111,13 +112,12 @@ export default function DashboardPage() {
     fetchEmployees();
   }, []);
 
-  // Fetch suppliers
+  // ✅ Fetch suppliers with Array guard
   useEffect(() => {
     const fetchSuppliers = async () => {
       try {
         setLoadingSuppliers(true);
         const data = await api.getSuppliers();
-        // ✅ Guard against non-array response
         setSuppliers(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Failed to fetch suppliers:", err);
@@ -129,13 +129,12 @@ export default function DashboardPage() {
     fetchSuppliers();
   }, []);
 
-  // Fetch customers
+  // ✅ Fetch customers with Array guard
   useEffect(() => {
     const fetchCustomers = async () => {
       try {
         setLoadingCustomers(true);
         const data = await api.getCustomers();
-        // ✅ Guard against non-array response
         setCustomers(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Failed to fetch customers:", err);
@@ -149,6 +148,7 @@ export default function DashboardPage() {
 
   const handleLogout = () => {
     document.cookie = "token=; path=/; max-age=0";
+    localStorage.removeItem("token");
     localStorage.removeItem("employee");
     router.push("/");
   };
@@ -196,7 +196,10 @@ export default function DashboardPage() {
           </button>
           <div className="flex flex-col">
             <h1 className="text-xl md:text-2xl font-bold text-indigo-900">Dashboard</h1>
-            <p className="text-xs text-gray-400 hidden md:block">{formattedDate} &nbsp;·&nbsp; {formattedTime}</p>
+            {/* ✅ suppressHydrationWarning prevents SSR/client mismatch crash */}
+            <p suppressHydrationWarning className="text-xs text-gray-400 hidden md:block">
+              {formattedDate} &nbsp;·&nbsp; {formattedTime}
+            </p>
           </div>
           <div className="flex items-center gap-2 md:gap-3">
             <div className="relative">
@@ -281,7 +284,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* ✅ Account Management - Employees from DB */}
+            {/* Account Management */}
             <div className="md:col-span-4 bg-white rounded-2xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-bold text-gray-800">Account Management</h2>
@@ -323,7 +326,7 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* ✅ Customer List from DB */}
+            {/* Customer List */}
             <div className="md:col-span-3 bg-white rounded-2xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-bold text-gray-800">Customer List</h2>
@@ -361,7 +364,7 @@ export default function DashboardPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-4">
 
-            {/* ✅ Supplier Information from DB */}
+            {/* Supplier Information */}
             <div className="md:col-span-5 bg-white rounded-2xl p-4 shadow-sm overflow-x-auto">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-bold text-gray-800">Supplier Information</h2>

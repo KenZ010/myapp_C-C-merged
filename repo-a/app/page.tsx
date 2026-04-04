@@ -16,6 +16,7 @@ export default function LoginPage() {
 
   // LoginPage.tsx
 
+// In LoginPage.tsx — replace your handleLogin with this
 const handleLogin = async () => {
   setError("");
 
@@ -30,27 +31,28 @@ const handleLogin = async () => {
     const data = await api.loginAdmin(username, password);
 
     if (data.token) {
-      // Save token + employee info
+      const role = data.employee.role;
+
+      if (role !== "ADMIN") {
+        setError("Access denied. Admins only.");
+        return;
+      }
+
+      // ✅ Save token to BOTH cookie (for middleware) and localStorage (for api.ts getToken)
       document.cookie = `token=${data.token}; path=/; max-age=${60 * 60 * 24}`;
+      localStorage.setItem("token", data.token);
       localStorage.setItem("employee", JSON.stringify(data.employee));
 
-      // ✅ Redirect based on role
-      const role = data.employee.role;
-      if (role === "ADMIN") {
-        router.push("/dashboard");
-      }else {
-        router.push("/login"); // fallback
-      }
+      router.push("/dashboard");
     } else {
       setError(data.message || "Invalid credentials");
     }
-  } catch (err) {
-    setError("Something went wrong. Please try again.");
+  } catch (err: any) {
+    setError(err?.response?.data?.message || "Something went wrong. Please try again.");
   } finally {
     setLoading(false);
   }
 };
-
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleLogin();
