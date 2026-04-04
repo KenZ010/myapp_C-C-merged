@@ -201,7 +201,7 @@ export const api = {
   },
   updateDelivery: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/deliveries/${id}`, {
-      method: 'PATCH',
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify(data)
     });
