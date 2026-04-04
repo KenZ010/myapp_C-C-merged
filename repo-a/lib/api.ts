@@ -18,7 +18,7 @@ export const api = {
     return res.json();
   },
   loginAdmin: async (name: string, password: string) => {
-  const res = await fetch(`${API_URL}/employees/loginAdmin`, { // ← backtick here
+  const res = await fetch(`${API_URL}/employees/login-admin`, { // ← backtick here
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, password })
