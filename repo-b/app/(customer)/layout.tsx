@@ -74,6 +74,8 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
           alignItems: "center",
           justifyContent: "space-between",
           flexShrink: 0,
+          position: "relative",
+          zIndex: 60,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
