@@ -4,187 +4,167 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 
-type PromoType = "Discount" | "Buy 1 Get 1" | "Bundle Deal";
 type PromoStatus = "Active" | "Inactive";
 
 type Promo = {
-  id: string; // ✅ string from backend
-  title: string;
-  description: string;
-  type: PromoType;
-  discount?: number;
-  bundleQty?: number;
-  product: string;
-  image: string;
-  status: PromoStatus;
-  startDate: string;
-  endDate: string;
+  id: string;
+  promoName: string;
+  productId: string;
+  alteredPrice: number;
+  discountPercent?: number;
+  dateEffective: string;
+  lastDate: string;
+  isActive: boolean;
+  product?: { id: string; productName: string; price: number };
 };
+
+type Product = { id: string; productName: string; price: number };
 
 const navItems = [
-  { label: "Dashboard", icon: "🏠", path: "/dashboard" },
-  { label: "Inventory Maintenance", icon: "🛒", path: "/inventory" },
-  { label: "Supplier Maintenance", icon: "📊", path: "/supplier" },
-  { label: "Sales Reports", icon: "🌐", path: "/sales" },
-  { label: "Transaction Logs", icon: "▦", path: "/transaction" },
-  { label: "Product Management", icon: "🗒️", path: "/product" },
-  { label: "Account Management", icon: "👤", path: "/account" },
-  { label: "Promo Management", icon: "🎁", path: "/promo" },
+  { label: "Dashboard",             icon: "🏠", path: "/dashboard"      },
+  { label: "Inventory Maintenance", icon: "🛒", path: "/inventory"      },
+  { label: "Supplier Maintenance",  icon: "📊", path: "/supplier"       },
+  { label: "Sales Reports",         icon: "🌐", path: "/sales"          },
+  { label: "Transaction Logs",      icon: "▦",  path: "/transaction"    },
+  { label: "Product Management",    icon: "🗒️", path: "/product"        },
+  { label: "Account Management",    icon: "👤", path: "/account"        },
+  { label: "Promo Management",      icon: "🎁", path: "/promo"          },
 ];
 
-const PROMO_TYPES: PromoType[] = ["Discount", "Buy 1 Get 1", "Bundle Deal"];
-
-const TYPE_COLORS: Record<PromoType, string> = {
-  "Discount": "bg-blue-100 text-blue-600",
-  "Buy 1 Get 1": "bg-purple-100 text-purple-600",
-  "Bundle Deal": "bg-orange-100 text-orange-600",
-};
-
-const TYPE_ICONS: Record<PromoType, string> = {
-  "Discount": "🏷️",
-  "Buy 1 Get 1": "🎀",
-  "Bundle Deal": "📦",
-};
-
 const emptyForm = {
-  title: "",
-  description: "",
-  type: "Discount" as PromoType,
-  discount: undefined as number | undefined,
-  bundleQty: undefined as number | undefined,
-  product: "",
-  image: "",
-  status: "Active" as PromoStatus,
-  startDate: "",
-  endDate: "",
+  productId:       "",
+  promoName:       "",
+  alteredPrice:    "" as number | "",
+  discountPercent: "" as number | "",
+  dateEffective:   "",
+  lastDate:        "",
+  isActive:        true,
 };
 
 const ITEMS_PER_PAGE = 18;
 
-const getPromoLabel = (promo: Promo) => {
-  if (promo.type === "Discount") return `${promo.discount}% OFF`;
-  if (promo.type === "Buy 1 Get 1") return "BOGO";
-  if (promo.type === "Bundle Deal") return `${promo.bundleQty} for 2`;
-  return "";
-};
-
 export default function PromoManagementPage() {
-  const router = useRouter();
+  const router   = useRouter();
   const pathname = usePathname();
-  const [showUserMenu, setShowUserMenu] = useState(false);
+
+  const [showUserMenu,   setShowUserMenu]   = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [promos, setPromos] = useState<Promo[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState("All");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [promos,         setPromos]         = useState<Promo[]>([]);
+  const [products,       setProducts]       = useState<Product[]>([]);
+  const [loading,        setLoading]        = useState(true);
+  const [search,         setSearch]         = useState("");
+  const [statusFilter,   setStatusFilter]   = useState("All");
+  const [currentPage,    setCurrentPage]    = useState(1);
 
   // Add modal
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addForm, setAddForm] = useState(emptyForm);
-  const [isDirty, setIsDirty] = useState(false);
-  const [addLoading, setAddLoading] = useState(false);
+  const [addForm,      setAddForm]      = useState(emptyForm);
+  const [isDirty,      setIsDirty]      = useState(false);
+  const [addLoading,   setAddLoading]   = useState(false);
 
   // Detail/edit modal
-  const [showPromoModal, setShowPromoModal] = useState(false);
-  const [selectedPromo, setSelectedPromo] = useState<Promo | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState(emptyForm);
-  const [editLoading, setEditLoading] = useState(false);
-
+  const [showPromoModal,  setShowPromoModal]  = useState(false);
+  const [selectedPromo,   setSelectedPromo]   = useState<Promo | null>(null);
+  const [isEditing,       setIsEditing]       = useState(false);
+  const [editForm,        setEditForm]        = useState(emptyForm);
+  const [editLoading,     setEditLoading]     = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+  const [deleteLoading,   setDeleteLoading]   = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [success, setSuccess] = useState("");
-  const [error, setError] = useState("");
+  const [error,   setError]   = useState("");
 
-  const typeRef = useRef<HTMLDivElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
 
-  // ✅ Close dropdowns on outside click
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (typeRef.current && !typeRef.current.contains(e.target as Node)) setShowTypeDropdown(false);
-      if (statusRef.current && !statusRef.current.contains(e.target as Node)) setShowStatusDropdown(false);
+    const h = (e: MouseEvent) => {
+      if (statusRef.current && !statusRef.current.contains(e.target as Node))
+        setShowStatusDropdown(false);
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  // ✅ Fetch promos from API
-  const fetchPromos = async () => {
+  // ── Fetch promos + products ──────────────────────────────────────────────
+  const fetchAll = async () => {
     try {
       setLoading(true);
-      const data = await api.getPromos();
-      setPromos(Array.isArray(data) ? data : []);
+      const [promosData, productsData] = await Promise.all([
+        api.getPromos(),
+        api.getProducts(),
+      ]);
+      setPromos(Array.isArray(promosData) ? promosData : []);
+      setProducts(Array.isArray(productsData) ? productsData : []);
     } catch (err) {
-      console.error("Failed to fetch promos:", err);
-      setError("Failed to load promos. Please try again.");
+      console.error("Failed to fetch:", err);
+      setError("Failed to load data. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchPromos(); }, []);
+  useEffect(() => { fetchAll(); }, []);
 
   const showToast = (msg: string, isError = false) => {
     if (isError) { setError(msg); setTimeout(() => setError(""), 3000); }
-    else { setSuccess(msg); setTimeout(() => setSuccess(""), 3000); }
+    else         { setSuccess(msg); setTimeout(() => setSuccess(""), 3000); }
   };
 
+  // ── Filtering ────────────────────────────────────────────────────────────
   const filtered = promos.filter((p) => {
-    const matchSearch = p.title.toLowerCase().includes(search.toLowerCase()) ||
-      p.product.toLowerCase().includes(search.toLowerCase());
-    const matchType = typeFilter === "All" || p.type === typeFilter;
-    const matchStatus = statusFilter === "All" || p.status === statusFilter;
-    return matchSearch && matchType && matchStatus;
+    const matchSearch = p.promoName.toLowerCase().includes(search.toLowerCase()) ||
+      (p.product?.productName || "").toLowerCase().includes(search.toLowerCase());
+    const matchStatus = statusFilter === "All" ||
+      (statusFilter === "Active" && p.isActive) ||
+      (statusFilter === "Inactive" && !p.isActive);
+    return matchSearch && matchStatus;
   });
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-  const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const paginated  = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const totalActive = promos.filter((p) => p.isActive).length;
 
-  const totalActive = promos.filter((p) => p.status === "Active").length;
-  const totalDiscount = promos.filter((p) => p.type === "Discount").length;
-  const totalBogo = promos.filter((p) => p.type === "Buy 1 Get 1").length;
-
-  // ✅ Card click → open detail modal
+  // ── Card click ───────────────────────────────────────────────────────────
   const handleCardClick = (promo: Promo) => {
     setSelectedPromo(promo);
     setEditForm({
-      title: promo.title,
-      description: promo.description,
-      type: promo.type,
-      discount: promo.discount,
-      bundleQty: promo.bundleQty,
-      product: promo.product,
-      image: promo.image,
-      status: promo.status,
-      startDate: promo.startDate?.split("T")[0] || "",
-      endDate: promo.endDate?.split("T")[0] || "",
+      productId:       promo.productId,
+      promoName:       promo.promoName,
+      alteredPrice:    promo.alteredPrice,
+      discountPercent: promo.discountPercent ?? "",
+      dateEffective:   promo.dateEffective?.split("T")[0] || "",
+      lastDate:        promo.lastDate?.split("T")[0] || "",
+      isActive:        promo.isActive,
     });
     setIsEditing(false);
     setShowPromoModal(true);
   };
 
-  // ✅ Save edit via API PUT
+  // ── Save edit ────────────────────────────────────────────────────────────
   const handleSaveEdit = async () => {
-    if (!editForm.title) { alert("Promo title is required."); return; }
-    if (!editForm.product) { alert("Product is required."); return; }
-    if (!editForm.startDate || !editForm.endDate) { alert("Start and End dates are required."); return; }
-    if (new Date(editForm.startDate) > new Date(editForm.endDate)) { alert("Start date must be before end date."); return; }
-    if (editForm.type === "Discount" && (!editForm.discount || Number(editForm.discount) <= 0)) {
-      alert("Please enter a valid discount percentage."); return;
+    if (!editForm.productId)   { alert("Please select a product."); return; }
+    if (!editForm.promoName)   { alert("Promo name is required."); return; }
+    if (!editForm.alteredPrice || Number(editForm.alteredPrice) <= 0) {
+      alert("Please enter a valid promo price."); return;
+    }
+    if (!editForm.dateEffective || !editForm.lastDate) {
+      alert("Start and end dates are required."); return;
+    }
+    if (new Date(editForm.dateEffective) > new Date(editForm.lastDate)) {
+      alert("Start date must be before end date."); return;
     }
     try {
       setEditLoading(true);
       await api.updatePromo(selectedPromo!.id, {
-        ...editForm,
-        discount: editForm.discount ? Number(editForm.discount) : undefined,
-        bundleQty: editForm.bundleQty ? Number(editForm.bundleQty) : undefined,
+        productId:       editForm.productId,
+        promoName:       editForm.promoName,
+        alteredPrice:    Number(editForm.alteredPrice),
+        discountPercent: editForm.discountPercent !== "" ? Number(editForm.discountPercent) : undefined,
+        dateEffective:   editForm.dateEffective,
+        lastDate:        editForm.lastDate,
+        isActive:        editForm.isActive,
       });
-      await fetchPromos();
+      await fetchAll();
       setIsEditing(false);
       setShowPromoModal(false);
       showToast("Promo updated successfully!");
@@ -196,24 +176,24 @@ export default function PromoManagementPage() {
     }
   };
 
-  // ✅ Toggle status via API PATCH
+  // ── Toggle status ────────────────────────────────────────────────────────
   const handleToggleStatus = async (promo: Promo) => {
     try {
       await api.togglePromo(promo.id);
-      await fetchPromos();
-      showToast(`Promo ${promo.status === "Active" ? "deactivated" : "activated"}!`);
+      await fetchAll();
+      showToast(`Promo ${promo.isActive ? "deactivated" : "activated"}!`);
     } catch (err) {
       console.error(err);
       showToast("Failed to toggle promo status.", true);
     }
   };
 
-  // ✅ Delete via API DELETE
+  // ── Delete ───────────────────────────────────────────────────────────────
   const confirmDelete = async () => {
     try {
       setDeleteLoading(true);
       await api.deletePromo(selectedPromo!.id);
-      await fetchPromos();
+      await fetchAll();
       setShowDeleteConfirm(false);
       setShowPromoModal(false);
       setSelectedPromo(null);
@@ -226,23 +206,31 @@ export default function PromoManagementPage() {
     }
   };
 
-  // ✅ Add via API POST
+  // ── Add promo ────────────────────────────────────────────────────────────
   const handleAddPromo = async () => {
-    if (!addForm.title) { alert("Promo title is required."); return; }
-    if (!addForm.product) { alert("Product is required."); return; }
-    if (!addForm.startDate || !addForm.endDate) { alert("Start and End dates are required."); return; }
-    if (new Date(addForm.startDate) > new Date(addForm.endDate)) { alert("Start date must be before end date."); return; }
-    if (addForm.type === "Discount" && (!addForm.discount || Number(addForm.discount) <= 0)) {
-      alert("Please enter a valid discount percentage."); return;
+    if (!addForm.productId)   { alert("Please select a product."); return; }
+    if (!addForm.promoName)   { alert("Promo name is required."); return; }
+    if (!addForm.alteredPrice || Number(addForm.alteredPrice) <= 0) {
+      alert("Please enter a valid promo price."); return;
+    }
+    if (!addForm.dateEffective || !addForm.lastDate) {
+      alert("Start and end dates are required."); return;
+    }
+    if (new Date(addForm.dateEffective) > new Date(addForm.lastDate)) {
+      alert("Start date must be before end date."); return;
     }
     try {
       setAddLoading(true);
       await api.createPromo({
-        ...addForm,
-        discount: addForm.discount ? Number(addForm.discount) : undefined,
-        bundleQty: addForm.bundleQty ? Number(addForm.bundleQty) : undefined,
+        productId:       addForm.productId,
+        promoName:       addForm.promoName,
+        alteredPrice:    Number(addForm.alteredPrice),
+        discountPercent: addForm.discountPercent !== "" ? Number(addForm.discountPercent) : undefined,
+        dateEffective:   addForm.dateEffective,
+        lastDate:        addForm.lastDate,
+        isActive:        addForm.isActive,
       });
-      await fetchPromos();
+      await fetchAll();
       setShowAddModal(false);
       setAddForm(emptyForm);
       setIsDirty(false);
@@ -263,16 +251,23 @@ export default function PromoManagementPage() {
   };
 
   const handleExport = () => {
-    const headers = ["Title", "Product", "Type", "Discount%", "Bundle Qty", "Status", "Start Date", "End Date"];
-    const rows = promos.map((p) => [p.title, p.product, p.type, p.discount || "", p.bundleQty || "", p.status, p.startDate, p.endDate]);
+    const headers = ["ID", "Promo Name", "Product", "Altered Price", "Discount%", "Start Date", "End Date", "Active"];
+    const rows = promos.map((p) => [
+      p.id, p.promoName, p.product?.productName || p.productId,
+      p.alteredPrice, p.discountPercent || "", p.dateEffective, p.lastDate, p.isActive
+    ]);
     const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "promos.csv"; a.click();
-    URL.revokeObjectURL(url);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = "promos.csv"; a.click();
   };
 
-  const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("employee"); router.push("/"); };
+  const handleLogout = () => {
+    document.cookie = "token=; path=/; max-age=0";
+    localStorage.removeItem("token");
+    localStorage.removeItem("employee");
+    router.push("/");
+  };
   const navigate = (path: string) => { router.push(path); setShowMobileMenu(false); };
 
   const getPageNumbers = () => {
@@ -288,8 +283,80 @@ export default function PromoManagementPage() {
     return pages;
   };
 
+  // ── Shared form fields (used in both Add and Edit modals) ────────────────
+  const renderFormFields = (
+    form: typeof emptyForm,
+    setForm: (f: typeof emptyForm) => void,
+    markDirty?: () => void
+  ) => {
+    const update = (patch: Partial<typeof emptyForm>) => {
+      setForm({ ...form, ...patch });
+      markDirty?.();
+    };
+    return (
+      <div className="flex flex-col gap-3">
+        {/* Product */}
+        <div>
+          <label className="text-xs font-medium text-gray-600">Product <span className="text-red-400">*</span></label>
+          <select value={form.productId} onChange={(e) => update({ productId: e.target.value })}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+            <option value="">— Select a product —</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>{p.productName} (₱{p.price})</option>
+            ))}
+          </select>
+        </div>
+        {/* Promo name */}
+        <div>
+          <label className="text-xs font-medium text-gray-600">Promo Name <span className="text-red-400">*</span></label>
+          <input value={form.promoName} onChange={(e) => update({ promoName: e.target.value })}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
+            placeholder="e.g. Summer Sale" />
+        </div>
+        {/* Altered price */}
+        <div>
+          <label className="text-xs font-medium text-gray-600">Promo Price (₱) <span className="text-red-400">*</span></label>
+          <input type="number" min="0" step="0.01" value={form.alteredPrice}
+            onChange={(e) => update({ alteredPrice: e.target.value === "" ? "" : Number(e.target.value) })}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
+            placeholder="e.g. 59.00" />
+        </div>
+        {/* Discount percent */}
+        <div>
+          <label className="text-xs font-medium text-gray-600">Discount % <span className="text-gray-400">(optional)</span></label>
+          <input type="number" min="0" max="100" value={form.discountPercent}
+            onChange={(e) => update({ discountPercent: e.target.value === "" ? "" : Number(e.target.value) })}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
+            placeholder="e.g. 20" />
+        </div>
+        {/* Dates */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-medium text-gray-600">Start Date <span className="text-red-400">*</span></label>
+            <input type="date" value={form.dateEffective} onChange={(e) => update({ dateEffective: e.target.value })}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600">End Date <span className="text-red-400">*</span></label>
+            <input type="date" value={form.lastDate} onChange={(e) => update({ lastDate: e.target.value })}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+          </div>
+        </div>
+        {/* isActive toggle */}
+        <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+          <span className="text-sm text-gray-600 flex-1">Active immediately</span>
+          <button type="button" onClick={() => update({ isActive: !form.isActive })}
+            className={`w-11 h-6 rounded-full transition-colors relative ${form.isActive ? "bg-green-500" : "bg-gray-300"}`}>
+            <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.isActive ? "translate-x-5" : "translate-x-0.5"}`} />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
+
       {/* Sidebar */}
       <aside className="hidden md:flex w-52 bg-white flex-col py-6 px-4 border-r border-gray-100 shrink-0">
         <div className="text-center mb-10">
@@ -312,6 +379,7 @@ export default function PromoManagementPage() {
       </aside>
 
       <main className="flex-1 flex flex-col overflow-auto">
+
         {/* Header */}
         <header className="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-100">
           <button className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300"
@@ -321,17 +389,26 @@ export default function PromoManagementPage() {
           </button>
           <h1 className="text-xl md:text-2xl font-bold text-gray-800">Promo Management</h1>
           <div className="flex items-center gap-2">
-            <div className="relative"><span className="text-xl">🔔</span><div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" /></div>
             <div className="relative">
-              <button onClick={() => setShowUserMenu(!showUserMenu)} className={`flex items-center gap-2 px-2 py-2 rounded-xl transition-colors ${showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"}`}>
+              <span className="text-xl">🔔</span>
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" />
+            </div>
+            <div className="relative">
+              <button onClick={() => setShowUserMenu(!showUserMenu)}
+                className={`flex items-center gap-2 px-2 py-2 rounded-xl transition-colors ${showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="https://i.pravatar.cc/40?img=8" alt="User" className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover" />
-                <div className="hidden md:block text-left"><p className="text-sm font-semibold text-gray-800">Ray Teodoro</p><p className="text-xs text-green-500">Admin</p></div>
+                <div className="hidden md:block text-left">
+                  <p className="text-sm font-semibold text-gray-800">Ray Teodoro</p>
+                  <p className="text-xs text-green-500">Admin</p>
+                </div>
               </button>
               {showUserMenu && (
                 <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-lg border border-gray-100 z-50">
                   <button onClick={handleLogout} className="flex items-center gap-2 w-full px-4 py-3 text-sm text-red-500 hover:bg-red-50 rounded-xl">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
                     Log Out
                   </button>
                 </div>
@@ -355,8 +432,9 @@ export default function PromoManagementPage() {
         )}
 
         <div className="flex-1 p-3 md:p-4 bg-green-50">
+
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
             <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-lg">🎁</div>
               <div><p className="text-xs text-gray-400">Total Promos</p><p className="text-xl font-bold text-gray-800">{promos.length}</p></div>
@@ -366,16 +444,13 @@ export default function PromoManagementPage() {
               <div><p className="text-xs text-gray-400">Active</p><p className="text-xl font-bold text-green-600">{totalActive}</p></div>
             </div>
             <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-lg">💙</div>
-              <div><p className="text-xs text-gray-400">Discounts</p><p className="text-xl font-bold text-blue-600">{totalDiscount}</p></div>
-            </div>
-            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-lg">🎀</div>
-              <div><p className="text-xs text-gray-400">BOGO</p><p className="text-xl font-bold text-purple-600">{totalBogo}</p></div>
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-lg">⏸️</div>
+              <div><p className="text-xs text-gray-400">Inactive</p><p className="text-xl font-bold text-gray-500">{promos.length - totalActive}</p></div>
             </div>
           </div>
 
           <div className="bg-white rounded-2xl p-4 shadow-sm">
+
             {/* Toolbar */}
             <div className="flex items-center gap-2 mb-6 flex-wrap">
               <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-40 md:w-48">
@@ -385,27 +460,9 @@ export default function PromoManagementPage() {
                   className="outline-none text-sm text-gray-700 w-full" />
               </div>
 
-              {/* Type Filter */}
-              <div className="relative" ref={typeRef}>
-                <button onClick={() => { setShowTypeDropdown(!showTypeDropdown); setShowStatusDropdown(false); }}
-                  className={`flex items-center gap-1 border rounded-lg px-3 py-2 text-sm transition-colors ${typeFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                  🎁 {typeFilter === "All" ? "Type" : typeFilter} ▾
-                </button>
-                {showTypeDropdown && (
-                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44">
-                    {["All", ...PROMO_TYPES].map((opt) => (
-                      <button key={opt} onClick={() => { setTypeFilter(opt); setShowTypeDropdown(false); setCurrentPage(1); }}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${typeFilter === opt ? "text-indigo-600 font-semibold" : "text-gray-600"}`}>
-                        {opt === "All" ? "All Types" : opt}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
               {/* Status Filter */}
               <div className="relative" ref={statusRef}>
-                <button onClick={() => { setShowStatusDropdown(!showStatusDropdown); setShowTypeDropdown(false); }}
+                <button onClick={() => setShowStatusDropdown(!showStatusDropdown)}
                   className={`flex items-center gap-1 border rounded-lg px-3 py-2 text-sm transition-colors ${statusFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
                   🔖 {statusFilter === "All" ? "Status" : statusFilter} ▾
                 </button>
@@ -421,13 +478,16 @@ export default function PromoManagementPage() {
                 )}
               </div>
 
-              {(typeFilter !== "All" || statusFilter !== "All") && (
-                <button onClick={() => { setTypeFilter("All"); setStatusFilter("All"); setCurrentPage(1); }}
+              {statusFilter !== "All" && (
+                <button onClick={() => { setStatusFilter("All"); setCurrentPage(1); }}
                   className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
               )}
 
               <button onClick={handleExport} className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">📤 Export</button>
-              <button onClick={() => { setShowAddModal(true); setIsDirty(false); }} className="ml-auto flex items-center gap-1 bg-gray-900 rounded-lg px-3 py-2 text-sm text-white hover:bg-gray-700">+ Add Promo</button>
+              <button onClick={() => { setShowAddModal(true); setIsDirty(false); }}
+                className="ml-auto flex items-center gap-1 bg-gray-900 rounded-lg px-3 py-2 text-sm text-white hover:bg-gray-700">
+                + Add Promo
+              </button>
             </div>
 
             {/* Promo Cards */}
@@ -447,22 +507,19 @@ export default function PromoManagementPage() {
                 {paginated.map((promo) => (
                   <div key={promo.id} onClick={() => handleCardClick(promo)}
                     className="flex flex-col rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow cursor-pointer">
-                    <div className="w-full aspect-square bg-gray-100 rounded-t-2xl flex flex-col items-center justify-center relative">
-                      {promo.image ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={promo.image} alt={promo.title} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-4xl">{TYPE_ICONS[promo.type]}</span>
-                      )}
-                      <span className={`absolute top-2 right-2 text-xs px-2 py-0.5 rounded-full font-medium ${promo.status === "Active" ? "bg-green-100 text-green-600" : "bg-gray-200 text-gray-500"}`}>
-                        {promo.status}
+                    <div className="w-full aspect-square bg-indigo-50 rounded-t-2xl flex flex-col items-center justify-center relative">
+                      <span className="text-4xl">🎁</span>
+                      <span className={`absolute top-2 right-2 text-xs px-2 py-0.5 rounded-full font-medium ${promo.isActive ? "bg-green-100 text-green-600" : "bg-gray-200 text-gray-500"}`}>
+                        {promo.isActive ? "Active" : "Inactive"}
                       </span>
                     </div>
                     <div className="p-2">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_COLORS[promo.type]}`}>{promo.type}</span>
-                      <p className="text-sm font-semibold text-gray-800 mt-1 truncate">{promo.title}</p>
-                      <p className="text-xs text-gray-500 truncate">{promo.product}</p>
-                      <p className="text-xs font-bold text-indigo-600 mt-0.5">{getPromoLabel(promo)}</p>
+                      <p className="text-sm font-semibold text-gray-800 mt-1 truncate">{promo.promoName}</p>
+                      <p className="text-xs text-gray-500 truncate">{promo.product?.productName || promo.productId}</p>
+                      <p className="text-xs font-bold text-indigo-600 mt-0.5">₱{promo.alteredPrice}</p>
+                      {promo.discountPercent && (
+                        <p className="text-xs text-green-600">{promo.discountPercent}% off</p>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -493,94 +550,31 @@ export default function PromoManagementPage() {
       {/* PROMO DETAIL / EDIT MODAL */}
       {showPromoModal && selectedPromo && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-screen overflow-y-auto">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
             <p className="text-xs text-gray-400 mb-3 font-medium">Promo {isEditing ? "Editing" : "Details"}</p>
-            <div className="flex gap-4">
-              <div className="w-32 h-32 bg-gray-100 rounded-xl shrink-0 flex items-center justify-center text-5xl">
-                {selectedPromo.image
-                  // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={selectedPromo.image} alt={selectedPromo.title} className="w-full h-full object-cover rounded-xl" />
-                  : TYPE_ICONS[selectedPromo.type]}
-              </div>
-              <div className="flex-1 flex flex-col gap-3">
-                {isEditing ? (
-                  <>
-                    <div><p className="text-xs text-gray-400">Promo Title</p>
-                      <input value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
-                    </div>
-                    <div><p className="text-xs text-gray-400">Description</p>
-                      <textarea value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900 resize-none" rows={2} />
-                    </div>
-                    <div><p className="text-xs text-gray-400">Product</p>
-                      <input value={editForm.product} onChange={(e) => setEditForm({ ...editForm, product: e.target.value })}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
-                    </div>
-                    <div><p className="text-xs text-gray-400">Promo Type</p>
-                      <select value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value as PromoType })}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                        {PROMO_TYPES.map((t) => <option key={t}>{t}</option>)}
-                      </select>
-                    </div>
-                    {editForm.type === "Discount" && (
-                      <div><p className="text-xs text-gray-400">Discount (%)</p>
-                        <input type="number" min="1" max="100" value={editForm.discount ?? ""}
-                          onChange={(e) => setEditForm({ ...editForm, discount: e.target.value === "" ? undefined : Number(e.target.value) })}
-                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
-                      </div>
-                    )}
-                    {editForm.type === "Bundle Deal" && (
-                      <div><p className="text-xs text-gray-400">Bundle Qty</p>
-                        <input type="number" min="3" value={editForm.bundleQty ?? ""}
-                          onChange={(e) => setEditForm({ ...editForm, bundleQty: e.target.value === "" ? undefined : Number(e.target.value) })}
-                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
-                      </div>
-                    )}
-                    <div><p className="text-xs text-gray-400">Start Date</p>
-                      <input type="date" value={editForm.startDate} onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
-                    </div>
-                    <div><p className="text-xs text-gray-400">End Date</p>
-                      <input type="date" value={editForm.endDate} onChange={(e) => setEditForm({ ...editForm, endDate: e.target.value })}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
-                    </div>
-                    <div><p className="text-xs text-gray-400">Status</p>
-                      <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value as PromoStatus })}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                      </select>
-                    </div>
-                    <div><p className="text-xs text-gray-400">Image URL (optional)</p>
-                      <input value={editForm.image} onChange={(e) => setEditForm({ ...editForm, image: e.target.value })}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="https://..." />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div><p className="text-xs text-gray-400">Promo Title</p><p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedPromo.title}</p></div>
-                    <div><p className="text-xs text-gray-400">Product</p><p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedPromo.product}</p></div>
-                    <div><p className="text-xs text-gray-400">Type</p>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium mt-0.5 inline-block ${TYPE_COLORS[selectedPromo.type]}`}>{selectedPromo.type}</span>
-                    </div>
-                    <div><p className="text-xs text-gray-400">Deal</p><p className="text-sm font-bold text-indigo-600 mt-0.5">{getPromoLabel(selectedPromo)}</p></div>
-                    <div><p className="text-xs text-gray-400">Duration</p>
-                      <p className="text-sm text-gray-700 mt-0.5">{selectedPromo.startDate?.split("T")[0]} → {selectedPromo.endDate?.split("T")[0]}</p>
-                    </div>
-                    <div><p className="text-xs text-gray-400">Status</p>
-                      <button onClick={() => handleToggleStatus(selectedPromo)}
-                        className={`text-xs px-3 py-1 rounded-full font-medium inline-block mt-0.5 cursor-pointer transition-colors ${selectedPromo.status === "Active" ? "bg-green-100 text-green-600 hover:bg-green-200" : "bg-gray-200 text-gray-500 hover:bg-gray-300"}`}>
-                        {selectedPromo.status} (click to toggle)
-                      </button>
-                    </div>
-                    {selectedPromo.description && (
-                      <div><p className="text-xs text-gray-400">Description</p><p className="text-xs text-gray-600 mt-0.5">{selectedPromo.description}</p></div>
-                    )}
-                  </>
+
+            {isEditing ? (
+              renderFormFields(editForm, setEditForm)
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div><p className="text-xs text-gray-400">Promo Name</p><p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedPromo.promoName}</p></div>
+                <div><p className="text-xs text-gray-400">Product</p><p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedPromo.product?.productName || selectedPromo.productId}</p></div>
+                <div><p className="text-xs text-gray-400">Promo Price</p><p className="text-sm font-bold text-indigo-600 mt-0.5">₱{selectedPromo.alteredPrice}</p></div>
+                {selectedPromo.discountPercent && (
+                  <div><p className="text-xs text-gray-400">Discount</p><p className="text-sm text-green-600 mt-0.5">{selectedPromo.discountPercent}% off</p></div>
                 )}
+                <div><p className="text-xs text-gray-400">Duration</p>
+                  <p className="text-sm text-gray-700 mt-0.5">{selectedPromo.dateEffective?.split("T")[0]} → {selectedPromo.lastDate?.split("T")[0]}</p>
+                </div>
+                <div><p className="text-xs text-gray-400">Status</p>
+                  <button onClick={() => handleToggleStatus(selectedPromo)}
+                    className={`text-xs px-3 py-1 rounded-full font-medium inline-block mt-0.5 cursor-pointer transition-colors ${selectedPromo.isActive ? "bg-green-100 text-green-600 hover:bg-green-200" : "bg-gray-200 text-gray-500 hover:bg-gray-300"}`}>
+                    {selectedPromo.isActive ? "Active" : "Inactive"} (click to toggle)
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
+
             <div className="flex gap-2 mt-5 justify-end">
               {isEditing ? (
                 <>
@@ -604,63 +598,9 @@ export default function PromoManagementPage() {
       {/* ADD PROMO MODAL */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl max-h-screen overflow-y-auto">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-bold text-gray-800 mb-4">Add New Promo</h2>
-            <div className="flex flex-col gap-3">
-              <div><label className="text-xs font-medium text-gray-600">Promo Title</label>
-                <input value={addForm.title} onChange={(e) => { setAddForm({ ...addForm, title: e.target.value }); setIsDirty(true); }}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="e.g. Summer Sale" />
-              </div>
-              <div><label className="text-xs font-medium text-gray-600">Description</label>
-                <textarea value={addForm.description} onChange={(e) => { setAddForm({ ...addForm, description: e.target.value }); setIsDirty(true); }}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900 resize-none" rows={2} placeholder="Describe the promo..." />
-              </div>
-              <div><label className="text-xs font-medium text-gray-600">Product</label>
-                <input value={addForm.product} onChange={(e) => { setAddForm({ ...addForm, product: e.target.value }); setIsDirty(true); }}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="e.g. Coca Cola 1.5L" />
-              </div>
-              <div><label className="text-xs font-medium text-gray-600">Promo Type</label>
-                <select value={addForm.type} onChange={(e) => { setAddForm({ ...addForm, type: e.target.value as PromoType }); setIsDirty(true); }}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                  {PROMO_TYPES.map((t) => <option key={t}>{t}</option>)}
-                </select>
-              </div>
-              {addForm.type === "Discount" && (
-                <div><label className="text-xs font-medium text-gray-600">Discount Percentage (%)</label>
-                  <input type="number" min="1" max="100" value={addForm.discount ?? ""}
-                    onChange={(e) => { setAddForm({ ...addForm, discount: e.target.value === "" ? undefined : Number(e.target.value) }); setIsDirty(true); }}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="e.g. 20" />
-                </div>
-              )}
-              {addForm.type === "Bundle Deal" && (
-                <div><label className="text-xs font-medium text-gray-600">Buy how many? (pay for 2)</label>
-                  <input type="number" min="3" value={addForm.bundleQty ?? ""}
-                    onChange={(e) => { setAddForm({ ...addForm, bundleQty: e.target.value === "" ? undefined : Number(e.target.value) }); setIsDirty(true); }}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="e.g. 3" />
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs font-medium text-gray-600">Start Date</label>
-                  <input type="date" value={addForm.startDate} onChange={(e) => { setAddForm({ ...addForm, startDate: e.target.value }); setIsDirty(true); }}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
-                </div>
-                <div><label className="text-xs font-medium text-gray-600">End Date</label>
-                  <input type="date" value={addForm.endDate} onChange={(e) => { setAddForm({ ...addForm, endDate: e.target.value }); setIsDirty(true); }}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
-                </div>
-              </div>
-              <div><label className="text-xs font-medium text-gray-600">Status</label>
-                <select value={addForm.status} onChange={(e) => { setAddForm({ ...addForm, status: e.target.value as PromoStatus }); setIsDirty(true); }}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
-              </div>
-              <div><label className="text-xs font-medium text-gray-600">Promo Image URL <span className="text-gray-400">(optional)</span></label>
-                <input value={addForm.image} onChange={(e) => { setAddForm({ ...addForm, image: e.target.value }); setIsDirty(true); }}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="https://..." />
-              </div>
-            </div>
+            {renderFormFields(addForm, setAddForm, () => setIsDirty(true))}
             <div className="flex gap-3 mt-5">
               <button onClick={handleCloseAddModal} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
               <button onClick={handleAddPromo} disabled={addLoading} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-60">
@@ -677,7 +617,7 @@ export default function PromoManagementPage() {
           <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
             <p className="text-2xl mb-2">🗑️</p>
             <h2 className="text-lg font-bold text-gray-800 mb-2">Delete Promo?</h2>
-            <p className="text-sm text-gray-500 mb-5">Are you sure you want to delete <span className="font-semibold text-gray-700">{selectedPromo?.title}</span>?</p>
+            <p className="text-sm text-gray-500 mb-5">Are you sure you want to delete <span className="font-semibold text-gray-700">{selectedPromo?.promoName}</span>?</p>
             <div className="flex gap-3">
               <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
               <button onClick={confirmDelete} disabled={deleteLoading} className="flex-1 bg-red-500 rounded-lg py-2 text-sm text-white hover:bg-red-600 disabled:opacity-60">
