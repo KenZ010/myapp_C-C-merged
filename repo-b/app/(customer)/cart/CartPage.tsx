@@ -31,7 +31,6 @@ const getBg    = (cat?: string) => BG_MAP[cat?.toUpperCase() || ""]    || "#4242
 export default function CartPage() {
   const [items,         setItems]         = useState<CartItem[]>([]);
   const [loading,       setLoading]       = useState(true);
-  const [updating,      setUpdating]      = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "gcash">("cod");
   const [gcashRef,      setGcashRef]      = useState("");
   const [gcashImage,    setGcashImage]    = useState<string | null>(null);
@@ -60,31 +59,43 @@ export default function CartPage() {
   const handleUpdateQty = async (item: CartItem, delta: number) => {
     const customerId = getCustomerId();
     const newQty = item.quantity + delta;
-    setUpdating(item.id);
+
+    // ── Optimistic update: change state immediately, no waiting ──
+    if (newQty <= 0) {
+      setItems((prev) => prev.filter((i) => i.id !== item.id));
+    } else {
+      setItems((prev) =>
+        prev.map((i) => i.id === item.id ? { ...i, quantity: newQty } : i)
+      );
+    }
+
+    // ── Sync with server in the background ──
     try {
       if (newQty <= 0) {
         await api.removeCartItem(customerId, item.id);
       } else {
         await api.updateCartItem(customerId, item.id, newQty);
       }
-      await fetchCart();
     } catch (err) {
       console.error("Failed to update cart:", err);
-    } finally {
-      setUpdating(null);
+      // Revert on failure
+      await fetchCart();
     }
   };
 
   const handleRemove = async (item: CartItem) => {
     const customerId = getCustomerId();
-    setUpdating(item.id);
+
+    // ── Optimistic update: remove immediately ──
+    setItems((prev) => prev.filter((i) => i.id !== item.id));
+
+    // ── Sync with server in the background ──
     try {
       await api.removeCartItem(customerId, item.id);
-      await fetchCart();
     } catch (err) {
       console.error("Failed to remove item:", err);
-    } finally {
-      setUpdating(null);
+      // Revert on failure
+      await fetchCart();
     }
   };
 
@@ -152,14 +163,13 @@ export default function CartPage() {
         {/* ── LEFT: Cart Items ── */}
         <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
           {items.map((item) => {
-            const isUpdating    = updating === item.id;
-            const emoji         = getEmoji(item.product.category);
-            const bg            = getBg(item.product.category);
+            const emoji          = getEmoji(item.product.category);
+            const bg             = getBg(item.product.category);
             const effectivePrice = getEffectivePrice(item);
-            const hasDiscount   = item.product.finalPrice != null && item.product.finalPrice < item.product.price;
+            const hasDiscount    = item.product.finalPrice != null && item.product.finalPrice < item.product.price;
 
             return (
-              <div key={item.id} style={{ background: "#fff", borderRadius: "16px", border: "0.5px solid #e8e8e8", padding: "18px 22px", display: "flex", alignItems: "center", gap: "18px", opacity: isUpdating ? 0.6 : 1, transition: "opacity 0.2s" }}>
+              <div key={item.id} style={{ background: "#fff", borderRadius: "16px", border: "0.5px solid #e8e8e8", padding: "18px 22px", display: "flex", alignItems: "center", gap: "18px" }}>
                 <div style={{ width: "80px", height: "80px", borderRadius: "14px", background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "36px", flexShrink: 0 }}>
                   {emoji}
                 </div>
@@ -192,20 +202,20 @@ export default function CartPage() {
 
                 <div style={{ display: "flex", alignItems: "center", gap: "12px", flexShrink: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", border: "1.5px solid #e8e8e8", borderRadius: "30px", overflow: "hidden" }}>
-                    <button onClick={() => handleUpdateQty(item, -1)} disabled={isUpdating}
-                      style={{ width: "36px", height: "36px", background: "none", border: "none", fontSize: "18px", cursor: isUpdating ? "not-allowed" : "pointer", color: "#2d7a3a", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <button onClick={() => handleUpdateQty(item, -1)}
+                      style={{ width: "36px", height: "36px", background: "none", border: "none", fontSize: "18px", cursor: "pointer", color: "#2d7a3a", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
                       −
                     </button>
                     <span style={{ minWidth: "32px", textAlign: "center", fontSize: "15px", fontWeight: 600, color: "#1a1a1a" }}>
                       {item.quantity}
                     </span>
-                    <button onClick={() => handleUpdateQty(item, 1)} disabled={isUpdating}
-                      style={{ width: "36px", height: "36px", background: "none", border: "none", fontSize: "18px", cursor: isUpdating ? "not-allowed" : "pointer", color: "#2d7a3a", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <button onClick={() => handleUpdateQty(item, 1)}
+                      style={{ width: "36px", height: "36px", background: "none", border: "none", fontSize: "18px", cursor: "pointer", color: "#2d7a3a", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
                       +
                     </button>
                   </div>
-                  <button onClick={() => handleRemove(item)} disabled={isUpdating}
-                    style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#ffebee", border: "none", cursor: isUpdating ? "not-allowed" : "pointer", fontSize: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <button onClick={() => handleRemove(item)}
+                    style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#ffebee", border: "none", cursor: "pointer", fontSize: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     🗑️
                   </button>
                 </div>
