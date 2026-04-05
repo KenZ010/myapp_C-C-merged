@@ -10,19 +10,27 @@ type OrderStatus =
   | "Cancelled";
 
 const statusColors: Record<OrderStatus, { bg: string; color: string }> = {
-  Waiting:           { bg: "#fff9c4", color: "#f57f17" },
-  Processing:        { bg: "#e3f2fd", color: "#1565c0" },
-  "Out For Delivery":{ bg: "#fff3e0", color: "#e65100" },
-  Received:          { bg: "#e8f5e9", color: "#2e7d32" },
-  Cancelled:         { bg: "#f5f5f5", color: "#757575" },
+  Waiting:            { bg: "#fff9c4", color: "#f57f17" },
+  Processing:         { bg: "#e3f2fd", color: "#1565c0" },
+  "Out For Delivery": { bg: "#fff3e0", color: "#e65100" },
+  Received:           { bg: "#e8f5e9", color: "#2e7d32" },
+  Cancelled:          { bg: "#f5f5f5", color: "#757575" },
 };
 
 const statusNote: Record<OrderStatus, string> = {
-  Waiting:           "Your order is being verified by the cashier",
-  Processing:        "Your order is being prepared",
-  "Out For Delivery":"Your order is out for delivery",
-  Received:          "Your order has been delivered",
-  Cancelled:         "This order has been cancelled",
+  Waiting:            "Your order is being verified by the cashier",
+  Processing:         "Your order is being prepared",
+  "Out For Delivery": "Your order is out for delivery",
+  Received:           "Your order has been delivered",
+  Cancelled:          "This order has been cancelled",
+};
+
+const statusIcon: Record<OrderStatus, string> = {
+  Waiting:            "⏳",
+  Processing:         "⚙️",
+  "Out For Delivery": "🚚",
+  Received:           "✅",
+  Cancelled:          "✕",
 };
 
 type OrderItem = { name: string; qty: number; price: number };
@@ -36,14 +44,8 @@ type Order = {
   items:  OrderItem[];
 };
 
-const statusSteps: OrderStatus[] = [
-  "Waiting",
-  "Processing",
-  "Out For Delivery",
-  "Received",
-];
+const statusSteps: OrderStatus[] = ["Waiting", "Processing", "Out For Delivery", "Received"];
 
-// Maps backend SaleStatus enum → UI OrderStatus
 const STATUS_MAP: Record<string, OrderStatus> = {
   PENDING:            "Waiting",
   PROCESSING:         "Processing",
@@ -57,12 +59,14 @@ const STATUS_MAP: Record<string, OrderStatus> = {
 
 const ACTIVE_STATUSES: OrderStatus[] = ["Waiting", "Processing", "Out For Delivery"];
 
+type TabFilter = "All" | OrderStatus;
+const TABS: TabFilter[] = ["All", "Waiting", "Processing", "Out For Delivery"];
+
 function normalizeOrder(o: Record<string, unknown>): Order {
-  // status comes as e.g. "PENDING", "OUT_FOR_DELIVERY"
   const rawStatus = String(o.status ?? "PENDING").toUpperCase();
   const status: OrderStatus = STATUS_MAP[rawStatus] ?? "Waiting";
 
-  // Backend returns orderLines[].{ product: { productName }, quantity, price }
+  // Handle both pre-shaped items (from getCustomerOrders) and raw orderLines
   const rawLines = (o.orderLines ?? o.items ?? []) as Record<string, unknown>[];
   const items: OrderItem[] = rawLines.map((l) => {
     const product = l.product as Record<string, unknown> | null;
@@ -74,29 +78,22 @@ function normalizeOrder(o: Record<string, unknown>): Order {
   });
 
   const total = Number(o.totalAmount ?? items.reduce((s, i) => s + i.price * i.qty, 0));
-
   const rawDate = String(o.createdAt ?? o.date ?? "");
   const date = rawDate
     ? new Date(rawDate).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" })
     : "—";
 
-  return {
-    id:     String(o.id ?? ""),
-    date,
-    status,
-    note:   statusNote[status],
-    total,
-    items,
-  };
+  return { id: String(o.id ?? ""), date, status, note: statusNote[status], total, items };
 }
 
 export default function OrdersPage() {
-  const [orders,           setOrders]           = useState<Order[]>([]);
-  const [selectedOrder,    setSelectedOrder]    = useState<Order | null>(null);
-  const [loading,          setLoading]          = useState(true);
-  const [error,            setError]            = useState<string | null>(null);
-  const [cancellingId,     setCancellingId]     = useState<string | null>(null);
-  const [showCancelConfirm,setShowCancelConfirm]= useState<string | null>(null);
+  const [orders,            setOrders]            = useState<Order[]>([]);
+  const [selectedOrder,     setSelectedOrder]     = useState<Order | null>(null);
+  const [loading,           setLoading]           = useState(true);
+  const [error,             setError]             = useState<string | null>(null);
+  const [activeTab,         setActiveTab]         = useState<TabFilter>("All");
+  const [cancellingId,      setCancellingId]      = useState<string | null>(null);
+  const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
 
   const getCustomerId = () =>
     JSON.parse(localStorage.getItem("user") || "{}")?.id ?? "";
@@ -110,10 +107,15 @@ export default function OrdersPage() {
 
       if (data?.message) { setError(data.message); setOrders([]); return; }
 
-      const raw: Record<string, unknown>[] = Array.isArray(data) ? data : (data.orders ?? data.sales ?? []);
+      const raw: Record<string, unknown>[] = Array.isArray(data)
+        ? data
+        : (data.orders ?? data.sales ?? []);
 
-      // Only show active orders (Waiting, Processing, Out For Delivery)
-      const active = raw.map(normalizeOrder).filter((o) => ACTIVE_STATUSES.includes(o.status));
+      // Show only active statuses
+      const active = raw
+        .map(normalizeOrder)
+        .filter((o) => ACTIVE_STATUSES.includes(o.status));
+
       setOrders(active);
       setError(null);
     } catch (err) {
@@ -129,7 +131,6 @@ export default function OrdersPage() {
     const order = orders.find((o) => o.id === id);
     if (!order || order.status !== "Out For Delivery") return;
 
-    // Optimistic
     setOrders((prev) => prev.map((o) => o.id === id ? { ...o, status: "Received" } : o));
     if (selectedOrder?.id === id) setSelectedOrder((p) => p ? { ...p, status: "Received" } : null);
 
@@ -153,15 +154,20 @@ export default function OrdersPage() {
     }, 1500);
   };
 
-  const getStepIndex = (status: OrderStatus) => statusSteps.indexOf(status);
+  const filtered = activeTab === "All"
+    ? orders
+    : orders.filter((o) => o.status === activeTab);
+
+  const tabCount = (tab: TabFilter) =>
+    tab === "All" ? orders.length : orders.filter((o) => o.status === tab).length;
 
   // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div style={{ minHeight: "calc(100vh - 56px)", display: "flex", alignItems: "center", justifyContent: "center", background: "#f5f5f5" }}>
+      <div style={{ minHeight: "calc(100vh - 56px)", background: "#f5f5f5" }}>
         <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
-        <div style={{ display: "flex", flexDirection: "column", gap: "14px", width: "100%", maxWidth: "700px", padding: "28px" }}>
-          {[180, 180, 160].map((h, i) => (
+        <div style={{ display: "flex", flexDirection: "column", gap: "14px", padding: "28px" }}>
+          {[190, 190, 170].map((h, i) => (
             <div key={i} style={{ height: `${h}px`, borderRadius: "16px", background: "linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.4s infinite" }} />
           ))}
         </div>
@@ -205,21 +211,43 @@ export default function OrdersPage() {
         </div>
       )}
 
+      {/* Status Tab Filter */}
+      <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
+        {TABS.map((tab) => (
+          <button key={tab} onClick={() => setActiveTab(tab)}
+            style={{ padding: "8px 18px", borderRadius: "20px", fontSize: "13px", fontWeight: activeTab === tab ? 600 : 400, cursor: "pointer", border: activeTab === tab ? "none" : "1px solid #e0e0e0", background: activeTab === tab ? "#2d7a3a" : "#fff", color: activeTab === tab ? "#fff" : "#555", display: "flex", alignItems: "center", gap: "6px", transition: "all 0.2s" }}>
+            {tab !== "All" && statusIcon[tab as OrderStatus]}
+            {tab}
+            <span style={{ background: activeTab === tab ? "rgba(255,255,255,0.25)" : "#f0f0f0", color: activeTab === tab ? "#fff" : "#888", padding: "1px 7px", borderRadius: "10px", fontSize: "11px", fontWeight: 700 }}>
+              {tabCount(tab)}
+            </span>
+          </button>
+        ))}
+        <button onClick={fetchOrders}
+          style={{ marginLeft: "auto", padding: "8px 16px", borderRadius: "20px", fontSize: "13px", fontWeight: 600, cursor: "pointer", border: "1px solid #e0e0e0", background: "#fff", color: "#555" }}>
+          🔄 Refresh
+        </button>
+      </div>
+
       <div style={{ display: "grid", gridTemplateColumns: selectedOrder ? "1fr 420px" : "1fr", gap: "20px", alignItems: "start" }}>
 
         {/* Orders List */}
         <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          {orders.length === 0 ? (
+          {filtered.length === 0 ? (
             <div style={{ background: "#fff", borderRadius: "16px", padding: "60px", textAlign: "center", border: "0.5px solid #e8e8e8" }}>
               <div style={{ fontSize: "56px", marginBottom: "16px" }}>📦</div>
-              <p style={{ fontSize: "18px", fontWeight: 600, color: "#1a1a1a", marginBottom: "8px" }}>No active orders</p>
-              <p style={{ fontSize: "13px", color: "#aaa", marginBottom: "20px" }}>Completed orders are in your Transaction History</p>
+              <p style={{ fontSize: "18px", fontWeight: 600, color: "#1a1a1a", marginBottom: "8px" }}>
+                {activeTab === "All" ? "No active orders" : `No ${activeTab} orders`}
+              </p>
+              <p style={{ fontSize: "13px", color: "#aaa", marginBottom: "20px" }}>
+                Completed orders are in your Transaction History
+              </p>
               <a href="/transactions" style={{ background: "#2d7a3a", color: "#fff", textDecoration: "none", padding: "11px 28px", borderRadius: "20px", fontSize: "13px", fontWeight: 600 }}>
                 View Transaction History
               </a>
             </div>
           ) : (
-            orders.map((order) => {
+            filtered.map((order) => {
               const s          = statusColors[order.status];
               const isSelected = selectedOrder?.id === order.id;
               const canCancel  = order.status === "Waiting" || order.status === "Processing";
@@ -227,14 +255,13 @@ export default function OrdersPage() {
 
               return (
                 <div key={order.id} style={{ background: "#fff", borderRadius: "16px", border: isSelected ? "2px solid #2d7a3a" : "0.5px solid #e8e8e8", padding: "20px 24px", transition: "border 0.2s" }}>
-
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "4px" }}>
                     <div>
                       <p style={{ fontSize: "11px", color: "#aaa", margin: 0 }}>Order ID</p>
                       <p style={{ fontSize: "14px", fontWeight: 700, color: "#1a1a1a", margin: 0 }}>{order.id}</p>
                     </div>
                     <span style={{ padding: "5px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, background: s.bg, color: s.color }}>
-                      🕐 {order.status}
+                      {statusIcon[order.status]} {order.status}
                     </span>
                   </div>
                   <p style={{ fontSize: "12px", color: "#aaa", marginBottom: "14px" }}>📅 {order.date}</p>
@@ -280,7 +307,7 @@ export default function OrdersPage() {
         {/* Order Details Panel */}
         {selectedOrder && (() => {
           const s          = statusColors[selectedOrder.status];
-          const stepIndex  = getStepIndex(selectedOrder.status);
+          const stepIndex  = selectedOrder.status !== "Cancelled" ? statusSteps.indexOf(selectedOrder.status) : -1;
           const canCancel  = selectedOrder.status === "Waiting" || selectedOrder.status === "Processing";
           const canReceive = selectedOrder.status === "Out For Delivery";
 
@@ -295,7 +322,7 @@ export default function OrdersPage() {
                 <p style={{ fontSize: "11px", color: "#aaa", margin: 0 }}>Order ID</p>
                 <p style={{ fontSize: "14px", fontWeight: 700, color: "#1a1a1a", marginBottom: "8px" }}>{selectedOrder.id}</p>
                 <span style={{ padding: "4px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, background: s.bg, color: s.color }}>
-                  {selectedOrder.status}
+                  {statusIcon[selectedOrder.status]} {selectedOrder.status}
                 </span>
               </div>
 
