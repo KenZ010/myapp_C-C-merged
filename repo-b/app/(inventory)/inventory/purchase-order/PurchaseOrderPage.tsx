@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 
 type POStatus = "Draft" | "Sent" | "Receiving" | "Completed" | "Cancelled";
 type POStep = "create" | "receiving" | "history";
@@ -153,6 +153,7 @@ const initialHistory: PurchaseOrder[] = [
 ];
 
 export default function PurchaseOrderPage() {
+  const [isNarrow, setIsNarrow] = useState(false);
   const [step, setStep] = useState<POStep>("create");
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(
     null,
@@ -166,6 +167,12 @@ export default function PurchaseOrderPage() {
   const [submitted, setSubmitted] = useState(false);
   const [viewPO, setViewPO] = useState<PurchaseOrder | null>(null);
 
+  useEffect(() => {
+    const check = () => setIsNarrow(window.innerWidth < 1100);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
   const total = orderItems.reduce((s, i) => s + i.unitCost * i.orderedQty, 0);
 
   const addProduct = (p: {
@@ -261,7 +268,8 @@ export default function PurchaseOrderPage() {
           borderRadius: "14px",
           border: "0.5px solid #e8e8e8",
           overflow: "hidden",
-          width: "fit-content",
+          flexWrap: "wrap",
+          width: "100%",
         }}
       >
         {(
@@ -295,7 +303,9 @@ export default function PurchaseOrderPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 360px",
+            gridTemplateColumns: isNarrow
+              ? "1fr"
+              : "minmax(0,1fr) minmax(320px,380px)",
             gap: "24px",
             alignItems: "start",
           }}
@@ -558,6 +568,7 @@ export default function PurchaseOrderPage() {
               padding: "24px",
               position: "sticky",
               top: "20px",
+              alignSelf: "start",
             }}
           >
             <p
@@ -919,8 +930,10 @@ export default function PurchaseOrderPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 320px",
-                gap: "24px",
+                gridTemplateColumns: isNarrow
+                  ? "1fr"
+                  : "minmax(0,1fr) minmax(280px,340px)",
+                gap: "20px",
               }}
             >
               <div
@@ -1284,7 +1297,7 @@ export default function PurchaseOrderPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
+              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
               gap: "14px",
               marginBottom: "20px",
             }}
@@ -1386,6 +1399,7 @@ export default function PurchaseOrderPage() {
                 fontSize: "12px",
                 color: "#888",
                 fontWeight: 500,
+                flexWrap: "wrap",
               }}
             >
               {filteredHistory.length} purchase orders
@@ -1398,7 +1412,7 @@ export default function PurchaseOrderPage() {
               background: "#fff",
               borderRadius: "14px",
               border: "0.5px solid #e8e8e8",
-              overflow: "hidden",
+              overflowX: "auto",
             }}
           >
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -1584,7 +1598,7 @@ export default function PurchaseOrderPage() {
               zIndex: 50,
               background: "#fff",
               borderRadius: "20px",
-              width: "480px",
+              width: "min(92vw, 480px)",
               boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
               maxHeight: "85vh",
               overflowY: "auto",
@@ -1668,6 +1682,8 @@ export default function PurchaseOrderPage() {
                       display: "flex",
                       justifyContent: "space-between",
                       padding: "8px 0",
+                      flexWrap: "wrap",
+                      rowGap: "4px",
                       borderBottom: "0.5px solid #f0f0f0",
                     }}
                   >
@@ -1701,12 +1717,14 @@ export default function PurchaseOrderPage() {
               <div
                 style={{
                   borderRadius: "12px",
-                  overflow: "hidden",
+                  overflowX: "auto",
                   border: "0.5px solid #e8e8e8",
                   marginBottom: "20px",
                 }}
               >
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <table
+                  style={{ minWidth: "650px", borderCollapse: "collapse" }}
+                >
                   <thead>
                     <tr style={{ background: "#1a3c2e" }}>
                       {[
@@ -1847,6 +1865,8 @@ export default function PurchaseOrderPage() {
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
+                  flexWrap: "wrap",
+                  rowGap: "6px",
                 }}
               >
                 <span
