@@ -1,12 +1,10 @@
 const API_URL = 'https://backend-production-da89.up.railway.app/api';
 
 const getToken = () => {
-  // ✅ Read from localStorage first (more reliable than cookies for JWTs)
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('token');
     if (token) return token;
   }
-  // Fallback to cookie (slice preserves = characters in JWT)
   if (typeof document === 'undefined') return '';
   const cookies = document.cookie.split(';');
   const tokenCookie = cookies.find(c => c.trim().startsWith('token='));
@@ -214,20 +212,63 @@ export const api = {
   ) => {
     const res = await fetch(`${API_URL}/deliveries/${id}/receive`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${getToken()}`
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify({ employeeId, items })
     });
     const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.message || 'Failed to receive delivery');
-    }
+    if (!res.ok) throw new Error(data.message || 'Failed to receive delivery');
     return data;
   },
   deleteDelivery: async (id: string) => {
     const res = await fetch(`${API_URL}/deliveries/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${getToken()}` }
+    });
+    return res.json();
+  },
+
+  // PROMOS
+  getPromos: async () => {
+    const res = await fetch(`${API_URL}/promos`, {
+      headers: { Authorization: `Bearer ${getToken()}` }
+    });
+    return res.json();
+  },
+  getActivePromos: async () => {
+    const res = await fetch(`${API_URL}/promos/active`);
+    return res.json();
+  },
+  getPromo: async (id: string) => {
+    const res = await fetch(`${API_URL}/promos/${id}`, {
+      headers: { Authorization: `Bearer ${getToken()}` }
+    });
+    return res.json();
+  },
+  createPromo: async (data: Record<string, unknown>) => {
+    const res = await fetch(`${API_URL}/promos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
+  updatePromo: async (id: string, data: Record<string, unknown>) => {
+    const res = await fetch(`${API_URL}/promos/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
+  togglePromo: async (id: string) => {
+    const res = await fetch(`${API_URL}/promos/${id}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${getToken()}` }
+    });
+    return res.json();
+  },
+  deletePromo: async (id: string) => {
+    const res = await fetch(`${API_URL}/promos/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${getToken()}` }
     });
