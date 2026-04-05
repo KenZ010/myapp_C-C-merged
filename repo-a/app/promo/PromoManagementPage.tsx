@@ -2,12 +2,13 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { api } from "@/lib/api";
 
 type PromoType = "Discount" | "Buy 1 Get 1" | "Bundle Deal";
 type PromoStatus = "Active" | "Inactive";
 
 type Promo = {
-  id: number;
+  id: string; // ✅ string from backend
   title: string;
   description: string;
   type: PromoType;
@@ -45,64 +46,20 @@ const TYPE_ICONS: Record<PromoType, string> = {
   "Bundle Deal": "📦",
 };
 
-const initialPromos: Promo[] = [
-  {
-    id: 1,
-    title: "Coca Cola Summer Sale",
-    description: "Get 20% off on all Coca Cola products this summer!",
-    type: "Discount",
-    discount: 20,
-    product: "Coca Cola",
-    image: "",
-    status: "Active",
-    startDate: "2025-06-01",
-    endDate: "2025-08-31",
-  },
-  {
-    id: 2,
-    title: "Pepsi BOGO",
-    description: "Buy 1 Get 1 Free on all Pepsi 500ml bottles!",
-    type: "Buy 1 Get 1",
-    product: "Pepsi 500ml",
-    image: "",
-    status: "Active",
-    startDate: "2025-06-01",
-    endDate: "2025-06-30",
-  },
-  {
-    id: 3,
-    title: "Cobra Bundle Deal",
-    description: "Buy 3 Cobra Energy drinks and pay for only 2!",
-    type: "Bundle Deal",
-    bundleQty: 3,
-    product: "Cobra Energy",
-    image: "",
-    status: "Inactive",
-    startDate: "2025-07-01",
-    endDate: "2025-07-31",
-  },
-];
-
-const emptyForm: Omit<Promo, "id"> = {
+const emptyForm = {
   title: "",
   description: "",
-  type: "Discount",
-  discount: undefined,
-  bundleQty: undefined,
+  type: "Discount" as PromoType,
+  discount: undefined as number | undefined,
+  bundleQty: undefined as number | undefined,
   product: "",
   image: "",
-  status: "Active",
+  status: "Active" as PromoStatus,
   startDate: "",
   endDate: "",
 };
 
-const isPromoCurrentlyActive = (promo: Promo): boolean => {
-  if (promo.status === "Inactive") return false;
-  const now = new Date();
-  const start = new Date(promo.startDate);
-  const end = new Date(promo.endDate);
-  return now >= start && now <= end;
-};
+const ITEMS_PER_PAGE = 18;
 
 const getPromoLabel = (promo: Promo) => {
   if (promo.type === "Discount") return `${promo.discount}% OFF`;
@@ -111,14 +68,13 @@ const getPromoLabel = (promo: Promo) => {
   return "";
 };
 
-const ITEMS_PER_PAGE = 18;
-
 export default function PromoManagementPage() {
   const router = useRouter();
   const pathname = usePathname();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [promos, setPromos] = useState<Promo[]>(initialPromos);
+  const [promos, setPromos] = useState<Promo[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -126,23 +82,28 @@ export default function PromoManagementPage() {
 
   // Add modal
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addForm, setAddForm] = useState<Omit<Promo, "id">>(emptyForm);
+  const [addForm, setAddForm] = useState(emptyForm);
   const [isDirty, setIsDirty] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
 
   // Detail/edit modal
   const [showPromoModal, setShowPromoModal] = useState(false);
   const [selectedPromo, setSelectedPromo] = useState<Promo | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState<Omit<Promo, "id">>(emptyForm);
+  const [editForm, setEditForm] = useState(emptyForm);
+  const [editLoading, setEditLoading] = useState(false);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [success, setSuccess] = useState("");
+  const [error, setError] = useState("");
 
   const typeRef = useRef<HTMLDivElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
 
+  // ✅ Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (typeRef.current && !typeRef.current.contains(e.target as Node)) setShowTypeDropdown(false);
@@ -152,9 +113,29 @@ export default function PromoManagementPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // ✅ Fetch promos from API
+  const fetchPromos = async () => {
+    try {
+      setLoading(true);
+      const data = await api.getPromos();
+      setPromos(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to fetch promos:", err);
+      setError("Failed to load promos. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchPromos(); }, []);
+
+  const showToast = (msg: string, isError = false) => {
+    if (isError) { setError(msg); setTimeout(() => setError(""), 3000); }
+    else { setSuccess(msg); setTimeout(() => setSuccess(""), 3000); }
+  };
+
   const filtered = promos.filter((p) => {
-    const matchSearch =
-      p.title.toLowerCase().includes(search.toLowerCase()) ||
+    const matchSearch = p.title.toLowerCase().includes(search.toLowerCase()) ||
       p.product.toLowerCase().includes(search.toLowerCase());
     const matchType = typeFilter === "All" || p.type === typeFilter;
     const matchStatus = statusFilter === "All" || p.status === statusFilter;
@@ -164,11 +145,11 @@ export default function PromoManagementPage() {
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  const totalActive = promos.filter((p) => isPromoCurrentlyActive(p)).length;
+  const totalActive = promos.filter((p) => p.status === "Active").length;
   const totalDiscount = promos.filter((p) => p.type === "Discount").length;
   const totalBogo = promos.filter((p) => p.type === "Buy 1 Get 1").length;
 
-  // Card click → open detail modal
+  // ✅ Card click → open detail modal
   const handleCardClick = (promo: Promo) => {
     setSelectedPromo(promo);
     setEditForm({
@@ -180,56 +161,98 @@ export default function PromoManagementPage() {
       product: promo.product,
       image: promo.image,
       status: promo.status,
-      startDate: promo.startDate,
-      endDate: promo.endDate,
+      startDate: promo.startDate?.split("T")[0] || "",
+      endDate: promo.endDate?.split("T")[0] || "",
     });
     setIsEditing(false);
     setShowPromoModal(true);
   };
 
-  // Save edit
-  const handleSaveEdit = () => {
+  // ✅ Save edit via API PUT
+  const handleSaveEdit = async () => {
     if (!editForm.title) { alert("Promo title is required."); return; }
     if (!editForm.product) { alert("Product is required."); return; }
     if (!editForm.startDate || !editForm.endDate) { alert("Start and End dates are required."); return; }
     if (new Date(editForm.startDate) > new Date(editForm.endDate)) { alert("Start date must be before end date."); return; }
-    if (editForm.type === "Discount" && (editForm.discount === undefined || Number(editForm.discount) <= 0)) {
+    if (editForm.type === "Discount" && (!editForm.discount || Number(editForm.discount) <= 0)) {
       alert("Please enter a valid discount percentage."); return;
     }
-    setPromos((prev) =>
-      prev.map((p) => p.id === selectedPromo!.id ? { ...p, ...editForm } : p)
-    );
-    setSelectedPromo({ ...selectedPromo!, ...editForm });
-    setIsEditing(false);
-    setSuccess("Promo updated successfully!");
-    setTimeout(() => setSuccess(""), 3000);
+    try {
+      setEditLoading(true);
+      await api.updatePromo(selectedPromo!.id, {
+        ...editForm,
+        discount: editForm.discount ? Number(editForm.discount) : undefined,
+        bundleQty: editForm.bundleQty ? Number(editForm.bundleQty) : undefined,
+      });
+      await fetchPromos();
+      setIsEditing(false);
+      setShowPromoModal(false);
+      showToast("Promo updated successfully!");
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to update promo.", true);
+    } finally {
+      setEditLoading(false);
+    }
   };
 
-  // Delete
-  const confirmDelete = () => {
-    setPromos((prev) => prev.filter((p) => p.id !== selectedPromo!.id));
-    setShowDeleteConfirm(false);
-    setShowPromoModal(false);
-    setSelectedPromo(null);
-    setSuccess("Promo deleted successfully!");
-    setTimeout(() => setSuccess(""), 3000);
+  // ✅ Toggle status via API PATCH
+  const handleToggleStatus = async (promo: Promo) => {
+    try {
+      await api.togglePromo(promo.id);
+      await fetchPromos();
+      showToast(`Promo ${promo.status === "Active" ? "deactivated" : "activated"}!`);
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to toggle promo status.", true);
+    }
   };
 
-  // Add
-  const handleAddPromo = () => {
+  // ✅ Delete via API DELETE
+  const confirmDelete = async () => {
+    try {
+      setDeleteLoading(true);
+      await api.deletePromo(selectedPromo!.id);
+      await fetchPromos();
+      setShowDeleteConfirm(false);
+      setShowPromoModal(false);
+      setSelectedPromo(null);
+      showToast("Promo deleted successfully!");
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to delete promo.", true);
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  // ✅ Add via API POST
+  const handleAddPromo = async () => {
     if (!addForm.title) { alert("Promo title is required."); return; }
     if (!addForm.product) { alert("Product is required."); return; }
     if (!addForm.startDate || !addForm.endDate) { alert("Start and End dates are required."); return; }
     if (new Date(addForm.startDate) > new Date(addForm.endDate)) { alert("Start date must be before end date."); return; }
-    if (addForm.type === "Discount" && (addForm.discount === undefined || Number(addForm.discount) <= 0)) {
+    if (addForm.type === "Discount" && (!addForm.discount || Number(addForm.discount) <= 0)) {
       alert("Please enter a valid discount percentage."); return;
     }
-    setPromos((prev) => [...prev, { id: Date.now(), ...addForm }]);
-    setShowAddModal(false);
-    setAddForm(emptyForm);
-    setIsDirty(false);
-    setSuccess("Promo added successfully!");
-    setTimeout(() => setSuccess(""), 3000);
+    try {
+      setAddLoading(true);
+      await api.createPromo({
+        ...addForm,
+        discount: addForm.discount ? Number(addForm.discount) : undefined,
+        bundleQty: addForm.bundleQty ? Number(addForm.bundleQty) : undefined,
+      });
+      await fetchPromos();
+      setShowAddModal(false);
+      setAddForm(emptyForm);
+      setIsDirty(false);
+      showToast("Promo added successfully!");
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to add promo.", true);
+    } finally {
+      setAddLoading(false);
+    }
   };
 
   const handleCloseAddModal = () => {
@@ -249,16 +272,8 @@ export default function PromoManagementPage() {
     URL.revokeObjectURL(url);
   };
 
-  const handleLogout = () => {
-    document.cookie = "token=; path=/; max-age=0";
-    localStorage.removeItem("employee");
-    router.push("/");
-  };
-
-  const navigate = (path: string) => {
-    router.push(path);
-    setShowMobileMenu(false);
-  };
+  const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("employee"); router.push("/"); };
+  const navigate = (path: string) => { router.push(path); setShowMobileMenu(false); };
 
   const getPageNumbers = () => {
     const pages: (number | string)[] = [];
@@ -348,7 +363,7 @@ export default function PromoManagementPage() {
             </div>
             <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-lg">✅</div>
-              <div><p className="text-xs text-gray-400">Active Now</p><p className="text-xl font-bold text-green-600">{totalActive}</p></div>
+              <div><p className="text-xs text-gray-400">Active</p><p className="text-xl font-bold text-green-600">{totalActive}</p></div>
             </div>
             <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-lg">💙</div>
@@ -415,21 +430,23 @@ export default function PromoManagementPage() {
               <button onClick={() => { setShowAddModal(true); setIsDirty(false); }} className="ml-auto flex items-center gap-1 bg-gray-900 rounded-lg px-3 py-2 text-sm text-white hover:bg-gray-700">+ Add Promo</button>
             </div>
 
-            {/* Promo Card Grid */}
-            {paginated.length === 0 ? (
+            {/* Promo Cards */}
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <p className="text-4xl mb-3 animate-bounce">🎁</p>
+                <p className="text-gray-400 text-sm">Loading promos...</p>
+              </div>
+            ) : paginated.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <p className="text-4xl mb-3">🎁</p>
                 <p className="text-gray-500 font-medium">No promos found</p>
-                <p className="text-gray-400 text-sm mt-1">
-                  {search ? `No results for "${search}"` : "Add your first promo!"}
-                </p>
+                <p className="text-gray-400 text-sm mt-1">{search ? `No results for "${search}"` : "Add your first promo!"}</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
                 {paginated.map((promo) => (
                   <div key={promo.id} onClick={() => handleCardClick(promo)}
                     className="flex flex-col rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow cursor-pointer">
-                    {/* Card image / icon area */}
                     <div className="w-full aspect-square bg-gray-100 rounded-t-2xl flex flex-col items-center justify-center relative">
                       {promo.image ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -437,16 +454,12 @@ export default function PromoManagementPage() {
                       ) : (
                         <span className="text-4xl">{TYPE_ICONS[promo.type]}</span>
                       )}
-                      {/* Status badge */}
                       <span className={`absolute top-2 right-2 text-xs px-2 py-0.5 rounded-full font-medium ${promo.status === "Active" ? "bg-green-100 text-green-600" : "bg-gray-200 text-gray-500"}`}>
                         {promo.status}
                       </span>
                     </div>
-                    {/* Card info */}
                     <div className="p-2">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_COLORS[promo.type]}`}>
-                        {promo.type}
-                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_COLORS[promo.type]}`}>{promo.type}</span>
                       <p className="text-sm font-semibold text-gray-800 mt-1 truncate">{promo.title}</p>
                       <p className="text-xs text-gray-500 truncate">{promo.product}</p>
                       <p className="text-xs font-bold text-indigo-600 mt-0.5">{getPromoLabel(promo)}</p>
@@ -462,9 +475,7 @@ export default function PromoManagementPage() {
                 <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-2 py-1 rounded-lg text-sm text-gray-500 hover:bg-gray-100 disabled:opacity-30">«</button>
                 <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 rounded-lg text-sm text-gray-500 hover:bg-gray-100 disabled:opacity-30">‹</button>
                 {getPageNumbers().map((page, i) => (
-                  page === "..." ? (
-                    <span key={i} className="px-2 py-1 text-gray-400">...</span>
-                  ) : (
+                  page === "..." ? <span key={i} className="px-2 py-1 text-gray-400">...</span> : (
                     <button key={i} onClick={() => setCurrentPage(Number(page))}
                       className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${currentPage === page ? "bg-indigo-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}>
                       {page}
@@ -485,10 +496,10 @@ export default function PromoManagementPage() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-screen overflow-y-auto">
             <p className="text-xs text-gray-400 mb-3 font-medium">Promo {isEditing ? "Editing" : "Details"}</p>
             <div className="flex gap-4">
-              {/* Icon area */}
               <div className="w-32 h-32 bg-gray-100 rounded-xl shrink-0 flex items-center justify-center text-5xl">
                 {selectedPromo.image
-                  ? <img src={selectedPromo.image} alt={selectedPromo.title} className="w-full h-full object-cover rounded-xl" /> // eslint-disable-line @next/next/no-img-element
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={selectedPromo.image} alt={selectedPromo.title} className="w-full h-full object-cover rounded-xl" />
                   : TYPE_ICONS[selectedPromo.type]}
               </div>
               <div className="flex-1 flex flex-col gap-3">
@@ -497,6 +508,10 @@ export default function PromoManagementPage() {
                     <div><p className="text-xs text-gray-400">Promo Title</p>
                       <input value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
                         className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                    </div>
+                    <div><p className="text-xs text-gray-400">Description</p>
+                      <textarea value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900 resize-none" rows={2} />
                     </div>
                     <div><p className="text-xs text-gray-400">Product</p>
                       <input value={editForm.product} onChange={(e) => setEditForm({ ...editForm, product: e.target.value })}
@@ -537,35 +552,30 @@ export default function PromoManagementPage() {
                         <option value="Inactive">Inactive</option>
                       </select>
                     </div>
+                    <div><p className="text-xs text-gray-400">Image URL (optional)</p>
+                      <input value={editForm.image} onChange={(e) => setEditForm({ ...editForm, image: e.target.value })}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="https://..." />
+                    </div>
                   </>
                 ) : (
                   <>
-                    <div><p className="text-xs text-gray-400">Promo Title</p>
-                      <p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedPromo.title}</p>
-                    </div>
-                    <div><p className="text-xs text-gray-400">Product</p>
-                      <p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedPromo.product}</p>
-                    </div>
+                    <div><p className="text-xs text-gray-400">Promo Title</p><p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedPromo.title}</p></div>
+                    <div><p className="text-xs text-gray-400">Product</p><p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedPromo.product}</p></div>
                     <div><p className="text-xs text-gray-400">Type</p>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium mt-0.5 inline-block ${TYPE_COLORS[selectedPromo.type]}`}>
-                        {selectedPromo.type}
-                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium mt-0.5 inline-block ${TYPE_COLORS[selectedPromo.type]}`}>{selectedPromo.type}</span>
                     </div>
-                    <div><p className="text-xs text-gray-400">Deal</p>
-                      <p className="text-sm font-bold text-indigo-600 mt-0.5">{getPromoLabel(selectedPromo)}</p>
-                    </div>
+                    <div><p className="text-xs text-gray-400">Deal</p><p className="text-sm font-bold text-indigo-600 mt-0.5">{getPromoLabel(selectedPromo)}</p></div>
                     <div><p className="text-xs text-gray-400">Duration</p>
-                      <p className="text-sm text-gray-700 mt-0.5">{selectedPromo.startDate} → {selectedPromo.endDate}</p>
+                      <p className="text-sm text-gray-700 mt-0.5">{selectedPromo.startDate?.split("T")[0]} → {selectedPromo.endDate?.split("T")[0]}</p>
                     </div>
                     <div><p className="text-xs text-gray-400">Status</p>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium inline-block mt-0.5 ${selectedPromo.status === "Active" ? "bg-green-100 text-green-600" : "bg-gray-200 text-gray-500"}`}>
-                        {selectedPromo.status}
-                      </span>
+                      <button onClick={() => handleToggleStatus(selectedPromo)}
+                        className={`text-xs px-3 py-1 rounded-full font-medium inline-block mt-0.5 cursor-pointer transition-colors ${selectedPromo.status === "Active" ? "bg-green-100 text-green-600 hover:bg-green-200" : "bg-gray-200 text-gray-500 hover:bg-gray-300"}`}>
+                        {selectedPromo.status} (click to toggle)
+                      </button>
                     </div>
                     {selectedPromo.description && (
-                      <div><p className="text-xs text-gray-400">Description</p>
-                        <p className="text-xs text-gray-600 mt-0.5">{selectedPromo.description}</p>
-                      </div>
+                      <div><p className="text-xs text-gray-400">Description</p><p className="text-xs text-gray-600 mt-0.5">{selectedPromo.description}</p></div>
                     )}
                   </>
                 )}
@@ -575,7 +585,9 @@ export default function PromoManagementPage() {
               {isEditing ? (
                 <>
                   <button onClick={() => setIsEditing(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-                  <button onClick={handleSaveEdit} className="px-4 py-2 bg-green-500 rounded-lg text-sm text-white font-medium hover:bg-green-600">Save</button>
+                  <button onClick={handleSaveEdit} disabled={editLoading} className="px-4 py-2 bg-green-500 rounded-lg text-sm text-white font-medium hover:bg-green-600 disabled:opacity-60">
+                    {editLoading ? "Saving..." : "Save"}
+                  </button>
                 </>
               ) : (
                 <>
@@ -651,7 +663,9 @@ export default function PromoManagementPage() {
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={handleCloseAddModal} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={handleAddPromo} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700">Add Promo</button>
+              <button onClick={handleAddPromo} disabled={addLoading} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-60">
+                {addLoading ? "Adding..." : "Add Promo"}
+              </button>
             </div>
           </div>
         </div>
@@ -663,10 +677,12 @@ export default function PromoManagementPage() {
           <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
             <p className="text-2xl mb-2">🗑️</p>
             <h2 className="text-lg font-bold text-gray-800 mb-2">Delete Promo?</h2>
-            <p className="text-sm text-gray-500 mb-5">Are you sure you want to delete <span className="font-semibold text-gray-700">{selectedPromo?.title}</span>? This cannot be undone.</p>
+            <p className="text-sm text-gray-500 mb-5">Are you sure you want to delete <span className="font-semibold text-gray-700">{selectedPromo?.title}</span>?</p>
             <div className="flex gap-3">
               <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={confirmDelete} className="flex-1 bg-red-500 rounded-lg py-2 text-sm text-white hover:bg-red-600">Delete</button>
+              <button onClick={confirmDelete} disabled={deleteLoading} className="flex-1 bg-red-500 rounded-lg py-2 text-sm text-white hover:bg-red-600 disabled:opacity-60">
+                {deleteLoading ? "Deleting..." : "Delete"}
+              </button>
             </div>
           </div>
         </div>
@@ -675,8 +691,14 @@ export default function PromoManagementPage() {
       {/* SUCCESS TOAST */}
       {success && (
         <div className="fixed bottom-6 right-6 z-50 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
-          <span>✅</span>
-          <span className="text-sm font-medium">{success}</span>
+          <span>✅</span><span className="text-sm font-medium">{success}</span>
+        </div>
+      )}
+
+      {/* ERROR TOAST */}
+      {error && (
+        <div className="fixed bottom-6 right-6 z-50 bg-red-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
+          <span>❌</span><span className="text-sm font-medium">{error}</span>
         </div>
       )}
     </div>

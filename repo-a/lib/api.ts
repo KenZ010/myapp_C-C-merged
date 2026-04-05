@@ -212,11 +212,16 @@ export const api = {
   ) => {
     const res = await fetch(`${API_URL}/deliveries/${id}/receive`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${getToken()}`
+      },
       body: JSON.stringify({ employeeId, items })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Failed to receive delivery');
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to receive delivery');
+    }
     return data;
   },
   deleteDelivery: async (id: string) => {
@@ -227,21 +232,27 @@ export const api = {
     return res.json();
   },
 
-  // PROMOS
+  // ✅ PROMOS
+  // Public - customer side (no auth needed)
+  getActivePromos: async () => {
+    const res = await fetch(`${API_URL}/promos/active`);
+    if (!res.ok) throw new Error('Failed to fetch active promos');
+    return res.json();
+  },
+
+  // Admin only
   getPromos: async () => {
     const res = await fetch(`${API_URL}/promos`, {
       headers: { Authorization: `Bearer ${getToken()}` }
     });
-    return res.json();
-  },
-  getActivePromos: async () => {
-    const res = await fetch(`${API_URL}/promos/active`);
+    if (!res.ok) throw new Error('Failed to fetch promos');
     return res.json();
   },
   getPromo: async (id: string) => {
     const res = await fetch(`${API_URL}/promos/${id}`, {
       headers: { Authorization: `Bearer ${getToken()}` }
     });
+    if (!res.ok) throw new Error('Failed to fetch promo');
     return res.json();
   },
   createPromo: async (data: Record<string, unknown>) => {
@@ -250,6 +261,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify(data)
     });
+    if (!res.ok) throw new Error('Failed to create promo');
     return res.json();
   },
   updatePromo: async (id: string, data: Record<string, unknown>) => {
@@ -258,6 +270,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify(data)
     });
+    if (!res.ok) throw new Error('Failed to update promo');
     return res.json();
   },
   togglePromo: async (id: string) => {
@@ -265,6 +278,7 @@ export const api = {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${getToken()}` }
     });
+    if (!res.ok) throw new Error('Failed to toggle promo');
     return res.json();
   },
   deletePromo: async (id: string) => {
@@ -272,6 +286,7 @@ export const api = {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${getToken()}` }
     });
+    if (!res.ok) throw new Error('Failed to delete promo');
     return res.json();
   },
 };
