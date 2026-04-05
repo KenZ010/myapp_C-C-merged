@@ -29,44 +29,7 @@ type Product = {
 };
 
 const categories = ["All", "SOFTDRINKS", "ENERGY_DRINK", "BEER", "JUICE", "WATER", "OTHER"];
-
-// ✅ Added 237ml and 290ml
 const sizes = ["All", "237ml", "250ml", "290ml", "500ml", "1L", "1.5L", "2L"];
-
-// ✅ Predefined softdrinks product names for dropdown
-const PRODUCT_NAME_OPTIONS = [
-  "Coca Cola",
-  "Pepsi",
-  "Sprite",
-  "Royal",
-  "Mountain Dew",
-  "RC Cola",
-  "Sarsi",
-  "Pop Cola",
-  "7UP",
-  "Mirinda",
-  "Cobra",
-  "Sting",
-  "Red Bull",
-  "Monster",
-  "Gatorade",
-  "Pocari Sweat",
-  "Nature Spring",
-  "Wilkins",
-  "Absolute",
-  "Summit",
-  "C2 Apple",
-  "C2 Green Tea",
-  "Zest-O Orange",
-  "Zest-O Mango",
-  "Minute Maid",
-  "San Miguel Beer",
-  "Red Horse",
-  "Budweiser",
-  "Heineken",
-  "Other",
-];
-
 const ITEMS_PER_PAGE = 18;
 
 const getCategoryColor = (category: string) => {
@@ -104,10 +67,6 @@ export default function ProductManagementPage() {
     productName: "", size: "500ml", price: 0,
     category: "SOFTDRINKS", stockQuantity: 0, supplierId: "", status: "ACTIVE"
   });
-
-  // ✅ Custom name field — shows when "Other" is selected in dropdown
-  const [addCustomName, setAddCustomName] = useState("");
-  const [editCustomName, setEditCustomName] = useState("");
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
@@ -180,10 +139,8 @@ export default function ProductManagementPage() {
 
   const handleCardClick = (product: Product) => {
     setSelectedProduct(product);
-    // ✅ Check if product name is in our list, else use "Other" + custom name
-    const isKnown = PRODUCT_NAME_OPTIONS.includes(product.productName);
     setEditForm({
-      productName: isKnown ? product.productName : "Other",
+      productName: product.productName,
       size: product.size || "500ml",
       price: product.price,
       category: product.category,
@@ -191,21 +148,18 @@ export default function ProductManagementPage() {
       supplierId: product.supplierId,
       status: product.status
     });
-    setEditCustomName(isKnown ? "" : product.productName);
     setIsEditing(false);
     setShowProductModal(true);
   };
 
   const handleSaveEdit = async () => {
-    // ✅ Use custom name if "Other" is selected
-    const finalName = editForm.productName === "Other" ? editCustomName : editForm.productName;
-    if (!finalName) { alert("Product name is required."); return; }
+    if (!editForm.productName) { alert("Product name is required."); return; }
     setSaving(true);
     try {
-      const res = await api.updateProduct(selectedProduct!.id, { ...editForm, productName: finalName });
+      const res = await api.updateProduct(selectedProduct!.id, editForm);
       if (res.message && !res.id) { setError(res.message); return; }
-      setProducts(prev => prev.map(p => p.id === selectedProduct!.id ? { ...p, ...editForm, productName: finalName } : p));
-      setSelectedProduct({ ...selectedProduct!, ...editForm, productName: finalName });
+      setProducts(prev => prev.map(p => p.id === selectedProduct!.id ? { ...p, ...editForm } : p));
+      setSelectedProduct({ ...selectedProduct!, ...editForm });
       setIsEditing(false);
       setSuccess("Product updated successfully!");
       setTimeout(() => setSuccess(""), 3000);
@@ -231,18 +185,15 @@ export default function ProductManagementPage() {
   };
 
   const handleAddProduct = async () => {
-    // ✅ Use custom name if "Other" is selected
-    const finalName = addForm.productName === "Other" ? addCustomName : addForm.productName;
-    if (!finalName) { alert("Product name is required."); return; }
+    if (!addForm.productName) { alert("Product name is required."); return; }
     if (!addForm.supplierId) { alert("Please select a supplier."); return; }
     setSaving(true);
     try {
-      const res = await api.createProduct({ ...addForm, productName: finalName });
+      const res = await api.createProduct(addForm);
       if (res.message && !res.id) { setError(res.message); return; }
       setProducts(prev => [...prev, res]);
       setShowAddModal(false);
       setAddForm({ productName: "", size: "500ml", price: 0, category: "SOFTDRINKS", stockQuantity: 0, supplierId: "", status: "ACTIVE" });
-      setAddCustomName("");
       setSuccess("Product added successfully!");
       setTimeout(() => setSuccess(""), 3000);
     } catch {
@@ -358,7 +309,6 @@ export default function ProductManagementPage() {
                 <input type="text" placeholder="Search" value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} className="outline-none text-sm text-gray-700 w-full" />
               </div>
 
-              {/* Category Dropdown */}
               <div className="relative" ref={categoryRef}>
                 <button onClick={() => { setShowCategoryDropdown(!showCategoryDropdown); setShowSizeDropdown(false); }}
                   className={`flex items-center gap-1 border rounded-lg px-3 py-2 text-sm transition-colors ${selectedCategory !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
@@ -376,7 +326,6 @@ export default function ProductManagementPage() {
                 )}
               </div>
 
-              {/* Size Dropdown */}
               <div className="relative" ref={sizeRef}>
                 <button onClick={() => { setShowSizeDropdown(!showSizeDropdown); setShowCategoryDropdown(false); }}
                   className={`flex items-center gap-1 border rounded-lg px-3 py-2 text-sm transition-colors ${selectedSize !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
@@ -437,7 +386,6 @@ export default function ProductManagementPage() {
               </div>
             )}
 
-            {/* Pagination */}
             {totalPages > 1 && (
               <div className="flex items-center justify-center gap-1 flex-wrap mt-2">
                 <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-2 py-1 rounded-lg text-sm text-gray-500 hover:bg-gray-100 disabled:opacity-30">«</button>
@@ -468,21 +416,14 @@ export default function ProductManagementPage() {
               <div className="flex-1 flex flex-col gap-3">
                 {isEditing ? (
                   <>
-                    {/* ✅ Product Name Dropdown */}
                     <div>
                       <p className="text-xs text-gray-400">Product Name</p>
-                      <select value={editForm.productName}
-                        onChange={(e) => { setEditForm({ ...editForm, productName: e.target.value }); if (e.target.value !== "Other") setEditCustomName(""); }}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                        <option value="">-- Select Product --</option>
-                        {PRODUCT_NAME_OPTIONS.map((name) => <option key={name}>{name}</option>)}
-                      </select>
-                      {/* ✅ Show text input only when "Other" is selected */}
-                      {editForm.productName === "Other" && (
-                        <input value={editCustomName} onChange={(e) => setEditCustomName(e.target.value)}
-                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-2 outline-none focus:border-indigo-400 text-gray-900"
-                          placeholder="Enter custom product name..." />
-                      )}
+                      <input
+                        value={editForm.productName}
+                        onChange={(e) => setEditForm({ ...editForm, productName: e.target.value })}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
+                        placeholder="e.g. Coca Cola"
+                      />
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Size</p>
@@ -572,21 +513,15 @@ export default function ProductManagementPage() {
             )}
 
             <div className="flex flex-col gap-3">
-              {/* ✅ Product Name Dropdown */}
+              {/* ✅ Plain text input instead of dropdown */}
               <div>
                 <label className="text-xs font-medium text-gray-600">Product Name</label>
-                <select value={addForm.productName}
-                  onChange={(e) => { setAddForm({ ...addForm, productName: e.target.value }); if (e.target.value !== "Other") setAddCustomName(""); }}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                  <option value="">-- Select Product --</option>
-                  {PRODUCT_NAME_OPTIONS.map((name) => <option key={name}>{name}</option>)}
-                </select>
-                {/* ✅ Show text input only when "Other" is selected */}
-                {addForm.productName === "Other" && (
-                  <input value={addCustomName} onChange={(e) => setAddCustomName(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-2 outline-none focus:border-indigo-400 text-gray-900"
-                    placeholder="Enter custom product name..." />
-                )}
+                <input
+                  value={addForm.productName}
+                  onChange={(e) => setAddForm({ ...addForm, productName: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
+                  placeholder="e.g. Coca Cola"
+                />
               </div>
 
               <div>
@@ -597,7 +532,6 @@ export default function ProductManagementPage() {
                 </select>
               </div>
 
-              {/* ✅ Size with 237ml and 290ml added */}
               <div>
                 <label className="text-xs font-medium text-gray-600">Size</label>
                 <select value={addForm.size} onChange={(e) => setAddForm({ ...addForm, size: e.target.value })}
@@ -641,7 +575,7 @@ export default function ProductManagementPage() {
             </div>
 
             <div className="flex gap-3 mt-5">
-              <button onClick={() => { setShowAddModal(false); setError(""); setAddCustomName(""); }} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={() => { setShowAddModal(false); setError(""); }} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
               <button onClick={handleAddProduct} disabled={saving} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-60">
                 {saving ? "Adding..." : "Add Product"}
               </button>
