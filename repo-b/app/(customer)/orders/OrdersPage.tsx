@@ -7,7 +7,7 @@ type OrderStatus =
   | "Waiting"
   | "Processing"
   | "Out For Delivery"
-  | "Received"
+  | "Completed"
   | "Return"
   | "Cancelled";
 
@@ -15,7 +15,7 @@ const statusColors: Record<OrderStatus, { bg: string; color: string }> = {
   Waiting: { bg: "#fff9c4", color: "#f57f17" },
   Processing: { bg: "#e3f2fd", color: "#1565c0" },
   "Out For Delivery": { bg: "#fff3e0", color: "#e65100" },
-  Received: { bg: "#e8f5e9", color: "#2e7d32" },
+  Completed: { bg: "#e8f5e9", color: "#2e7d32" },
   Return: { bg: "#ffebee", color: "#c62828" },
   Cancelled: { bg: "#f5f5f5", color: "#757575" },
 };
@@ -35,14 +35,14 @@ const statusSteps: OrderStatus[] = [
   "Waiting",
   "Processing",
   "Out For Delivery",
-  "Received",
+  "Completed",
 ];
 
 const statusNote: Record<OrderStatus, string> = {
   Waiting: "Your order is being verified by the cashier",
   Processing: "Your order is being prepared",
   "Out For Delivery": "Your order is out for delivery",
-  Received: "Your order has been delivered",
+  Completed: "Your order has been completed",
   Return: "This order has been returned",
   Cancelled: "This order has been cancelled",
 };
@@ -56,9 +56,9 @@ function normalizeOrder(o: Record<string, unknown>): Order {
     out_for_delivery: "Out For Delivery",
     "out for delivery": "Out For Delivery",
     outfordelivery: "Out For Delivery",
-    received: "Received",
-    delivered: "Received",
-    completed: "Received",   // ← COMPLETED maps to "Received" display
+    received: "Completed",
+    delivered: "Completed",
+    completed: "Completed",
     return: "Return",
     returned: "Return",
     partially_returned: "Return",
@@ -137,15 +137,17 @@ export default function OrdersPage() {
 
     setReceivingId(id);
 
-    // Optimistically update UI to "Received"
+    // Optimistically update UI to "Completed"
     setOrders((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, status: "Received" } : o))
+      prev.map((o) => (o.id === id ? { ...o, status: "Completed", note: statusNote["Completed"] } : o))
     );
     if (selectedOrder?.id === id)
-      setSelectedOrder((prev) => (prev ? { ...prev, status: "Received" } : null));
+      setSelectedOrder((prev) =>
+        prev ? { ...prev, status: "Completed", note: statusNote["Completed"] } : null
+      );
 
     try {
-      // ✅ Send COMPLETED to backend
+      // Send COMPLETED to backend
       await api.updateOrderStatus(id, "COMPLETED");
     } catch {
       // keep optimistic state even if request fails
@@ -326,8 +328,8 @@ export default function OrdersPage() {
                         onClick={() => markReceived(order.id)}
                         disabled={!canReceive || isReceiving}
                         style={{
-                          background: order.status === "Received" ? "#2d7a3a" : canReceive ? "#2d7a3a" : "#e0e0e0",
-                          color: canReceive || order.status === "Received" ? "#fff" : "#aaa",
+                          background: order.status === "Completed" ? "#2d7a3a" : canReceive ? "#2d7a3a" : "#e0e0e0",
+                          color: canReceive || order.status === "Completed" ? "#fff" : "#aaa",
                           border: "none",
                           borderRadius: "20px",
                           padding: "10px 18px",
@@ -337,7 +339,7 @@ export default function OrdersPage() {
                           opacity: isReceiving ? 0.7 : 1,
                         }}
                       >
-                        {isReceiving ? "Updating…" : order.status === "Received" ? "✓ Completed" : "Received"}
+                        {isReceiving ? "Updating…" : order.status === "Completed" ? "✓ Completed" : "Received"}
                       </button>
                     </div>
                   </div>
@@ -416,11 +418,11 @@ export default function OrdersPage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   <button
                     onClick={() => markReceived(selectedOrder.id)}
-                    disabled={(!canReceive && selectedOrder.status !== "Received") || isReceiving}
+                    disabled={(!canReceive && selectedOrder.status !== "Completed") || isReceiving}
                     style={{
                       width: "100%", padding: "12px", borderRadius: "20px", border: "none",
-                      background: selectedOrder.status === "Received" ? "#bbb" : canReceive ? "#2d7a3a" : "#e0e0e0",
-                      color: canReceive || selectedOrder.status === "Received" ? "#fff" : "#aaa",
+                      background: selectedOrder.status === "Completed" ? "#bbb" : canReceive ? "#2d7a3a" : "#e0e0e0",
+                      color: canReceive || selectedOrder.status === "Completed" ? "#fff" : "#aaa",
                       fontSize: "14px", fontWeight: 700,
                       cursor: canReceive && !isReceiving ? "pointer" : "not-allowed",
                       opacity: isReceiving ? 0.7 : 1,
@@ -428,10 +430,10 @@ export default function OrdersPage() {
                   >
                     {isReceiving
                       ? "Updating to Completed…"
-                      : selectedOrder.status === "Received"
+                      : selectedOrder.status === "Completed"
                       ? "✓ Moving to Transaction History..."
                       : canReceive
-                      ? "Mark as Received"
+                      ? "Mark as Completed"
                       : "Awaiting Delivery"}
                   </button>
 
