@@ -158,7 +158,7 @@ export default function CartPage() {
                     {item.product.size ? `Size: ${item.product.size}` : item.product.category || ""}
                   </p>
                   <p style={{ fontSize: "18px", fontWeight: 700, color: "#2d7a3a" }}>
-                    ₱{(item.product.price * item.quantity).toLocaleString()}.00
+                    ₱{(price * item.quantity).toLocaleString()}.00
                   </p>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "12px", flexShrink: 0 }}>
@@ -190,20 +190,73 @@ export default function CartPage() {
 
         {/* ── RIGHT: Order Summary ── */}
         <div style={{ background: "#fff", borderRadius: "20px", border: "0.5px solid #e8e8e8", padding: "24px", position: "sticky", top: "20px" }}>
-          <p style={{ fontSize: "16px", fontWeight: 700, color: "#1a1a1a", marginBottom: "20px" }}>Order Summary</p>
+          {/* ── RIGHT: Order Summary ── */}
+            <div style={{ background: "#fff", borderRadius: "20px", border: "0.5px solid #e8e8e8", padding: "24px", position: "sticky", top: "20px" }}>
+              <p style={{ fontSize: "16px", fontWeight: 700, color: "#1a1a1a", marginBottom: "20px" }}>Order Summary</p>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
-            {items.map((item) => {
-              const price = item.product.finalPrice ?? item.product.price;
+              {/* Itemized list */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
+                {items.map((item) => {
+                  const basePrice   = item.product.price;
+                  const finalPrice  = item.product.finalPrice ?? item.product.price;
+                  const hasDiscount = item.product.finalPrice && item.product.finalPrice < item.product.price;
 
-              return (
-                <div key={item.id} style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>{item.product.productName} × {item.quantity}</span>
-                  <span>₱{(price * item.quantity).toLocaleString()}.00</span>
+                  return (
+                    <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span>{item.product.productName} × {item.quantity}</span>
+                      <div style={{ textAlign: "right" }}>
+                        {hasDiscount && (
+                          <div style={{ fontSize: "12px", color: "#888", textDecoration: "line-through" }}>
+                            ₱{(basePrice * item.quantity).toLocaleString()}.00
+                          </div>
+                        )}
+                        <div style={{ fontSize: "14px", fontWeight: 600, color: "#2d7a3a" }}>
+                          ₱{(finalPrice * item.quantity).toLocaleString()}.00
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Subtotal */}
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                <span>Subtotal</span>
+                <span>₱{subtotal.toLocaleString()}.00</span>
+              </div>
+
+              {/* Delivery */}
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                <span>Delivery</span>
+                <span style={{ color: delivery === 0 ? "#2d7a3a" : "#1a1a1a" }}>
+                  {delivery === 0 ? "FREE" : `₱${delivery}.00`}
+                </span>
+              </div>
+
+              {/* Promo Discount */}
+              {items.some(i => i.product.finalPrice && i.product.finalPrice < i.product.price) && (
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", color: "#2d7a3a" }}>
+                  <span>Promo Discount</span>
+                  <span>
+                    -₱{items.reduce((sum, i) => {
+                      if (i.product.finalPrice && i.product.finalPrice < i.product.price) {
+                        return sum + (i.product.price - i.product.finalPrice) * i.quantity;
+                      }
+                      return sum;
+                    }, 0).toLocaleString()}.00
+                  </span>
                 </div>
-              );
-            })}
-          </div>
+              )}
+
+              <hr style={{ margin: "12px 0" }} />
+
+              {/* Total */}
+              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: "16px" }}>
+                <span>Total</span>
+                <span>₱{total.toLocaleString()}.00</span>
+              </div>
+            </div>
+
 
           <div style={{ height: "1px", background: "#f0f0f0", margin: "14px 0" }} />
 
