@@ -118,4 +118,29 @@ export const api = {
     });
     return res.json();
   },
+
+  // ORDERS
+  placeOrder: async (payload: {
+    customerId:    string;
+    paymentMethod: 'cod' | 'gcash';
+    gcashRef?:     string;
+    note?:         string;
+    items: {
+      productId: string;
+      quantity:  number;
+      price:     number;
+    }[];
+  }) => {
+    const res = await fetch(`${API_URL}/orders`, {
+      method:  'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization:  `Bearer ${getToken()}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Failed to place order');
+    return data; // { message, saleId }
+  },
 };
