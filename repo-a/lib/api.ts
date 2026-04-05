@@ -289,4 +289,11 @@ export const api = {
     if (!res.ok) throw new Error('Failed to delete promo');
     return res.json();
   },
+  
+  getCompletedOrders: async () => {
+  const res = await fetch(`${API_URL}/orders/completed`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  return res.json();
+},
 };
