@@ -58,7 +58,7 @@ function normalizeOrder(o: Record<string, unknown>): Order {
     outfordelivery: "Out For Delivery",
     received: "Received",
     delivered: "Received",
-    completed: "Received",
+    completed: "Received",   // ← COMPLETED maps to "Received" display
     return: "Return",
     returned: "Return",
     partially_returned: "Return",
@@ -97,6 +97,7 @@ export default function OrdersPage() {
   const [error, setError] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
+  const [receivingId, setReceivingId] = useState<string | null>(null);
 
   const getCustomerId = () =>
     JSON.parse(localStorage.getItem("user") || "{}")?.id ?? "";
@@ -134,6 +135,9 @@ export default function OrdersPage() {
     const order = orders.find((o) => o.id === id);
     if (!order || order.status !== "Out For Delivery") return;
 
+    setReceivingId(id);
+
+    // Optimistically update UI to "Received"
     setOrders((prev) =>
       prev.map((o) => (o.id === id ? { ...o, status: "Received" } : o))
     );
@@ -141,11 +145,15 @@ export default function OrdersPage() {
       setSelectedOrder((prev) => (prev ? { ...prev, status: "Received" } : null));
 
     try {
+      // ✅ Send COMPLETED to backend
       await api.updateOrderStatus(id, "COMPLETED");
     } catch {
-      // keep optimistic state
+      // keep optimistic state even if request fails
+    } finally {
+      setReceivingId(null);
     }
 
+    // Add to transaction history
     const total = order.items.reduce((sum, i) => sum + i.price * i.qty, 0);
     addTransaction({
       txId: `TX-${Date.now()}`,
@@ -156,6 +164,7 @@ export default function OrdersPage() {
       paymentMethod: "COD",
     });
 
+    // Remove from active orders after short delay
     setTimeout(() => {
       setOrders((prev) => prev.filter((o) => o.id !== id));
       if (selectedOrder?.id === id) setSelectedOrder(null);
@@ -177,7 +186,6 @@ export default function OrdersPage() {
       setCancellingId(null);
     }
 
-    // Remove immediately after cancel
     setTimeout(() => {
       setOrders((prev) => prev.filter((o) => o.id !== id && o.status !== "Cancelled"));
       if (selectedOrder?.id === id) setSelectedOrder(null);
@@ -256,6 +264,7 @@ export default function OrdersPage() {
               const isSelected = selectedOrder?.id === order.id;
               const canCancel = order.status === "Waiting" || order.status === "Processing";
               const canReceive = order.status === "Out For Delivery";
+              const isReceiving = receivingId === order.id;
 
               return (
                 <div
@@ -315,7 +324,7 @@ export default function OrdersPage() {
 
                       <button
                         onClick={() => markReceived(order.id)}
-                        disabled={!canReceive}
+                        disabled={!canReceive || isReceiving}
                         style={{
                           background: order.status === "Received" ? "#2d7a3a" : canReceive ? "#2d7a3a" : "#e0e0e0",
                           color: canReceive || order.status === "Received" ? "#fff" : "#aaa",
@@ -324,10 +333,11 @@ export default function OrdersPage() {
                           padding: "10px 18px",
                           fontSize: "13px",
                           fontWeight: 600,
-                          cursor: canReceive ? "pointer" : "not-allowed",
+                          cursor: canReceive && !isReceiving ? "pointer" : "not-allowed",
+                          opacity: isReceiving ? 0.7 : 1,
                         }}
                       >
-                        {order.status === "Received" ? "✓ Received" : "Received"}
+                        {isReceiving ? "Updating…" : order.status === "Received" ? "✓ Completed" : "Received"}
                       </button>
                     </div>
                   </div>
@@ -345,6 +355,7 @@ export default function OrdersPage() {
             const stepIndex = getStepIndex(selectedOrder.status);
             const canCancel = selectedOrder.status === "Waiting" || selectedOrder.status === "Processing";
             const canReceive = selectedOrder.status === "Out For Delivery";
+            const isReceiving = receivingId === selectedOrder.id;
 
             return (
               <div style={{ background: "#fff", borderRadius: "20px", border: "0.5px solid #e8e8e8", padding: "24px", position: "sticky", top: "20px" }}>
@@ -405,16 +416,19 @@ export default function OrdersPage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   <button
                     onClick={() => markReceived(selectedOrder.id)}
-                    disabled={!canReceive && selectedOrder.status !== "Received"}
+                    disabled={(!canReceive && selectedOrder.status !== "Received") || isReceiving}
                     style={{
                       width: "100%", padding: "12px", borderRadius: "20px", border: "none",
                       background: selectedOrder.status === "Received" ? "#bbb" : canReceive ? "#2d7a3a" : "#e0e0e0",
                       color: canReceive || selectedOrder.status === "Received" ? "#fff" : "#aaa",
                       fontSize: "14px", fontWeight: 700,
-                      cursor: canReceive ? "pointer" : "not-allowed",
+                      cursor: canReceive && !isReceiving ? "pointer" : "not-allowed",
+                      opacity: isReceiving ? 0.7 : 1,
                     }}
                   >
-                    {selectedOrder.status === "Received"
+                    {isReceiving
+                      ? "Updating to Completed…"
+                      : selectedOrder.status === "Received"
                       ? "✓ Moving to Transaction History..."
                       : canReceive
                       ? "Mark as Received"
