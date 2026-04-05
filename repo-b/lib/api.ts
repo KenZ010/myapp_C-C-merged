@@ -141,27 +141,39 @@ export const api = {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Failed to place order');
-    return data; // { message, saleId }
+    return data;
   },
-  // Add these to the api object in lib/api.ts
 
-getCustomerOrders: async (customerId: string) => {
-  const res = await fetch(`${API_URL}/orders/customer/${customerId}`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
-  });
-  return res.json();
-},
+  getCustomerOrders: async (customerId: string) => {
+    const res = await fetch(`${API_URL}/orders/customer/${customerId}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    return res.json();
+  },
 
-updateOrderStatus: async (orderId: string, status: string) => {
-  const res = await fetch(`${API_URL}/orders/${orderId}/status`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getToken()}`,
-    },
-    body: JSON.stringify({ status }),
-  });
-  return res.json();
-},
+  updateOrderStatus: async (orderId: string, status: string) => {
+    const res = await fetch(`${API_URL}/orders/${orderId}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${getToken()}`,
+      },
+      body: JSON.stringify({ status }),
+    });
+    return res.json();
+  },
 
+  // TRANSACTION LOGS
+  getCompletedOrders: async () => {
+    const res = await fetch(`${API_URL}/orders/completed`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    return res.json();
+  },
+
+  // PROMOS
+  getActivePromos: async () => {
+    const res = await fetch(`${API_URL}/promos/active`);
+    return res.json();
+  },
 };
