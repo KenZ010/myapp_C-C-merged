@@ -11,10 +11,12 @@ type CartItem = {
     id: string;
     productName: string;
     price: number;
+    finalPrice?: number;
     category?: string;
     size?: string;
   };
 };
+
 
 const EMOJI_MAP: Record<string, string> = {
   SOFTDRINKS: "🥤", ENERGY_DRINK: "⚡", BEER: "🍺",
@@ -95,7 +97,10 @@ export default function CartPage() {
     reader.readAsDataURL(file);
   };
 
-  const subtotal = items.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
+  const subtotal = items.reduce((sum, i) => {
+  const price = i.product.finalPrice ?? i.product.price;
+  return sum + price * i.quantity;
+}, 0);
   const delivery = subtotal >= 1000 ? 0 : 50;
   const total    = subtotal + delivery;
 
@@ -139,6 +144,9 @@ export default function CartPage() {
             const isUpdating = updating === item.id;
             const emoji = getEmoji(item.product.category);
             const bg    = getBg(item.product.category);
+
+            const price = item.product.finalPrice ?? item.product.price;
+            
             return (
               <div key={item.id} style={{ background: "#fff", borderRadius: "16px", border: "0.5px solid #e8e8e8", padding: "18px 22px", display: "flex", alignItems: "center", gap: "18px", opacity: isUpdating ? 0.6 : 1, transition: "opacity 0.2s" }}>
                 <div style={{ width: "80px", height: "80px", borderRadius: "14px", background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "36px", flexShrink: 0 }}>
@@ -185,12 +193,16 @@ export default function CartPage() {
           <p style={{ fontSize: "16px", fontWeight: 700, color: "#1a1a1a", marginBottom: "20px" }}>Order Summary</p>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
-            {items.map((item) => (
-              <div key={item.id} style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "13px", color: "#555" }}>{item.product.productName} × {item.quantity}</span>
-                <span style={{ fontSize: "13px", fontWeight: 500, color: "#1a1a1a" }}>₱{(item.product.price * item.quantity).toLocaleString()}.00</span>
-              </div>
-            ))}
+            {items.map((item) => {
+              const price = item.product.finalPrice ?? item.product.price;
+
+              return (
+                <div key={item.id} style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>{item.product.productName} × {item.quantity}</span>
+                  <span>₱{(price * item.quantity).toLocaleString()}.00</span>
+                </div>
+              );
+            })}
           </div>
 
           <div style={{ height: "1px", background: "#f0f0f0", margin: "14px 0" }} />
