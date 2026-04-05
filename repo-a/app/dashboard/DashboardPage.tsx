@@ -443,23 +443,32 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-            <div className="flex gap-3 overflow-x-auto pb-2">
+            <div className="md:col-span-7 bg-white rounded-2xl p-4 shadow-sm">
+              <h2 className="font-bold text-gray-800 mb-3">Product Maintenance</h2>
+
               {loadingProducts ? (
                 <p className="text-sm text-gray-400">Loading products...</p>
               ) : products.length === 0 ? (
                 <p className="text-sm text-gray-400">No products found.</p>
               ) : (
-                products.map((product) => (
-                  <div key={product.id} className="flex flex-col w-36 shrink-0">
-                    <div className="w-full h-28 bg-gray-200 rounded-xl mb-2" />
-                    <p className="text-sm font-semibold text-gray-800">
-                      {product.productName}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      ₱{product.price}
-                    </p>
-                  </div>
-                ))
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {products.map((product) => (
+                    <div
+                      key={product.id}
+                      className="bg-gray-50 rounded-xl p-3 hover:shadow-md transition"
+                    >
+                      <div className="w-full h-28 bg-gray-200 rounded-lg mb-2" />
+
+                      <p className="text-sm font-semibold text-gray-800 truncate">
+                        {product.productName}
+                      </p>
+
+                      <p className="text-xs text-gray-500">
+                        ₱{product.price}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
             <div className="md:col-span-5 bg-white rounded-2xl p-4 shadow-sm">
