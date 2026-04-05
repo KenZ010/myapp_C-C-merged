@@ -114,7 +114,9 @@ export default function OrdersPage() {
       const raw: Record<string, unknown>[] = Array.isArray(data)
         ? data
         : (data.orders ?? data.sales ?? []);
-      setOrders(raw.map(normalizeOrder));
+      setOrders(
+        raw.map(normalizeOrder).filter((o) => o.status !== "Cancelled")
+      );
       setError(null);
     } catch (err) {
       setError((err as Error).message || "Failed to load orders.");
@@ -162,20 +164,10 @@ export default function OrdersPage() {
 
   const cancelOrder = async (id: string) => {
     const order = orders.find((o) => o.id === id);
-    if (!order || order.status !== "Waiting") return;
+    if (!order || (order.status !== "Waiting" && order.status !== "Processing")) return;
 
     setCancellingId(id);
     setShowCancelConfirm(null);
-
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === id ? { ...o, status: "Cancelled", note: statusNote["Cancelled"] } : o
-      )
-    );
-    if (selectedOrder?.id === id)
-      setSelectedOrder((prev) =>
-        prev ? { ...prev, status: "Cancelled", note: statusNote["Cancelled"] } : null
-      );
 
     try {
       await api.updateOrderStatus(id, "CANCELLED");
@@ -185,10 +177,11 @@ export default function OrdersPage() {
       setCancellingId(null);
     }
 
+    // Remove immediately after cancel
     setTimeout(() => {
-      setOrders((prev) => prev.filter((o) => o.id !== id));
+      setOrders((prev) => prev.filter((o) => o.id !== id && o.status !== "Cancelled"));
       if (selectedOrder?.id === id) setSelectedOrder(null);
-    }, 2000);
+    }, 1500);
   };
 
   const getStepIndex = (status: OrderStatus) => statusSteps.indexOf(status);
@@ -261,7 +254,7 @@ export default function OrdersPage() {
               const s = statusColors[order.status];
               const total = order.items.reduce((sum, i) => sum + i.price * i.qty, 0);
               const isSelected = selectedOrder?.id === order.id;
-              const canCancel = order.status === "Waiting";
+              const canCancel = order.status === "Waiting" || order.status === "Processing";
               const canReceive = order.status === "Out For Delivery";
 
               return (
@@ -273,7 +266,6 @@ export default function OrdersPage() {
                     border: isSelected ? "2px solid #2d7a3a" : "0.5px solid #e8e8e8",
                     padding: "20px 24px",
                     transition: "border 0.2s",
-                    opacity: order.status === "Cancelled" ? 0.7 : 1,
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "6px" }}>
@@ -351,7 +343,7 @@ export default function OrdersPage() {
             const s = statusColors[selectedOrder.status];
             const total = selectedOrder.items.reduce((sum, i) => sum + i.price * i.qty, 0);
             const stepIndex = getStepIndex(selectedOrder.status);
-            const canCancel = selectedOrder.status === "Waiting";
+            const canCancel = selectedOrder.status === "Waiting" || selectedOrder.status === "Processing";
             const canReceive = selectedOrder.status === "Out For Delivery";
 
             return (
@@ -389,13 +381,6 @@ export default function OrdersPage() {
                         );
                       })}
                     </div>
-                  </div>
-                )}
-
-                {/* Cancelled banner */}
-                {selectedOrder.status === "Cancelled" && (
-                  <div style={{ background: "#f5f5f5", borderRadius: "12px", padding: "14px", marginBottom: "16px", textAlign: "center" }}>
-                    <p style={{ fontSize: "13px", color: "#757575", fontWeight: 600 }}>🚫 This order has been cancelled</p>
                   </div>
                 )}
 
