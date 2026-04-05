@@ -94,7 +94,7 @@ export default function OrdersPage() {
 
   const customerId =
     typeof window !== "undefined"
-      ? (localStorage.getItem("customerId") ?? "")
+      ? (JSON.parse(localStorage.getItem("user") || "{}")?.id ?? "")
       : "";
 
   const fetchOrders = useCallback(async () => {
