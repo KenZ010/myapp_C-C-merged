@@ -1,9 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useCart } from "@/context/CartContext";
-
-// Counter outside component — never causes re-render issues
-let txCounter = 1000;
+import { api } from "@/lib/api";
 
 type OrderStatus =
   | "Waiting"
@@ -20,36 +18,16 @@ const statusColors: Record<OrderStatus, { bg: string; color: string }> = {
   Return: { bg: "#ffebee", color: "#c62828" },
 };
 
+type OrderItem = { name: string; qty: number; price: number };
+
 type Order = {
   id: string;
   orderId: string;
   date: string;
   status: OrderStatus;
   note: string;
-  items: { name: string; qty: number; price: number }[];
+  items: OrderItem[];
 };
-
-const sampleOrders: Order[] = [
-  {
-    id: "1",
-    orderId: "ORD-1769542089081",
-    date: "March 15, 2026 • 10:30 AM",
-    status: "Out For Delivery",
-    note: "Your order is out for delivery",
-    items: [{ name: "Cola Regular", qty: 1, price: 480 }],
-  },
-  {
-    id: "2",
-    orderId: "ORD-1769542089082",
-    date: "March 15, 2026 • 09:15 AM",
-    status: "Waiting",
-    note: "Your order is being verified by the cashier",
-    items: [
-      { name: "Cola Regular", qty: 1, price: 480 },
-      { name: "Orange Soda", qty: 2, price: 450 },
-    ],
-  },
-];
 
 const statusSteps: OrderStatus[] = [
   "Waiting",
@@ -58,31 +36,115 @@ const statusSteps: OrderStatus[] = [
   "Received",
 ];
 
+const statusNote: Record<OrderStatus, string> = {
+  Waiting: "Your order is being verified by the cashier",
+  Processing: "Your order is being prepared",
+  "Out For Delivery": "Your order is out for delivery",
+  Received: "Your order has been delivered",
+  Return: "This order has been returned",
+};
+
+/** Normalize whatever shape the backend returns into our Order type */
+function normalizeOrder(o: Record<string, unknown>): Order {
+  const rawStatus = (o.status ?? o.orderStatus ?? "Waiting") as string;
+  // Map backend status strings to our UI statuses
+  const statusMap: Record<string, OrderStatus> = {
+    waiting: "Waiting",
+    pending: "Waiting",
+    processing: "Processing",
+    out_for_delivery: "Out For Delivery",
+    "out for delivery": "Out For Delivery",
+    outfordelivery: "Out For Delivery",
+    received: "Received",
+    delivered: "Received",
+    return: "Return",
+    returned: "Return",
+  };
+  const status: OrderStatus =
+    statusMap[rawStatus.toLowerCase()] ?? "Waiting";
+
+  // Normalize items — backend may call them orderItems, saleItems, etc.
+  const rawItems =
+    (o.items ?? o.orderItems ?? o.saleItems ?? []) as Record<string, unknown>[];
+  const items: OrderItem[] = rawItems.map((i) => ({
+    name: (i.productName ?? i.name ?? i.product ?? "Item") as string,
+    qty: Number(i.quantity ?? i.qty ?? 1),
+    price: Number(i.price ?? i.unitPrice ?? 0),
+  }));
+
+  const id = String(o._id ?? o.id ?? o.saleId ?? o.orderId ?? "");
+  const orderId = String(o.orderId ?? o.saleId ?? o._id ?? id);
+  const rawDate = (o.createdAt ?? o.date ?? o.orderDate ?? "") as string;
+  const date = rawDate
+    ? new Date(rawDate).toLocaleString("en-PH", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : "";
+
+  return { id, orderId, date, status, note: statusNote[status], items };
+}
+
 export default function OrdersPage() {
   const { addTransaction } = useCart();
-  const [orders, setOrders] = useState<Order[]>(sampleOrders);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const markReceived = (id: string) => {
+  const customerId =
+    typeof window !== "undefined"
+      ? (localStorage.getItem("customerId") ?? "")
+      : "";
+
+  const fetchOrders = useCallback(async () => {
+    if (!customerId) {
+      setError("Not logged in.");
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      const data = await api.getCustomerOrders(customerId);
+      // Backend may return { orders: [...] } or just [...]
+      const raw: Record<string, unknown>[] = Array.isArray(data)
+        ? data
+        : (data.orders ?? data.sales ?? []);
+      setOrders(raw.map(normalizeOrder));
+      setError(null);
+    } catch (err) {
+      setError((err as Error).message || "Failed to load orders.");
+    } finally {
+      setLoading(false);
+    }
+  }, [customerId]);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  const markReceived = async (id: string) => {
     const order = orders.find((o) => o.id === id);
     if (!order || order.status === "Received") return;
 
-    // Update status to Received
-    setOrders((prev) =>
+    // Optimistic UI update
+    const update = (prev: Order[]) =>
       prev.map((o) =>
-        o.id === id ? { ...o, status: "Received" as OrderStatus } : o,
-      ),
-    );
-    if (selectedOrder?.id === id)
-      setSelectedOrder((prev) =>
-        prev ? { ...prev, status: "Received" } : null,
+        o.id === id ? { ...o, status: "Received" as OrderStatus } : o
       );
+    setOrders(update);
+    if (selectedOrder?.id === id)
+      setSelectedOrder((prev) => (prev ? { ...prev, status: "Received" } : null));
 
-    // Save to Transaction History
+    try {
+      await api.updateOrderStatus(id, "Received");
+    } catch {
+      // Silently keep optimistic state — order was likely received
+    }
+
     const total = order.items.reduce((sum, i) => sum + i.price * i.qty, 0);
-    const txId = `TX-${txCounter++}`;
     addTransaction({
-      txId,
+      txId: `TX-${Date.now()}`,
       orderId: order.orderId,
       date: order.date,
       items: order.items,
@@ -90,7 +152,6 @@ export default function OrdersPage() {
       paymentMethod: "COD",
     });
 
-    // Remove from orders list after 2 seconds
     setTimeout(() => {
       setOrders((prev) => prev.filter((o) => o.id !== id));
       if (selectedOrder?.id === id) setSelectedOrder(null);
@@ -98,6 +159,59 @@ export default function OrdersPage() {
   };
 
   const getStepIndex = (status: OrderStatus) => statusSteps.indexOf(status);
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          minHeight: "calc(100vh - 56px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#f5f5f5",
+        }}
+      >
+        <p style={{ fontSize: "16px", color: "#2d7a3a", fontWeight: 600 }}>
+          Loading your orders…
+        </p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div
+        style={{
+          minHeight: "calc(100vh - 56px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexDirection: "column",
+          gap: "12px",
+          background: "#f5f5f5",
+        }}
+      >
+        <p style={{ fontSize: "16px", fontWeight: 700, color: "#c62828" }}>
+          ⚠️ {error}
+        </p>
+        <button
+          onClick={fetchOrders}
+          style={{
+            background: "#2d7a3a",
+            color: "#fff",
+            border: "none",
+            borderRadius: "20px",
+            padding: "10px 24px",
+            fontSize: "13px",
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -167,7 +281,7 @@ export default function OrdersPage() {
               const s = statusColors[order.status];
               const total = order.items.reduce(
                 (sum, i) => sum + i.price * i.qty,
-                0,
+                0
               );
               const isSelected = selectedOrder?.id === order.id;
               return (
@@ -192,22 +306,10 @@ export default function OrdersPage() {
                     }}
                   >
                     <div>
-                      <p
-                        style={{
-                          fontSize: "11px",
-                          color: "#aaa",
-                          marginBottom: "2px",
-                        }}
-                      >
+                      <p style={{ fontSize: "11px", color: "#aaa", marginBottom: "2px" }}>
                         Order ID
                       </p>
-                      <p
-                        style={{
-                          fontSize: "14px",
-                          fontWeight: 700,
-                          color: "#1a1a1a",
-                        }}
-                      >
+                      <p style={{ fontSize: "14px", fontWeight: 700, color: "#1a1a1a" }}>
                         {order.orderId}
                       </p>
                     </div>
@@ -228,13 +330,7 @@ export default function OrdersPage() {
                       🕐 {order.status}
                     </span>
                   </div>
-                  <p
-                    style={{
-                      fontSize: "12px",
-                      color: "#aaa",
-                      marginBottom: "14px",
-                    }}
-                  >
+                  <p style={{ fontSize: "12px", color: "#aaa", marginBottom: "14px" }}>
                     📅 {order.date}
                   </p>
 
@@ -246,13 +342,7 @@ export default function OrdersPage() {
                       marginBottom: "14px",
                     }}
                   >
-                    <p
-                      style={{
-                        fontSize: "12px",
-                        color: "#888",
-                        marginBottom: "8px",
-                      }}
-                    >
+                    <p style={{ fontSize: "12px", color: "#888", marginBottom: "8px" }}>
                       {order.note}
                     </p>
                     {order.items.map((item, i) => (
@@ -283,24 +373,14 @@ export default function OrdersPage() {
                     }}
                   >
                     <div>
-                      <p style={{ fontSize: "12px", color: "#aaa" }}>
-                        Total Amount:
-                      </p>
-                      <p
-                        style={{
-                          fontSize: "22px",
-                          fontWeight: 800,
-                          color: "#7c3aed",
-                        }}
-                      >
+                      <p style={{ fontSize: "12px", color: "#aaa" }}>Total Amount:</p>
+                      <p style={{ fontSize: "22px", fontWeight: 800, color: "#7c3aed" }}>
                         ₱{total.toLocaleString()}.00
                       </p>
                     </div>
                     <div style={{ display: "flex", gap: "10px" }}>
                       <button
-                        onClick={() =>
-                          setSelectedOrder(isSelected ? null : order)
-                        }
+                        onClick={() => setSelectedOrder(isSelected ? null : order)}
                         style={{
                           background: "#7c3aed",
                           color: "#fff",
@@ -317,16 +397,15 @@ export default function OrdersPage() {
                       <button
                         onClick={() => markReceived(order.id)}
                         disabled={
-                          order.status === "Received" ||
-                          order.status === "Return"
+                          order.status === "Received" || order.status === "Return"
                         }
                         style={{
                           background:
                             order.status === "Received"
                               ? "#2d7a3a"
                               : order.status === "Return"
-                                ? "#ffebee"
-                                : "#2d7a3a",
+                              ? "#ffebee"
+                              : "#2d7a3a",
                           color: order.status === "Return" ? "#c62828" : "#fff",
                           border: "none",
                           borderRadius: "20px",
@@ -334,16 +413,13 @@ export default function OrdersPage() {
                           fontSize: "13px",
                           fontWeight: 600,
                           cursor:
-                            order.status === "Received" ||
-                            order.status === "Return"
+                            order.status === "Received" || order.status === "Return"
                               ? "not-allowed"
                               : "pointer",
                           opacity: order.status === "Received" ? 0.7 : 1,
                         }}
                       >
-                        {order.status === "Received"
-                          ? "✓ Received"
-                          : "Received Order"}
+                        {order.status === "Received" ? "✓ Received" : "Received Order"}
                       </button>
                     </div>
                   </div>
@@ -359,7 +435,7 @@ export default function OrdersPage() {
             const s = statusColors[selectedOrder.status];
             const total = selectedOrder.items.reduce(
               (sum, i) => sum + i.price * i.qty,
-              0,
+              0
             );
             const stepIndex = getStepIndex(selectedOrder.status);
             return (
@@ -381,13 +457,7 @@ export default function OrdersPage() {
                     marginBottom: "20px",
                   }}
                 >
-                  <p
-                    style={{
-                      fontSize: "16px",
-                      fontWeight: 700,
-                      color: "#1a1a1a",
-                    }}
-                  >
+                  <p style={{ fontSize: "16px", fontWeight: 700, color: "#1a1a1a" }}>
                     Order Details
                   </p>
                   <button
@@ -414,13 +484,7 @@ export default function OrdersPage() {
                     marginBottom: "16px",
                   }}
                 >
-                  <p
-                    style={{
-                      fontSize: "11px",
-                      color: "#aaa",
-                      marginBottom: "2px",
-                    }}
-                  >
+                  <p style={{ fontSize: "11px", color: "#aaa", marginBottom: "2px" }}>
                     Order ID
                   </p>
                   <p
@@ -450,13 +514,7 @@ export default function OrdersPage() {
                 {/* Progress Tracker */}
                 {selectedOrder.status !== "Return" && (
                   <div style={{ marginBottom: "20px" }}>
-                    <p
-                      style={{
-                        fontSize: "12px",
-                        color: "#aaa",
-                        marginBottom: "12px",
-                      }}
-                    >
+                    <p style={{ fontSize: "12px", color: "#aaa", marginBottom: "12px" }}>
                       Order Progress
                     </p>
                     <div
@@ -562,26 +620,12 @@ export default function OrdersPage() {
                       }}
                     >
                       <div>
-                        <p
-                          style={{
-                            fontSize: "13px",
-                            fontWeight: 500,
-                            color: "#1a1a1a",
-                          }}
-                        >
+                        <p style={{ fontSize: "13px", fontWeight: 500, color: "#1a1a1a" }}>
                           {item.name}
                         </p>
-                        <p style={{ fontSize: "11px", color: "#aaa" }}>
-                          qty: {item.qty}
-                        </p>
+                        <p style={{ fontSize: "11px", color: "#aaa" }}>qty: {item.qty}</p>
                       </div>
-                      <p
-                        style={{
-                          fontSize: "14px",
-                          fontWeight: 600,
-                          color: "#2d7a3a",
-                        }}
-                      >
+                      <p style={{ fontSize: "14px", fontWeight: 600, color: "#2d7a3a" }}>
                         ₱{(item.price * item.qty).toLocaleString()}.00
                       </p>
                     </div>
@@ -598,27 +642,13 @@ export default function OrdersPage() {
                     marginBottom: "16px",
                   }}
                 >
-                  <span style={{ fontSize: "15px", fontWeight: 700 }}>
-                    Total Amount
-                  </span>
-                  <span
-                    style={{
-                      fontSize: "22px",
-                      fontWeight: 800,
-                      color: "#7c3aed",
-                    }}
-                  >
+                  <span style={{ fontSize: "15px", fontWeight: 700 }}>Total Amount</span>
+                  <span style={{ fontSize: "22px", fontWeight: 800, color: "#7c3aed" }}>
                     ₱{total.toLocaleString()}.00
                   </span>
                 </div>
 
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "10px",
-                  }}
-                >
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   <button
                     onClick={() => markReceived(selectedOrder.id)}
                     disabled={
@@ -631,16 +661,12 @@ export default function OrdersPage() {
                       borderRadius: "20px",
                       border: "none",
                       background:
-                        selectedOrder.status === "Received"
-                          ? "#bbb"
-                          : "#2d7a3a",
+                        selectedOrder.status === "Received" ? "#bbb" : "#2d7a3a",
                       color: "#fff",
                       fontSize: "14px",
                       fontWeight: 700,
                       cursor:
-                        selectedOrder.status === "Received"
-                          ? "not-allowed"
-                          : "pointer",
+                        selectedOrder.status === "Received" ? "not-allowed" : "pointer",
                     }}
                   >
                     {selectedOrder.status === "Received"

@@ -143,4 +143,25 @@ export const api = {
     if (!res.ok) throw new Error(data.message || 'Failed to place order');
     return data; // { message, saleId }
   },
+  // Add these to the api object in lib/api.ts
+
+getCustomerOrders: async (customerId: string) => {
+  const res = await fetch(`${API_URL}/orders/customer/${customerId}`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  return res.json();
+},
+
+updateOrderStatus: async (orderId: string, status: string) => {
+  const res = await fetch(`${API_URL}/orders/${orderId}/status`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getToken()}`,
+    },
+    body: JSON.stringify({ status }),
+  });
+  return res.json();
+},
+
 };
