@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 
 type ReturnStatus = "Pending" | "Processed";
 type ReturnReason = "Damaged" | "Defective" | "Expired" | "Wrong Item";
@@ -94,11 +94,19 @@ const initialReturns: ReturnItem[] = [
 ];
 
 export default function ReturnPage() {
+  const [isNarrow, setIsNarrow] = useState(false);
   const [returns, setReturns] = useState<ReturnItem[]>(initialReturns);
   const [filter, setFilter] = useState<"All" | ReturnStatus>("All");
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [viewItem, setViewItem] = useState<ReturnItem | null>(null);
+
+  useEffect(() => {
+    const check = () => setIsNarrow(window.innerWidth < 1100);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   // New Return form
   const [form, setForm] = useState({
@@ -181,7 +189,7 @@ export default function ReturnPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
+          gridTemplateColumns: isNarrow ? "1fr" : "repeat(3, 1fr)",
           gap: "14px",
           marginBottom: "24px",
         }}
@@ -255,12 +263,13 @@ export default function ReturnPage() {
           padding: "14px 20px",
           marginBottom: "16px",
           display: "flex",
+          flexWrap: "wrap",
           alignItems: "center",
           gap: "10px",
         }}
       >
         {/* Search */}
-        <div style={{ position: "relative", flex: 1, maxWidth: "360px" }}>
+        <div style={{ position: "relative", flex: 1, maxWidth: "220px" }}>
           <span
             style={{
               position: "absolute",
@@ -322,7 +331,12 @@ export default function ReturnPage() {
         </div>
 
         {/* New Return Button */}
-        <div style={{ marginLeft: "auto" }}>
+        <div
+          style={{
+            marginLeft: isNarrow ? "0" : "auto",
+            width: isNarrow ? "100%" : "auto",
+          }}
+        >
           <button
             onClick={() => setShowModal(true)}
             style={{
@@ -351,10 +365,16 @@ export default function ReturnPage() {
           background: "#fff",
           borderRadius: "14px",
           border: "0.5px solid #e8e8e8",
-          overflow: "hidden",
+          overflowX: "auto",
         }}
       >
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <table
+          style={{
+            width: "100%",
+            minWidth: "1000px",
+            borderCollapse: "collapse",
+          }}
+        >
           <thead>
             <tr style={{ background: "#1a3c2e" }}>
               {[
@@ -580,7 +600,7 @@ export default function ReturnPage() {
               background: "#fff",
               borderRadius: "20px",
               padding: "28px",
-              width: "480px",
+              width: isNarrow ? "92%" : "480px",
               boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
               maxHeight: "90vh",
               overflowY: "auto",
