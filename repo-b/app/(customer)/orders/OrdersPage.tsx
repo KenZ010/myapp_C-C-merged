@@ -148,7 +148,7 @@ export default function OrdersPage() {
 
     try {
       // Send COMPLETED to backend
-      await api.updateOrderStatus(id, "COMPLETED");
+      await api.updateOrderStatus(id, "completed");
     } catch {
       // keep optimistic state even if request fails
     } finally {
@@ -181,7 +181,7 @@ export default function OrdersPage() {
     setShowCancelConfirm(null);
 
     try {
-      await api.updateOrderStatus(id, "CANCELLED");
+      await api.updateOrderStatus(id, "cancelled");
     } catch {
       // keep optimistic state
     } finally {
