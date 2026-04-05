@@ -153,14 +153,30 @@ export default function CartPage() {
                   {emoji}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: "15px", fontWeight: 600, color: "#1a1a1a", marginBottom: "3px" }}>{item.product.productName}</p>
+                  <p style={{ fontSize: "15px", fontWeight: 600, color: "#1a1a1a", marginBottom: "3px" }}>
+                    {item.product.productName}
+                  </p>
                   <p style={{ fontSize: "12px", color: "#aaa", marginBottom: "10px" }}>
                     {item.product.size ? `Size: ${item.product.size}` : item.product.category || ""}
                   </p>
-                  <p style={{ fontSize: "18px", fontWeight: 700, color: "#2d7a3a" }}>
-                    ₱{(price * item.quantity).toLocaleString()}.00
-                  </p>
+
+                  {/* Price display */}
+                  {item.product.finalPrice && item.product.finalPrice < item.product.price ? (
+                    <>
+                      <p style={{ fontSize: "14px", color: "#888", textDecoration: "line-through", marginBottom: "4px" }}>
+                        ₱{(item.product.price * item.quantity).toLocaleString()}.00
+                      </p>
+                      <p style={{ fontSize: "18px", fontWeight: 700, color: "#2d7a3a" }}>
+                        ₱{(item.product.finalPrice * item.quantity).toLocaleString()}.00
+                      </p>
+                    </>
+                  ) : (
+                    <p style={{ fontSize: "18px", fontWeight: 700, color: "#2d7a3a" }}>
+                      ₱{(item.product.price * item.quantity).toLocaleString()}.00
+                    </p>
+                  )}
                 </div>
+
                 <div style={{ display: "flex", alignItems: "center", gap: "12px", flexShrink: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", border: "1.5px solid #e8e8e8", borderRadius: "30px", overflow: "hidden" }}>
                     <button onClick={() => handleUpdateQty(item, -1)} disabled={isUpdating}
@@ -220,45 +236,46 @@ export default function CartPage() {
               </div>
 
               {/* Subtotal */}
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                <span>Subtotal</span>
-                <span>₱{subtotal.toLocaleString()}.00</span>
-              </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                  <span>Subtotal</span>
+                  <span>₱{subtotal.toLocaleString()}.00</span>
+                </div>
 
-              {/* Delivery */}
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                <span>Delivery</span>
-                <span style={{ color: delivery === 0 ? "#2d7a3a" : "#1a1a1a" }}>
-                  {delivery === 0 ? "FREE" : `₱${delivery}.00`}
-                </span>
-              </div>
-
-              {/* Promo Discount */}
-              {items.some(i => i.product.finalPrice && i.product.finalPrice < i.product.price) && (
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", color: "#2d7a3a" }}>
-                  <span>Promo Discount</span>
-                  <span>
-                    -₱{items.reduce((sum, i) => {
-                      if (i.product.finalPrice && i.product.finalPrice < i.product.price) {
-                        return sum + (i.product.price - i.product.finalPrice) * i.quantity;
-                      }
-                      return sum;
-                    }, 0).toLocaleString()}.00
+                {/* Delivery */}
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                  <span>Delivery</span>
+                  <span style={{ color: delivery === 0 ? "#2d7a3a" : "#1a1a1a" }}>
+                    {delivery === 0 ? "FREE" : `₱${delivery}.00`}
                   </span>
                 </div>
-              )}
 
-              <hr style={{ margin: "12px 0" }} />
+                {/* Promo Discount */}
+                {items.some(i => i.product.finalPrice && i.product.finalPrice < i.product.price) && (
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", color: "#2d7a3a" }}>
+                    <span>Promo Discount</span>
+                    <span>
+                      -₱{items.reduce((sum, i) => {
+                        if (i.product.finalPrice && i.product.finalPrice < i.product.price) {
+                          return sum + (i.product.price - i.product.finalPrice) * i.quantity;
+                        }
+                        return sum;
+                      }, 0).toLocaleString()}.00
+                    </span>
+                  </div>
+                )}
 
-              {/* Total */}
-              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: "16px" }}>
-                <span>Total</span>
-                <span>₱{total.toLocaleString()}.00</span>
-              </div>
+                <hr style={{ margin: "12px 0" }} />
+
+                {/* Total */}
+                <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: "16px" }}>
+                  <span>Total</span>
+                  <span>₱{total.toLocaleString()}.00</span>
+                </div>
+
             </div>
 
 
-          <div style={{ height: "1px", background: "#f0f0f0", margin: "14px 0" }} />
+            <div style={{ height: "1px", background: "#f0f0f0", margin: "14px 0" }} />
 
           <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
