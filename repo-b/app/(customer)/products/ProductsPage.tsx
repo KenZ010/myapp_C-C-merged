@@ -6,6 +6,7 @@ type Product = {
   id: string;
   productName: string;
   price: number;
+  finalPrice?: number; // ✅ ADD THIS
   category?: string;
   size?: string;
   stock?: number;
@@ -208,7 +209,22 @@ export default function ProductsPage() {
                   </p>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div>
-                      <p style={{ fontSize: "20px", fontWeight: 700, color: "#2d7a3a" }}>₱{p.price.toLocaleString()}</p>
+                      <div>
+                        {p.finalPrice && p.finalPrice < p.price ? (
+                          <>
+                            <p style={{ fontSize: "18px", fontWeight: 700, color: "#2d7a3a" }}>
+                              ₱{p.finalPrice.toLocaleString()}
+                            </p>
+                            <p style={{ fontSize: "12px", color: "#aaa", textDecoration: "line-through" }}>
+                              ₱{p.price.toLocaleString()}
+                            </p>
+                          </>
+                        ) : (
+                          <p style={{ fontSize: "20px", fontWeight: 700, color: "#2d7a3a" }}>
+                            ₱{p.price.toLocaleString()}
+                          </p>
+                        )}
+                      </div>
                       <p style={{ fontSize: "10px", color: "#bbb" }}>
                         {outOfStock ? "unavailable" : `${p.stock} in stock`}
                       </p>
