@@ -176,4 +176,10 @@ export const api = {
     const res = await fetch(`${API_URL}/promos/active`);
     return res.json();
   },
+  getActiveOrders: async () => {
+  const res = await fetch(`${API_URL}/orders/active`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  return res.json();
+},
 };
