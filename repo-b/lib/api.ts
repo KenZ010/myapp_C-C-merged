@@ -133,32 +133,30 @@ export const api = {
   }) => {
     const res = await fetch(`${API_URL}/orders`, {
       method:  'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization:  `Bearer ${getToken()}`,
-      },
-      body: JSON.stringify(payload),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body:    JSON.stringify(payload),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Failed to place order');
-    return data;
+    return data; // { message, saleId }
   },
-
+  getActiveOrders: async () => {
+    const res = await fetch(`${API_URL}/orders/active`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    return res.json();
+  },
   getCustomerOrders: async (customerId: string) => {
     const res = await fetch(`${API_URL}/orders/customer/${customerId}`, {
       headers: { Authorization: `Bearer ${getToken()}` },
     });
     return res.json();
   },
-
   updateOrderStatus: async (orderId: string, status: string) => {
     const res = await fetch(`${API_URL}/orders/${orderId}/status`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${getToken()}`,
-      },
-      body: JSON.stringify({ status }),
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body:    JSON.stringify({ status }),
     });
     return res.json();
   },
@@ -176,10 +174,4 @@ export const api = {
     const res = await fetch(`${API_URL}/promos/active`);
     return res.json();
   },
-  getActiveOrders: async () => {
-  const res = await fetch(`${API_URL}/orders/active`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
-  });
-  return res.json();
-},
 };
