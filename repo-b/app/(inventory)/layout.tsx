@@ -209,7 +209,7 @@ export default function InventoryLayout({
           flexDirection: "column",
           overflow: "hidden",
         }}
-        className="lg:ml-[220px]"
+        className=""
       >
         {/* Topbar */}
         <header

@@ -173,12 +173,12 @@ export default function LossReportPage() {
     );
 
   return (
-    <div style={{ padding: "28px" }}>
+    <div style={{ padding: "16px" }}>
       {/* Summary Cards */}
       <div
+        className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
           gap: "14px",
           marginBottom: "24px",
         }}
@@ -255,9 +255,9 @@ export default function LossReportPage() {
 
       {/* Loss by Type Cards */}
       <div
+        className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6"
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
           gap: "12px",
           marginBottom: "24px",
         }}
@@ -335,16 +335,18 @@ export default function LossReportPage() {
           background: "#fff",
           borderRadius: "14px",
           border: "0.5px solid #e8e8e8",
-          padding: "14px 20px",
+          padding: "14px 16px",
           marginBottom: "16px",
           display: "flex",
-          alignItems: "center",
-          gap: "10px",
           flexWrap: "wrap",
+          gap: "10px",
+          alignItems: "center",
         }}
       >
         {/* Search */}
-        <div style={{ position: "relative" }}>
+        <div
+          style={{ position: "relative", flex: "1 1 180px", maxWidth: "100%" }}
+        >
           <span
             style={{
               position: "absolute",
@@ -361,25 +363,31 @@ export default function LossReportPage() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search product, brand, store, or ID..."
             style={{
+              width: "100%",
               padding: "8px 14px 8px 32px",
               borderRadius: "20px",
               border: "1.5px solid #ddd",
               fontSize: "13px",
-              outline: "none",
-              width: "240px",
               color: "#1a1a1a",
+              outline: "none",
             }}
           />
         </div>
 
         {/* Type Filter Tabs */}
-        <div style={{ display: "flex", gap: "6px" }}>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "6px",
+          }}
+        >
           {lossTypes.map((t) => (
             <button
               key={t}
               onClick={() => setFilter(t)}
               style={{
-                padding: "7px 16px",
+                padding: "7px 14px",
                 borderRadius: "20px",
                 fontSize: "12px",
                 fontWeight: filter === t ? 700 : 400,
@@ -387,6 +395,7 @@ export default function LossReportPage() {
                 border: filter === t ? "none" : "1px solid #ddd",
                 background: filter === t ? "#1a3c2e" : "#fff",
                 color: filter === t ? "#fff" : "#555",
+                whiteSpace: "nowrap",
               }}
             >
               {t}
@@ -395,13 +404,13 @@ export default function LossReportPage() {
         </div>
 
         {/* Export */}
-        <div style={{ marginLeft: "auto", display: "flex", gap: "8px" }}>
+        <div style={{ marginLeft: "auto" }}>
           <button
             style={{
               display: "flex",
               alignItems: "center",
               gap: "6px",
-              padding: "8px 18px",
+              padding: "8px 14px",
               borderRadius: "20px",
               border: "1.5px solid #1a3c2e",
               background: "#fff",
@@ -409,6 +418,7 @@ export default function LossReportPage() {
               fontSize: "13px",
               fontWeight: 600,
               cursor: "pointer",
+              whiteSpace: "nowrap",
             }}
           >
             ⬇ Export Report
@@ -422,13 +432,19 @@ export default function LossReportPage() {
           background: "#fff",
           borderRadius: "14px",
           border: "0.5px solid #e8e8e8",
-          overflow: "hidden",
+          overflowX: "auto",
         }}
       >
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <table
+          style={{
+            width: "100%",
+            minWidth: "900px",
+            borderCollapse: "collapse",
+          }}
+        >
           <thead>
             <tr style={{ background: "#1a3c2e" }}>
-              <th style={{ padding: "12px 14px", width: "40px" }}>
+              <th style={{ padding: "10px 12px", width: "40px" }}>
                 <input
                   type="checkbox"
                   checked={
@@ -496,7 +512,7 @@ export default function LossReportPage() {
                         : "#fafafa",
                   }}
                 >
-                  <td style={{ padding: "12px 14px" }}>
+                  <td style={{ padding: "10px 12px" }}>
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(l.id)}
@@ -510,7 +526,7 @@ export default function LossReportPage() {
                   </td>
                   <td
                     style={{
-                      padding: "12px 14px",
+                      padding: "10px 12px",
                       fontSize: "13px",
                       fontWeight: 700,
                       color: "#1a3c2e",
@@ -558,7 +574,7 @@ export default function LossReportPage() {
                   >
                     {l.reason}
                   </td>
-                  <td style={{ padding: "12px 14px" }}>
+                  <td style={{ padding: "10px 12px" }}>
                     <span
                       style={{
                         padding: "3px 10px",
@@ -589,7 +605,7 @@ export default function LossReportPage() {
                   >
                     {l.store}
                   </td>
-                  <td style={{ padding: "12px 14px" }}>
+                  <td style={{ padding: "10px 12px" }}>
                     <span
                       style={{
                         background: "#f5f5f5",
@@ -657,7 +673,7 @@ export default function LossReportPage() {
                   {totalQty}
                 </td>
                 <td colSpan={5} />
-                <td style={{ padding: "12px 14px" }} />
+                <td style={{ padding: "10px 12px" }} />
                 <td
                   style={{
                     padding: "12px 14px",
