@@ -144,7 +144,14 @@ export default function PendingPage() {
             Monitor and update the status of incoming customer orders
           </p>
         </div>
-        <div style={{ display: "flex", gap: "12px" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "12px",
+            flexWrap: "wrap",
+            justifyContent: "flex-end",
+          }}
+        >
           {[
             {
               label: "Pending",
@@ -240,7 +247,7 @@ export default function PendingPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
+          gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
           gap: "16px",
         }}
       >
