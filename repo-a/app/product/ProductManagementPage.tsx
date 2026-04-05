@@ -29,7 +29,44 @@ type Product = {
 };
 
 const categories = ["All", "SOFTDRINKS", "ENERGY_DRINK", "BEER", "JUICE", "WATER", "OTHER"];
-const sizes = ["All", "250ml", "500ml", "1L", "1.5L", "2L"];
+
+// ✅ Added 237ml and 290ml
+const sizes = ["All", "237ml", "250ml", "290ml", "500ml", "1L", "1.5L", "2L"];
+
+// ✅ Predefined softdrinks product names for dropdown
+const PRODUCT_NAME_OPTIONS = [
+  "Coca Cola",
+  "Pepsi",
+  "Sprite",
+  "Royal",
+  "Mountain Dew",
+  "RC Cola",
+  "Sarsi",
+  "Pop Cola",
+  "7UP",
+  "Mirinda",
+  "Cobra",
+  "Sting",
+  "Red Bull",
+  "Monster",
+  "Gatorade",
+  "Pocari Sweat",
+  "Nature Spring",
+  "Wilkins",
+  "Absolute",
+  "Summit",
+  "C2 Apple",
+  "C2 Green Tea",
+  "Zest-O Orange",
+  "Zest-O Mango",
+  "Minute Maid",
+  "San Miguel Beer",
+  "Red Horse",
+  "Budweiser",
+  "Heineken",
+  "Other",
+];
+
 const ITEMS_PER_PAGE = 18;
 
 const getCategoryColor = (category: string) => {
@@ -59,8 +96,19 @@ export default function ProductManagementPage() {
   const [showProductModal, setShowProductModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ productName: "", size: "500ml", price: 0, category: "SOFTDRINKS", stockQuantity: 0, supplierId: "", status: "ACTIVE" });
-  const [addForm, setAddForm] = useState({ productName: "", size: "500ml", price: 0, category: "SOFTDRINKS", stockQuantity: 0, supplierId: "", status: "ACTIVE" });
+  const [editForm, setEditForm] = useState({
+    productName: "", size: "500ml", price: 0,
+    category: "SOFTDRINKS", stockQuantity: 0, supplierId: "", status: "ACTIVE"
+  });
+  const [addForm, setAddForm] = useState({
+    productName: "", size: "500ml", price: 0,
+    category: "SOFTDRINKS", stockQuantity: 0, supplierId: "", status: "ACTIVE"
+  });
+
+  // ✅ Custom name field — shows when "Other" is selected in dropdown
+  const [addCustomName, setAddCustomName] = useState("");
+  const [editCustomName, setEditCustomName] = useState("");
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showSizeDropdown, setShowSizeDropdown] = useState(false);
@@ -81,7 +129,6 @@ export default function ProductManagementPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Fetch products and suppliers
   const fetchProducts = async () => {
     try {
       setLoading(true);
@@ -114,10 +161,7 @@ export default function ProductManagementPage() {
     router.push("/");
   };
 
-  const navigate = (path: string) => {
-    router.push(path);
-    setShowMobileMenu(false);
-  };
+  const navigate = (path: string) => { router.push(path); setShowMobileMenu(false); };
 
   const filtered = products.filter((p) => {
     const matchSearch = p.productName.toLowerCase().includes(search.toLowerCase());
@@ -136,8 +180,10 @@ export default function ProductManagementPage() {
 
   const handleCardClick = (product: Product) => {
     setSelectedProduct(product);
+    // ✅ Check if product name is in our list, else use "Other" + custom name
+    const isKnown = PRODUCT_NAME_OPTIONS.includes(product.productName);
     setEditForm({
-      productName: product.productName,
+      productName: isKnown ? product.productName : "Other",
       size: product.size || "500ml",
       price: product.price,
       category: product.category,
@@ -145,25 +191,25 @@ export default function ProductManagementPage() {
       supplierId: product.supplierId,
       status: product.status
     });
+    setEditCustomName(isKnown ? "" : product.productName);
     setIsEditing(false);
     setShowProductModal(true);
   };
 
   const handleSaveEdit = async () => {
-    if (!editForm.productName) { alert("Product name is required."); return; }
+    // ✅ Use custom name if "Other" is selected
+    const finalName = editForm.productName === "Other" ? editCustomName : editForm.productName;
+    if (!finalName) { alert("Product name is required."); return; }
     setSaving(true);
     try {
-      const res = await api.updateProduct(selectedProduct!.id, editForm);
-      if (res.message && !res.id) {
-        setError(res.message);
-        return;
-      }
-      setProducts(prev => prev.map(p => p.id === selectedProduct!.id ? { ...p, ...editForm } : p));
-      setSelectedProduct({ ...selectedProduct!, ...editForm });
+      const res = await api.updateProduct(selectedProduct!.id, { ...editForm, productName: finalName });
+      if (res.message && !res.id) { setError(res.message); return; }
+      setProducts(prev => prev.map(p => p.id === selectedProduct!.id ? { ...p, ...editForm, productName: finalName } : p));
+      setSelectedProduct({ ...selectedProduct!, ...editForm, productName: finalName });
       setIsEditing(false);
       setSuccess("Product updated successfully!");
       setTimeout(() => setSuccess(""), 3000);
-    } catch (err) {
+    } catch {
       setError("Failed to update product.");
     } finally {
       setSaving(false);
@@ -179,27 +225,27 @@ export default function ProductManagementPage() {
       setSelectedProduct(null);
       setSuccess("Product deleted successfully!");
       setTimeout(() => setSuccess(""), 3000);
-    } catch (err) {
+    } catch {
       setError("Failed to delete product.");
     }
   };
 
   const handleAddProduct = async () => {
-    if (!addForm.productName) { alert("Product name is required."); return; }
+    // ✅ Use custom name if "Other" is selected
+    const finalName = addForm.productName === "Other" ? addCustomName : addForm.productName;
+    if (!finalName) { alert("Product name is required."); return; }
     if (!addForm.supplierId) { alert("Please select a supplier."); return; }
     setSaving(true);
     try {
-      const res = await api.createProduct(addForm);
-      if (res.message && !res.id) {
-        setError(res.message);
-        return;
-      }
+      const res = await api.createProduct({ ...addForm, productName: finalName });
+      if (res.message && !res.id) { setError(res.message); return; }
       setProducts(prev => [...prev, res]);
       setShowAddModal(false);
       setAddForm({ productName: "", size: "500ml", price: 0, category: "SOFTDRINKS", stockQuantity: 0, supplierId: "", status: "ACTIVE" });
+      setAddCustomName("");
       setSuccess("Product added successfully!");
       setTimeout(() => setSuccess(""), 3000);
-    } catch (err) {
+    } catch {
       setError("Failed to add product.");
     } finally {
       setSaving(false);
@@ -243,11 +289,9 @@ export default function ProductManagementPage() {
 
       <main className="flex-1 flex flex-col overflow-auto">
         <header className="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-100">
-          <button
-            className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300"
+          <button className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300"
             style={{ transform: showMobileMenu ? "rotate(90deg)" : "rotate(0deg)" }}
-            onClick={() => setShowMobileMenu(!showMobileMenu)}
-          >
+            onClick={() => setShowMobileMenu(!showMobileMenu)}>
             {showMobileMenu ? "✕" : "☰"}
           </button>
           <h1 className="text-xl md:text-2xl font-bold text-gray-800">Product Management</h1>
@@ -290,31 +334,19 @@ export default function ProductManagementPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-lg">🗒️</div>
-              <div>
-                <p className="text-xs text-gray-400">Total Products</p>
-                <p className="text-xl font-bold text-gray-800">{totalProducts}</p>
-              </div>
+              <div><p className="text-xs text-gray-400">Total Products</p><p className="text-xl font-bold text-gray-800">{totalProducts}</p></div>
             </div>
             <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-lg">📂</div>
-              <div>
-                <p className="text-xs text-gray-400">Categories</p>
-                <p className="text-xl font-bold text-blue-600">{totalCategories}</p>
-              </div>
+              <div><p className="text-xs text-gray-400">Categories</p><p className="text-xl font-bold text-blue-600">{totalCategories}</p></div>
             </div>
             <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-lg">🥤</div>
-              <div>
-                <p className="text-xs text-gray-400">Soft Drinks</p>
-                <p className="text-xl font-bold text-green-600">{softDrinksCount}</p>
-              </div>
+              <div><p className="text-xs text-gray-400">Soft Drinks</p><p className="text-xl font-bold text-green-600">{softDrinksCount}</p></div>
             </div>
             <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-lg">⚡</div>
-              <div>
-                <p className="text-xs text-gray-400">Energy Drinks</p>
-                <p className="text-xl font-bold text-yellow-600">{energyDrinkCount}</p>
-              </div>
+              <div><p className="text-xs text-gray-400">Energy Drinks</p><p className="text-xl font-bold text-yellow-600">{energyDrinkCount}</p></div>
             </div>
           </div>
 
@@ -364,9 +396,7 @@ export default function ProductManagementPage() {
 
               {(selectedCategory !== "All" || selectedSize !== "All") && (
                 <button onClick={() => { setSelectedCategory("All"); setSelectedSize("All"); setCurrentPage(1); }}
-                  className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">
-                  ✕ Clear
-                </button>
+                  className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
               )}
 
               <button onClick={() => { setShowAddModal(true); setError(""); }} className="ml-auto flex items-center gap-1 bg-gray-900 rounded-lg px-3 py-2 text-sm text-white hover:bg-gray-700">+ Add Product</button>
@@ -381,9 +411,7 @@ export default function ProductManagementPage() {
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <p className="text-4xl mb-3">🔍</p>
                 <p className="text-gray-500 font-medium">No products found</p>
-                <p className="text-gray-400 text-sm mt-1">
-                  {search ? `No results for "${search}"` : "Add your first product!"}
-                </p>
+                <p className="text-gray-400 text-sm mt-1">{search ? `No results for "${search}"` : "Add your first product!"}</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
@@ -399,12 +427,8 @@ export default function ProductManagementPage() {
                       )}
                     </div>
                     <div className="p-2">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getCategoryColor(product.category)}`}>
-                        {product.category}
-                      </span>
-                      <p className="text-sm font-semibold text-gray-800 mt-1">
-                        {product.productName} <span className="text-gray-400 font-normal">{product.size}</span>
-                      </p>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getCategoryColor(product.category)}`}>{product.category}</span>
+                      <p className="text-sm font-semibold text-gray-800 mt-1">{product.productName} <span className="text-gray-400 font-normal">{product.size}</span></p>
                       <p className="text-xs text-gray-500">₱{product.price}</p>
                       <p className="text-xs text-gray-400">Stock: {product.stockQuantity}</p>
                     </div>
@@ -419,9 +443,7 @@ export default function ProductManagementPage() {
                 <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1} className="px-2 py-1 rounded-lg text-sm text-gray-500 hover:bg-gray-100 disabled:opacity-30">«</button>
                 <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 rounded-lg text-sm text-gray-500 hover:bg-gray-100 disabled:opacity-30">‹</button>
                 {getPageNumbers().map((page, i) => (
-                  page === "..." ? (
-                    <span key={i} className="px-2 py-1 text-gray-400">...</span>
-                  ) : (
+                  page === "..." ? <span key={i} className="px-2 py-1 text-gray-400">...</span> : (
                     <button key={i} onClick={() => setCurrentPage(Number(page))}
                       className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${currentPage === page ? "bg-indigo-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}>
                       {page}
@@ -439,42 +461,59 @@ export default function ProductManagementPage() {
       {/* PRODUCT DETAIL MODAL */}
       {showProductModal && selectedProduct && (
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-screen overflow-y-auto">
             <p className="text-xs text-gray-400 mb-3 font-medium">Product {isEditing ? "Editing" : "Details"}</p>
             <div className="flex gap-4">
-              <div className="w-32 h-32 bg-gray-200 rounded-xl shrink-0 flex items-center justify-center text-4xl">
-                🥤
-              </div>
+              <div className="w-32 h-32 bg-gray-200 rounded-xl shrink-0 flex items-center justify-center text-4xl">🥤</div>
               <div className="flex-1 flex flex-col gap-3">
                 {isEditing ? (
                   <>
+                    {/* ✅ Product Name Dropdown */}
                     <div>
                       <p className="text-xs text-gray-400">Product Name</p>
-                      <input value={editForm.productName} onChange={(e) => setEditForm({ ...editForm, productName: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                      <select value={editForm.productName}
+                        onChange={(e) => { setEditForm({ ...editForm, productName: e.target.value }); if (e.target.value !== "Other") setEditCustomName(""); }}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                        <option value="">-- Select Product --</option>
+                        {PRODUCT_NAME_OPTIONS.map((name) => <option key={name}>{name}</option>)}
+                      </select>
+                      {/* ✅ Show text input only when "Other" is selected */}
+                      {editForm.productName === "Other" && (
+                        <input value={editCustomName} onChange={(e) => setEditCustomName(e.target.value)}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-2 outline-none focus:border-indigo-400 text-gray-900"
+                          placeholder="Enter custom product name..." />
+                      )}
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Size</p>
-                      <select value={editForm.size} onChange={(e) => setEditForm({ ...editForm, size: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                      <select value={editForm.size} onChange={(e) => setEditForm({ ...editForm, size: e.target.value })}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
                         {sizes.filter((s) => s !== "All").map((s) => <option key={s}>{s}</option>)}
                       </select>
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Price (₱)</p>
-                      <input type="number" min="0" value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: Math.max(0, Number(e.target.value)) })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                      <input type="number" min="0" value={editForm.price}
+                        onChange={(e) => setEditForm({ ...editForm, price: Math.max(0, Number(e.target.value)) })}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Stock Quantity</p>
-                      <input type="number" min="0" value={editForm.stockQuantity} onChange={(e) => setEditForm({ ...editForm, stockQuantity: Math.max(0, Number(e.target.value)) })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                      <input type="number" min="0" value={editForm.stockQuantity}
+                        onChange={(e) => setEditForm({ ...editForm, stockQuantity: Math.max(0, Number(e.target.value)) })}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Category</p>
-                      <select value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                      <select value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
                         {categories.filter((c) => c !== "All").map((c) => <option key={c}>{c}</option>)}
                       </select>
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Status</p>
-                      <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                      <select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
                         <option value="ACTIVE">ACTIVE</option>
                         <option value="INACTIVE">INACTIVE</option>
                         <option value="OUT_OF_STOCK">OUT_OF_STOCK</option>
@@ -483,30 +522,14 @@ export default function ProductManagementPage() {
                   </>
                 ) : (
                   <>
-                    <div>
-                      <p className="text-xs text-gray-400">Product Name</p>
-                      <p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedProduct.productName}</p>
+                    <div><p className="text-xs text-gray-400">Product Name</p><p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedProduct.productName}</p></div>
+                    <div><p className="text-xs text-gray-400">Category</p>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium mt-0.5 inline-block ${getCategoryColor(selectedProduct.category)}`}>{selectedProduct.category}</span>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-400">Category</p>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium mt-0.5 inline-block ${getCategoryColor(selectedProduct.category)}`}>
-                        {selectedProduct.category}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400">Size</p>
-                      <p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedProduct.size ?? "-"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400">Price</p>
-                      <p className="text-sm font-semibold text-gray-800 mt-0.5">₱{selectedProduct.price}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400">Stock</p>
-                      <p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedProduct.stockQuantity}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400">Status</p>
+                    <div><p className="text-xs text-gray-400">Size</p><p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedProduct.size ?? "-"}</p></div>
+                    <div><p className="text-xs text-gray-400">Price</p><p className="text-sm font-semibold text-gray-800 mt-0.5">₱{selectedProduct.price}</p></div>
+                    <div><p className="text-xs text-gray-400">Stock</p><p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedProduct.stockQuantity}</p></div>
+                    <div><p className="text-xs text-gray-400">Status</p>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${selectedProduct.status === "ACTIVE" ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"}`}>
                         {selectedProduct.status}
                       </span>
@@ -549,43 +572,76 @@ export default function ProductManagementPage() {
             )}
 
             <div className="flex flex-col gap-3">
-              <div><label className="text-xs font-medium text-gray-600">Product Name</label>
-                <input value={addForm.productName} onChange={(e) => setAddForm({ ...addForm, productName: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+              {/* ✅ Product Name Dropdown */}
+              <div>
+                <label className="text-xs font-medium text-gray-600">Product Name</label>
+                <select value={addForm.productName}
+                  onChange={(e) => { setAddForm({ ...addForm, productName: e.target.value }); if (e.target.value !== "Other") setAddCustomName(""); }}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                  <option value="">-- Select Product --</option>
+                  {PRODUCT_NAME_OPTIONS.map((name) => <option key={name}>{name}</option>)}
+                </select>
+                {/* ✅ Show text input only when "Other" is selected */}
+                {addForm.productName === "Other" && (
+                  <input value={addCustomName} onChange={(e) => setAddCustomName(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-2 outline-none focus:border-indigo-400 text-gray-900"
+                    placeholder="Enter custom product name..." />
+                )}
               </div>
-              <div><label className="text-xs font-medium text-gray-600">Category</label>
-                <select value={addForm.category} onChange={(e) => setAddForm({ ...addForm, category: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+
+              <div>
+                <label className="text-xs font-medium text-gray-600">Category</label>
+                <select value={addForm.category} onChange={(e) => setAddForm({ ...addForm, category: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
                   {categories.filter((c) => c !== "All").map((c) => <option key={c}>{c}</option>)}
                 </select>
               </div>
-              <div><label className="text-xs font-medium text-gray-600">Size</label>
-                <select value={addForm.size} onChange={(e) => setAddForm({ ...addForm, size: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+
+              {/* ✅ Size with 237ml and 290ml added */}
+              <div>
+                <label className="text-xs font-medium text-gray-600">Size</label>
+                <select value={addForm.size} onChange={(e) => setAddForm({ ...addForm, size: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
                   {sizes.filter((s) => s !== "All").map((s) => <option key={s}>{s}</option>)}
                 </select>
               </div>
-              <div><label className="text-xs font-medium text-gray-600">Price (₱)</label>
-                <input type="number" min="0" value={addForm.price} onChange={(e) => setAddForm({ ...addForm, price: Math.max(0, Number(e.target.value)) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+
+              <div>
+                <label className="text-xs font-medium text-gray-600">Price (₱)</label>
+                <input type="number" min="0" value={addForm.price}
+                  onChange={(e) => setAddForm({ ...addForm, price: Math.max(0, Number(e.target.value)) })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
-              <div><label className="text-xs font-medium text-gray-600">Stock Quantity</label>
-                <input type="number" min="0" value={addForm.stockQuantity} onChange={(e) => setAddForm({ ...addForm, stockQuantity: Math.max(0, Number(e.target.value)) })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+
+              <div>
+                <label className="text-xs font-medium text-gray-600">Stock Quantity</label>
+                <input type="number" min="0" value={addForm.stockQuantity}
+                  onChange={(e) => setAddForm({ ...addForm, stockQuantity: Math.max(0, Number(e.target.value)) })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
-              <div><label className="text-xs font-medium text-gray-600">Supplier</label>
-                <select value={addForm.supplierId} onChange={(e) => setAddForm({ ...addForm, supplierId: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+
+              <div>
+                <label className="text-xs font-medium text-gray-600">Supplier</label>
+                <select value={addForm.supplierId} onChange={(e) => setAddForm({ ...addForm, supplierId: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
                   <option value="">Select Supplier</option>
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>{s.supplierName}</option>
-                  ))}
+                  {suppliers.map((s) => <option key={s.id} value={s.id}>{s.supplierName}</option>)}
                 </select>
               </div>
-              <div><label className="text-xs font-medium text-gray-600">Status</label>
-                <select value={addForm.status} onChange={(e) => setAddForm({ ...addForm, status: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+
+              <div>
+                <label className="text-xs font-medium text-gray-600">Status</label>
+                <select value={addForm.status} onChange={(e) => setAddForm({ ...addForm, status: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
                   <option value="ACTIVE">ACTIVE</option>
                   <option value="INACTIVE">INACTIVE</option>
                   <option value="OUT_OF_STOCK">OUT_OF_STOCK</option>
                 </select>
               </div>
             </div>
+
             <div className="flex gap-3 mt-5">
-              <button onClick={() => { setShowAddModal(false); setError(""); }} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={() => { setShowAddModal(false); setError(""); setAddCustomName(""); }} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
               <button onClick={handleAddProduct} disabled={saving} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-60">
                 {saving ? "Adding..." : "Add Product"}
               </button>
@@ -612,16 +668,14 @@ export default function ProductManagementPage() {
       {/* SUCCESS TOAST */}
       {success && (
         <div className="fixed bottom-6 right-6 z-50 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
-          <span>✅</span>
-          <span className="text-sm font-medium">{success}</span>
+          <span>✅</span><span className="text-sm font-medium">{success}</span>
         </div>
       )}
 
       {/* ERROR TOAST */}
       {error && !showAddModal && !showProductModal && (
         <div className="fixed bottom-6 right-6 z-50 bg-red-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
-          <span>❌</span>
-          <span className="text-sm font-medium">{error}</span>
+          <span>❌</span><span className="text-sm font-medium">{error}</span>
           <button onClick={() => setError("")} className="ml-2 hover:text-red-200">✕</button>
         </div>
       )}
