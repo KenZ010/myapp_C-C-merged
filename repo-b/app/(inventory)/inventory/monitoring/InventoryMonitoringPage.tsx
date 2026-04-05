@@ -273,12 +273,12 @@ export default function InventoryMonitoringPage() {
   ).length;
 
   return (
-    <div style={{ padding: "28px" }}>
+    <div style={{ padding: "16px" }}>
       {/* Summary Cards */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
+          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
           gap: "14px",
           marginBottom: "24px",
         }}
@@ -354,7 +354,7 @@ export default function InventoryMonitoringPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
+          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
           gap: "14px",
           marginBottom: "24px",
         }}
@@ -579,7 +579,7 @@ export default function InventoryMonitoringPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
+          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
           gap: "20px",
           marginBottom: "24px",
         }}
@@ -714,7 +714,14 @@ export default function InventoryMonitoringPage() {
           >
             🗂️ Inventory by Category
           </p>
-          <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: "24px",
+            }}
+          >
             <PieChart />
             <div
               style={{ display: "flex", flexDirection: "column", gap: "10px" }}
@@ -801,10 +808,17 @@ export default function InventoryMonitoringPage() {
           background: "#fff",
           borderRadius: "14px",
           border: "0.5px solid #e8e8e8",
-          overflow: "hidden",
+          padding: "14px 20px",
+          marginBottom: "16px",
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: "10px",
+          overflowX: "auto",
+          width: "100%",
         }}
       >
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <table style={{ width: "900%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "#1a3c2e" }}>
               <th style={{ padding: "12px 14px", width: "40px" }}>
