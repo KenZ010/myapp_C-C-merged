@@ -396,9 +396,7 @@ export default function OrdersPage() {
                       </button>
                       <button
                         onClick={() => markReceived(order.id)}
-                        disabled={
-                          order.status === "Received" || order.status === "Return"
-                        }
+                        disabled={order.status !== "Out For Delivery"}
                         style={{
                           background:
                             order.status === "Received"
