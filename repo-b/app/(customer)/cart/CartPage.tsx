@@ -14,6 +14,7 @@ type CartItem = {
     finalPrice?: number;
     category?: string;
     size?: string;
+    stock?: number;
   };
 };
 
@@ -31,6 +32,7 @@ const getBg    = (cat?: string) => BG_MAP[cat?.toUpperCase() || ""]    || "#4242
 export default function CartPage() {
   const [items,         setItems]         = useState<CartItem[]>([]);
   const [loading,       setLoading]       = useState(true);
+  const [stockWarning,  setStockWarning]  = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "gcash">("cod");
   const [gcashRef,      setGcashRef]      = useState("");
   const [gcashImage,    setGcashImage]    = useState<string | null>(null);
@@ -59,6 +61,14 @@ export default function CartPage() {
   const handleUpdateQty = async (item: CartItem, delta: number) => {
     const customerId = getCustomerId();
     const newQty = item.quantity + delta;
+    const stock  = item.product.stock ?? Infinity;
+
+    // ── Block if exceeding available stock ──
+    if (delta > 0 && newQty > stock) {
+      setStockWarning(item.id);
+      setTimeout(() => setStockWarning(null), 2500);
+      return;
+    }
 
     // ── Optimistic update: change state immediately, no waiting ──
     if (newQty <= 0) {
@@ -126,8 +136,13 @@ export default function CartPage() {
   // No delivery fee
   const total = subtotal;
 
+  const hasStockIssue = items.some(
+    (i) => i.quantity > (i.product.stock ?? Infinity)
+  );
+
   const canCheckout =
     items.length > 0 &&
+    !hasStockIssue &&
     (paymentMethod === "cod" ||
       (paymentMethod === "gcash" && gcashRef.trim() !== "" && gcashImage !== null));
 
@@ -201,18 +216,27 @@ export default function CartPage() {
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: "12px", flexShrink: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", border: "1.5px solid #e8e8e8", borderRadius: "30px", overflow: "hidden" }}>
-                    <button onClick={() => handleUpdateQty(item, -1)}
-                      style={{ width: "36px", height: "36px", background: "none", border: "none", fontSize: "18px", cursor: "pointer", color: "#2d7a3a", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      −
-                    </button>
-                    <span style={{ minWidth: "32px", textAlign: "center", fontSize: "15px", fontWeight: 600, color: "#1a1a1a" }}>
-                      {item.quantity}
-                    </span>
-                    <button onClick={() => handleUpdateQty(item, 1)}
-                      style={{ width: "36px", height: "36px", background: "none", border: "none", fontSize: "18px", cursor: "pointer", color: "#2d7a3a", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      +
-                    </button>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                    <div style={{ display: "flex", alignItems: "center", border: "1.5px solid #e8e8e8", borderRadius: "30px", overflow: "hidden" }}>
+                      <button onClick={() => handleUpdateQty(item, -1)}
+                        style={{ width: "36px", height: "36px", background: "none", border: "none", fontSize: "18px", cursor: "pointer", color: "#2d7a3a", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        −
+                      </button>
+                      <span style={{ minWidth: "32px", textAlign: "center", fontSize: "15px", fontWeight: 600, color: "#1a1a1a" }}>
+                        {item.quantity}
+                      </span>
+                      <button
+                        onClick={() => handleUpdateQty(item, 1)}
+                        disabled={item.quantity >= (item.product.stock ?? Infinity)}
+                        style={{ width: "36px", height: "36px", background: "none", border: "none", fontSize: "18px", cursor: item.quantity >= (item.product.stock ?? Infinity) ? "not-allowed" : "pointer", color: item.quantity >= (item.product.stock ?? Infinity) ? "#ccc" : "#2d7a3a", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        +
+                      </button>
+                    </div>
+                    {stockWarning === item.id && (
+                      <span style={{ fontSize: "10px", color: "#e53935", fontWeight: 600, whiteSpace: "nowrap" }}>
+                        ⚠️ Max stock reached
+                      </span>
+                    )}
                   </div>
                   <button onClick={() => handleRemove(item)}
                     style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#ffebee", border: "none", cursor: "pointer", fontSize: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -362,7 +386,11 @@ export default function CartPage() {
 
           <Link href={canCheckout ? "/checkout" : "#"} onClick={(e) => { if (!canCheckout) e.preventDefault(); }}
             style={{ display: "block", textAlign: "center", textDecoration: "none", padding: "14px", borderRadius: "30px", fontSize: "15px", fontWeight: 700, background: canCheckout ? "#2d7a3a" : "#ccc", color: "#fff", cursor: canCheckout ? "pointer" : "not-allowed", boxShadow: canCheckout ? "0 6px 20px rgba(45,122,58,0.3)" : "none" }}>
-            {paymentMethod === "gcash" && !canCheckout ? "Complete GCash Details First" : "Proceed to Checkout →"}
+            {hasStockIssue
+              ? "⚠️ Reduce quantity to match stock"
+              : paymentMethod === "gcash" && !canCheckout
+              ? "Complete GCash Details First"
+              : "Proceed to Checkout →"}
           </Link>
 
           <p style={{ textAlign: "center", fontSize: "11px", color: "#bbb", marginTop: "14px" }}>🔒 Secure checkout — your info is safe</p>
