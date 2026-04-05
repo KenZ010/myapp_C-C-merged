@@ -153,25 +153,6 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
             </Link>
           )}
 
-          {/* ✅ Logout button */}
-          <button
-            onClick={handleLogout}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "6px 12px",
-              borderRadius: "8px",
-              border: "none",
-              background: "rgba(255,255,255,0.15)",
-              color: "#fff",
-              fontSize: "13px",
-              fontWeight: 500,
-              cursor: "pointer",
-            }}
-          >
-            🚪 Logout
-          </button>
         </div>
       </header>
 
