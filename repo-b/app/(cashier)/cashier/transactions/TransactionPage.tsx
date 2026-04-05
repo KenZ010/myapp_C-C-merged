@@ -144,8 +144,10 @@ export default function CashierTransactionsPage() {
           padding: "28px 36px",
           marginBottom: "24px",
           display: "flex",
+          flexWrap: "wrap",
           alignItems: "center",
           justifyContent: "space-between",
+          gap: "16px",
           overflow: "hidden",
           position: "relative",
         }}
@@ -159,20 +161,6 @@ export default function CashierTransactionsPage() {
               marginBottom: "8px",
             }}
           >
-            <div
-              style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "10px",
-                background: "rgba(255,255,255,0.15)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "20px",
-              }}
-            >
-              🕐
-            </div>
             <h1 style={{ fontSize: "28px", fontWeight: 800, color: "#fff" }}>
               Transaction History
             </h1>
@@ -226,12 +214,21 @@ export default function CashierTransactionsPage() {
           <div
             style={{
               display: "flex",
+              flexWrap: "wrap",
               alignItems: "center",
               justifyContent: "space-between",
+              gap: "12px",
               marginBottom: "20px",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
               <span style={{ fontSize: "13px", color: "#888" }}>
                 📅 Report Period:
               </span>
@@ -323,7 +320,7 @@ export default function CashierTransactionsPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
               gap: "14px",
               marginBottom: "24px",
             }}
@@ -357,7 +354,7 @@ export default function CashierTransactionsPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr 320px",
+              gridTemplateColumns: "repeat(auto-fit, minmax(300px, 2fr))",
               gap: "20px",
             }}
           >
@@ -712,7 +709,7 @@ export default function CashierTransactionsPage() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr 1fr",
+              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
               gap: "16px",
             }}
           >
