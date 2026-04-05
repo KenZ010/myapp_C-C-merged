@@ -4,7 +4,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 
 type CartItem = {
-  id: string;          // ShoppingCartItem id
+  id: string;
   productId: string;
   quantity: number;
   product: {
@@ -16,7 +16,6 @@ type CartItem = {
     size?: string;
   };
 };
-
 
 const EMOJI_MAP: Record<string, string> = {
   SOFTDRINKS: "🥤", ENERGY_DRINK: "⚡", BEER: "🍺",
@@ -97,12 +96,24 @@ export default function CartPage() {
     reader.readAsDataURL(file);
   };
 
-  const subtotal = items.reduce((sum, i) => {
-  const price = i.product.finalPrice ?? i.product.price;
-  return sum + price * i.quantity;
-}, 0);
-  const delivery = subtotal >= 1000 ? 0 : 50;
-  const total    = subtotal + delivery;
+  // Always use finalPrice if available (promo applied), fallback to price
+  const getEffectivePrice = (item: CartItem) =>
+    item.product.finalPrice != null && item.product.finalPrice < item.product.price
+      ? item.product.finalPrice
+      : item.product.price;
+
+  const subtotal = items.reduce((sum, i) => sum + getEffectivePrice(i) * i.quantity, 0);
+
+  const totalDiscount = items.reduce((sum, i) => {
+    const fp = i.product.finalPrice;
+    if (fp != null && fp < i.product.price) {
+      return sum + (i.product.price - fp) * i.quantity;
+    }
+    return sum;
+  }, 0);
+
+  // No delivery fee
+  const total = subtotal;
 
   const canCheckout =
     items.length > 0 &&
@@ -141,12 +152,12 @@ export default function CartPage() {
         {/* ── LEFT: Cart Items ── */}
         <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
           {items.map((item) => {
-            const isUpdating = updating === item.id;
-            const emoji = getEmoji(item.product.category);
-            const bg    = getBg(item.product.category);
+            const isUpdating    = updating === item.id;
+            const emoji         = getEmoji(item.product.category);
+            const bg            = getBg(item.product.category);
+            const effectivePrice = getEffectivePrice(item);
+            const hasDiscount   = item.product.finalPrice != null && item.product.finalPrice < item.product.price;
 
-            const price = item.product.finalPrice ?? item.product.price;
-            
             return (
               <div key={item.id} style={{ background: "#fff", borderRadius: "16px", border: "0.5px solid #e8e8e8", padding: "18px 22px", display: "flex", alignItems: "center", gap: "18px", opacity: isUpdating ? 0.6 : 1, transition: "opacity 0.2s" }}>
                 <div style={{ width: "80px", height: "80px", borderRadius: "14px", background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "36px", flexShrink: 0 }}>
@@ -160,19 +171,21 @@ export default function CartPage() {
                     {item.product.size ? `Size: ${item.product.size}` : item.product.category || ""}
                   </p>
 
-                  {/* Price display */}
-                  {item.product.finalPrice && item.product.finalPrice < item.product.price ? (
-                    <>
-                      <p style={{ fontSize: "14px", color: "#888", textDecoration: "line-through", marginBottom: "4px" }}>
+                  {hasDiscount ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <p style={{ fontSize: "14px", color: "#bbb", textDecoration: "line-through", margin: 0 }}>
                         ₱{(item.product.price * item.quantity).toLocaleString()}.00
                       </p>
-                      <p style={{ fontSize: "18px", fontWeight: 700, color: "#2d7a3a" }}>
-                        ₱{(item.product.finalPrice * item.quantity).toLocaleString()}.00
+                      <p style={{ fontSize: "18px", fontWeight: 700, color: "#2d7a3a", margin: 0 }}>
+                        ₱{(effectivePrice * item.quantity).toLocaleString()}.00
                       </p>
-                    </>
+                      <span style={{ fontSize: "10px", fontWeight: 700, color: "#fff", background: "#e53935", borderRadius: "6px", padding: "2px 6px" }}>
+                        PROMO
+                      </span>
+                    </div>
                   ) : (
-                    <p style={{ fontSize: "18px", fontWeight: 700, color: "#2d7a3a" }}>
-                      ₱{(item.product.price * item.quantity).toLocaleString()}.00
+                    <p style={{ fontSize: "18px", fontWeight: 700, color: "#2d7a3a", margin: 0 }}>
+                      ₱{(effectivePrice * item.quantity).toLocaleString()}.00
                     </p>
                   )}
                 </div>
@@ -206,97 +219,55 @@ export default function CartPage() {
 
         {/* ── RIGHT: Order Summary ── */}
         <div style={{ background: "#fff", borderRadius: "20px", border: "0.5px solid #e8e8e8", padding: "24px", position: "sticky", top: "20px" }}>
-          {/* ── RIGHT: Order Summary ── */}
-            <div style={{ background: "#fff", borderRadius: "20px", border: "0.5px solid #e8e8e8", padding: "24px", position: "sticky", top: "20px" }}>
-              <p style={{ fontSize: "16px", fontWeight: 700, color: "#1a1a1a", marginBottom: "20px" }}>Order Summary</p>
+          <p style={{ fontSize: "16px", fontWeight: 700, color: "#1a1a1a", marginBottom: "20px" }}>Order Summary</p>
 
-              {/* Itemized list */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
-                {items.map((item) => {
-                  const basePrice   = item.product.price;
-                  const finalPrice  = item.product.finalPrice ?? item.product.price;
-                  const hasDiscount = item.product.finalPrice && item.product.finalPrice < item.product.price;
-
-                  return (
-                    <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span>{item.product.productName} × {item.quantity}</span>
-                      <div style={{ textAlign: "right" }}>
-                        {hasDiscount && (
-                          <div style={{ fontSize: "12px", color: "#888", textDecoration: "line-through" }}>
-                            ₱{(basePrice * item.quantity).toLocaleString()}.00
-                          </div>
-                        )}
-                        <div style={{ fontSize: "14px", fontWeight: 600, color: "#2d7a3a" }}>
-                          ₱{(finalPrice * item.quantity).toLocaleString()}.00
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Subtotal */}
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                  <span>Subtotal</span>
-                  <span>₱{subtotal.toLocaleString()}.00</span>
-                </div>
-
-                {/* Delivery */}
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                  <span>Delivery</span>
-                  <span style={{ color: delivery === 0 ? "#2d7a3a" : "#1a1a1a" }}>
-                    {delivery === 0 ? "FREE" : `₱${delivery}.00`}
-                  </span>
-                </div>
-
-                {/* Promo Discount */}
-                {items.some(i => i.product.finalPrice && i.product.finalPrice < i.product.price) && (
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", color: "#2d7a3a" }}>
-                    <span>Promo Discount</span>
-                    <span>
-                      -₱{items.reduce((sum, i) => {
-                        if (i.product.finalPrice && i.product.finalPrice < i.product.price) {
-                          return sum + (i.product.price - i.product.finalPrice) * i.quantity;
-                        }
-                        return sum;
-                      }, 0).toLocaleString()}.00
-                    </span>
-                  </div>
-                )}
-
-                <hr style={{ margin: "12px 0" }} />
-
-                {/* Total */}
-                <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: "16px" }}>
-                  <span>Total</span>
-                  <span>₱{total.toLocaleString()}.00</span>
-                </div>
-
-            </div>
-
-
-            <div style={{ height: "1px", background: "#f0f0f0", margin: "14px 0" }} />
-
+          {/* Itemized list */}
           <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontSize: "13px", color: "#888" }}>Subtotal</span>
-              <span style={{ fontSize: "13px", color: "#1a1a1a" }}>₱{subtotal.toLocaleString()}.00</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontSize: "13px", color: "#888" }}>Delivery Fee</span>
-              <span style={{ fontSize: "13px", color: delivery === 0 ? "#2e7d32" : "#1a1a1a", fontWeight: delivery === 0 ? 600 : 400 }}>
-                {delivery === 0 ? "FREE" : `₱${delivery}.00`}
-              </span>
-            </div>
-            {delivery === 0 ? (
-              <p style={{ fontSize: "11px", color: "#2e7d32", background: "#e8f5e9", padding: "6px 10px", borderRadius: "8px" }}>🎉 You qualify for free delivery!</p>
-            ) : (
-              <p style={{ fontSize: "11px", color: "#888", background: "#f5f5f5", padding: "6px 10px", borderRadius: "8px" }}>Add ₱{(1000 - subtotal).toLocaleString()} more for free delivery</p>
-            )}
+            {items.map((item) => {
+              const effectivePrice = getEffectivePrice(item);
+              const hasDiscount    = item.product.finalPrice != null && item.product.finalPrice < item.product.price;
+
+              return (
+                <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "13px", color: "#555" }}>
+                    {item.product.productName} × {item.quantity}
+                  </span>
+                  <div style={{ textAlign: "right" }}>
+                    {hasDiscount && (
+                      <div style={{ fontSize: "11px", color: "#bbb", textDecoration: "line-through" }}>
+                        ₱{(item.product.price * item.quantity).toLocaleString()}.00
+                      </div>
+                    )}
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: "#2d7a3a" }}>
+                      ₱{(effectivePrice * item.quantity).toLocaleString()}.00
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           <div style={{ height: "1px", background: "#f0f0f0", margin: "14px 0" }} />
 
+          {/* Subtotal */}
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+            <span style={{ fontSize: "13px", color: "#888" }}>Subtotal</span>
+            <span style={{ fontSize: "13px", color: "#1a1a1a" }}>₱{subtotal.toLocaleString()}.00</span>
+          </div>
+
+          {/* Promo Discount — only shown when applicable */}
+          {totalDiscount > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+              <span style={{ fontSize: "13px", color: "#e53935" }}>🏷️ Promo Discount</span>
+              <span style={{ fontSize: "13px", fontWeight: 600, color: "#e53935" }}>
+                −₱{totalDiscount.toLocaleString()}.00
+              </span>
+            </div>
+          )}
+
+          <div style={{ height: "1px", background: "#f0f0f0", margin: "14px 0" }} />
+
+          {/* Total */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
             <span style={{ fontSize: "16px", fontWeight: 700, color: "#1a1a1a" }}>Total</span>
             <span style={{ fontSize: "22px", fontWeight: 700, color: "#2d7a3a" }}>₱{total.toLocaleString()}.00</span>
