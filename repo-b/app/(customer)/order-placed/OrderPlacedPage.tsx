@@ -28,8 +28,11 @@ export default function OrderPlacedPage() {
     setDelivery(del);
     setTotal(sub + del);
 
+    // ── Read customer ID from the shared "user" key set at login ──
     const customerId =
-      typeof window !== "undefined" ? localStorage.getItem("customerId") ?? "" : "";
+      typeof window !== "undefined"
+        ? JSON.parse(localStorage.getItem("user") || "{}")?.id ?? ""
+        : "";
 
     api
       .placeOrder({
