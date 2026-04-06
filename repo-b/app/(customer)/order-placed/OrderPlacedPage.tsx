@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 
 export default function OrderPlacedPage() {
+  const [isMobile, setIsMobile] = useState(false);
   const { items, clearCart } = useCart();
 
   const [orderNo, setOrderNo] = useState<string | null>(null);
@@ -13,6 +14,16 @@ export default function OrderPlacedPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 600);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     // Snapshot items immediately so clearCart doesn't wipe them mid-flight
@@ -31,7 +42,7 @@ export default function OrderPlacedPage() {
     // ── Read customer ID from the shared "user" key set at login ──
     const customerId =
       typeof window !== "undefined"
-        ? JSON.parse(localStorage.getItem("user") || "{}")?.id ?? ""
+        ? (JSON.parse(localStorage.getItem("user") || "{}")?.id ?? "")
         : "";
 
     api
@@ -83,7 +94,7 @@ export default function OrderPlacedPage() {
           justifyContent: "center",
           flexDirection: "column",
           gap: "16px",
-          padding: "28px",
+          padding: isMobile ? "16px" : "28px",
           background: "linear-gradient(160deg, #fff5f5 0%, #fce4e4 100%)",
         }}
       >
@@ -126,8 +137,8 @@ export default function OrderPlacedPage() {
         {/* Check Icon */}
         <div
           style={{
-            width: "110px",
-            height: "110px",
+            width: isMobile ? "80px" : "110px",
+            height: isMobile ? "80px" : "110px",
             borderRadius: "50%",
             background: "linear-gradient(135deg, #2d7a3a, #56ab6e)",
             display: "flex",
@@ -137,19 +148,59 @@ export default function OrderPlacedPage() {
             boxShadow: "0 12px 32px rgba(45,122,58,0.3)",
           }}
         >
-          <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
-            <circle cx="26" cy="26" r="24" stroke="rgba(255,255,255,0.3)" strokeWidth="2" fill="none" />
-            <path d="M14 26l9 9 15-18" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          <svg
+            width={isMobile ? "36" : "52"}
+            height={isMobile ? "36" : "52"}
+            viewBox="0 0 52 52"
+            fill="none"
+          >
+            <circle
+              cx="26"
+              cy="26"
+              r="24"
+              stroke="rgba(255,255,255,0.3)"
+              strokeWidth="2"
+              fill="none"
+            />
+            <path
+              d="M14 26l9 9 15-18"
+              stroke="#fff"
+              strokeWidth="3.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
           </svg>
         </div>
 
-        <h1 style={{ fontSize: "28px", fontWeight: 800, color: "#1a1a1a", marginBottom: "12px" }}>
+        <h1
+          style={{
+            fontSize: isMobile ? "22px" : "28px",
+            fontWeight: 800,
+            color: "#1a1a1a",
+            marginBottom: "12px",
+          }}
+        >
           Order Placed! 🎉
         </h1>
-        <p style={{ fontSize: "14px", color: "#666", lineHeight: 1.7, marginBottom: "8px" }}>
+        <p
+          style={{
+            fontSize: "14px",
+            color: "#666",
+            lineHeight: 1.7,
+            marginBottom: "8px",
+          }}
+        >
           Your order has been placed successfully!
         </p>
-        <p style={{ fontSize: "14px", color: "#666", lineHeight: 1.7, marginBottom: "28px" }}>
+        <p
+          style={{
+            fontSize: "14px",
+            color: "#666",
+            lineHeight: 1.7,
+            marginBottom: "28px",
+          }}
+        >
           We will process it and deliver it to your address soon.
         </p>
 
@@ -175,31 +226,73 @@ export default function OrderPlacedPage() {
             background: "#fff",
             borderRadius: "20px",
             border: "0.5px solid #e8e8e8",
-            padding: "24px",
+            padding: isMobile ? "16px" : "24px",
             marginBottom: "24px",
             textAlign: "left",
             boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
           }}
         >
-          <p style={{ fontSize: "15px", fontWeight: 700, color: "#1a1a1a", marginBottom: "16px", textAlign: "center" }}>
+          <p
+            style={{
+              fontSize: "15px",
+              fontWeight: 700,
+              color: "#1a1a1a",
+              marginBottom: "16px",
+              textAlign: "center",
+            }}
+          >
             Order Summary
           </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "14px" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+              marginBottom: "14px",
+            }}
+          >
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span style={{ fontSize: "14px", color: "#888" }}>Subtotal:</span>
-              <span style={{ fontSize: "14px", color: "#1a1a1a" }}>₱{subtotal.toLocaleString()}.00</span>
+              <span style={{ fontSize: "14px", color: "#1a1a1a" }}>
+                ₱{subtotal.toLocaleString()}.00
+              </span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontSize: "14px", color: "#888" }}>Delivery Fee:</span>
-              <span style={{ fontSize: "14px", color: delivery === 0 ? "#2e7d32" : "#1a1a1a" }}>
+              <span style={{ fontSize: "14px", color: "#888" }}>
+                Delivery Fee:
+              </span>
+              <span
+                style={{
+                  fontSize: "14px",
+                  color: delivery === 0 ? "#2e7d32" : "#1a1a1a",
+                }}
+              >
                 {delivery === 0 ? "FREE" : `₱${delivery}.00`}
               </span>
             </div>
           </div>
-          <div style={{ height: "1px", background: "#f0f0f0", margin: "12px 0" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "16px", fontWeight: 700, color: "#1a1a1a" }}>Total:</span>
-            <span style={{ fontSize: "26px", fontWeight: 800, color: "#2d7a3a" }}>
+          <div
+            style={{ height: "1px", background: "#f0f0f0", margin: "12px 0" }}
+          />
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <span
+              style={{ fontSize: "16px", fontWeight: 700, color: "#1a1a1a" }}
+            >
+              Total:
+            </span>
+            <span
+              style={{
+                fontSize: isMobile ? "20px" : "26px",
+                fontWeight: 800,
+                color: "#2d7a3a",
+              }}
+            >
               ₱{total.toLocaleString()}.00
             </span>
           </div>
@@ -210,7 +303,7 @@ export default function OrderPlacedPage() {
           style={{
             background: "#fff8e1",
             borderRadius: "12px",
-            padding: "12px 20px",
+            padding: isMobile ? "10px 14px" : "12px 20px",
             marginBottom: "28px",
             border: "1px solid #ffe082",
             display: "flex",
@@ -226,7 +319,13 @@ export default function OrderPlacedPage() {
         </div>
 
         {/* Buttons */}
-        <div style={{ display: "flex", gap: "12px" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: isMobile ? "column" : "row",
+            gap: "12px",
+          }}
+        >
           <Link
             href="/products"
             style={{
@@ -240,7 +339,7 @@ export default function OrderPlacedPage() {
               textDecoration: "none",
               padding: "14px",
               borderRadius: "30px",
-              fontSize: "14px",
+              fontSize: isMobile ? "13px" : "14px",
               fontWeight: 700,
               boxShadow: "0 6px 20px rgba(45,122,58,0.3)",
             }}
@@ -269,7 +368,14 @@ export default function OrderPlacedPage() {
           </Link>
         </div>
 
-        <p style={{ fontSize: "12px", color: "#aaa", marginTop: "20px", lineHeight: 1.6 }}>
+        <p
+          style={{
+            fontSize: "12px",
+            color: "#aaa",
+            marginTop: "20px",
+            lineHeight: 1.6,
+          }}
+        >
           You can track your order status in the My Orders section
         </p>
       </div>
