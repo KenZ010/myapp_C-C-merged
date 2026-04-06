@@ -56,6 +56,12 @@ export const api = {
   },
 
   // CUSTOMERS
+  getCustomers: async () => {
+    const res = await fetch(`${API_URL}/customers`, {
+      headers: { Authorization: `Bearer ${getToken()}` }
+    });
+    return res.json();
+  },
   getCustomer: async (id: string) => {
     const res = await fetch(`${API_URL}/customers/${id}`, {
       headers: { Authorization: `Bearer ${getToken()}` }
