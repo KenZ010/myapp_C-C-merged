@@ -47,17 +47,7 @@ const calculateStockStatus = (stock: number): { label: string; color: string } =
   return { label: "In Stock", color: "green" };
 };
 
-const ITEMS_PER_PAGE = 5;
-const LOGS_PER_PAGE  = 10;
-
-const getStockBadge = (color: string) => {
-  const map: Record<string, string> = {
-    green:  "bg-green-500 text-white",
-    red:    "bg-red-500 text-white",
-    yellow: "bg-yellow-400 text-black",
-  };
-  return map[color] || "bg-gray-300 text-white";
-};
+const LOGS_PER_PAGE = 10;
 
 const navItems = [
   { label: "Dashboard",             icon: "🏠", path: "/dashboard"      },
@@ -82,37 +72,21 @@ export default function InventoryMaintenancePage() {
 
   const [items,     setItems]     = useState<InventoryItem[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading,   setLoading]   = useState(true);
 
   // Inventory logs state
-  const [logs,        setLogs]        = useState<InventoryLog[]>([]);
-  const [logsTotal,   setLogsTotal]   = useState(0);
-  const [logsPage,    setLogsPage]    = useState(1);
+  const [logs,           setLogs]           = useState<InventoryLog[]>([]);
+  const [logsTotal,      setLogsTotal]      = useState(0);
+  const [logsPage,       setLogsPage]       = useState(1);
   const [logsTotalPages, setLogsTotalPages] = useState(1);
-  const [logsLoading, setLogsLoading] = useState(true);
-  const [logTypeFilter, setLogTypeFilter] = useState<string>("ALL");
+  const [logsLoading,    setLogsLoading]    = useState(true);
+  const [logTypeFilter,  setLogTypeFilter]  = useState<string>("ALL");
 
   const [showUserMenu,   setShowUserMenu]   = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [search,         setSearch]         = useState("");
-  const [selected,       setSelected]       = useState<string[]>([]);
-  const [categoryFilter, setCategoryFilter] = useState("All");
-  const [statusFilter,   setStatusFilter]   = useState("All");
-  const [currentPage,    setCurrentPage]    = useState(1);
-  const [sortKey,        setSortKey]        = useState<SortKey>("productName");
-  const [sortDir,        setSortDir]        = useState<SortDir>("asc");
-
-  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
-  const [showStatusDropdown,   setShowStatusDropdown]   = useState(false);
-  const [showDeleteConfirm,    setShowDeleteConfirm]    = useState(false);
-
-  const categoryRef = useRef<HTMLDivElement>(null);
-  const statusRef   = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        setLoading(true);
         const res  = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/products`);
         const data = await res.json();
         setItems(data.map((p: any) => ({
@@ -121,7 +95,6 @@ export default function InventoryMaintenancePage() {
           stock: p.stock ?? 0, status: p.status,
         })));
       } catch (err) { console.error("Failed to fetch products", err); }
-      finally { setLoading(false); }
     };
     fetchData();
   }, []);
@@ -156,20 +129,6 @@ export default function InventoryMaintenancePage() {
 
   useEffect(() => { fetchLogs(1, logTypeFilter); }, [logTypeFilter, fetchLogs]);
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (categoryRef.current && !categoryRef.current.contains(e.target as Node)) setShowCategoryDropdown(false);
-      if (statusRef.current   && !statusRef.current.contains(e.target as Node))   setShowStatusDropdown(false);
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const totalItems      = items.length;
-  const inStockCount    = items.filter(i => calculateStockStatus(i.stock).label === "In Stock").length;
-  const lowStockCount   = items.filter(i => calculateStockStatus(i.stock).label === "Low Stock").length;
-  const outOfStockCount = items.filter(i => calculateStockStatus(i.stock).label === "Out of Stock").length;
-
   const categoryData = useMemo(() => {
     const counts: Record<string, number> = {};
     items.forEach(i => { counts[i.category] = (counts[i.category] ?? 0) + 1; });
@@ -183,65 +142,8 @@ export default function InventoryMaintenancePage() {
     [...items].sort((a, b) => b.stock - a.stock).slice(0, 5).map(p => ({ name: p.productName, units: p.stock }))
   , [items]);
 
-  const filtered = useMemo(() => {
-    const f = items.filter(row => {
-      const matchSearch   = row.productName.toLowerCase().includes(search.toLowerCase()) || row.barcode.toLowerCase().includes(search.toLowerCase());
-      const matchCategory = categoryFilter === "All" || row.category === categoryFilter;
-      const matchStatus   = statusFilter   === "All" || calculateStockStatus(row.stock).label === statusFilter;
-      return matchSearch && matchCategory && matchStatus;
-    });
-    f.sort((a, b) => {
-      const aVal = a[sortKey]; const bVal = b[sortKey];
-      if (typeof aVal === "number" && typeof bVal === "number") return sortDir === "asc" ? aVal - bVal : bVal - aVal;
-      return sortDir === "asc" ? String(aVal).localeCompare(String(bVal)) : String(bVal).localeCompare(String(aVal));
-    });
-    return f;
-  }, [items, search, categoryFilter, statusFilter, sortKey, sortDir]);
-
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-  const paginated  = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortKey(key); setSortDir("asc"); }
-  };
-  const sortIcon = (key: SortKey) => {
-    if (sortKey !== key) return <span className="ml-1 opacity-30">↕</span>;
-    return <span className="ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>;
-  };
-
-  const allPageSelected = paginated.length > 0 && paginated.every(r => selected.includes(r.id));
-  const toggleSelect    = (id: string) => setSelected(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-  const toggleAll       = () => {
-    if (allPageSelected) setSelected(prev => prev.filter(id => !paginated.map(r => r.id).includes(id)));
-    else setSelected(prev => [...new Set([...prev, ...paginated.map(r => r.id)])]);
-  };
-
-  const handleDelete = () => {
-    if (selected.length === 0) { alert("Please select at least one item to delete."); return; }
-    setShowDeleteConfirm(true);
-  };
-  const confirmDelete = async () => {
-    try {
-      await Promise.all(selected.map(id => fetch(`${process.env.NEXT_PUBLIC_API_URL}/products/${id}`, { method: "DELETE" })));
-      setItems(prev => prev.filter(item => !selected.includes(item.id)));
-      setSelected([]);
-    } catch (err) { console.error("Failed to delete", err); }
-    finally { setShowDeleteConfirm(false); }
-  };
-
-  const handleExport = () => {
-    const headers = ["Barcode","Product Name","Category","Expiry Date","Stock","Status"];
-    const rows    = items.map(item => [item.barcode, item.productName, item.category, item.expiryDate, item.stock, calculateStockStatus(item.stock).label]);
-    const csv     = [headers, ...rows].map(row => row.join(",")).join("\n");
-    const blob    = new Blob([csv], { type: "text/csv" });
-    const url     = URL.createObjectURL(blob);
-    const a       = document.createElement("a"); a.href = url; a.download = "inventory.csv"; a.click(); URL.revokeObjectURL(url);
-  };
-
   const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("employee"); router.push("/"); };
   const navigate     = (path: string) => { router.push(path); setShowMobileMenu(false); };
-  const hasActiveFilters = categoryFilter !== "All" || statusFilter !== "All";
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const renderLabel = (props: any) => {
@@ -315,181 +217,14 @@ export default function InventoryMaintenancePage() {
 
         <div className="flex-1 p-3 md:p-4 bg-green-50">
 
-          {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-            {[
-              { icon: "📦", label: "Total Items",   value: totalItems,      cls: "text-gray-800",   bg: "bg-indigo-100" },
-              { icon: "✅", label: "In Stock",       value: inStockCount,    cls: "text-green-600",  bg: "bg-green-100"  },
-              { icon: "⚠️", label: "Low Stock",      value: lowStockCount,   cls: "text-yellow-500", bg: "bg-yellow-100" },
-              { icon: "❌", label: "Out of Stock",   value: outOfStockCount, cls: "text-red-500",    bg: "bg-red-100"    },
-            ].map((s) => (
-              <div key={s.label} className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full ${s.bg} flex items-center justify-center text-lg`}>{s.icon}</div>
-                <div><p className="text-xs text-gray-400">{s.label}</p><p className={`text-xl font-bold ${s.cls}`}>{s.value}</p></div>
-              </div>
-            ))}
-          </div>
-
-          {/* Table Card */}
+          {/* Inventory Movement Log */}
           <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm mb-4">
-            {/* Toolbar */}
-            <div className="flex items-center gap-2 mb-4 flex-wrap">
-              <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-40 md:w-48">
-                <span className="text-gray-400 text-sm">🔍</span>
-                <input type="text" placeholder="Search" value={search}
-                  onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
-                  className="outline-none text-sm text-gray-700 w-full bg-transparent" />
-              </div>
-
-              <div className="relative" ref={categoryRef}>
-                <button onClick={() => { setShowCategoryDropdown(!showCategoryDropdown); setShowStatusDropdown(false); }}
-                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${categoryFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                  📦 {categoryFilter === "All" ? "Category" : categoryFilter} ▾
-                </button>
-                {showCategoryDropdown && (
-                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44">
-                    {["All", ...Array.from(new Set(items.map(i => i.category)))].map(opt => (
-                      <button key={opt} onClick={() => { setCategoryFilter(opt); setCurrentPage(1); setShowCategoryDropdown(false); }}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${categoryFilter === opt ? "text-indigo-600 font-semibold" : "text-gray-600"}`}>
-                        {opt === "All" ? "All Categories" : opt}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="relative" ref={statusRef}>
-                <button onClick={() => { setShowStatusDropdown(!showStatusDropdown); setShowCategoryDropdown(false); }}
-                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${statusFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                  🔖 {statusFilter === "All" ? "Status" : statusFilter} ▾
-                </button>
-                {showStatusDropdown && (
-                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44">
-                    {["All","In Stock","Low Stock","Out of Stock"].map(opt => (
-                      <button key={opt} onClick={() => { setStatusFilter(opt); setCurrentPage(1); setShowStatusDropdown(false); }}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${statusFilter === opt ? "text-indigo-600 font-semibold" : "text-gray-600"}`}>
-                        {opt === "All" ? "All Statuses" : opt}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {hasActiveFilters && (
-                <button onClick={() => { setCategoryFilter("All"); setStatusFilter("All"); setCurrentPage(1); }}
-                  className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
-              )}
-
-              <button onClick={handleExport} className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-600 hover:bg-gray-50 ml-auto">📤 Export</button>
-              <button onClick={handleDelete} className="flex items-center gap-1 border border-red-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-red-500 hover:bg-red-50">🗑️ Delete</button>
-              <button onClick={() => router.push("/product")} className="flex items-center gap-1 bg-gray-900 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-white hover:bg-gray-700">+ Add</button>
-            </div>
-
-            {/* Table */}
-            {loading ? (
-              <div className="text-center py-10 text-gray-400 text-sm">Loading inventory...</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-max">
-                  <thead>
-                    <tr className="bg-indigo-900 text-white text-xs">
-                      <th className="p-3 text-left w-8"><input type="checkbox" onChange={toggleAll} checked={allPageSelected} /></th>
-                      {([
-                        { key: "barcode",     label: "Barcode"      },
-                        { key: "productName", label: "Product Name" },
-                        { key: "category",    label: "Category"     },
-                        { key: "expiryDate",  label: "Expiry Date"  },
-                        { key: "stock",       label: "Stock"        },
-                        { key: "status",      label: "Stock Status" },
-                      ] as { key: SortKey; label: string }[]).map(({ key, label }) => (
-                        <th key={key} className="p-3 text-left cursor-pointer hover:bg-indigo-800 select-none" onClick={() => handleSort(key)}>
-                          {label}{sortIcon(key)}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginated.length === 0 ? (
-                      <tr><td colSpan={7} className="text-center py-10">
-                        <p className="text-gray-400 text-sm">{search ? `No results for "${search}".` : "No items in inventory yet."}</p>
-                      </td></tr>
-                    ) : paginated.map(row => {
-                      const { label, color } = calculateStockStatus(row.stock);
-                      return (
-                        <tr key={row.id} className={`border-b border-gray-100 hover:bg-gray-50 ${selected.includes(row.id) ? "bg-indigo-50" : ""}`}>
-                          <td className="p-3"><input type="checkbox" checked={selected.includes(row.id)} onChange={() => toggleSelect(row.id)} /></td>
-                          <td className="p-3 text-gray-700">{row.barcode}</td>
-                          <td className="p-3 text-gray-700">{row.productName}</td>
-                          <td className="p-3"><span className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full text-xs">{row.category}</span></td>
-                          <td className="p-3"><span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">{row.expiryDate}</span></td>
-                          <td className="p-3 text-gray-700">{row.stock}</td>
-                          <td className="p-3"><span className={`px-3 py-1 rounded-full text-xs font-medium ${getStockBadge(color)}`}>{label}</span></td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 px-1">
-                <p className="text-xs text-gray-400">
-                  Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} of {filtered.length} items
-                </p>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-                    className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">← Prev</button>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                    <button key={page} onClick={() => setCurrentPage(page)}
-                      className={`px-3 py-1 rounded-lg text-sm border transition-colors ${currentPage === page ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                      {page}
-                    </button>
-                  ))}
-                  <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-                    className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">Next →</button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Charts */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <h2 className="font-bold text-gray-800 mb-3">Top Products by Stock</h2>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={topSellingData} margin={{ top: 5, right: 10, left: -20, bottom: 30 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-15} textAnchor="end" />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Bar dataKey="units" fill="#3b82f6" radius={[4,4,0,0]} name="Stock" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <h2 className="font-bold text-gray-800 mb-3">Inventory by Category</h2>
-              <div className="flex justify-center overflow-x-auto">
-                <PieChart width={320} height={220}>
-                  <Pie data={categoryData} cx={155} cy={100} outerRadius={90} dataKey="value" label={renderLabel} labelLine>
-                    {categoryData.map((entry, index) => <Cell key={index} fill={entry.color} />)}
-                  </Pie>
-                  <Tooltip formatter={value => `${value}%`} />
-                </PieChart>
-              </div>
-            </div>
-          </div>
-
-          {/* ── INVENTORY LOGS TABLE ── */}
-          <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm">
             <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
               <div>
                 <h2 className="font-bold text-gray-800 text-base">📋 Inventory Movement Log</h2>
                 <p className="text-xs text-gray-400 mt-0.5">{logsTotal} total records</p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                {/* Log type filter */}
                 {["ALL","STOCK_IN","STOCK_OUT","ADJUSTMENT","RETURN_IN","RETURN_OUT"].map((t) => (
                   <button key={t} onClick={() => { setLogTypeFilter(t); setLogsPage(1); }}
                     className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${logTypeFilter === t ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
@@ -581,23 +316,36 @@ export default function InventoryMaintenancePage() {
               </div>
             )}
           </div>
-        </div>
-      </main>
 
-      {/* DELETE CONFIRM MODAL */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
-            <p className="text-2xl mb-2">🗑️</p>
-            <h2 className="text-lg font-bold text-gray-800 mb-2">Delete Items?</h2>
-            <p className="text-sm text-gray-500 mb-5">Are you sure you want to delete {selected.length} item(s)? This cannot be undone.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={confirmDelete} className="flex-1 bg-red-500 rounded-lg py-2 text-sm text-white hover:bg-red-600">Delete</button>
+          {/* Charts */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <h2 className="font-bold text-gray-800 mb-3">Top Selling Products</h2>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={topSellingData} margin={{ top: 5, right: 10, left: -20, bottom: 30 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-15} textAnchor="end" />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="units" fill="#3b82f6" radius={[4,4,0,0]} name="Stock" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <h2 className="font-bold text-gray-800 mb-3">Inventory by Category</h2>
+              <div className="flex justify-center overflow-x-auto">
+                <PieChart width={320} height={220}>
+                  <Pie data={categoryData} cx={155} cy={100} outerRadius={90} dataKey="value" label={renderLabel} labelLine>
+                    {categoryData.map((entry, index) => <Cell key={index} fill={entry.color} />)}
+                  </Pie>
+                  <Tooltip formatter={value => `${value}%`} />
+                </PieChart>
+              </div>
             </div>
           </div>
+
         </div>
-      )}
+      </main>
     </div>
   );
 }
