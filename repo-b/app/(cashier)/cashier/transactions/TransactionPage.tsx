@@ -41,7 +41,9 @@ function normalizeTransaction(o: Record<string, unknown>): Transaction {
       ? new Date(String(o.createdAt)).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" })
       : "—",
     customer:     customer ? String(customer.name ?? "Walk-in") : "Walk-in",
-    employeeName: employee ? String(employee.name ?? "—") : "—",
+    employeeName: customer
+      ? "Online Order"  // customer-placed orders have no cashier
+      : employee ? String(employee.name ?? "—") : "—",
     total:        Number(o.totalAmount ?? 0),
     payment:      payment ? String(payment.method ?? "CASH") : "CASH",
     items:        rawLines.map((l) => {
