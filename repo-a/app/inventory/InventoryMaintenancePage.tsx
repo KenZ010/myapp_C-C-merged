@@ -3,8 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
-  PieChart, Pie, Cell, Tooltip,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell, Tooltip
 } from "recharts";
 import { api } from "@/lib/api";
 
@@ -29,6 +28,62 @@ type InventoryLog = {
   product:  { productName: string; category: string };
   employee: { name: string; role: string };
 };
+
+type OrderLine = {
+  id: string; quantity: number; price: number; subtotal: number;
+  product: { productName: string; category: string };
+};
+
+type Transaction = {
+  id: string; date: string; customer: string; employeeName: string;
+  total: number; payment: string; items: OrderLine[];
+};
+
+type Period = "Daily" | "Weekly" | "Monthly";
+
+const EMOJI_MAP: Record<string, string> = {
+  SOFTDRINKS: "🥤", ENERGY_DRINK: "⚡", BEER: "🍺",
+  JUICE: "🍹", WATER: "💧", OTHER: "🛒",
+};
+const getEmoji = (cat?: string) => EMOJI_MAP[cat?.toUpperCase() || ""] || "🥤";
+
+const rankColors = ["#e53935","#fb8c00","#f9a825","#aaa","#aaa","#aaa","#aaa","#aaa"];
+
+function normalizeTransaction(o: Record<string, unknown>): Transaction {
+  const customer = o.customer as Record<string, unknown> | null;
+  const employee = o.employee as Record<string, unknown> | null;
+  const payment  = o.payment  as Record<string, unknown> | null;
+  const rawLines = (o.orderLines ?? []) as Record<string, unknown>[];
+  return {
+    id:           String(o.id ?? ""),
+    date:         o.createdAt ? new Date(String(o.createdAt)).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" }) : "—",
+    customer:     customer ? String(customer.name ?? "Walk-in") : "Walk-in",
+    employeeName: employee ? String(employee.name ?? "—") : "—",
+    total:        Number(o.totalAmount ?? 0),
+    payment:      payment ? String(payment.method ?? "CASH") : "CASH",
+    items:        rawLines.map((l) => {
+      const product = l.product as Record<string, unknown> | null;
+      return {
+        id: String(l.id ?? ""), quantity: Number(l.quantity ?? 0),
+        price: Number(l.price ?? 0), subtotal: Number(l.subtotal ?? 0),
+        product: {
+          productName: product ? String(product.productName ?? "Item") : "Item",
+          category:    product ? String(product.category ?? "") : "",
+        },
+      };
+    }),
+  };
+}
+
+function filterByPeriod(txs: Transaction[], period: Period): Transaction[] {
+  const now = new Date();
+  return txs.filter((tx) => {
+    const d = new Date(tx.date);
+    if (period === "Daily")   return d.toDateString() === now.toDateString();
+    if (period === "Weekly")  { const w = new Date(now); w.setDate(now.getDate() - 7); return d >= w; }
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  });
+}
 
 const LOG_TYPE_STYLE: Record<LogType, { label: string; bg: string; color: string; sign: string }> = {
   STOCK_IN:    { label: "Stock In",    bg: "#e8f5e9", color: "#2e7d32", sign: "+" },
@@ -128,14 +183,38 @@ export default function InventoryMaintenancePage() {
 
   useEffect(() => { fetchLogs(1, logTypeFilter); }, [logTypeFilter, fetchLogs]);
 
-  const categoryData = useMemo(() => {
-    const counts: Record<string, number> = {};
-    items.forEach(i => { counts[i.category] = (counts[i.category] ?? 0) + 1; });
-    const colors = ["#60a5fa","#7c3aed","#f59e0b","#f97316","#22c55e","#ec4899"];
-    return Object.entries(counts).map(([name, value], idx) => ({
-      name, value: Math.round((value / items.length) * 100), color: colors[idx % colors.length]
-    }));
-  }, [items]);
+  // ── Top Selling ──
+  const [transactions,  setTransactions]  = useState<Transaction[]>([]);
+  const [txLoading,     setTxLoading]     = useState(true);
+  const [topPeriod,     setTopPeriod]     = useState<Period>("Monthly");
+
+  useEffect(() => {
+    const fetchTx = async () => {
+      try {
+        setTxLoading(true);
+        const data = await api.getCompletedOrders();
+        if (data?.message) return;
+        const raw: Record<string, unknown>[] = Array.isArray(data) ? data : [];
+        setTransactions(raw.map(normalizeTransaction));
+      } catch (err) { console.error("Failed to fetch transactions", err); }
+      finally { setTxLoading(false); }
+    };
+    fetchTx();
+  }, []);
+
+  const topSelling = useMemo(() => {
+    const periodFiltered = filterByPeriod(transactions, topPeriod);
+    const productMap: Record<string, { name: string; qty: number; revenue: number; category: string }> = {};
+    periodFiltered.forEach((tx) => {
+      tx.items.forEach((line) => {
+        const key = line.product.productName;
+        if (!productMap[key]) productMap[key] = { name: key, qty: 0, revenue: 0, category: line.product.category };
+        productMap[key].qty     += line.quantity;
+        productMap[key].revenue += line.subtotal;
+      });
+    });
+    return Object.values(productMap).sort((a, b) => b.qty - a.qty).slice(0, 8).map((p, i) => ({ ...p, rank: i + 1 }));
+  }, [transactions, topPeriod]);
 
   const productStockData = useMemo(() =>
     [...items]
@@ -146,11 +225,6 @@ export default function InventoryMaintenancePage() {
   const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("employee"); router.push("/"); };
   const navigate     = (path: string) => { router.push(path); setShowMobileMenu(false); };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const renderLabel = (props: any) => {
-    const { name, value, x, y, cx } = props;
-    return <text x={x} y={y} fill="#555" fontSize={11} textAnchor={x > cx ? "start" : "end"}>{`${name}: ${value}%`}</text>;
-  };
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
@@ -357,15 +431,52 @@ export default function InventoryMaintenancePage() {
               )}
             </div>
             <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <h2 className="font-bold text-gray-800 mb-3">Inventory by Category</h2>
-              <div className="flex justify-center overflow-x-auto">
-                <PieChart width={320} height={220}>
-                  <Pie data={categoryData} cx={155} cy={100} outerRadius={90} dataKey="value" label={renderLabel} labelLine>
-                    {categoryData.map((entry, index) => <Cell key={index} fill={entry.color} />)}
-                  </Pie>
-                  <Tooltip formatter={value => `${value}%`} />
-                </PieChart>
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
+                <span className="text-lg">📈</span>
+                <h2 className="font-bold text-gray-800">Top Selling Items</h2>
+                <div className="ml-auto flex gap-1">
+                  {(["Daily", "Weekly", "Monthly"] as Period[]).map((p) => (
+                    <button key={p} onClick={() => setTopPeriod(p)}
+                      className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${topPeriod === p ? "bg-indigo-900 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                      {p}
+                    </button>
+                  ))}
+                </div>
               </div>
+              {txLoading ? (
+                <div className="flex items-center justify-center h-[220px] text-gray-400 text-sm">Loading...</div>
+              ) : topSelling.length === 0 ? (
+                <div className="flex items-center justify-center h-[220px] text-gray-400 text-sm">No sales data for this period.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100">
+                        {["Rank", "Product", "Qty Sold", "Revenue"].map((h) => (
+                          <th key={h} className="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {topSelling.map((item) => (
+                        <tr key={item.rank} className="border-b border-gray-50 hover:bg-gray-50">
+                          <td className="py-2 px-2">
+                            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                              style={{ background: rankColors[item.rank - 1] }}>
+                              {item.rank}
+                            </div>
+                          </td>
+                          <td className="py-2 px-2 font-medium text-gray-800">
+                            {getEmoji(item.category)} {item.name}
+                          </td>
+                          <td className="py-2 px-2 text-gray-500">{item.qty}</td>
+                          <td className="py-2 px-2 font-bold text-indigo-900">₱{item.revenue.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
 
