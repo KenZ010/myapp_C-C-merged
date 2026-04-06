@@ -114,11 +114,42 @@ export default function PaymentPage() {
     reader.readAsDataURL(file);
   };
 
-  const handleComplete = () => {
-    if (!canComplete) return;
-    sessionStorage.removeItem("pendingCart"); // ✅ clear cart after payment
+  const handleComplete = async () => {
+  if (!canComplete) return;
+
+  try {
+    // ✅ FIX: strict type for TS
+    const method: "cod" | "gcash" =
+      paymentMethod === "Cash" ? "cod" : "gcash";
+
+    const payload = {
+      customerId: selectedCustomer?.id || "",
+
+      paymentMethod: method, // ✅ FIXED
+
+      gcashRef: paymentMethod === "GCash" ? gcashRef : undefined,
+
+      items: cartItems.map(item => ({
+        productId: item.id,
+        quantity: item.qty,
+        price: item.finalPrice,
+      })),
+    };
+
+    const res = await api.placeOrder(payload);
+
+    // ✅ mark as COMPLETED (VERY IMPORTANT)
+    if (res?.saleId) {
+      await api.updateOrderStatus(res.saleId, "COMPLETED");
+    }
+
+    sessionStorage.removeItem("pendingCart");
     setCompleted(true);
-  };
+
+  } catch (err) {
+    console.error("Failed to complete order:", err);
+  }
+};
 
   const resetAll = () => {
     setCompleted(false);
