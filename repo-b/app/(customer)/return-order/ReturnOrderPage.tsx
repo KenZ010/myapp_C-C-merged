@@ -150,7 +150,7 @@ export default function ReturnOrderPage() {
   const cardStyle: React.CSSProperties = {
     background: "#fff",
     borderRadius: "16px",
-    padding: "20px 24px",
+    padding: "clamp(14px, 2.5vw, 24px)",
     border: "0.5px solid #f0e8ec",
     marginBottom: "16px",
   };
@@ -160,13 +160,13 @@ export default function ReturnOrderPage() {
       style={{
         minHeight: "calc(100vh - 56px)",
         background: "linear-gradient(160deg, #fff5f7 0%, #ffe4ec 100%)",
-        padding: "28px",
+        padding: "clamp(14px, 3vw, 28px)",
       }}
     >
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
+          gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
           gap: "24px",
           maxWidth: "1000px",
           margin: "0 auto",
@@ -285,7 +285,7 @@ export default function ReturnOrderPage() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(3, 1fr)",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))",
                   gap: "10px",
                 }}
               >
