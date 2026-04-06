@@ -337,7 +337,7 @@ export default function OrderPlacedPage() {
               background: "#2d7a3a",
               color: "#fff",
               textDecoration: "none",
-              padding: "14px",
+              padding: isMobile ? "13px" : "14px",
               borderRadius: "30px",
               fontSize: isMobile ? "13px" : "14px",
               fontWeight: 700,
@@ -359,7 +359,7 @@ export default function OrderPlacedPage() {
               textDecoration: "none",
               padding: "14px",
               borderRadius: "30px",
-              fontSize: "14px",
+              fontSize: isMobile ? "13px" : "14px",
               fontWeight: 700,
               boxShadow: "0 6px 20px rgba(45,122,58,0.3)",
             }}
