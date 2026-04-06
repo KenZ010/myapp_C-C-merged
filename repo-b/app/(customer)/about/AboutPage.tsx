@@ -48,13 +48,13 @@ const team = [
 
 export default function AboutPage() {
   return (
-    <div style={{ padding: "28px" }}>
+    <div style={{ padding: "16px" }}>
       {/* Hero */}
       <div
         style={{
           background: "linear-gradient(135deg, #7c3aed, #ec4899)",
           borderRadius: "16px",
-          padding: "32px 36px",
+          padding: "24px",
           marginBottom: "24px",
         }}
       >
@@ -77,8 +77,9 @@ export default function AboutPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
+          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
           gap: "20px",
+          flexWrap: "wrap",
           marginBottom: "24px",
         }}
       >
@@ -193,7 +194,7 @@ export default function AboutPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
+          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
           gap: "14px",
           marginBottom: "24px",
         }}
@@ -268,7 +269,7 @@ export default function AboutPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
             gap: "12px",
           }}
         >
