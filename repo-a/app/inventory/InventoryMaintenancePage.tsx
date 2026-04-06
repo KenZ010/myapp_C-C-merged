@@ -62,8 +62,9 @@ export default function InventoryMaintenancePage() {
   const router   = useRouter();
   const pathname = usePathname();
 
-  const [items,     setItems]     = useState<InventoryItem[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [items,        setItems]        = useState<InventoryItem[]>([]);
+  const [itemsLoading, setItemsLoading] = useState(true);
+  const [employees,    setEmployees]    = useState<Employee[]>([]);
 
   // Inventory logs state
   const [logs,           setLogs]           = useState<InventoryLog[]>([]);
@@ -79,14 +80,20 @@ export default function InventoryMaintenancePage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setItemsLoading(true);
         const res  = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/products`);
         const data = await res.json();
         setItems(data.map((p: any) => ({
-          id: p.id, barcode: p.barcode ?? "—", productName: p.productName,
-          category: p.category, expiryDate: p.expiryDate ? new Date(p.expiryDate).toISOString().split("T")[0] : "—",
-          stock: p.stock ?? 0, status: p.status,
+          id: p.id,
+          barcode: p.barcode ?? "—",
+          productName: p.productName,
+          category: p.category,
+          expiryDate: p.expiryDate ? new Date(p.expiryDate).toISOString().split("T")[0] : "—",
+          stock: Number(p.stock ?? 0),
+          status: p.status,
         })));
       } catch (err) { console.error("Failed to fetch products", err); }
+      finally { setItemsLoading(false); }
     };
     fetchData();
   }, []);
@@ -316,24 +323,38 @@ export default function InventoryMaintenancePage() {
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <h2 className="font-bold text-gray-800 mb-1">Product Stock</h2>
               <p className="text-xs text-gray-400 mb-3">Current stock levels from inventory</p>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={productStockData} margin={{ top: 5, right: 10, left: -20, bottom: 60 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-35} textAnchor="end" interval={0} />
-                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                  <Tooltip formatter={(value) => [value ?? 0, "Stock"]} contentStyle={{ borderRadius: "8px", fontSize: "12px" }} />
-                  <Bar dataKey="stock" radius={[4, 4, 0, 0]} name="Stock">
-                    {productStockData.map((entry, index) => (
-                      <Cell key={index} fill={entry.stock === 0 ? "#ef4444" : entry.stock <= 10 ? "#facc15" : "#3b82f6"} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-              <div className="flex items-center gap-4 mt-2 justify-center flex-wrap">
-                <span className="flex items-center gap-1 text-xs text-gray-500"><span className="w-3 h-3 rounded-sm inline-block bg-blue-500" /> In Stock</span>
-                <span className="flex items-center gap-1 text-xs text-gray-500"><span className="w-3 h-3 rounded-sm inline-block bg-yellow-400" /> Low Stock (≤10)</span>
-                <span className="flex items-center gap-1 text-xs text-gray-500"><span className="w-3 h-3 rounded-sm inline-block bg-red-500" /> Out of Stock</span>
-              </div>
+              {itemsLoading ? (
+                <div className="flex items-center justify-center h-[260px] text-gray-400 text-sm">Loading chart...</div>
+              ) : productStockData.length === 0 ? (
+                <div className="flex items-center justify-center h-[260px] text-gray-400 text-sm">No products found.</div>
+              ) : (
+                <>
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={productStockData} margin={{ top: 5, right: 10, left: -20, bottom: 60 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-35} textAnchor="end" interval={0} />
+                      <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                      <Tooltip
+                        formatter={(value) => [Number(value ?? 0), "Stock"]}
+                        contentStyle={{ borderRadius: "8px", fontSize: "12px" }}
+                      />
+                      <Bar dataKey="stock" radius={[4, 4, 0, 0]} name="Stock" isAnimationActive={false}>
+                        {productStockData.map((entry, index) => (
+                          <Cell
+                            key={index}
+                            fill={entry.stock === 0 ? "#ef4444" : entry.stock <= 10 ? "#facc15" : "#3b82f6"}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                  <div className="flex items-center gap-4 mt-2 justify-center flex-wrap">
+                    <span className="flex items-center gap-1 text-xs text-gray-500"><span className="w-3 h-3 rounded-sm inline-block bg-blue-500" /> In Stock</span>
+                    <span className="flex items-center gap-1 text-xs text-gray-500"><span className="w-3 h-3 rounded-sm inline-block bg-yellow-400" /> Low Stock (≤10)</span>
+                    <span className="flex items-center gap-1 text-xs text-gray-500"><span className="w-3 h-3 rounded-sm inline-block bg-red-500" /> Out of Stock</span>
+                  </div>
+                </>
+              )}
             </div>
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <h2 className="font-bold text-gray-800 mb-3">Inventory by Category</h2>
