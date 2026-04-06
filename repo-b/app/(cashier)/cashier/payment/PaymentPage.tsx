@@ -134,17 +134,13 @@ export default function PaymentPage() {
   if (!canComplete) return;
 
   try {
-    // ✅ FIX: strict type for TS
     const method: "cod" | "gcash" =
       paymentMethod === "Cash" ? "cod" : "gcash";
 
     const payload = {
       customerId: selectedCustomer?.id || "",
-
-      paymentMethod: method, // ✅ FIXED
-
+      paymentMethod: method,
       gcashRef: paymentMethod === "GCash" ? gcashRef : undefined,
-
       items: cartItems.map(item => ({
         productId: item.id,
         quantity: item.qty,
@@ -154,9 +150,9 @@ export default function PaymentPage() {
 
     const res = await api.placeOrder(payload);
 
-    // ✅ mark as COMPLETED (VERY IMPORTANT)
+    // ✅ CHANGE HERE
     if (res?.saleId) {
-      await api.updateOrderStatus(res.saleId, "COMPLETED");
+      await api.updateOrderStatus(res.saleId, "PROCESSING");
     }
 
     sessionStorage.removeItem("pendingCart");
