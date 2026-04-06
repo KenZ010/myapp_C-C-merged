@@ -249,6 +249,7 @@ export default function ProductsPage() {
                 outline: "none",
                 background: "#fff",
                 width: "220px",
+                color: "#000",
               }}
             />
           </div>
