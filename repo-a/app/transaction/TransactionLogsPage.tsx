@@ -51,7 +51,7 @@ function normalizeTransaction(o: Record<string, unknown>): Transaction {
     id:            String(o.id ?? ""),
     customer:      customer ? String(customer.name ?? "Guest") : "Walk-in",
     customerId:    customer ? String(customer.id ?? "") : null,
-    cashier:       customer ? "Online Order" : employee ? String(employee.name ?? "—") : "—",
+    cashier:       employee ? String(employee.name ?? "—") : "—",
     total:         Number(o.totalAmount ?? 0),
     paymentMethod: payment ? String(payment.method ?? "CASH") : "CASH",
     createdAt:     String(o.createdAt ?? o.saleDate ?? ""),
