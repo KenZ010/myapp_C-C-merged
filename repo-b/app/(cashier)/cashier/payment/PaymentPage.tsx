@@ -49,7 +49,12 @@ export default function PaymentPage() {
       try {
         setLoadingCust(true);
         const data = await api.getCustomers();
-        setCustomers(Array.isArray(data) ? data : []);
+        setCustomers(
+            (Array.isArray(data) ? data : []).map((c: any) => ({
+              ...c,
+              customerName: c.customerName || c.name, // ✅ map DB -> frontend
+            }))
+          );
       } catch (err) {
         console.error("Failed to fetch customers:", err);
       } finally {
@@ -77,13 +82,24 @@ export default function PaymentPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const filteredCustomers = useMemo(
-    () => searchQuery.trim() === "" ? [] : customers.filter((c) =>
-      c.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.storeName  || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.contactNumber || "").includes(searchQuery)
-    ),
-    [searchQuery, customers],
-  );
+  () =>
+    searchQuery.trim() === ""
+      ? []
+      : customers.filter((c) => {
+          const name  = c.customerName?.toLowerCase() || "";
+          const store = c.storeName?.toLowerCase() || "";
+          const phone = c.contactNumber || "";
+
+          const query = searchQuery.toLowerCase();
+
+          return (
+            name.includes(query) ||
+            store.includes(query) ||
+            phone.includes(query)
+          );
+        }),
+  [searchQuery, customers],
+);
 
   const activeCustomer =
     customerType === "Existing Customer"
@@ -114,11 +130,38 @@ export default function PaymentPage() {
     reader.readAsDataURL(file);
   };
 
-  const handleComplete = () => {
-    if (!canComplete) return;
-    sessionStorage.removeItem("pendingCart"); // ✅ clear cart after payment
+  const handleComplete = async () => {
+  if (!canComplete) return;
+
+  try {
+    const method: "cod" | "gcash" =
+      paymentMethod === "Cash" ? "cod" : "gcash";
+
+    const payload = {
+      customerId: selectedCustomer?.id || "",
+      paymentMethod: method,
+      gcashRef: paymentMethod === "GCash" ? gcashRef : undefined,
+      items: cartItems.map(item => ({
+        productId: item.id,
+        quantity: item.qty,
+        price: item.finalPrice,
+      })),
+    };
+
+    const res = await api.placeOrder(payload);
+
+    // ✅ CHANGE HERE
+    if (res?.saleId) {
+      await api.updateOrderStatus(res.saleId, "PROCESSING");
+    }
+
+    sessionStorage.removeItem("pendingCart");
     setCompleted(true);
-  };
+
+  } catch (err) {
+    console.error("Failed to complete order:", err);
+  }
+};
 
   const resetAll = () => {
     setCompleted(false);
