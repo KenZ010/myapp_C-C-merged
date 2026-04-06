@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   PieChart, Pie, Cell, Tooltip,
@@ -30,9 +30,6 @@ type InventoryLog = {
   employee: { name: string; role: string };
 };
 
-type SortKey = "barcode" | "productName" | "category" | "expiryDate" | "stock" | "status";
-type SortDir = "asc" | "desc";
-
 const LOG_TYPE_STYLE: Record<LogType, { label: string; bg: string; color: string; sign: string }> = {
   STOCK_IN:    { label: "Stock In",    bg: "#e8f5e9", color: "#2e7d32", sign: "+" },
   STOCK_OUT:   { label: "Stock Out",   bg: "#ffebee", color: "#c62828", sign: "-" },
@@ -41,11 +38,6 @@ const LOG_TYPE_STYLE: Record<LogType, { label: string; bg: string; color: string
   RETURN_OUT:  { label: "Return Out",  bg: "#fff3e0", color: "#e65100", sign: "-" },
 };
 
-const calculateStockStatus = (stock: number): { label: string; color: string } => {
-  if (stock === 0)  return { label: "Out of Stock", color: "red"    };
-  if (stock <= 10)  return { label: "Low Stock",    color: "yellow" };
-  return { label: "In Stock", color: "green" };
-};
 
 const LOGS_PER_PAGE = 10;
 
@@ -138,8 +130,10 @@ export default function InventoryMaintenancePage() {
     }));
   }, [items]);
 
-  const topSellingData = useMemo(() =>
-    [...items].sort((a, b) => b.stock - a.stock).slice(0, 5).map(p => ({ name: p.productName, units: p.stock }))
+  const productStockData = useMemo(() =>
+    [...items]
+      .sort((a, b) => b.stock - a.stock)
+      .map(p => ({ name: p.productName, stock: p.stock }))
   , [items]);
 
   const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("employee"); router.push("/"); };
@@ -320,16 +314,26 @@ export default function InventoryMaintenancePage() {
           {/* Charts */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <h2 className="font-bold text-gray-800 mb-3">Top Selling Products</h2>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={topSellingData} margin={{ top: 5, right: 10, left: -20, bottom: 30 }}>
+              <h2 className="font-bold text-gray-800 mb-1">Product Stock</h2>
+              <p className="text-xs text-gray-400 mb-3">Current stock levels from inventory</p>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={productStockData} margin={{ top: 5, right: 10, left: -20, bottom: 60 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-15} textAnchor="end" />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Bar dataKey="units" fill="#3b82f6" radius={[4,4,0,0]} name="Stock" />
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-35} textAnchor="end" interval={0} />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <Tooltip formatter={(value) => [value ?? 0, "Stock"]} contentStyle={{ borderRadius: "8px", fontSize: "12px" }} />
+                  <Bar dataKey="stock" radius={[4, 4, 0, 0]} name="Stock">
+                    {productStockData.map((entry, index) => (
+                      <Cell key={index} fill={entry.stock === 0 ? "#ef4444" : entry.stock <= 10 ? "#facc15" : "#3b82f6"} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
+              <div className="flex items-center gap-4 mt-2 justify-center flex-wrap">
+                <span className="flex items-center gap-1 text-xs text-gray-500"><span className="w-3 h-3 rounded-sm inline-block bg-blue-500" /> In Stock</span>
+                <span className="flex items-center gap-1 text-xs text-gray-500"><span className="w-3 h-3 rounded-sm inline-block bg-yellow-400" /> Low Stock (≤10)</span>
+                <span className="flex items-center gap-1 text-xs text-gray-500"><span className="w-3 h-3 rounded-sm inline-block bg-red-500" /> Out of Stock</span>
+              </div>
             </div>
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <h2 className="font-bold text-gray-800 mb-3">Inventory by Category</h2>
