@@ -2,9 +2,6 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell, Tooltip
-} from "recharts";
 import { api } from "@/lib/api";
 
 type InventoryItem = {
@@ -183,6 +180,11 @@ export default function InventoryMaintenancePage() {
 
   useEffect(() => { fetchLogs(1, logTypeFilter); }, [logTypeFilter, fetchLogs]);
 
+  const productStockData = useMemo(() =>
+    [...items].sort((a, b) => a.productName.localeCompare(b.productName))
+      .map(p => ({ name: p.productName, stock: p.stock }))
+  , [items]);
+
   // ── Top Selling ──
   const [transactions,  setTransactions]  = useState<Transaction[]>([]);
   const [txLoading,     setTxLoading]     = useState(true);
@@ -216,11 +218,6 @@ export default function InventoryMaintenancePage() {
     return Object.values(productMap).sort((a, b) => b.qty - a.qty).slice(0, 8).map((p, i) => ({ ...p, rank: i + 1 }));
   }, [transactions, topPeriod]);
 
-  const productStockData = useMemo(() =>
-    [...items]
-      .sort((a, b) => b.stock - a.stock)
-      .map(p => ({ name: p.productName, stock: p.stock }))
-  , [items]);
 
   const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("employee"); router.push("/"); };
   const navigate     = (path: string) => { router.push(path); setShowMobileMenu(false); };
@@ -398,36 +395,37 @@ export default function InventoryMaintenancePage() {
               <h2 className="font-bold text-gray-800 mb-1">Product Stock</h2>
               <p className="text-xs text-gray-400 mb-3">Current stock levels from inventory</p>
               {itemsLoading ? (
-                <div className="flex items-center justify-center h-[260px] text-gray-400 text-sm">Loading chart...</div>
+                <div className="flex items-center justify-center h-[260px] text-gray-400 text-sm">Loading...</div>
               ) : productStockData.length === 0 ? (
                 <div className="flex items-center justify-center h-[260px] text-gray-400 text-sm">No products found.</div>
               ) : (
-                <>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={productStockData} margin={{ top: 5, right: 10, left: -20, bottom: 60 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-35} textAnchor="end" interval={0} />
-                      <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                      <Tooltip
-                        formatter={(value) => [Number(value ?? 0), "Stock"]}
-                        contentStyle={{ borderRadius: "8px", fontSize: "12px" }}
-                      />
-                      <Bar dataKey="stock" radius={[4, 4, 0, 0]} name="Stock" isAnimationActive={false}>
-                        {productStockData.map((entry, index) => (
-                          <Cell
-                            key={index}
-                            fill={entry.stock === 0 ? "#ef4444" : entry.stock <= 10 ? "#facc15" : "#3b82f6"}
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                  <div className="flex items-center gap-4 mt-2 justify-center flex-wrap">
-                    <span className="flex items-center gap-1 text-xs text-gray-500"><span className="w-3 h-3 rounded-sm inline-block bg-blue-500" /> In Stock</span>
-                    <span className="flex items-center gap-1 text-xs text-gray-500"><span className="w-3 h-3 rounded-sm inline-block bg-yellow-400" /> Low Stock (≤10)</span>
-                    <span className="flex items-center gap-1 text-xs text-gray-500"><span className="w-3 h-3 rounded-sm inline-block bg-red-500" /> Out of Stock</span>
-                  </div>
-                </>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100">
+                        <th className="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">Product</th>
+                        <th className="pb-2 text-right text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">Stock</th>
+                        <th className="pb-2 text-right text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {productStockData.map((item, index) => {
+                        const status = item.stock === 0 ? { label: "Out of Stock", cls: "bg-red-100 text-red-600" }
+                          : item.stock <= 10 ? { label: "Low Stock", cls: "bg-yellow-100 text-yellow-700" }
+                          : { label: "In Stock", cls: "bg-green-100 text-green-700" };
+                        return (
+                          <tr key={index} className="border-b border-gray-50 hover:bg-gray-50">
+                            <td className="py-2 px-2 font-medium text-gray-800">{item.name}</td>
+                            <td className="py-2 px-2 text-right font-bold text-gray-700">{item.stock}</td>
+                            <td className="py-2 px-2 text-right">
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${status.cls}`}>{status.label}</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
             <div className="bg-white rounded-2xl p-4 shadow-sm">
