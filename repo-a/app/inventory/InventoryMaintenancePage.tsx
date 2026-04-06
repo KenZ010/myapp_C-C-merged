@@ -1,37 +1,54 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   PieChart, Pie, Cell, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer
 } from "recharts";
+import { api } from "@/lib/api";
 
 type InventoryItem = {
-  id: string;
-  barcode: string;
-  productName: string;
-  category: string;
-  expiryDate: string;
-  stock: number;
-  status: string;
+  id: string; barcode: string; productName: string; category: string;
+  expiryDate: string; stock: number; status: string;
 };
 
-type Employee = {
+type Employee = { id: string; name: string; };
+
+type LogType = "STOCK_IN" | "STOCK_OUT" | "ADJUSTMENT" | "RETURN_IN" | "RETURN_OUT";
+
+type InventoryLog = {
   id: string;
-  name: string;
+  productId: string;
+  quantity: number;
+  type: LogType;
+  reason: string | null;
+  referenceId: string | null;
+  referenceType: string | null;
+  createdAt: string;
+  product:  { productName: string; category: string };
+  employee: { name: string; role: string };
 };
 
 type SortKey = "barcode" | "productName" | "category" | "expiryDate" | "stock" | "status";
 type SortDir = "asc" | "desc";
 
+const LOG_TYPE_STYLE: Record<LogType, { label: string; bg: string; color: string; sign: string }> = {
+  STOCK_IN:    { label: "Stock In",    bg: "#e8f5e9", color: "#2e7d32", sign: "+" },
+  STOCK_OUT:   { label: "Stock Out",   bg: "#ffebee", color: "#c62828", sign: "-" },
+  ADJUSTMENT:  { label: "Adjustment",  bg: "#e3f2fd", color: "#1565c0", sign: "±" },
+  RETURN_IN:   { label: "Return In",   bg: "#f3e5f5", color: "#6a1b9a", sign: "+" },
+  RETURN_OUT:  { label: "Return Out",  bg: "#fff3e0", color: "#e65100", sign: "-" },
+};
+
 const calculateStockStatus = (stock: number): { label: string; color: string } => {
-  if (stock === 0) return { label: "Out of Stock", color: "red" };
+  if (stock === 0)  return { label: "Out of Stock", color: "red"    };
   if (stock <= 10)  return { label: "Low Stock",    color: "yellow" };
   return { label: "In Stock", color: "green" };
 };
 
 const ITEMS_PER_PAGE = 5;
+const LOGS_PER_PAGE  = 10;
 
 const getStockBadge = (color: string) => {
   const map: Record<string, string> = {
@@ -51,16 +68,29 @@ const navItems = [
   { label: "Product Management",    icon: "🗒️", path: "/product"        },
   { label: "Account Management",    icon: "👤", path: "/account"        },
   { label: "Purchase Order",        icon: "📋", path: "/purchase-order" },
-  { label: "Promo Management", icon: "🎁", path: "/promo" },
+  { label: "Promo Management",      icon: "🎁", path: "/promo"          },
 ];
+
+function fmtDate(str: string) {
+  if (!str) return "—";
+  return new Date(str).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" });
+}
 
 export default function InventoryMaintenancePage() {
   const router   = useRouter();
   const pathname = usePathname();
 
-  const [items,    setItems]    = useState<InventoryItem[]>([]);
+  const [items,     setItems]     = useState<InventoryItem[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading,  setLoading]  = useState(true);
+  const [loading,   setLoading]   = useState(true);
+
+  // Inventory logs state
+  const [logs,        setLogs]        = useState<InventoryLog[]>([]);
+  const [logsTotal,   setLogsTotal]   = useState(0);
+  const [logsPage,    setLogsPage]    = useState(1);
+  const [logsTotalPages, setLogsTotalPages] = useState(1);
+  const [logsLoading, setLogsLoading] = useState(true);
+  const [logTypeFilter, setLogTypeFilter] = useState<string>("ALL");
 
   const [showUserMenu,   setShowUserMenu]   = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -79,44 +109,52 @@ export default function InventoryMaintenancePage() {
   const categoryRef = useRef<HTMLDivElement>(null);
   const statusRef   = useRef<HTMLDivElement>(null);
 
-  // Fetch products from your API
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/products`);
+        const res  = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/products`);
         const data = await res.json();
         setItems(data.map((p: any) => ({
-          id:          p.id,
-          barcode:     p.barcode     ?? "—",
-          productName: p.productName,
-          category:    p.category,
-          expiryDate:  p.expiryDate  ? new Date(p.expiryDate).toISOString().split("T")[0] : "—",
-          stock:       p.stock       ?? 0,
-          status:      p.status,
+          id: p.id, barcode: p.barcode ?? "—", productName: p.productName,
+          category: p.category, expiryDate: p.expiryDate ? new Date(p.expiryDate).toISOString().split("T")[0] : "—",
+          stock: p.stock ?? 0, status: p.status,
         })));
-      } catch (err) {
-        console.error("Failed to fetch products", err);
-      } finally {
-        setLoading(false);
-      }
+      } catch (err) { console.error("Failed to fetch products", err); }
+      finally { setLoading(false); }
     };
     fetchData();
   }, []);
 
-  // Fetch employees for checker filter
   useEffect(() => {
     const fetchEmployees = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/employees`);
+        const res  = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/employees`);
         const data = await res.json();
         setEmployees(data);
-      } catch (err) {
-        console.error("Failed to fetch employees", err);
-      }
+      } catch (err) { console.error("Failed to fetch employees", err); }
     };
     fetchEmployees();
   }, []);
+
+  const fetchLogs = useCallback(async (page = 1, type = "ALL") => {
+    try {
+      setLogsLoading(true);
+      const data = await api.getInventoryLogs({
+        page,
+        limit: LOGS_PER_PAGE,
+        type: type === "ALL" ? undefined : type,
+      });
+      if (data?.message) return;
+      setLogs(data.logs ?? []);
+      setLogsTotal(data.total ?? 0);
+      setLogsTotalPages(data.totalPages ?? 1);
+      setLogsPage(page);
+    } catch (err) { console.error("Failed to fetch logs", err); }
+    finally { setLogsLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchLogs(1, logTypeFilter); }, [logTypeFilter, fetchLogs]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -127,43 +165,33 @@ export default function InventoryMaintenancePage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Summary counts
   const totalItems      = items.length;
   const inStockCount    = items.filter(i => calculateStockStatus(i.stock).label === "In Stock").length;
   const lowStockCount   = items.filter(i => calculateStockStatus(i.stock).label === "Low Stock").length;
   const outOfStockCount = items.filter(i => calculateStockStatus(i.stock).label === "Out of Stock").length;
 
-  // Category breakdown for pie chart (dynamic)
   const categoryData = useMemo(() => {
     const counts: Record<string, number> = {};
     items.forEach(i => { counts[i.category] = (counts[i.category] ?? 0) + 1; });
     const colors = ["#60a5fa","#7c3aed","#f59e0b","#f97316","#22c55e","#ec4899"];
     return Object.entries(counts).map(([name, value], idx) => ({
-      name,
-      value: Math.round((value / items.length) * 100),
-      color: colors[idx % colors.length]
+      name, value: Math.round((value / items.length) * 100), color: colors[idx % colors.length]
     }));
   }, [items]);
 
-  // Top selling for bar chart (by stock, replace with actual sales data later)
   const topSellingData = useMemo(() =>
-    [...items].sort((a, b) => b.stock - a.stock).slice(0, 5).map(p => ({
-      name: p.productName,
-      units: p.stock
-    }))
+    [...items].sort((a, b) => b.stock - a.stock).slice(0, 5).map(p => ({ name: p.productName, units: p.stock }))
   , [items]);
 
   const filtered = useMemo(() => {
     const f = items.filter(row => {
-      const matchSearch   = row.productName.toLowerCase().includes(search.toLowerCase()) ||
-                            row.barcode.toLowerCase().includes(search.toLowerCase());
+      const matchSearch   = row.productName.toLowerCase().includes(search.toLowerCase()) || row.barcode.toLowerCase().includes(search.toLowerCase());
       const matchCategory = categoryFilter === "All" || row.category === categoryFilter;
       const matchStatus   = statusFilter   === "All" || calculateStockStatus(row.stock).label === statusFilter;
       return matchSearch && matchCategory && matchStatus;
     });
     f.sort((a, b) => {
-      const aVal = a[sortKey];
-      const bVal = b[sortKey];
+      const aVal = a[sortKey]; const bVal = b[sortKey];
       if (typeof aVal === "number" && typeof bVal === "number") return sortDir === "asc" ? aVal - bVal : bVal - aVal;
       return sortDir === "asc" ? String(aVal).localeCompare(String(bVal)) : String(bVal).localeCompare(String(aVal));
     });
@@ -177,16 +205,14 @@ export default function InventoryMaintenancePage() {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortKey(key); setSortDir("asc"); }
   };
-
   const sortIcon = (key: SortKey) => {
     if (sortKey !== key) return <span className="ml-1 opacity-30">↕</span>;
     return <span className="ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>;
   };
 
   const allPageSelected = paginated.length > 0 && paginated.every(r => selected.includes(r.id));
-  const toggleSelect = (id: string) =>
-    setSelected(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-  const toggleAll = () => {
+  const toggleSelect    = (id: string) => setSelected(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  const toggleAll       = () => {
     if (allPageSelected) setSelected(prev => prev.filter(id => !paginated.map(r => r.id).includes(id)));
     else setSelected(prev => [...new Set([...prev, ...paginated.map(r => r.id)])]);
   };
@@ -195,34 +221,26 @@ export default function InventoryMaintenancePage() {
     if (selected.length === 0) { alert("Please select at least one item to delete."); return; }
     setShowDeleteConfirm(true);
   };
-
   const confirmDelete = async () => {
     try {
-      await Promise.all(
-        selected.map(id =>
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/products/${id}`, { method: "DELETE" })
-        )
-      );
+      await Promise.all(selected.map(id => fetch(`${process.env.NEXT_PUBLIC_API_URL}/products/${id}`, { method: "DELETE" })));
       setItems(prev => prev.filter(item => !selected.includes(item.id)));
       setSelected([]);
-    } catch (err) {
-      console.error("Failed to delete", err);
-    } finally {
-      setShowDeleteConfirm(false);
-    }
+    } catch (err) { console.error("Failed to delete", err); }
+    finally { setShowDeleteConfirm(false); }
   };
 
   const handleExport = () => {
     const headers = ["Barcode","Product Name","Category","Expiry Date","Stock","Status"];
-    const rows = items.map(item => [item.barcode, item.productName, item.category, item.expiryDate, item.stock, calculateStockStatus(item.stock).label]);
-    const csvContent = [headers, ...rows].map(row => row.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a"); a.href = url; a.download = "inventory.csv"; a.click(); URL.revokeObjectURL(url);
+    const rows    = items.map(item => [item.barcode, item.productName, item.category, item.expiryDate, item.stock, calculateStockStatus(item.stock).label]);
+    const csv     = [headers, ...rows].map(row => row.join(",")).join("\n");
+    const blob    = new Blob([csv], { type: "text/csv" });
+    const url     = URL.createObjectURL(blob);
+    const a       = document.createElement("a"); a.href = url; a.download = "inventory.csv"; a.click(); URL.revokeObjectURL(url);
   };
 
   const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("employee"); router.push("/"); };
-  const navigate = (path: string) => { router.push(path); setShowMobileMenu(false); };
+  const navigate     = (path: string) => { router.push(path); setShowMobileMenu(false); };
   const hasActiveFilters = categoryFilter !== "All" || statusFilter !== "All";
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -259,8 +277,7 @@ export default function InventoryMaintenancePage() {
 
         {/* Header */}
         <header className="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-100">
-          <button className="md:hidden text-gray-600 text-xl mr-2"
-            onClick={() => setShowMobileMenu(!showMobileMenu)}>
+          <button className="md:hidden text-gray-600 text-xl mr-2" onClick={() => setShowMobileMenu(!showMobileMenu)}>
             {showMobileMenu ? "✕" : "☰"}
           </button>
           <h1 className="text-xl md:text-2xl font-bold text-gray-800">Inventory Maintenance</h1>
@@ -277,40 +294,44 @@ export default function InventoryMaintenancePage() {
               </button>
               {showUserMenu && (
                 <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-lg border border-gray-100 z-50">
-                  <button onClick={handleLogout} className="flex items-center gap-2 w-full px-4 py-3 text-sm text-red-500 hover:bg-red-50 rounded-xl">
-                    Log Out
-                  </button>
+                  <button onClick={handleLogout} className="flex items-center gap-2 w-full px-4 py-3 text-sm text-red-500 hover:bg-red-50 rounded-xl">Log Out</button>
                 </div>
               )}
             </div>
           </div>
         </header>
 
+        {/* Mobile Menu */}
+        {showMobileMenu && (
+          <div className="md:hidden bg-white border-b border-gray-100 px-4 py-3 flex flex-col gap-1 z-40">
+            {navItems.map(item => (
+              <div key={item.label} onClick={() => navigate(item.path)}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${pathname === item.path ? "text-indigo-700 font-semibold" : "text-gray-500"}`}>
+                <span>{item.icon}</span><span>{item.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="flex-1 p-3 md:p-4 bg-green-50">
 
           {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-lg">📦</div>
-              <div><p className="text-xs text-gray-400">Total Items</p><p className="text-xl font-bold text-gray-800">{totalItems}</p></div>
-            </div>
-            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-lg">✅</div>
-              <div><p className="text-xs text-gray-400">In Stock</p><p className="text-xl font-bold text-green-600">{inStockCount}</p></div>
-            </div>
-            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-lg">⚠️</div>
-              <div><p className="text-xs text-gray-400">Low Stock</p><p className="text-xl font-bold text-yellow-500">{lowStockCount}</p></div>
-            </div>
-            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-lg">❌</div>
-              <div><p className="text-xs text-gray-400">Out of Stock</p><p className="text-xl font-bold text-red-500">{outOfStockCount}</p></div>
-            </div>
+            {[
+              { icon: "📦", label: "Total Items",   value: totalItems,      cls: "text-gray-800",   bg: "bg-indigo-100" },
+              { icon: "✅", label: "In Stock",       value: inStockCount,    cls: "text-green-600",  bg: "bg-green-100"  },
+              { icon: "⚠️", label: "Low Stock",      value: lowStockCount,   cls: "text-yellow-500", bg: "bg-yellow-100" },
+              { icon: "❌", label: "Out of Stock",   value: outOfStockCount, cls: "text-red-500",    bg: "bg-red-100"    },
+            ].map((s) => (
+              <div key={s.label} className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-full ${s.bg} flex items-center justify-center text-lg`}>{s.icon}</div>
+                <div><p className="text-xs text-gray-400">{s.label}</p><p className={`text-xl font-bold ${s.cls}`}>{s.value}</p></div>
+              </div>
+            ))}
           </div>
 
           {/* Table Card */}
           <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm mb-4">
-
             {/* Toolbar */}
             <div className="flex items-center gap-2 mb-4 flex-wrap">
               <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-40 md:w-48">
@@ -320,7 +341,6 @@ export default function InventoryMaintenancePage() {
                   className="outline-none text-sm text-gray-700 w-full bg-transparent" />
               </div>
 
-              {/* Category Filter */}
               <div className="relative" ref={categoryRef}>
                 <button onClick={() => { setShowCategoryDropdown(!showCategoryDropdown); setShowStatusDropdown(false); }}
                   className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${categoryFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
@@ -338,7 +358,6 @@ export default function InventoryMaintenancePage() {
                 )}
               </div>
 
-              {/* Status Filter */}
               <div className="relative" ref={statusRef}>
                 <button onClick={() => { setShowStatusDropdown(!showStatusDropdown); setShowCategoryDropdown(false); }}
                   className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${statusFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
@@ -374,19 +393,16 @@ export default function InventoryMaintenancePage() {
                 <table className="w-full text-sm min-w-max">
                   <thead>
                     <tr className="bg-indigo-900 text-white text-xs">
-                      <th className="p-3 text-left w-8">
-                        <input type="checkbox" onChange={toggleAll} checked={allPageSelected} />
-                      </th>
+                      <th className="p-3 text-left w-8"><input type="checkbox" onChange={toggleAll} checked={allPageSelected} /></th>
                       {([
-                        { key: "barcode",     label: "Barcode"       },
-                        { key: "productName", label: "Product Name"  },
-                        { key: "category",    label: "Category"      },
-                        { key: "expiryDate",  label: "Expiry Date"   },
-                        { key: "stock",       label: "Stock"         },
-                        { key: "status",      label: "Stock Status"  },
+                        { key: "barcode",     label: "Barcode"      },
+                        { key: "productName", label: "Product Name" },
+                        { key: "category",    label: "Category"     },
+                        { key: "expiryDate",  label: "Expiry Date"  },
+                        { key: "stock",       label: "Stock"        },
+                        { key: "status",      label: "Stock Status" },
                       ] as { key: SortKey; label: string }[]).map(({ key, label }) => (
-                        <th key={key} className="p-3 text-left cursor-pointer hover:bg-indigo-800 select-none"
-                          onClick={() => handleSort(key)}>
+                        <th key={key} className="p-3 text-left cursor-pointer hover:bg-indigo-800 select-none" onClick={() => handleSort(key)}>
                           {label}{sortIcon(key)}
                         </th>
                       ))}
@@ -404,14 +420,10 @@ export default function InventoryMaintenancePage() {
                           <td className="p-3"><input type="checkbox" checked={selected.includes(row.id)} onChange={() => toggleSelect(row.id)} /></td>
                           <td className="p-3 text-gray-700">{row.barcode}</td>
                           <td className="p-3 text-gray-700">{row.productName}</td>
-                          <td className="p-3">
-                            <span className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full text-xs">{row.category}</span>
-                          </td>
+                          <td className="p-3"><span className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full text-xs">{row.category}</span></td>
                           <td className="p-3"><span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">{row.expiryDate}</span></td>
                           <td className="p-3 text-gray-700">{row.stock}</td>
-                          <td className="p-3">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStockBadge(color)}`}>{label}</span>
-                          </td>
+                          <td className="p-3"><span className={`px-3 py-1 rounded-full text-xs font-medium ${getStockBadge(color)}`}>{label}</span></td>
                         </tr>
                       );
                     })}
@@ -428,7 +440,7 @@ export default function InventoryMaintenancePage() {
                 </p>
                 <div className="flex items-center gap-1">
                   <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-                    className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">← Prev</button>
+                    className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">← Prev</button>
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
                     <button key={page} onClick={() => setCurrentPage(page)}
                       className={`px-3 py-1 rounded-lg text-sm border transition-colors ${currentPage === page ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
@@ -436,14 +448,14 @@ export default function InventoryMaintenancePage() {
                     </button>
                   ))}
                   <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-                    className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">Next →</button>
+                    className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">Next →</button>
                 </div>
               </div>
             )}
           </div>
 
           {/* Charts */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <h2 className="font-bold text-gray-800 mb-3">Top Products by Stock</h2>
               <ResponsiveContainer width="100%" height={220}>
@@ -460,13 +472,114 @@ export default function InventoryMaintenancePage() {
               <h2 className="font-bold text-gray-800 mb-3">Inventory by Category</h2>
               <div className="flex justify-center overflow-x-auto">
                 <PieChart width={320} height={220}>
-                  <Pie data={categoryData} cx={155} cy={100} outerRadius={90} dataKey="value" label={renderLabel} labelLine={true}>
-                    {categoryData.map((entry, index) => (<Cell key={index} fill={entry.color} />))}
+                  <Pie data={categoryData} cx={155} cy={100} outerRadius={90} dataKey="value" label={renderLabel} labelLine>
+                    {categoryData.map((entry, index) => <Cell key={index} fill={entry.color} />)}
                   </Pie>
                   <Tooltip formatter={value => `${value}%`} />
                 </PieChart>
               </div>
             </div>
+          </div>
+
+          {/* ── INVENTORY LOGS TABLE ── */}
+          <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm">
+            <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+              <div>
+                <h2 className="font-bold text-gray-800 text-base">📋 Inventory Movement Log</h2>
+                <p className="text-xs text-gray-400 mt-0.5">{logsTotal} total records</p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Log type filter */}
+                {["ALL","STOCK_IN","STOCK_OUT","ADJUSTMENT","RETURN_IN","RETURN_OUT"].map((t) => (
+                  <button key={t} onClick={() => { setLogTypeFilter(t); setLogsPage(1); }}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${logTypeFilter === t ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                    {t === "ALL" ? "All" : LOG_TYPE_STYLE[t as LogType]?.label ?? t}
+                  </button>
+                ))}
+                <button onClick={() => fetchLogs(logsPage, logTypeFilter)}
+                  className="px-3 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-500 hover:bg-gray-200">
+                  🔄
+                </button>
+              </div>
+            </div>
+
+            {logsLoading ? (
+              <div className="text-center py-10 text-gray-400 text-sm">Loading logs...</div>
+            ) : logs.length === 0 ? (
+              <div className="text-center py-10">
+                <p className="text-2xl mb-2">📭</p>
+                <p className="text-sm text-gray-400">No inventory movements recorded yet.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-max">
+                  <thead>
+                    <tr className="bg-indigo-900 text-white text-xs">
+                      {["Date & Time","Product","Category","Type","Qty Change","Reason","Reference","Employee"].map(h => (
+                        <th key={h} className="p-3 text-left whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logs.map((log) => {
+                      const style   = LOG_TYPE_STYLE[log.type];
+                      const isIn    = log.type === "STOCK_IN" || log.type === "RETURN_IN";
+                      const isOut   = log.type === "STOCK_OUT" || log.type === "RETURN_OUT";
+                      const qtySign = isIn ? "+" : isOut ? "-" : "±";
+                      return (
+                        <tr key={log.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="p-3 text-gray-500 whitespace-nowrap text-xs">{fmtDate(log.createdAt)}</td>
+                          <td className="p-3 font-medium text-gray-800">{log.product.productName}</td>
+                          <td className="p-3">
+                            <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs">{log.product.category}</span>
+                          </td>
+                          <td className="p-3">
+                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: style.bg, color: style.color }}>
+                              {style.label}
+                            </span>
+                          </td>
+                          <td className="p-3 font-bold" style={{ color: isIn ? "#2e7d32" : isOut ? "#c62828" : "#1565c0" }}>
+                            {qtySign}{Math.abs(log.quantity)}
+                          </td>
+                          <td className="p-3 text-gray-500 text-xs max-w-[160px] truncate">{log.reason ?? "—"}</td>
+                          <td className="p-3 text-xs text-gray-400">
+                            {log.referenceId
+                              ? <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-600">{log.referenceType}: {log.referenceId}</span>
+                              : "—"}
+                          </td>
+                          <td className="p-3 text-gray-700 text-xs whitespace-nowrap">{log.employee.name}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Logs Pagination */}
+            {logsTotalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 px-1">
+                <p className="text-xs text-gray-400">
+                  Page {logsPage} of {logsTotalPages} · {logsTotal} records
+                </p>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => fetchLogs(logsPage - 1, logTypeFilter)} disabled={logsPage === 1}
+                    className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">← Prev</button>
+                  {Array.from({ length: Math.min(5, logsTotalPages) }, (_, i) => {
+                    const p = Math.max(1, logsPage - 2) + i;
+                    if (p > logsTotalPages) return null;
+                    return (
+                      <button key={p} onClick={() => fetchLogs(p, logTypeFilter)}
+                        className={`px-3 py-1 rounded-lg text-sm border transition-colors ${logsPage === p ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                        {p}
+                      </button>
+                    );
+                  })}
+                  <button onClick={() => fetchLogs(logsPage + 1, logTypeFilter)} disabled={logsPage === logsTotalPages}
+                    className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">Next →</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </main>

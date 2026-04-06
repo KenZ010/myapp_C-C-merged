@@ -296,4 +296,16 @@ export const api = {
   });
   return res.json();
 },
+
+ getInventoryLogs: async (params?: { page?: number; limit?: number; type?: string; product?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.page)    query.set('page',    String(params.page));
+    if (params?.limit)   query.set('limit',   String(params.limit));
+    if (params?.type)    query.set('type',    params.type);
+    if (params?.product) query.set('product', params.product);
+    const res = await fetch(`${API_URL}/inventory/logs?${query.toString()}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    return res.json();
+  },
 };
