@@ -13,7 +13,7 @@ const navItems = [
   { label: "Product Management", icon: "🗒️" },
   { label: "Account Management", icon: "👤", active: true },
   { label: "Purchase Order", icon: "📋" },
-  { label: "Promo Management", icon: "🎁", path: "/promo" },
+  { label: "Promo Management", icon: "🎁" },
 ];
 
 type Employee = {
@@ -45,6 +45,30 @@ const emptyEmployee = { name: "", phone: "", password: "", role: "CASHIER", user
 const emptyCustomer = { name: "", email: "", phone: "", address: "", password: "", userStatus: "ACTIVE" };
 const ROWS_OPTIONS = [5, 10, 20];
 
+// ✅ Reusable phone input with +63 prefix, numbers only
+function PhoneInput({ value, onChange }: { value: string; onChange: (val: string) => void }) {
+  const digits = value.startsWith("+63") ? value.slice(3) : value.replace(/^\+63/, "");
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, "").slice(0, 10);
+    onChange("+63" + raw);
+  };
+  return (
+    <div className="flex mt-1">
+      <span className="flex items-center px-3 bg-gray-100 border border-r-0 border-gray-200 rounded-l-lg text-sm text-gray-600 font-medium select-none">
+        🇵🇭 +63
+      </span>
+      <input
+        type="tel"
+        value={digits}
+        onChange={handleChange}
+        placeholder="9XXXXXXXXX"
+        maxLength={10}
+        className="flex-1 border border-gray-200 rounded-r-lg px-3 py-2 text-sm outline-none focus:border-indigo-400 text-gray-900"
+      />
+    </div>
+  );
+}
+
 function Pagination({ page, total, onChange }: { page: number; total: number; onChange: (p: number) => void }) {
   return (
     <div className="flex items-center gap-1">
@@ -65,13 +89,11 @@ export default function AccountManagementPage() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
-  // Toast states
   const [empSuccess, setEmpSuccess] = useState("");
   const [empError, setEmpError] = useState("");
   const [cusSuccess, setCusSuccess] = useState("");
   const [cusError, setCusError] = useState("");
 
-  // Employee state
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loadingEmp, setLoadingEmp] = useState(true);
   const [empSearch, setEmpSearch] = useState("");
@@ -83,7 +105,6 @@ export default function AccountManagementPage() {
   const [empEditingId, setEmpEditingId] = useState<string | null>(null);
   const [showEmpDelete, setShowEmpDelete] = useState(false);
 
-  // Customer state
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loadingCus, setLoadingCus] = useState(true);
   const [cusSearch, setCusSearch] = useState("");
@@ -95,7 +116,6 @@ export default function AccountManagementPage() {
   const [cusEditingId, setCusEditingId] = useState<string | null>(null);
   const [showCusDelete, setShowCusDelete] = useState(false);
 
-  // Fetch employees
   const fetchEmployees = async () => {
     try {
       setLoadingEmp(true);
@@ -108,7 +128,6 @@ export default function AccountManagementPage() {
     }
   };
 
-  // Fetch customers
   const fetchCustomers = async () => {
     try {
       setLoadingCus(true);
@@ -139,7 +158,6 @@ export default function AccountManagementPage() {
     setShowMobileMenu(false);
   };
 
-  // Employee helpers
   const filteredEmp = employees.filter((e) =>
     e.name.toLowerCase().includes(empSearch.toLowerCase()) ||
     e.phone.toLowerCase().includes(empSearch.toLowerCase())
@@ -149,18 +167,10 @@ export default function AccountManagementPage() {
   const toggleEmp = (id: string) => setEmpSelected((p) => p.includes(id) ? p.filter((i) => i !== id) : [...p, id]);
   const toggleAllEmp = () => empSelected.length === paginatedEmp.length ? setEmpSelected([]) : setEmpSelected(paginatedEmp.map((e) => e.id));
 
-  const openAddEmp = () => {
-    setEmpForm(emptyEmployee);
-    setEmpEditingId(null);
-    setEmpError("");
-    setShowEmpModal(true);
-  };
-
+  const openAddEmp = () => { setEmpForm(emptyEmployee); setEmpEditingId(null); setEmpError(""); setShowEmpModal(true); };
   const openEditEmp = (emp: Employee) => {
     setEmpForm({ name: emp.name, phone: emp.phone, password: "", role: emp.role, userStatus: emp.userStatus });
-    setEmpEditingId(emp.id);
-    setEmpError("");
-    setShowEmpModal(true);
+    setEmpEditingId(emp.id); setEmpError(""); setShowEmpModal(true);
   };
 
   const saveEmp = async () => {
@@ -168,24 +178,18 @@ export default function AccountManagementPage() {
     try {
       if (empEditingId !== null) {
         const res = await api.updateEmployee(empEditingId, empForm);
-        if (res.message && !res.id) {
-          setEmpError(res.message || "Failed to update employee");
-          return;
-        }
+        if (res.message && !res.id) { setEmpError(res.message || "Failed to update employee"); return; }
         setEmpSuccess("Employee updated successfully!");
       } else {
         const res = await api.createEmployee(empForm);
-        if (res.message && !res.id) {
-          setEmpError(res.message || "Failed to create employee");
-          return;
-        }
+        if (res.message && !res.id) { setEmpError(res.message || "Failed to create employee"); return; }
         setEmpSuccess("Employee created successfully!");
       }
       await fetchEmployees();
       setShowEmpModal(false);
       setEmpSelected([]);
       setTimeout(() => setEmpSuccess(""), 3000);
-    } catch (err) {
+    } catch {
       setEmpError("Something went wrong. Please try again.");
     }
   };
@@ -198,7 +202,7 @@ export default function AccountManagementPage() {
       setShowEmpDelete(false);
       setEmpSuccess("Employee deleted successfully!");
       setTimeout(() => setEmpSuccess(""), 3000);
-    } catch (err) {
+    } catch {
       setEmpError("Failed to delete employee.");
     }
   };
@@ -212,7 +216,6 @@ export default function AccountManagementPage() {
     const a = document.createElement("a"); a.href = url; a.download = "employees.csv"; a.click(); URL.revokeObjectURL(url);
   };
 
-  // Customer helpers
   const filteredCus = customers.filter((c) =>
     c.name.toLowerCase().includes(cusSearch.toLowerCase()) ||
     (c.email && c.email.toLowerCase().includes(cusSearch.toLowerCase()))
@@ -222,18 +225,10 @@ export default function AccountManagementPage() {
   const toggleCus = (id: string) => setCusSelected((p) => p.includes(id) ? p.filter((i) => i !== id) : [...p, id]);
   const toggleAllCus = () => cusSelected.length === paginatedCus.length ? setCusSelected([]) : setCusSelected(paginatedCus.map((c) => c.id));
 
-  const openAddCus = () => {
-    setCusForm(emptyCustomer);
-    setCusEditingId(null);
-    setCusError("");
-    setShowCusModal(true);
-  };
-
+  const openAddCus = () => { setCusForm(emptyCustomer); setCusEditingId(null); setCusError(""); setShowCusModal(true); };
   const openEditCus = (cus: Customer) => {
     setCusForm({ name: cus.name, email: cus.email || "", phone: cus.phone || "", address: cus.address || "", password: "", userStatus: cus.userStatus });
-    setCusEditingId(cus.id);
-    setCusError("");
-    setShowCusModal(true);
+    setCusEditingId(cus.id); setCusError(""); setShowCusModal(true);
   };
 
   const saveCus = async () => {
@@ -241,24 +236,18 @@ export default function AccountManagementPage() {
     try {
       if (cusEditingId !== null) {
         const res = await api.updateCustomer(cusEditingId, cusForm);
-        if (res.message && !res.id) {
-          setCusError(res.message || "Failed to update customer");
-          return;
-        }
+        if (res.message && !res.id) { setCusError(res.message || "Failed to update customer"); return; }
         setCusSuccess("Customer updated successfully!");
       } else {
         const res = await api.createCustomer(cusForm);
-        if (res.message && !res.id) {
-          setCusError(res.message || "Failed to create customer");
-          return;
-        }
+        if (res.message && !res.id) { setCusError(res.message || "Failed to create customer"); return; }
         setCusSuccess("Customer created successfully!");
       }
       await fetchCustomers();
       setShowCusModal(false);
       setCusSelected([]);
       setTimeout(() => setCusSuccess(""), 3000);
-    } catch (err) {
+    } catch {
       setCusError("Something went wrong. Please try again.");
     }
   };
@@ -271,7 +260,7 @@ export default function AccountManagementPage() {
       setShowCusDelete(false);
       setCusSuccess("Customer deleted successfully!");
       setTimeout(() => setCusSuccess(""), 3000);
-    } catch (err) {
+    } catch {
       setCusError("Failed to delete customer.");
     }
   };
@@ -387,22 +376,16 @@ export default function AccountManagementPage() {
                         <td className="p-3 text-gray-500 text-xs">{emp.id}</td>
                         <td className="p-3">
                           <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs">
-                              {emp.name.charAt(0).toUpperCase()}
-                            </div>
+                            <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs">{emp.name.charAt(0).toUpperCase()}</div>
                             <span className="text-gray-700">{emp.name}</span>
                           </div>
                         </td>
                         <td className="p-3 text-gray-500">{emp.phone}</td>
                         <td className="p-3">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${emp.role === "CASHIER" ? "bg-blue-100 text-blue-600" : emp.role === "STOCK_MANAGER" ? "bg-purple-100 text-purple-600" : "bg-red-100 text-red-600"}`}>
-                            {emp.role}
-                          </span>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${emp.role === "CASHIER" ? "bg-blue-100 text-blue-600" : emp.role === "STOCK_MANAGER" ? "bg-purple-100 text-purple-600" : "bg-red-100 text-red-600"}`}>{emp.role}</span>
                         </td>
                         <td className="p-3">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[emp.userStatus] || "bg-gray-200 text-gray-600"}`}>
-                            {emp.userStatus}
-                          </span>
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[emp.userStatus] || "bg-gray-200 text-gray-600"}`}>{emp.userStatus}</span>
                         </td>
                         <td className="p-3 text-gray-500">{new Date(emp.createdAt).toLocaleDateString()}</td>
                         <td className="p-3">
@@ -470,9 +453,7 @@ export default function AccountManagementPage() {
                         <td className="p-3 text-gray-500 text-xs">{cus.id}</td>
                         <td className="p-3">
                           <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs">
-                              {cus.name.charAt(0).toUpperCase()}
-                            </div>
+                            <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs">{cus.name.charAt(0).toUpperCase()}</div>
                             <span className="text-gray-700">{cus.name}</span>
                           </div>
                         </td>
@@ -480,9 +461,7 @@ export default function AccountManagementPage() {
                         <td className="p-3 text-gray-500">{cus.phone ?? "-"}</td>
                         <td className="p-3 text-gray-500">{cus.address ?? "-"}</td>
                         <td className="p-3">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[cus.userStatus] || "bg-gray-200 text-gray-600"}`}>
-                            {cus.userStatus}
-                          </span>
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[cus.userStatus] || "bg-gray-200 text-gray-600"}`}>{cus.userStatus}</span>
                         </td>
                         <td className="p-3 text-gray-500">{new Date(cus.createdAt).toLocaleDateString()}</td>
                         <td className="p-3">
@@ -516,31 +495,37 @@ export default function AccountManagementPage() {
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-screen overflow-y-auto">
             <h2 className="text-lg font-bold text-gray-800 mb-4">{empEditingId !== null ? "Edit Employee" : "Add New Employee"}</h2>
-
-            {/* Error message inside modal */}
             {empError && (
               <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-2">
-                <span>⚠️</span>
-                <span>{empError}</span>
+                <span>⚠️</span><span>{empError}</span>
                 <button onClick={() => setEmpError("")} className="ml-auto text-red-400 hover:text-red-600">✕</button>
               </div>
             )}
-
             <div className="flex flex-col gap-3">
-              <div><label className="text-xs font-medium text-gray-600">Full Name</label><input value={empForm.name} onChange={(e) => setEmpForm({ ...empForm, name: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-              <div><label className="text-xs font-medium text-gray-600">Phone</label><input value={empForm.phone} onChange={(e) => setEmpForm({ ...empForm, phone: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Full Name</label>
+                <input value={empForm.name} onChange={(e) => setEmpForm({ ...empForm, name: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+              </div>
+              {/* ✅ Phone with +63 prefix */}
+              <div>
+                <label className="text-xs font-medium text-gray-600">Phone</label>
+                <PhoneInput value={empForm.phone} onChange={(val) => setEmpForm({ ...empForm, phone: val })} />
+              </div>
               {empEditingId === null && (
-                <div><label className="text-xs font-medium text-gray-600">Password <span className="text-red-400">(min 8 characters)</span></label>
+                <div>
+                  <label className="text-xs font-medium text-gray-600">Password <span className="text-red-400">(min 8 characters)</span></label>
                   <input type="password" value={empForm.password} onChange={(e) => setEmpForm({ ...empForm, password: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
                 </div>
               )}
-              <div><label className="text-xs font-medium text-gray-600">Role</label>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Role</label>
                 <select value={empForm.role} onChange={(e) => setEmpForm({ ...empForm, role: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
                   <option value="CASHIER">CASHIER</option>
                   <option value="STOCK_MANAGER">STOCK_MANAGER</option>
                 </select>
               </div>
-              <div><label className="text-xs font-medium text-gray-600">Status</label>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Status</label>
                 <select value={empForm.userStatus} onChange={(e) => setEmpForm({ ...empForm, userStatus: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
                   <option value="ACTIVE">ACTIVE</option>
                   <option value="INACTIVE">INACTIVE</option>
@@ -561,27 +546,38 @@ export default function AccountManagementPage() {
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-screen overflow-y-auto">
             <h2 className="text-lg font-bold text-gray-800 mb-4">{cusEditingId !== null ? "Edit Customer" : "Add New Customer"}</h2>
-
-            {/* Error message inside modal */}
             {cusError && (
               <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-2">
-                <span>⚠️</span>
-                <span>{cusError}</span>
+                <span>⚠️</span><span>{cusError}</span>
                 <button onClick={() => setCusError("")} className="ml-auto text-red-400 hover:text-red-600">✕</button>
               </div>
             )}
-
             <div className="flex flex-col gap-3">
-              <div><label className="text-xs font-medium text-gray-600">Full Name</label><input value={cusForm.name} onChange={(e) => setCusForm({ ...cusForm, name: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-              <div><label className="text-xs font-medium text-gray-600">Email</label><input value={cusForm.email} onChange={(e) => setCusForm({ ...cusForm, email: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-              <div><label className="text-xs font-medium text-gray-600">Phone</label><input value={cusForm.phone} onChange={(e) => setCusForm({ ...cusForm, phone: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-              <div><label className="text-xs font-medium text-gray-600">Address</label><input value={cusForm.address} onChange={(e) => setCusForm({ ...cusForm, address: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Full Name</label>
+                <input value={cusForm.name} onChange={(e) => setCusForm({ ...cusForm, name: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Email</label>
+                <input value={cusForm.email} onChange={(e) => setCusForm({ ...cusForm, email: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+              </div>
+              {/* ✅ Phone with +63 prefix */}
+              <div>
+                <label className="text-xs font-medium text-gray-600">Phone</label>
+                <PhoneInput value={cusForm.phone} onChange={(val) => setCusForm({ ...cusForm, phone: val })} />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Address</label>
+                <input value={cusForm.address} onChange={(e) => setCusForm({ ...cusForm, address: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+              </div>
               {cusEditingId === null && (
-                <div><label className="text-xs font-medium text-gray-600">Password <span className="text-red-400">(min 8 characters)</span></label>
+                <div>
+                  <label className="text-xs font-medium text-gray-600">Password <span className="text-red-400">(min 8 characters)</span></label>
                   <input type="password" value={cusForm.password} onChange={(e) => setCusForm({ ...cusForm, password: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
                 </div>
               )}
-              <div><label className="text-xs font-medium text-gray-600">Status</label>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Status</label>
                 <select value={cusForm.userStatus} onChange={(e) => setCusForm({ ...cusForm, userStatus: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
                   <option value="ACTIVE">ACTIVE</option>
                   <option value="INACTIVE">INACTIVE</option>
@@ -627,32 +623,25 @@ export default function AccountManagementPage() {
         </div>
       )}
 
-      {/* ✅ SUCCESS TOASTS */}
       {empSuccess && (
         <div className="fixed bottom-6 right-6 z-50 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
-          <span>✅</span>
-          <span className="text-sm font-medium">{empSuccess}</span>
+          <span>✅</span><span className="text-sm font-medium">{empSuccess}</span>
         </div>
       )}
       {cusSuccess && (
         <div className="fixed bottom-6 right-6 z-50 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
-          <span>✅</span>
-          <span className="text-sm font-medium">{cusSuccess}</span>
+          <span>✅</span><span className="text-sm font-medium">{cusSuccess}</span>
         </div>
       )}
-
-      {/* ❌ ERROR TOASTS */}
       {empError && !showEmpModal && (
         <div className="fixed bottom-6 right-6 z-50 bg-red-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
-          <span>❌</span>
-          <span className="text-sm font-medium">{empError}</span>
+          <span>❌</span><span className="text-sm font-medium">{empError}</span>
           <button onClick={() => setEmpError("")} className="ml-2 hover:text-red-200">✕</button>
         </div>
       )}
       {cusError && !showCusModal && (
         <div className="fixed bottom-6 right-6 z-50 bg-red-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
-          <span>❌</span>
-          <span className="text-sm font-medium">{cusError}</span>
+          <span>❌</span><span className="text-sm font-medium">{cusError}</span>
           <button onClick={() => setCusError("")} className="ml-2 hover:text-red-200">✕</button>
         </div>
       )}

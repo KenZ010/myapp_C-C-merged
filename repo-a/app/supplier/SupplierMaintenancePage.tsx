@@ -14,12 +14,11 @@ type SupplierItem = {
   supplierName: string;
   contactNo: string;
   address: string | null;
-  email: string | null;
+  agentName: string | null;
   lastOrdered: number | null;
   lastCheckBy: string | null;
   dateChecked: string | null;
   status: string;
-
   products?: ProductItem[];
 };
 
@@ -34,19 +33,43 @@ const navItems = [
   { label: "Product Management", icon: "🗒️" },
   { label: "Account Management", icon: "👤" },
   { label: "Purchase Order", icon: "📋" },
-  { label: "Promo Management", icon: "🎁", path: "/promo" },
+  { label: "Promo Management", icon: "🎁" },
 ];
 
 const emptyForm = {
   supplierName: "",
   contactNo: "",
   address: "",
-  email: "",
+  agentName: "",
   lastOrdered: "" as string | number,
   lastCheckBy: "",
   dateChecked: "",
   status: "ACTIVE"
 };
+
+// ✅ Phone input component with +63 prefix, numbers only
+function PhoneInput({ value, onChange }: { value: string; onChange: (val: string) => void }) {
+  const digits = value.startsWith("+63") ? value.slice(3) : value.replace(/^\+63/, "");
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, "").slice(0, 10);
+    onChange("+63" + raw);
+  };
+  return (
+    <div className="flex mt-1">
+      <span className="flex items-center px-3 bg-gray-100 border border-r-0 border-gray-200 rounded-l-lg text-sm text-gray-600 font-medium select-none">
+        🇵🇭 +63
+      </span>
+      <input
+        type="tel"
+        value={digits}
+        onChange={handleChange}
+        placeholder="9XXXXXXXXX"
+        maxLength={10}
+        className="flex-1 border border-gray-200 rounded-r-lg px-3 py-2 text-sm outline-none focus:border-indigo-400 text-gray-900"
+      />
+    </div>
+  );
+}
 
 export default function SupplierMaintenancePage() {
   const router = useRouter();
@@ -86,9 +109,7 @@ export default function SupplierMaintenancePage() {
     }
   };
 
-  useEffect(() => {
-    fetchSuppliers();
-  }, []);
+  useEffect(() => { fetchSuppliers(); }, []);
 
   const filtered = items.filter((row) => {
     const matchSearch =
@@ -112,7 +133,7 @@ export default function SupplierMaintenancePage() {
       supplierName: item.supplierName,
       contactNo: item.contactNo,
       address: item.address || "",
-      email: item.email || "",
+      agentName: item.agentName || "",
       lastOrdered: item.lastOrdered ?? "",
       lastCheckBy: item.lastCheckBy || "",
       dateChecked: item.dateChecked ? new Date(item.dateChecked).toISOString().split('T')[0] : "",
@@ -128,7 +149,7 @@ export default function SupplierMaintenancePage() {
       supplierName: item.supplierName,
       contactNo: item.contactNo,
       address: item.address || "",
-      email: item.email || "",
+      agentName: item.agentName || "",
       lastOrdered: item.lastOrdered ?? "",
       lastCheckBy: item.lastCheckBy || "",
       dateChecked: item.dateChecked ? new Date(item.dateChecked).toISOString().split('T')[0] : "",
@@ -160,10 +181,9 @@ export default function SupplierMaintenancePage() {
   };
 
   const openViewModal = async (supplierId: string) => {
-  const supplier = await api.getSupplier(supplierId); // includes products
-  setViewItem(supplier);
-};
-
+    const supplier = await api.getSupplier(supplierId);
+    setViewItem(supplier);
+  };
 
   const handleDelete = () => {
     if (selected.length === 0) { alert("Please select at least one item."); return; }
@@ -182,8 +202,8 @@ export default function SupplierMaintenancePage() {
   };
 
   const handleExport = () => {
-    const headers = ["ID", "Company Name", "Contact No", "Address", "Email", "Last Ordered", "Last Check By", "Date Checked", "Status"];
-    const rows = items.map((item) => [item.id, item.supplierName, item.contactNo, item.address, item.email, item.lastOrdered, item.lastCheckBy, item.dateChecked, item.status]);
+    const headers = ["ID", "Company Name", "Contact No", "Address", "Agent Name", "Last Ordered", "Last Check By", "Date Checked", "Status"];
+    const rows = items.map((item) => [item.id, item.supplierName, item.contactNo, item.address, item.agentName, item.lastOrdered, item.lastCheckBy, item.dateChecked, item.status]);
     const csvContent = [headers, ...rows].map((row) => row.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -228,11 +248,9 @@ export default function SupplierMaintenancePage() {
 
       <main className="flex-1 flex flex-col overflow-auto">
         <header className="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-100">
-          <button
-            className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300"
+          <button className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300"
             style={{ transform: showMobileMenu ? "rotate(90deg)" : "rotate(0deg)" }}
-            onClick={() => setShowMobileMenu(!showMobileMenu)}
-          >
+            onClick={() => setShowMobileMenu(!showMobileMenu)}>
             {showMobileMenu ? "✕" : "☰"}
           </button>
           <h1 className="text-xl md:text-2xl font-bold text-gray-800">Supplier Maintenance</h1>
@@ -269,8 +287,6 @@ export default function SupplierMaintenancePage() {
 
         <div className="flex-1 p-3 md:p-4 bg-green-50">
           <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm">
-
-            {/* Top action buttons */}
             <div className="flex items-center gap-2 mb-4 flex-wrap justify-end">
               <button onClick={handleExport} className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-600 hover:bg-gray-50">📤 Export</button>
               <button onClick={handleDelete} className="flex items-center gap-1 border border-red-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-red-500 hover:bg-red-50">🗑️ Delete</button>
@@ -278,15 +294,12 @@ export default function SupplierMaintenancePage() {
               <button onClick={openAddModal} className="flex items-center gap-1 bg-gray-900 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-white hover:bg-gray-700">+ Add Supplier</button>
             </div>
 
-            {/* Search & Filters */}
             <div className="flex items-center gap-2 mb-4 flex-wrap">
               <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-40 md:w-48">
                 <span className="text-gray-400 text-sm">🔍</span>
                 <input type="text" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} className="outline-none text-sm text-gray-700 w-full" />
               </div>
               <button className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-600 hover:bg-gray-50">🔖 Status ▾</button>
-
-              {/* Checker Filter */}
               <div className="relative" ref={checkerRef}>
                 <button onClick={() => setShowCheckerDropdown(!showCheckerDropdown)}
                   className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${checkerFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
@@ -308,7 +321,6 @@ export default function SupplierMaintenancePage() {
               )}
             </div>
 
-            {/* Simplified Table */}
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-max">
                 <thead>
@@ -335,10 +347,8 @@ export default function SupplierMaintenancePage() {
                         <td className="p-3"><span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">{row.lastCheckBy ?? "-"}</span></td>
                         <td className="p-3"><span className={`px-3 py-1 rounded-full text-xs font-medium ${row.status === "ACTIVE" ? "bg-green-500 text-white" : "bg-yellow-400 text-black"}`}>{row.status}</span></td>
                         <td className="p-3">
-                          <button
-                            onClick={() => openViewModal(row.id)}
-                            className="flex items-center gap-1 border border-indigo-300 text-indigo-600 hover:bg-indigo-50 rounded-lg px-3 py-1 text-xs font-medium transition-colors"
-                          >
+                          <button onClick={() => openViewModal(row.id)}
+                            className="flex items-center gap-1 border border-indigo-300 text-indigo-600 hover:bg-indigo-50 rounded-lg px-3 py-1 text-xs font-medium transition-colors">
                             👁️ View Details
                           </button>
                         </td>
@@ -352,7 +362,7 @@ export default function SupplierMaintenancePage() {
         </div>
       </main>
 
-      {/* ── View Details Modal ── */}
+      {/* View Details Modal */}
       {viewItem && (
         <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
@@ -361,11 +371,8 @@ export default function SupplierMaintenancePage() {
                 <h2 className="text-lg font-bold text-gray-800">{viewItem.supplierName}</h2>
                 <p className="text-xs text-gray-400 mt-0.5">Supplier ID: {viewItem.id}</p>
               </div>
-              <span className={`px-3 py-1 rounded-full text-xs font-medium ${viewItem.status === "ACTIVE" ? "bg-green-500 text-white" : "bg-yellow-400 text-black"}`}>
-                {viewItem.status}
-              </span>
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${viewItem.status === "ACTIVE" ? "bg-green-500 text-white" : "bg-yellow-400 text-black"}`}>{viewItem.status}</span>
             </div>
-
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-50 rounded-xl p-3">
@@ -373,8 +380,8 @@ export default function SupplierMaintenancePage() {
                   <p className="text-sm font-medium text-gray-800">{viewItem.contactNo || "—"}</p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-xs text-gray-400 mb-1">Email</p>
-                  <p className="text-sm font-medium text-gray-800 break-all">{viewItem.email || "—"}</p>
+                  <p className="text-xs text-gray-400 mb-1">Agent Name</p>
+                  <p className="text-sm font-medium text-gray-800 break-all">{viewItem.agentName || "—"}</p>
                 </div>
               </div>
               <div className="bg-gray-50 rounded-xl p-3">
@@ -388,9 +395,7 @@ export default function SupplierMaintenancePage() {
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3">
                   <p className="text-xs text-gray-400 mb-1">Date Checked</p>
-                  <p className="text-sm font-medium text-gray-800">
-                    {viewItem.dateChecked ? new Date(viewItem.dateChecked).toLocaleDateString() : "—"}
-                  </p>
+                  <p className="text-sm font-medium text-gray-800">{viewItem.dateChecked ? new Date(viewItem.dateChecked).toLocaleDateString() : "—"}</p>
                 </div>
               </div>
               <div className="bg-gray-50 rounded-xl p-3">
@@ -398,34 +403,21 @@ export default function SupplierMaintenancePage() {
                 <p className="text-sm font-medium text-gray-800">{viewItem.lastCheckBy || "—"}</p>
               </div>
             </div>
-
-            {/* ── Products under Supplier ── */}
-<div className="mt-4">
-  <p className="text-sm font-semibold text-gray-700 mb-2">Products</p>
-
-  {viewItem.products && viewItem.products.length > 0 ? (
-    <div className="max-h-40 overflow-y-auto flex flex-col gap-2">
-      {viewItem.products.map((product) => (
-        <div
-          key={product.id}
-          className="bg-gray-50 rounded-xl p-3"
-        >
-          <p className="text-sm font-medium text-gray-800">
-            {product.productName}
-          </p>
-          <p className="text-xs text-gray-400">
-            ID: {product.id}
-          </p>
-        </div>
-      ))}
-    </div>
-  ) : (
-    <div className="bg-gray-50 rounded-xl p-3 text-sm text-gray-400 text-center">
-      No products found
-    </div>
-  )}
-</div>
-
+            <div className="mt-4">
+              <p className="text-sm font-semibold text-gray-700 mb-2">Products</p>
+              {viewItem.products && viewItem.products.length > 0 ? (
+                <div className="max-h-40 overflow-y-auto flex flex-col gap-2">
+                  {viewItem.products.map((product) => (
+                    <div key={product.id} className="bg-gray-50 rounded-xl p-3">
+                      <p className="text-sm font-medium text-gray-800">{product.productName}</p>
+                      <p className="text-xs text-gray-400">ID: {product.id}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-gray-50 rounded-xl p-3 text-sm text-gray-400 text-center">No products found</div>
+              )}
+            </div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => setViewItem(null)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Close</button>
               <button onClick={() => openEditFromView(viewItem)} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700">✏️ Edit</button>
@@ -434,28 +426,40 @@ export default function SupplierMaintenancePage() {
         </div>
       )}
 
-      {/* ── Add / Edit Modal ── */}
+      {/* Add / Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-screen overflow-y-auto">
             <h2 className="text-lg font-bold text-gray-800 mb-4">{editingId !== null ? "Edit Supplier" : "Add New Supplier"}</h2>
             <div className="flex flex-col gap-3">
-              <div><label className="text-xs font-medium text-gray-600">Company Name</label><input value={form.supplierName} onChange={(e) => setForm({ ...form, supplierName: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-              <div><label className="text-xs font-medium text-gray-600">Contact No.</label><input value={form.contactNo} onChange={(e) => setForm({ ...form, contactNo: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-              <div><label className="text-xs font-medium text-gray-600">Address</label><input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-              <div><label className="text-xs font-medium text-gray-600">Email</label><input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Company Name</label>
+                <input value={form.supplierName} onChange={(e) => setForm({ ...form, supplierName: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+              </div>
+              {/* ✅ Phone with +63 prefix */}
+              <div>
+                <label className="text-xs font-medium text-gray-600">Contact No.</label>
+                <PhoneInput value={form.contactNo} onChange={(val) => setForm({ ...form, contactNo: val })} />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Address</label>
+                <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Agent Name</label>
+                <input value={form.agentName} onChange={(e) => setForm({ ...form, agentName: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-gray-600">Last Ordered</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={form.lastOrdered}
+                  <input type="number" min="0" value={form.lastOrdered}
                     onChange={(e) => setForm({ ...form, lastOrdered: e.target.value === "" ? "" : Math.max(0, Number(e.target.value)) })}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
-                  />
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
                 </div>
-                <div><label className="text-xs font-medium text-gray-600">Date Checked</label><input type="date" value={form.dateChecked} onChange={(e) => setForm({ ...form, dateChecked: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600">Date Checked</label>
+                  <input type="date" value={form.dateChecked} onChange={(e) => setForm({ ...form, dateChecked: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                </div>
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600">Last Check By</label>
@@ -480,7 +484,7 @@ export default function SupplierMaintenancePage() {
         </div>
       )}
 
-      {/* ── Delete Confirm Modal ── */}
+      {/* Delete Confirm Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">

@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 
-// ── Types ────────────────────────────────────────────────────────────────────
 type DeliveryItem = {
   id: string;
   productId: string;
@@ -61,7 +60,7 @@ const navItems = [
   { label: "Product Management",    icon: "🗒️", path: "/product"        },
   { label: "Account Management",    icon: "👤", path: "/account"        },
   { label: "Purchase Order",        icon: "📋", path: "/purchase-order" },
-  { label: "Promo Management", icon: "🎁", path: "/promo" },
+  { label: "Promo Management",      icon: "🎁", path: "/promo"          },
 ];
 
 const ITEMS_PER_PAGE = 8;
@@ -89,6 +88,16 @@ export default function PurchaseOrderPage() {
   const [form,           setForm]           = useState<DeliveryForm>(makeEmptyForm());
   const [saving,         setSaving]         = useState(false);
 
+  // ✅ In-app alert/confirm states
+  const [alertModal,   setAlertModal]   = useState<{ show: boolean; message: string }>({ show: false, message: "" });
+  const [confirmModal, setConfirmModal] = useState<{ show: boolean; message: string; onConfirm: () => void }>({ show: false, message: "", onConfirm: () => {} });
+  const [createError,  setCreateError]  = useState("");
+  const [createSuccess, setCreateSuccess] = useState("");
+  const [receiveError,  setReceiveError]  = useState("");
+
+  const showAlert   = (message: string) => setAlertModal({ show: true, message });
+  const showConfirm = (message: string, onConfirm: () => void) => setConfirmModal({ show: true, message, onConfirm });
+
   // History
   const [historySearch,         setHistorySearch]         = useState("");
   const [historyStatus,         setHistoryStatus]         = useState("All");
@@ -104,7 +113,6 @@ export default function PurchaseOrderPage() {
   const [receiveQtys,       setReceiveQtys]       = useState<ReceiveQty[]>([]);
   const [receiving,         setReceiving]         = useState(false);
 
-  // ── Derived: products filtered by selected supplier ──────────────────────
   const supplierProducts = form.supplierId
     ? allProducts.filter((p) => p.supplierId === form.supplierId && p.status !== "INACTIVE")
     : [];
@@ -138,13 +146,8 @@ export default function PurchaseOrderPage() {
 
   useEffect(() => { fetchAll(); }, []);
 
-  // ── When supplier changes, reset line items ──────────────────────────────
   const handleSupplierChange = (supplierId: string) => {
-    setForm({
-      ...form,
-      supplierId,
-      lineItems: [emptyLineItem()], // reset products when supplier changes
-    });
+    setForm({ ...form, supplierId, lineItems: [emptyLineItem()] });
   };
 
   const calculateTotal = (items: LineItem[]) =>
@@ -152,13 +155,13 @@ export default function PurchaseOrderPage() {
 
   const validLineItems = form.lineItems.filter((i) => i.productId);
 
-  // ── CREATE ────────────────────────────────────────────────────────────────
+  // ✅ Replaced alert() with inline error or success toast
   const handleSave = async () => {
-    if (!form.supplierId) { alert("Please select a supplier."); return; }
-    if (validLineItems.length === 0) { alert("Please add at least one product."); return; }
-
+    if (!form.supplierId) { setCreateError("Please select a supplier."); return; }
+    if (validLineItems.length === 0) { setCreateError("Please add at least one product."); return; }
     try {
       setSaving(true);
+      setCreateError("");
       const saveData = {
         supplierId:   form.supplierId,
         deliveryDate: form.deliveryDate,
@@ -170,26 +173,25 @@ export default function PurchaseOrderPage() {
           costPrice: Number(i.unitPrice) || 0,
         })),
       };
-
       const result = await api.createDelivery(saveData);
       if (result?.error || result?.message?.toLowerCase().includes("error")) {
-        alert(result.message || "Failed to create delivery.");
+        setCreateError(result.message || "Failed to create delivery.");
         return;
       }
-
       setForm(makeEmptyForm());
       await fetchAll();
-      alert("Delivery created successfully!");
+      setCreateSuccess("Delivery created successfully!");
+      setTimeout(() => setCreateSuccess(""), 3000);
     } catch (err) {
       console.error(err);
-      alert("Failed to create delivery. Please try again.");
+      setCreateError("Failed to create delivery. Please try again.");
     } finally {
       setSaving(false);
     }
   };
 
-  const addLineItem    = () => {
-    if (!form.supplierId) { alert("Please select a supplier first."); return; }
+  const addLineItem = () => {
+    if (!form.supplierId) { setCreateError("Please select a supplier first."); return; }
     setForm({ ...form, lineItems: [...form.lineItems, emptyLineItem()] });
   };
   const removeLineItem = (idx: number) => setForm({ ...form, lineItems: form.lineItems.filter((_, i) => i !== idx) });
@@ -204,7 +206,6 @@ export default function PurchaseOrderPage() {
     setForm({ ...form, lineItems: items });
   };
 
-  // ── RECEIVING ─────────────────────────────────────────────────────────────
   const pendingDeliveries   = deliveries.filter((d) => d.status === "PENDING" || d.status === "PARTIALLY_RECEIVED");
   const filteredReceiving   = pendingDeliveries.filter((d) =>
     d.id.toLowerCase().includes(receivingSearch.toLowerCase()) ||
@@ -215,20 +216,21 @@ export default function PurchaseOrderPage() {
 
   const openReceiveModal = (delivery: Delivery) => {
     setReceivingDelivery(delivery);
-    setReceiveQtys(
-      delivery.items.map((item) => ({
-        deliveryItemId: item.id,
-        receivedQty: item.orderedQty - item.receivedQty,
-      }))
-    );
+    setReceiveError("");
+    setReceiveQtys(delivery.items.map((item) => ({
+      deliveryItemId: item.id,
+      receivedQty: item.orderedQty - item.receivedQty,
+    })));
   };
 
+  // ✅ Replaced alert() with inline error
   const handleReceive = async () => {
     if (!receivingDelivery) return;
     const employee = JSON.parse(localStorage.getItem("employee") || "{}");
-    if (!employee?.id) { alert("Employee not found. Please log in again."); return; }
+    if (!employee?.id) { setReceiveError("Employee not found. Please log in again."); return; }
     try {
       setReceiving(true);
+      setReceiveError("");
       await api.receiveDelivery(
         receivingDelivery.id,
         employee.id,
@@ -236,23 +238,26 @@ export default function PurchaseOrderPage() {
       );
       setReceivingDelivery(null);
       await fetchAll();
-      alert("Items received and stock updated!");
-    } catch (err: any) {
-      alert(err.message || "Failed to receive items.");
+      setCreateSuccess("Items received and stock updated!");
+      setTimeout(() => setCreateSuccess(""), 3000);
+    } catch (err: unknown) {
+      setReceiveError((err as Error).message || "Failed to receive items.");
     } finally {
       setReceiving(false);
     }
   };
 
-  const handleCancel = async (id: string) => {
-    if (!confirm("Cancel this delivery?")) return;
-    try {
-      await api.updateDelivery(id, { status: "CANCELLED" });
-      await fetchAll();
-    } catch (err) { console.error(err); }
+  // ✅ Replaced confirm() with in-app confirm modal
+  const handleCancel = (id: string) => {
+    showConfirm("Cancel this delivery?", async () => {
+      try {
+        await api.updateDelivery(id, { status: "CANCELLED" });
+        await fetchAll();
+        setConfirmModal({ show: false, message: "", onConfirm: () => {} });
+      } catch (err) { console.error(err); }
+    });
   };
 
-  // ── HISTORY ───────────────────────────────────────────────────────────────
   const filteredHistory = deliveries.filter((d) => {
     const ms = d.id.toLowerCase().includes(historySearch.toLowerCase()) ||
                (d.supplier?.supplierName || "").toLowerCase().includes(historySearch.toLowerCase());
@@ -272,27 +277,23 @@ export default function PurchaseOrderPage() {
     const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
     const a   = document.createElement("a");
     a.href    = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = "deliveries.csv";
-    a.click();
+    a.download = "deliveries.csv"; a.click();
   };
 
   const handleLogout = () => {
     document.cookie = "token=; path=/; max-age=0";
-    localStorage.removeItem("token");
-    localStorage.removeItem("employee");
+    localStorage.removeItem("token"); localStorage.removeItem("employee");
     router.push("/");
   };
 
   const navigate = (path: string) => { router.push(path); setShowMobileMenu(false); };
 
-  const PaginationBar = ({
-    page, totalPages, setPage, total, label,
-  }: { page: number; totalPages: number; setPage: (p: number) => void; total: number; label: string }) =>
+  const selectedSupplierName = suppliers.find((s) => s.id === form.supplierId)?.supplierName;
+
+  const PaginationBar = ({ page, totalPages, setPage, total, label }: { page: number; totalPages: number; setPage: (p: number) => void; total: number; label: string }) =>
     totalPages > 1 ? (
       <div className="flex items-center justify-between mt-4 px-1">
-        <p className="text-xs text-gray-400">
-          Showing {(page - 1) * ITEMS_PER_PAGE + 1}–{Math.min(page * ITEMS_PER_PAGE, total)} of {total} {label}
-        </p>
+        <p className="text-xs text-gray-400">Showing {(page - 1) * ITEMS_PER_PAGE + 1}–{Math.min(page * ITEMS_PER_PAGE, total)} of {total} {label}</p>
         <div className="flex gap-1">
           <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}
             className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">← Prev</button>
@@ -306,13 +307,37 @@ export default function PurchaseOrderPage() {
       </div>
     ) : null;
 
-  // ── Selected supplier name ─────────────────────────────────────────────────
-  const selectedSupplierName = suppliers.find((s) => s.id === form.supplierId)?.supplierName;
-
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
 
-      {/* Sidebar */}
+      {/* ✅ Alert Modal — replaces browser alert() */}
+      {alertModal.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-[60] px-4">
+          <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
+            <p className="text-2xl mb-2">ℹ️</p>
+            <p className="text-sm text-gray-700 mb-5">{alertModal.message}</p>
+            <button onClick={() => setAlertModal({ show: false, message: "" })}
+              className="w-full bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700">OK</button>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ Confirm Modal — replaces browser confirm() */}
+      {confirmModal.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-[60] px-4">
+          <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
+            <p className="text-2xl mb-2">⚠️</p>
+            <p className="text-sm text-gray-700 mb-5">{confirmModal.message}</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmModal({ show: false, message: "", onConfirm: () => {} })}
+                className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={confirmModal.onConfirm}
+                className="flex-1 bg-red-500 rounded-lg py-2 text-sm text-white hover:bg-red-600">Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <aside className="hidden md:flex w-52 bg-white flex-col py-6 px-4 border-r border-gray-100 shrink-0">
         <div className="text-center mb-10">
           <p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide">JULIETA SOFTDRINKS<br />STORE</p>
@@ -334,8 +359,6 @@ export default function PurchaseOrderPage() {
       </aside>
 
       <main className="flex-1 flex flex-col overflow-auto">
-
-        {/* Header */}
         <header className="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-100">
           <button className="md:hidden text-gray-600 text-xl mr-2" onClick={() => setShowMobileMenu(!showMobileMenu)}>
             {showMobileMenu ? "✕" : "☰"}
@@ -397,16 +420,11 @@ export default function PurchaseOrderPage() {
             ] as { key: Tab; label: string; icon: string }[]).map((tab) => (
               <button key={tab.key} onClick={() => setActiveTab(tab.key)}
                 className={`flex items-center gap-2 px-4 md:px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === tab.key
-                    ? "border-indigo-600 text-indigo-700 bg-indigo-50"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                  activeTab === tab.key ? "border-indigo-600 text-indigo-700 bg-indigo-50" : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
                 }`}>
-                <span>{tab.icon}</span>
-                <span>{tab.label}</span>
+                <span>{tab.icon}</span><span>{tab.label}</span>
                 {tab.key === "receiving" && pendingDeliveries.length > 0 && (
-                  <span className="bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none ml-1">
-                    {pendingDeliveries.length}
-                  </span>
+                  <span className="bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none ml-1">{pendingDeliveries.length}</span>
                 )}
               </button>
             ))}
@@ -420,22 +438,32 @@ export default function PurchaseOrderPage() {
             <div className="flex flex-col lg:flex-row gap-4">
               <div className="flex-1 flex flex-col gap-4">
 
-                {/* Step 1 — Supplier & Date */}
+                {/* Step 1 */}
                 <div className="bg-white rounded-2xl p-5 shadow-sm">
                   <div className="flex items-center gap-2 mb-3">
                     <div className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold">1</div>
                     <h2 className="text-sm font-bold text-gray-700">Select Supplier</h2>
                   </div>
+                  {/* ✅ Inline error for create tab */}
+                  {createError && (
+                    <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-2">
+                      <span>⚠️</span><span>{createError}</span>
+                      <button onClick={() => setCreateError("")} className="ml-auto">✕</button>
+                    </div>
+                  )}
+                  {createSuccess && (
+                    <div className="mb-3 p-3 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm flex items-center gap-2">
+                      <span>✅</span><span>{createSuccess}</span>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs font-medium text-gray-500 mb-1 block">Supplier <span className="text-red-400">*</span></label>
-                      <select value={form.supplierId}
-                        onChange={(e) => handleSupplierChange(e.target.value)}
+                      <select value={form.supplierId} onChange={(e) => handleSupplierChange(e.target.value)}
                         className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white">
                         <option value="">— Select a supplier —</option>
                         {suppliers.map((s) => <option key={s.id} value={s.id}>{s.supplierName}</option>)}
                       </select>
-                      {/* Show product count hint after selecting */}
                       {form.supplierId && (
                         <p className="text-xs mt-1 text-indigo-500">
                           {supplierProducts.length > 0
@@ -446,14 +474,15 @@ export default function PurchaseOrderPage() {
                     </div>
                     <div>
                       <label className="text-xs font-medium text-gray-500 mb-1 block">Delivery Date</label>
+                      {/* ✅ Fixed date input */}
                       <input type="date" value={form.deliveryDate}
                         onChange={(e) => setForm({ ...form, deliveryDate: e.target.value })}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white" />
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white [color-scheme:light]" />
                     </div>
                   </div>
                 </div>
 
-                {/* Step 2 — Products (locked until supplier selected) */}
+                {/* Step 2 */}
                 <div className={`bg-white rounded-2xl p-5 shadow-sm transition-opacity ${!form.supplierId ? "opacity-50 pointer-events-none" : ""}`}>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
@@ -461,20 +490,16 @@ export default function PurchaseOrderPage() {
                       <h2 className="text-sm font-bold text-gray-700">
                         Select Products
                         {form.supplierId && selectedSupplierName && (
-                          <span className="ml-2 text-xs font-normal text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">
-                            from {selectedSupplierName}
-                          </span>
+                          <span className="ml-2 text-xs font-normal text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">from {selectedSupplierName}</span>
                         )}
                       </h2>
                     </div>
-                    <button onClick={addLineItem}
-                      disabled={!form.supplierId || supplierProducts.length === 0}
+                    <button onClick={addLineItem} disabled={!form.supplierId || supplierProducts.length === 0}
                       className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed">
                       + Add Item
                     </button>
                   </div>
 
-                  {/* Empty state — no supplier selected */}
                   {!form.supplierId && (
                     <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-gray-200 rounded-xl">
                       <span className="text-3xl mb-2">🏢</span>
@@ -483,7 +508,6 @@ export default function PurchaseOrderPage() {
                     </div>
                   )}
 
-                  {/* Empty state — supplier selected but no products */}
                   {form.supplierId && supplierProducts.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-yellow-200 rounded-xl bg-yellow-50">
                       <span className="text-3xl mb-2">📦</span>
@@ -492,7 +516,6 @@ export default function PurchaseOrderPage() {
                     </div>
                   )}
 
-                  {/* Line items */}
                   {form.supplierId && supplierProducts.length > 0 && (
                     <div className="space-y-2">
                       <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-400 px-1">
@@ -504,36 +527,26 @@ export default function PurchaseOrderPage() {
                       {form.lineItems.map((item, idx) => (
                         <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-gray-50 rounded-xl p-2">
                           <div className="col-span-5">
-                            <select value={item.productId}
-                              onChange={(e) => updateLineItem(idx, "productId", e.target.value)}
+                            <select value={item.productId} onChange={(e) => updateLineItem(idx, "productId", e.target.value)}
                               className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white">
                               <option value="">— Select Product —</option>
                               {supplierProducts.map((p) => (
-                                <option
-                                  key={p.id}
-                                  value={p.id}
-                                  // disable if already selected in another row
-                                  disabled={form.lineItems.some((li, i) => i !== idx && li.productId === p.id)}>
+                                <option key={p.id} value={p.id} disabled={form.lineItems.some((li, i) => i !== idx && li.productId === p.id)}>
                                   {p.productName}
                                 </option>
                               ))}
                             </select>
                           </div>
                           <div className="col-span-2">
-                            <input type="number" min="1" value={item.quantity}
-                              onChange={(e) => updateLineItem(idx, "quantity", e.target.value)}
+                            <input type="number" min="1" value={item.quantity} onChange={(e) => updateLineItem(idx, "quantity", e.target.value)}
                               className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-center text-gray-900 bg-white" />
                           </div>
                           <div className="col-span-3">
-                            <input type="number" min="0" step="0.01" value={item.unitPrice}
-                              onChange={(e) => updateLineItem(idx, "unitPrice", e.target.value)}
-                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white"
-                              placeholder="₱0.00" />
+                            <input type="number" min="0" step="0.01" value={item.unitPrice} onChange={(e) => updateLineItem(idx, "unitPrice", e.target.value)}
+                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white" placeholder="₱0.00" />
                           </div>
                           <div className="col-span-2 flex items-center justify-end gap-1">
-                            <span className="text-xs font-medium text-gray-700">
-                              ₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
-                            </span>
+                            <span className="text-xs font-medium text-gray-700">₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}</span>
                             {form.lineItems.length > 1 && (
                               <button onClick={() => removeLineItem(idx)} className="text-red-400 hover:text-red-600 ml-1 text-sm">✕</button>
                             )}
@@ -544,40 +557,32 @@ export default function PurchaseOrderPage() {
                   )}
                 </div>
 
-                {/* Step 3 — Notes */}
+                {/* Step 3 */}
                 <div className={`bg-white rounded-2xl p-5 shadow-sm transition-opacity ${!form.supplierId ? "opacity-50 pointer-events-none" : ""}`}>
                   <div className="flex items-center gap-2 mb-3">
                     <div className={`w-6 h-6 rounded-full text-white text-xs flex items-center justify-center font-bold ${form.supplierId ? "bg-indigo-600" : "bg-gray-300"}`}>3</div>
                     <h2 className="text-sm font-bold text-gray-700">Notes (Optional)</h2>
                   </div>
-                  <textarea value={form.notes}
-                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                    rows={3}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white resize-none"
+                  <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                    rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white resize-none"
                     placeholder="Optional notes about this delivery..." />
                 </div>
               </div>
 
-              {/* Order summary sidebar */}
+              {/* Order Summary */}
               <div className="w-full lg:w-72 shrink-0">
                 <div className="bg-white rounded-2xl p-5 shadow-sm sticky top-4">
                   <h2 className="text-sm font-bold text-gray-700 mb-4">📋 Order Summary</h2>
-
-                  {/* Supplier badge */}
                   {form.supplierId ? (
                     <div className="mb-4 flex items-center gap-2 p-2.5 bg-indigo-50 rounded-xl border border-indigo-100">
                       <span className="text-lg">🏢</span>
-                      <div>
-                        <p className="text-xs text-indigo-400">Supplier</p>
-                        <p className="text-sm font-semibold text-indigo-800">{selectedSupplierName}</p>
-                      </div>
+                      <div><p className="text-xs text-indigo-400">Supplier</p><p className="text-sm font-semibold text-indigo-800">{selectedSupplierName}</p></div>
                     </div>
                   ) : (
                     <div className="mb-4 p-2.5 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center">
                       <p className="text-xs text-gray-400">No supplier selected</p>
                     </div>
                   )}
-
                   {validLineItems.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-8 text-center">
                       <span className="text-4xl mb-3">📋</span>
@@ -591,26 +596,18 @@ export default function PurchaseOrderPage() {
                             <p className="font-medium text-gray-800 text-xs">{item.productName}</p>
                             <p className="text-xs text-gray-400">{item.quantity} × ₱{Number(item.unitPrice).toLocaleString()}</p>
                           </div>
-                          <span className="text-xs font-semibold text-indigo-700">
-                            ₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
-                          </span>
+                          <span className="text-xs font-semibold text-indigo-700">₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}</span>
                         </div>
                       ))}
                       <div className="pt-2 flex justify-between items-center">
                         <span className="text-sm font-semibold text-gray-600">Total</span>
-                        <span className="text-base font-bold text-indigo-900">
-                          ₱{calculateTotal(validLineItems).toLocaleString()}
-                        </span>
+                        <span className="text-base font-bold text-indigo-900">₱{calculateTotal(validLineItems).toLocaleString()}</span>
                       </div>
                     </div>
                   )}
-
-                  <button onClick={handleSave}
-                    disabled={saving || validLineItems.length === 0 || !form.supplierId}
+                  <button onClick={handleSave} disabled={saving || validLineItems.length === 0 || !form.supplierId}
                     className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2">
-                    {saving
-                      ? <><span className="animate-spin inline-block">⏳</span> Submitting...</>
-                      : <><span>📤</span> Submit Delivery</>}
+                    {saving ? <><span className="animate-spin inline-block">⏳</span> Submitting...</> : <><span>📤</span> Submit Delivery</>}
                   </button>
                 </div>
               </div>
@@ -648,34 +645,19 @@ export default function PurchaseOrderPage() {
                           <tr><td colSpan={6} className="p-6 text-center text-gray-400">Loading...</td></tr>
                         ) : paginatedReceiving.length === 0 ? (
                           <tr><td colSpan={6} className="p-10 text-center">
-                            <div className="flex flex-col items-center gap-2">
-                              <span className="text-3xl">📭</span>
-                              <p className="text-gray-400 text-sm">No pending deliveries.</p>
-                            </div>
+                            <div className="flex flex-col items-center gap-2"><span className="text-3xl">📭</span><p className="text-gray-400 text-sm">No pending deliveries.</p></div>
                           </td></tr>
                         ) : paginatedReceiving.map((row) => (
                           <tr key={row.id} className={`border-b border-gray-100 hover:bg-gray-50 ${receivingDelivery?.id === row.id ? "bg-indigo-50" : ""}`}>
-                            <td className="p-3">
-                              <span className="bg-gray-700 text-white px-3 py-1 rounded-full text-xs font-mono">{row.id.slice(0, 8)}...</span>
-                            </td>
+                            <td className="p-3"><span className="bg-gray-700 text-white px-3 py-1 rounded-full text-xs font-mono">{row.id.slice(0, 8)}...</span></td>
                             <td className="p-3 text-gray-700">{row.supplier?.supplierName || row.supplierId}</td>
                             <td className="p-3 text-gray-500 text-xs">{new Date(row.deliveryDate).toLocaleDateString()}</td>
                             <td className="p-3 text-center text-gray-700">{row.items?.length || 0}</td>
-                            <td className="p-3">
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_CONFIG[row.status]?.bg} ${STATUS_CONFIG[row.status]?.text}`}>
-                                {row.status}
-                              </span>
-                            </td>
+                            <td className="p-3"><span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_CONFIG[row.status]?.bg} ${STATUS_CONFIG[row.status]?.text}`}>{row.status}</span></td>
                             <td className="p-3">
                               <div className="flex gap-1">
-                                <button onClick={() => openReceiveModal(row)}
-                                  className="border border-green-300 text-green-600 hover:bg-green-50 rounded-lg px-2 py-1 text-xs font-medium">
-                                  ✓ Receive
-                                </button>
-                                <button onClick={() => handleCancel(row.id)}
-                                  className="border border-red-200 text-red-500 hover:bg-red-50 rounded-lg px-2 py-1 text-xs font-medium">
-                                  Cancel
-                                </button>
+                                <button onClick={() => openReceiveModal(row)} className="border border-green-300 text-green-600 hover:bg-green-50 rounded-lg px-2 py-1 text-xs font-medium">✓ Receive</button>
+                                <button onClick={() => handleCancel(row.id)} className="border border-red-200 text-red-500 hover:bg-red-50 rounded-lg px-2 py-1 text-xs font-medium">Cancel</button>
                               </div>
                             </td>
                           </tr>
@@ -687,7 +669,7 @@ export default function PurchaseOrderPage() {
                 </div>
               </div>
 
-              {/* Receive detail sidebar */}
+              {/* Receive sidebar */}
               <div className="w-full lg:w-80 shrink-0">
                 <div className="bg-white rounded-2xl p-5 shadow-sm sticky top-4">
                   <h2 className="text-sm font-bold text-gray-700 mb-4">Receive Items</h2>
@@ -698,6 +680,12 @@ export default function PurchaseOrderPage() {
                     </div>
                   ) : (
                     <div className="space-y-3">
+                      {/* ✅ Inline error for receiving */}
+                      {receiveError && (
+                        <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-2">
+                          <span>⚠️</span><span>{receiveError}</span>
+                        </div>
+                      )}
                       <div className="bg-gray-50 rounded-xl p-3">
                         <p className="text-xs text-gray-400">Supplier</p>
                         <p className="text-sm font-medium text-gray-800">{receivingDelivery.supplier?.supplierName}</p>
@@ -711,24 +699,14 @@ export default function PurchaseOrderPage() {
                             return (
                               <div key={i} className="flex items-center gap-2 py-1.5 border-b border-gray-100 last:border-0">
                                 <div className="flex-1">
-                                  <p className="text-xs font-medium text-gray-700">
-                                    {item.product?.productName || item.productId}
-                                  </p>
-                                  <p className="text-xs text-gray-400">
-                                    Ordered: {item.orderedQty} | Received: {item.receivedQty} | Remaining: {remaining}
-                                  </p>
+                                  <p className="text-xs font-medium text-gray-700">{item.product?.productName || item.productId}</p>
+                                  <p className="text-xs text-gray-400">Ordered: {item.orderedQty} | Received: {item.receivedQty} | Remaining: {remaining}</p>
                                 </div>
-                                <input
-                                  type="number" min="0" max={remaining}
-                                  value={rq?.receivedQty ?? 0}
+                                <input type="number" min="0" max={remaining} value={rq?.receivedQty ?? 0}
                                   onChange={(e) => setReceiveQtys((prev) =>
-                                    prev.map((r) => r.deliveryItemId === item.id
-                                      ? { ...r, receivedQty: Math.min(Number(e.target.value), remaining) }
-                                      : r
-                                    )
+                                    prev.map((r) => r.deliveryItemId === item.id ? { ...r, receivedQty: Math.min(Number(e.target.value), remaining) } : r)
                                   )}
-                                  className="w-16 border border-gray-200 rounded-lg px-2 py-1 text-sm text-center outline-none focus:border-indigo-400"
-                                />
+                                  className="w-16 border border-gray-200 rounded-lg px-2 py-1 text-sm text-center outline-none focus:border-indigo-400" />
                               </div>
                             );
                           })}
@@ -738,10 +716,7 @@ export default function PurchaseOrderPage() {
                         className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2">
                         {receiving ? <><span className="animate-spin">⏳</span> Processing...</> : "✓ Confirm Receipt"}
                       </button>
-                      <button onClick={() => setReceivingDelivery(null)}
-                        className="w-full border border-gray-200 text-gray-600 rounded-xl py-2 text-sm hover:bg-gray-50">
-                        Close
-                      </button>
+                      <button onClick={() => setReceivingDelivery(null)} className="w-full border border-gray-200 text-gray-600 rounded-xl py-2 text-sm hover:bg-gray-50">Close</button>
                     </div>
                   )}
                 </div>
@@ -778,13 +753,9 @@ export default function PurchaseOrderPage() {
                     )}
                   </div>
                   {historyStatus !== "All" && (
-                    <button onClick={() => { setHistoryStatus("All"); setHistoryPage(1); }}
-                      className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
+                    <button onClick={() => { setHistoryStatus("All"); setHistoryPage(1); }} className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
                   )}
-                  <button onClick={handleExport}
-                    className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 hover:bg-gray-50">
-                    📤 Export
-                  </button>
+                  <button onClick={handleExport} className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 hover:bg-gray-50">📤 Export</button>
                 </div>
               </div>
 
@@ -796,9 +767,7 @@ export default function PurchaseOrderPage() {
                   { label: "Delivered", count: deliveries.filter(d => d.status==="DELIVERED").length,          color: "bg-green-100 text-green-800"   },
                   { label: "Cancelled", count: deliveries.filter(d => d.status==="CANCELLED").length,          color: "bg-red-100 text-red-700"       },
                 ].map((s) => (
-                  <span key={s.label} className={`${s.color} rounded-full px-3 py-1 text-xs font-semibold`}>
-                    {s.label}: {s.count}
-                  </span>
+                  <span key={s.label} className={`${s.color} rounded-full px-3 py-1 text-xs font-semibold`}>{s.label}: {s.count}</span>
                 ))}
               </div>
 
@@ -819,31 +788,20 @@ export default function PurchaseOrderPage() {
                       <tr><td colSpan={6} className="p-6 text-center text-gray-400">Loading...</td></tr>
                     ) : paginatedHistory.length === 0 ? (
                       <tr><td colSpan={6} className="p-10 text-center">
-                        <div className="flex flex-col items-center gap-2">
-                          <span className="text-3xl">📭</span>
-                          <p className="text-gray-400 text-sm">No deliveries found.</p>
-                        </div>
+                        <div className="flex flex-col items-center gap-2"><span className="text-3xl">📭</span><p className="text-gray-400 text-sm">No deliveries found.</p></div>
                       </td></tr>
                     ) : paginatedHistory.map((row) => (
                       <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="p-3">
-                          <span className="bg-gray-700 text-white px-3 py-1 rounded-full text-xs font-mono">{row.id.slice(0, 8)}...</span>
-                        </td>
+                        <td className="p-3"><span className="bg-gray-700 text-white px-3 py-1 rounded-full text-xs font-mono">{row.id.slice(0, 8)}...</span></td>
                         <td className="p-3 text-gray-700">{row.supplier?.supplierName || row.supplierId}</td>
                         <td className="p-3 text-gray-500 text-xs">{new Date(row.deliveryDate).toLocaleDateString()}</td>
                         <td className="p-3 text-center text-gray-700">{row.items?.length || 0}</td>
-                        <td className="p-3">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${STATUS_CONFIG[row.status]?.bg} ${STATUS_CONFIG[row.status]?.text}`}>
-                            {row.status}
-                          </span>
-                        </td>
+                        <td className="p-3"><span className={`px-3 py-1 rounded-full text-xs font-medium ${STATUS_CONFIG[row.status]?.bg} ${STATUS_CONFIG[row.status]?.text}`}>{row.status}</span></td>
                         <td className="p-3">
                           <div className="flex items-center gap-1">
-                            <button onClick={() => setViewDelivery(row)}
-                              className="border border-indigo-300 text-indigo-600 hover:bg-indigo-50 rounded-lg px-2 py-1 text-xs font-medium">View</button>
+                            <button onClick={() => setViewDelivery(row)} className="border border-indigo-300 text-indigo-600 hover:bg-indigo-50 rounded-lg px-2 py-1 text-xs font-medium">View</button>
                             {row.status !== "DELIVERED" && row.status !== "CANCELLED" && (
-                              <button onClick={() => handleCancel(row.id)}
-                                className="border border-red-200 text-red-500 hover:bg-red-50 rounded-lg px-2 py-1 text-xs font-medium">Cancel</button>
+                              <button onClick={() => handleCancel(row.id)} className="border border-red-200 text-red-500 hover:bg-red-50 rounded-lg px-2 py-1 text-xs font-medium">Cancel</button>
                             )}
                           </div>
                         </td>
@@ -867,9 +825,7 @@ export default function PurchaseOrderPage() {
                 <h2 className="text-lg font-bold text-gray-800">Delivery Details</h2>
                 <p className="text-xs text-gray-400 font-mono mt-0.5">{viewDelivery.id}</p>
               </div>
-              <span className={`px-3 py-1 rounded-full text-xs font-medium ${STATUS_CONFIG[viewDelivery.status]?.bg} ${STATUS_CONFIG[viewDelivery.status]?.text}`}>
-                {viewDelivery.status}
-              </span>
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${STATUS_CONFIG[viewDelivery.status]?.bg} ${STATUS_CONFIG[viewDelivery.status]?.text}`}>{viewDelivery.status}</span>
             </div>
             <div className="flex flex-col gap-3">
               <div className="bg-gray-50 rounded-xl p-3">
@@ -899,9 +855,7 @@ export default function PurchaseOrderPage() {
                     <div key={idx} className="flex justify-between text-sm text-gray-700 py-1 border-b border-gray-100 last:border-0">
                       <div>
                         <p className="font-medium">{item.product?.productName || item.productId}</p>
-                        <p className="text-xs text-gray-400">
-                          Ordered: {item.orderedQty} | Received: {item.receivedQty} | Returned: {item.returnedQty}
-                        </p>
+                        <p className="text-xs text-gray-400">Ordered: {item.orderedQty} | Received: {item.receivedQty} | Returned: {item.returnedQty}</p>
                       </div>
                       <span className="text-gray-500 text-xs">₱{item.costPrice}</span>
                     </div>
@@ -909,11 +863,15 @@ export default function PurchaseOrderPage() {
                 </div>
               </div>
             </div>
-            <button onClick={() => setViewDelivery(null)}
-              className="w-full mt-5 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">
-              Close
-            </button>
+            <button onClick={() => setViewDelivery(null)} className="w-full mt-5 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Close</button>
           </div>
+        </div>
+      )}
+
+      {/* Success Toast */}
+      {createSuccess && (
+        <div className="fixed bottom-6 right-6 z-50 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
+          <span>✅</span><span className="text-sm font-medium">{createSuccess}</span>
         </div>
       )}
     </div>
