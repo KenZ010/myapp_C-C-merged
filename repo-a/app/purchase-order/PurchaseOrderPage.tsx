@@ -4,45 +4,72 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 
+// ─── UNIFIED UNIT SYSTEM (same as product page) ────────────────────────────
+type StockUnit = "cs" | "btl" | "pk" | "pcs" | "box";
+
+const STOCK_UNITS: { value: StockUnit; label: string; abbr: string }[] = [
+  { value: "cs",  label: "Cases",   abbr: "cs"  },
+  { value: "btl", label: "Bottles", abbr: "btl" },
+  { value: "pk",  label: "Packs",   abbr: "pk"  },
+  { value: "pcs", label: "Pieces",  abbr: "pcs" },
+  { value: "box", label: "Boxes",   abbr: "box" },
+];
+
+const getUnitAbbr  = (u?: string) => STOCK_UNITS.find((x) => x.value === u)?.abbr  ?? "cs";
+const getUnitLabel = (u?: string) => STOCK_UNITS.find((x) => x.value === u)?.label ?? "Cases";
+
+// Compact inline unit selector for line item rows (mobile-friendly)
+function InlineUnitSelect({ value, onChange }: { value: string; onChange: (v: StockUnit) => void }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as StockUnit)}
+      className="w-full border border-gray-200 rounded-lg px-1.5 py-1.5 text-xs outline-none focus:border-indigo-400 text-gray-900 bg-white"
+    >
+      {STOCK_UNITS.map((u) => (
+        <option key={u.value} value={u.value}>{u.abbr} — {u.label}</option>
+      ))}
+    </select>
+  );
+}
+
+// Unit pill badge
+function UnitPill({ unit, qty }: { unit?: string; qty?: number }) {
+  const abbr = getUnitAbbr(unit);
+  return (
+    <span className="inline-flex items-center gap-0.5 text-xs text-indigo-600 font-medium bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full whitespace-nowrap">
+      {qty != null && <span className="text-gray-700 font-semibold">{qty}</span>}
+      <span>{abbr}</span>
+    </span>
+  );
+}
+
+// ─── TYPES ─────────────────────────────────────────────────────────────────
 type DeliveryItem = {
-  id: string;
-  productId: string;
-  orderedQty: number;
-  receivedQty: number;
-  returnedQty: number;
-  costPrice: number;
-  product?: { id: string; productName: string; price: number };
+  id: string; productId: string;
+  orderedQty: number; receivedQty: number; returnedQty: number;
+  costPrice: number; unit?: string;
+  product?: { id: string; productName: string; price: number; stockUnit?: string };
 };
 
 type Delivery = {
-  id: string;
-  supplierId: string;
-  deliveryDate: string;
+  id: string; supplierId: string; deliveryDate: string;
   status: "PENDING" | "PARTIALLY_RECEIVED" | "DELIVERED" | "CANCELLED";
-  totalItems: number;
-  notes?: string;
-  createdAt: string;
+  totalItems: number; notes?: string; createdAt: string;
   supplier?: { id: string; supplierName: string };
   items: DeliveryItem[];
 };
 
 type LineItem = {
-  productId: string;
-  productName: string;
-  quantity: number | string;
-  unitPrice: number | string;
+  productId: string; productName: string;
+  quantity: number | string; unitPrice: number | string;
+  unit: StockUnit;
 };
 
-type DeliveryForm = {
-  supplierId: string;
-  deliveryDate: string;
-  lineItems: LineItem[];
-  notes: string;
-};
-
-type Supplier = { id: string; supplierName: string };
-type Product  = { id: string; productName: string; price: number; supplierId: string; status?: string };
-type ReceiveQty = { deliveryItemId: string; receivedQty: number };
+type DeliveryForm = { supplierId: string; deliveryDate: string; lineItems: LineItem[]; notes: string };
+type Supplier    = { id: string; supplierName: string };
+type Product     = { id: string; productName: string; price: number; supplierId: string; status?: string; stockUnit?: string };
+type ReceiveQty  = { deliveryItemId: string; receivedQty: number };
 
 const STATUS_CONFIG: Record<string, { bg: string; text: string }> = {
   PENDING:            { bg: "bg-yellow-100", text: "text-yellow-800" },
@@ -64,12 +91,10 @@ const navItems = [
 ];
 
 const ITEMS_PER_PAGE = 8;
-const emptyLineItem  = (): LineItem => ({ productId: "", productName: "", quantity: 1, unitPrice: 0 });
+const emptyLineItem  = (): LineItem => ({ productId: "", productName: "", quantity: 1, unitPrice: 0, unit: "cs" });
 const makeEmptyForm  = (): DeliveryForm => ({
-  supplierId: "",
-  deliveryDate: new Date().toISOString().split("T")[0],
-  lineItems: [emptyLineItem()],
-  notes: "",
+  supplierId: "", deliveryDate: new Date().toISOString().split("T")[0],
+  lineItems: [emptyLineItem()], notes: "",
 });
 
 type Tab = "create" | "receiving" | "history";
@@ -88,17 +113,13 @@ export default function PurchaseOrderPage() {
   const [form,           setForm]           = useState<DeliveryForm>(makeEmptyForm());
   const [saving,         setSaving]         = useState(false);
 
-  // ✅ In-app alert/confirm states
-  const [alertModal,   setAlertModal]   = useState<{ show: boolean; message: string }>({ show: false, message: "" });
-  const [confirmModal, setConfirmModal] = useState<{ show: boolean; message: string; onConfirm: () => void }>({ show: false, message: "", onConfirm: () => {} });
-  const [createError,  setCreateError]  = useState("");
+  const [confirmModal,  setConfirmModal]  = useState<{ show: boolean; message: string; onConfirm: () => void }>({ show: false, message: "", onConfirm: () => {} });
+  const [createError,   setCreateError]   = useState("");
   const [createSuccess, setCreateSuccess] = useState("");
   const [receiveError,  setReceiveError]  = useState("");
 
-  const showAlert   = (message: string) => setAlertModal({ show: true, message });
-  const showConfirm = (message: string, onConfirm: () => void) => setConfirmModal({ show: true, message, onConfirm });
+  const showConfirm = (message: string, fn: () => void) => setConfirmModal({ show: true, message, onConfirm: fn });
 
-  // History
   const [historySearch,         setHistorySearch]         = useState("");
   const [historyStatus,         setHistoryStatus]         = useState("All");
   const [historyPage,           setHistoryPage]           = useState(1);
@@ -106,7 +127,6 @@ export default function PurchaseOrderPage() {
   const [showHistoryStatusDrop, setShowHistoryStatusDrop] = useState(false);
   const historyStatusRef = useRef<HTMLDivElement>(null);
 
-  // Receiving
   const [receivingSearch,   setReceivingSearch]   = useState("");
   const [receivePage,       setReceivePage]       = useState(1);
   const [receivingDelivery, setReceivingDelivery] = useState<Delivery | null>(null);
@@ -119,8 +139,7 @@ export default function PurchaseOrderPage() {
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
-      if (historyStatusRef.current && !historyStatusRef.current.contains(e.target as Node))
-        setShowHistoryStatusDrop(false);
+      if (historyStatusRef.current && !historyStatusRef.current.contains(e.target as Node)) setShowHistoryStatusDrop(false);
     };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
@@ -129,19 +148,12 @@ export default function PurchaseOrderPage() {
   const fetchAll = async () => {
     try {
       setLoading(true);
-      const [deliveriesData, suppliersData, productsData] = await Promise.all([
-        api.getDeliveries(),
-        api.getSuppliers(),
-        api.getProducts(),
-      ]);
-      setDeliveries(Array.isArray(deliveriesData) ? deliveriesData : []);
-      setSuppliers(Array.isArray(suppliersData) ? suppliersData : []);
-      setAllProducts(Array.isArray(productsData) ? productsData : []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+      const [d, s, p] = await Promise.all([api.getDeliveries(), api.getSuppliers(), api.getProducts()]);
+      setDeliveries(Array.isArray(d) ? d : []);
+      setSuppliers(Array.isArray(s) ? s : []);
+      setAllProducts(Array.isArray(p) ? p : []);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   };
 
   useEffect(() => { fetchAll(); }, []);
@@ -155,51 +167,42 @@ export default function PurchaseOrderPage() {
 
   const validLineItems = form.lineItems.filter((i) => i.productId);
 
-  // ✅ Replaced alert() with inline error or success toast
   const handleSave = async () => {
     if (!form.supplierId) { setCreateError("Please select a supplier."); return; }
     if (validLineItems.length === 0) { setCreateError("Please add at least one product."); return; }
     try {
-      setSaving(true);
-      setCreateError("");
-      const saveData = {
-        supplierId:   form.supplierId,
-        deliveryDate: form.deliveryDate,
-        totalItems:   validLineItems.reduce((sum, i) => sum + Number(i.quantity), 0),
-        notes:        form.notes || "",
-        items:        validLineItems.map((i) => ({
-          productId: i.productId,
-          quantity:  Number(i.quantity) || 1,
-          costPrice: Number(i.unitPrice) || 0,
+      setSaving(true); setCreateError("");
+      const res = await api.createDelivery({
+        supplierId: form.supplierId, deliveryDate: form.deliveryDate,
+        totalItems: validLineItems.reduce((s, i) => s + Number(i.quantity), 0),
+        notes: form.notes || "",
+        items: validLineItems.map((i) => ({
+          productId: i.productId, quantity: Number(i.quantity) || 1,
+          costPrice: Number(i.unitPrice) || 0, unit: i.unit || "cs",
         })),
-      };
-      const result = await api.createDelivery(saveData);
-      if (result?.error || result?.message?.toLowerCase().includes("error")) {
-        setCreateError(result.message || "Failed to create delivery.");
-        return;
+      });
+      if (res?.error || res?.message?.toLowerCase().includes("error")) {
+        setCreateError(res.message || "Failed to create delivery."); return;
       }
-      setForm(makeEmptyForm());
-      await fetchAll();
+      setForm(makeEmptyForm()); await fetchAll();
       setCreateSuccess("Delivery created successfully!");
       setTimeout(() => setCreateSuccess(""), 3000);
-    } catch (err) {
-      console.error(err);
-      setCreateError("Failed to create delivery. Please try again.");
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { console.error(e); setCreateError("Failed to create delivery. Please try again."); }
+    finally { setSaving(false); }
   };
 
-  const addLineItem = () => {
+  const addLineItem    = () => {
     if (!form.supplierId) { setCreateError("Please select a supplier first."); return; }
     setForm({ ...form, lineItems: [...form.lineItems, emptyLineItem()] });
   };
   const removeLineItem = (idx: number) => setForm({ ...form, lineItems: form.lineItems.filter((_, i) => i !== idx) });
+
   const updateLineItem = (idx: number, field: keyof LineItem, value: string | number) => {
     const items = [...form.lineItems];
     if (field === "productId") {
       const p = supplierProducts.find((p) => p.id === value);
-      items[idx] = { ...items[idx], productId: String(value), productName: p?.productName || "", unitPrice: p?.price || 0 };
+      // ✅ auto-fill unit from product's stockUnit
+      items[idx] = { ...items[idx], productId: String(value), productName: p?.productName || "", unitPrice: p?.price || 0, unit: (p?.stockUnit as StockUnit) || "cs" };
     } else {
       items[idx] = { ...items[idx], [field]: value };
     }
@@ -215,124 +218,78 @@ export default function PurchaseOrderPage() {
   const paginatedReceiving = filteredReceiving.slice((receivePage - 1) * ITEMS_PER_PAGE, receivePage * ITEMS_PER_PAGE);
 
   const openReceiveModal = (delivery: Delivery) => {
-    setReceivingDelivery(delivery);
-    setReceiveError("");
-    setReceiveQtys(delivery.items.map((item) => ({
-      deliveryItemId: item.id,
-      receivedQty: item.orderedQty - item.receivedQty,
-    })));
+    setReceivingDelivery(delivery); setReceiveError("");
+    setReceiveQtys(delivery.items.map((item) => ({ deliveryItemId: item.id, receivedQty: item.orderedQty - item.receivedQty })));
   };
 
-  // ✅ Replaced alert() with inline error
   const handleReceive = async () => {
     if (!receivingDelivery) return;
     const employee = JSON.parse(localStorage.getItem("employee") || "{}");
     if (!employee?.id) { setReceiveError("Employee not found. Please log in again."); return; }
     try {
-      setReceiving(true);
-      setReceiveError("");
-      await api.receiveDelivery(
-        receivingDelivery.id,
-        employee.id,
-        receiveQtys.filter((r) => r.receivedQty > 0)
-      );
-      setReceivingDelivery(null);
-      await fetchAll();
+      setReceiving(true); setReceiveError("");
+      await api.receiveDelivery(receivingDelivery.id, employee.id, receiveQtys.filter((r) => r.receivedQty > 0));
+      setReceivingDelivery(null); await fetchAll();
       setCreateSuccess("Items received and stock updated!");
       setTimeout(() => setCreateSuccess(""), 3000);
-    } catch (err: unknown) {
-      setReceiveError((err as Error).message || "Failed to receive items.");
-    } finally {
-      setReceiving(false);
-    }
+    } catch (e: unknown) { setReceiveError((e as Error).message || "Failed to receive items."); }
+    finally { setReceiving(false); }
   };
 
-  // ✅ Replaced confirm() with in-app confirm modal
-  const handleCancel = (id: string) => {
-    showConfirm("Cancel this delivery?", async () => {
-      try {
-        await api.updateDelivery(id, { status: "CANCELLED" });
-        await fetchAll();
-        setConfirmModal({ show: false, message: "", onConfirm: () => {} });
-      } catch (err) { console.error(err); }
-    });
-  };
-
-  const filteredHistory = deliveries.filter((d) => {
-    const ms = d.id.toLowerCase().includes(historySearch.toLowerCase()) ||
-               (d.supplier?.supplierName || "").toLowerCase().includes(historySearch.toLowerCase());
-    const ss = historyStatus === "All" || d.status === historyStatus;
-    return ms && ss;
+  const handleCancel = (id: string) => showConfirm("Cancel this delivery?", async () => {
+    try { await api.updateDelivery(id, { status: "CANCELLED" }); await fetchAll(); setConfirmModal({ show: false, message: "", onConfirm: () => {} }); }
+    catch (e) { console.error(e); }
   });
+
+  const filteredHistory = deliveries.filter((d) =>
+    (d.id.toLowerCase().includes(historySearch.toLowerCase()) || (d.supplier?.supplierName || "").toLowerCase().includes(historySearch.toLowerCase()))
+    && (historyStatus === "All" || d.status === historyStatus)
+  );
   const historyTotalPages = Math.ceil(filteredHistory.length / ITEMS_PER_PAGE);
   const paginatedHistory  = filteredHistory.slice((historyPage - 1) * ITEMS_PER_PAGE, historyPage * ITEMS_PER_PAGE);
 
   const handleExport = () => {
     const headers = ["ID","Supplier","Delivery Date","Total Items","Status","Notes"];
-    const rows    = deliveries.map((d) => [
-      d.id, d.supplier?.supplierName || d.supplierId,
-      new Date(d.deliveryDate).toLocaleDateString(),
-      d.totalItems, d.status, d.notes || ""
-    ]);
-    const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-    const a   = document.createElement("a");
-    a.href    = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const rows    = deliveries.map((d) => [d.id, d.supplier?.supplierName || d.supplierId, new Date(d.deliveryDate).toLocaleDateString(), d.totalItems, d.status, d.notes || ""]);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([[headers, ...rows].map((r) => r.join(",")).join("\n")], { type: "text/csv" }));
     a.download = "deliveries.csv"; a.click();
   };
 
-  const handleLogout = () => {
-    document.cookie = "token=; path=/; max-age=0";
-    localStorage.removeItem("token"); localStorage.removeItem("employee");
-    router.push("/");
-  };
-
-  const navigate = (path: string) => { router.push(path); setShowMobileMenu(false); };
-
+  const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("token"); localStorage.removeItem("employee"); router.push("/"); };
+  const navigate     = (path: string) => { router.push(path); setShowMobileMenu(false); };
   const selectedSupplierName = suppliers.find((s) => s.id === form.supplierId)?.supplierName;
 
-  const PaginationBar = ({ page, totalPages, setPage, total, label }: { page: number; totalPages: number; setPage: (p: number) => void; total: number; label: string }) =>
-    totalPages > 1 ? (
-      <div className="flex items-center justify-between mt-4 px-1">
-        <p className="text-xs text-gray-400">Showing {(page - 1) * ITEMS_PER_PAGE + 1}–{Math.min(page * ITEMS_PER_PAGE, total)} of {total} {label}</p>
-        <div className="flex gap-1">
-          <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}
-            className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">← Prev</button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-            <button key={p} onClick={() => setPage(p)}
-              className={`px-3 py-1 rounded-lg text-sm border ${page === p ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>{p}</button>
-          ))}
-          <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages}
-            className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">Next →</button>
-        </div>
+  const PaginationBar = ({ page, totalPages, setPage, total, label }: {
+    page: number; totalPages: number; setPage: (p: number) => void; total: number; label: string;
+  }) => totalPages <= 1 ? null : (
+    <div className="flex items-center justify-between mt-4 px-1 flex-wrap gap-2">
+      <p className="text-xs text-gray-400">Showing {(page - 1) * ITEMS_PER_PAGE + 1}–{Math.min(page * ITEMS_PER_PAGE, total)} of {total} {label}</p>
+      <div className="flex gap-1 flex-wrap">
+        <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}
+          className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">← Prev</button>
+        {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+          <button key={p} onClick={() => setPage(p)}
+            className={`px-3 py-1 rounded-lg text-sm border ${page === p ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>{p}</button>
+        ))}
+        <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages}
+          className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">Next →</button>
       </div>
-    ) : null;
+    </div>
+  );
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
 
-      {/* ✅ Alert Modal — replaces browser alert() */}
-      {alertModal.show && (
-        <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-[60] px-4">
-          <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
-            <p className="text-2xl mb-2">ℹ️</p>
-            <p className="text-sm text-gray-700 mb-5">{alertModal.message}</p>
-            <button onClick={() => setAlertModal({ show: false, message: "" })}
-              className="w-full bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700">OK</button>
-          </div>
-        </div>
-      )}
-
-      {/* ✅ Confirm Modal — replaces browser confirm() */}
+      {/* Confirm Modal */}
       {confirmModal.show && (
         <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-[60] px-4">
           <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
             <p className="text-2xl mb-2">⚠️</p>
             <p className="text-sm text-gray-700 mb-5">{confirmModal.message}</p>
             <div className="flex gap-3">
-              <button onClick={() => setConfirmModal({ show: false, message: "", onConfirm: () => {} })}
-                className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={confirmModal.onConfirm}
-                className="flex-1 bg-red-500 rounded-lg py-2 text-sm text-white hover:bg-red-600">Confirm</button>
+              <button onClick={() => setConfirmModal({ show: false, message: "", onConfirm: () => {} })} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={confirmModal.onConfirm} className="flex-1 bg-red-500 rounded-lg py-2 text-sm text-white hover:bg-red-600">Confirm</button>
             </div>
           </div>
         </div>
@@ -360,9 +317,7 @@ export default function PurchaseOrderPage() {
 
       <main className="flex-1 flex flex-col overflow-auto">
         <header className="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-100">
-          <button className="md:hidden text-gray-600 text-xl mr-2" onClick={() => setShowMobileMenu(!showMobileMenu)}>
-            {showMobileMenu ? "✕" : "☰"}
-          </button>
+          <button className="md:hidden text-gray-600 text-xl mr-2" onClick={() => setShowMobileMenu(!showMobileMenu)}>{showMobileMenu ? "✕" : "☰"}</button>
           <div>
             <h1 className="text-xl md:text-2xl font-bold text-gray-800">Purchase Order</h1>
             <p className="text-xs text-gray-400 hidden md:block">Create and manage deliveries from suppliers</p>
@@ -377,17 +332,12 @@ export default function PurchaseOrderPage() {
                 className={`flex items-center gap-2 px-2 py-1.5 rounded-xl transition-colors ${showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="https://i.pravatar.cc/40?img=8" alt="User" className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover" />
-                <div className="hidden md:block text-left">
-                  <p className="text-sm font-semibold text-gray-800">Ray Teodoro</p>
-                  <p className="text-xs text-green-500">Admin</p>
-                </div>
+                <div className="hidden md:block text-left"><p className="text-sm font-semibold text-gray-800">Ray Teodoro</p><p className="text-xs text-green-500">Admin</p></div>
               </button>
               {showUserMenu && (
                 <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-lg border border-gray-100 z-50">
                   <button onClick={handleLogout} className="flex items-center gap-2 w-full px-4 py-3 text-sm text-red-500 hover:bg-red-50 rounded-xl">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
                     Log Out
                   </button>
                 </div>
@@ -415,11 +365,11 @@ export default function PurchaseOrderPage() {
           <div className="flex">
             {([
               { key: "create",    label: "Create Order", icon: "📋" },
-              { key: "receiving", label: "Receiving",     icon: "📦" },
+              { key: "receiving", label: "Receiving",    icon: "📦" },
               { key: "history",   label: "PO History",   icon: "🕐" },
             ] as { key: Tab; label: string; icon: string }[]).map((tab) => (
               <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-2 px-4 md:px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                className={`flex items-center gap-1 md:gap-2 px-3 md:px-6 py-3 text-xs md:text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.key ? "border-indigo-600 text-indigo-700 bg-indigo-50" : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
                 }`}>
                 <span>{tab.icon}</span><span>{tab.label}</span>
@@ -439,12 +389,11 @@ export default function PurchaseOrderPage() {
               <div className="flex-1 flex flex-col gap-4">
 
                 {/* Step 1 */}
-                <div className="bg-white rounded-2xl p-5 shadow-sm">
+                <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm">
                   <div className="flex items-center gap-2 mb-3">
                     <div className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold">1</div>
                     <h2 className="text-sm font-bold text-gray-700">Select Supplier</h2>
                   </div>
-                  {/* ✅ Inline error for create tab */}
                   {createError && (
                     <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-2">
                       <span>⚠️</span><span>{createError}</span>
@@ -474,16 +423,14 @@ export default function PurchaseOrderPage() {
                     </div>
                     <div>
                       <label className="text-xs font-medium text-gray-500 mb-1 block">Delivery Date</label>
-                      {/* ✅ Fixed date input */}
-                      <input type="date" value={form.deliveryDate}
-                        onChange={(e) => setForm({ ...form, deliveryDate: e.target.value })}
+                      <input type="date" value={form.deliveryDate} onChange={(e) => setForm({ ...form, deliveryDate: e.target.value })}
                         className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white [color-scheme:light]" />
                     </div>
                   </div>
                 </div>
 
-                {/* Step 2 */}
-                <div className={`bg-white rounded-2xl p-5 shadow-sm transition-opacity ${!form.supplierId ? "opacity-50 pointer-events-none" : ""}`}>
+                {/* Step 2 — Line items with unit */}
+                <div className={`bg-white rounded-2xl p-4 md:p-5 shadow-sm transition-opacity ${!form.supplierId ? "opacity-50 pointer-events-none" : ""}`}>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <div className={`w-6 h-6 rounded-full text-white text-xs flex items-center justify-center font-bold ${form.supplierId ? "bg-indigo-600" : "bg-gray-300"}`}>2</div>
@@ -512,44 +459,67 @@ export default function PurchaseOrderPage() {
                     <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-yellow-200 rounded-xl bg-yellow-50">
                       <span className="text-3xl mb-2">📦</span>
                       <p className="text-sm text-yellow-700 font-medium">No products found for this supplier</p>
-                      <p className="text-xs text-yellow-500 mt-1">Add products linked to this supplier in Product Management</p>
                     </div>
                   )}
 
                   {form.supplierId && supplierProducts.length > 0 && (
                     <div className="space-y-2">
-                      <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-400 px-1">
-                        <div className="col-span-5">Product</div>
+                      {/* ✅ Responsive column headers */}
+                      <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-medium text-gray-400 px-1">
+                        <div className="col-span-4">Product</div>
                         <div className="col-span-2 text-center">Qty</div>
-                        <div className="col-span-3">Cost Price</div>
+                        <div className="col-span-2 text-center">Unit</div>
+                        <div className="col-span-2">Cost (₱)</div>
                         <div className="col-span-2 text-right">Subtotal</div>
                       </div>
+
                       {form.lineItems.map((item, idx) => (
-                        <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-gray-50 rounded-xl p-2">
-                          <div className="col-span-5">
-                            <select value={item.productId} onChange={(e) => updateLineItem(idx, "productId", e.target.value)}
-                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white">
-                              <option value="">— Select Product —</option>
-                              {supplierProducts.map((p) => (
-                                <option key={p.id} value={p.id} disabled={form.lineItems.some((li, i) => i !== idx && li.productId === p.id)}>
-                                  {p.productName}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="col-span-2">
-                            <input type="number" min="1" value={item.quantity} onChange={(e) => updateLineItem(idx, "quantity", e.target.value)}
-                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-center text-gray-900 bg-white" />
-                          </div>
-                          <div className="col-span-3">
-                            <input type="number" min="0" step="0.01" value={item.unitPrice} onChange={(e) => updateLineItem(idx, "unitPrice", e.target.value)}
-                              className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white" placeholder="₱0.00" />
-                          </div>
-                          <div className="col-span-2 flex items-center justify-end gap-1">
-                            <span className="text-xs font-medium text-gray-700">₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}</span>
-                            {form.lineItems.length > 1 && (
-                              <button onClick={() => removeLineItem(idx)} className="text-red-400 hover:text-red-600 ml-1 text-sm">✕</button>
-                            )}
+                        <div key={idx} className="bg-gray-50 rounded-xl p-2">
+                          {/* Mobile: stack vertically; desktop: grid */}
+                          <div className="grid grid-cols-2 md:grid-cols-12 gap-2 items-center">
+                            {/* Product — full width on mobile */}
+                            <div className="col-span-2 md:col-span-4">
+                              <label className="text-xs text-gray-400 md:hidden">Product</label>
+                              <select value={item.productId} onChange={(e) => updateLineItem(idx, "productId", e.target.value)}
+                                className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white">
+                                <option value="">— Select Product —</option>
+                                {supplierProducts.map((p) => (
+                                  <option key={p.id} value={p.id} disabled={form.lineItems.some((li, i) => i !== idx && li.productId === p.id)}>
+                                    {p.productName} {p.stockUnit ? `(${getUnitAbbr(p.stockUnit)})` : ""}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* Qty */}
+                            <div className="col-span-1 md:col-span-2">
+                              <label className="text-xs text-gray-400 md:hidden">Qty</label>
+                              <input type="number" min="1" value={item.quantity}
+                                onChange={(e) => updateLineItem(idx, "quantity", e.target.value)}
+                                className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-center text-gray-900 bg-white" />
+                            </div>
+
+                            {/* ✅ Unit — auto-filled from product, editable */}
+                            <div className="col-span-1 md:col-span-2">
+                              <label className="text-xs text-gray-400 md:hidden">Unit</label>
+                              <InlineUnitSelect value={item.unit} onChange={(v) => updateLineItem(idx, "unit", v)} />
+                            </div>
+
+                            {/* Cost price */}
+                            <div className="col-span-1 md:col-span-2">
+                              <label className="text-xs text-gray-400 md:hidden">Cost (₱)</label>
+                              <input type="number" min="0" step="0.01" value={item.unitPrice}
+                                onChange={(e) => updateLineItem(idx, "unitPrice", e.target.value)}
+                                className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white" placeholder="₱0" />
+                            </div>
+
+                            {/* Subtotal + remove */}
+                            <div className="col-span-1 md:col-span-2 flex items-center justify-end gap-1">
+                              <span className="text-xs font-medium text-gray-700">₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}</span>
+                              {form.lineItems.length > 1 && (
+                                <button onClick={() => removeLineItem(idx)} className="text-red-400 hover:text-red-600 ml-1 text-sm">✕</button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -558,7 +528,7 @@ export default function PurchaseOrderPage() {
                 </div>
 
                 {/* Step 3 */}
-                <div className={`bg-white rounded-2xl p-5 shadow-sm transition-opacity ${!form.supplierId ? "opacity-50 pointer-events-none" : ""}`}>
+                <div className={`bg-white rounded-2xl p-4 md:p-5 shadow-sm transition-opacity ${!form.supplierId ? "opacity-50 pointer-events-none" : ""}`}>
                   <div className="flex items-center gap-2 mb-3">
                     <div className={`w-6 h-6 rounded-full text-white text-xs flex items-center justify-center font-bold ${form.supplierId ? "bg-indigo-600" : "bg-gray-300"}`}>3</div>
                     <h2 className="text-sm font-bold text-gray-700">Notes (Optional)</h2>
@@ -569,7 +539,7 @@ export default function PurchaseOrderPage() {
                 </div>
               </div>
 
-              {/* Order Summary */}
+              {/* ✅ Order Summary — with unit displayed */}
               <div className="w-full lg:w-72 shrink-0">
                 <div className="bg-white rounded-2xl p-5 shadow-sm sticky top-4">
                   <h2 className="text-sm font-bold text-gray-700 mb-4">📋 Order Summary</h2>
@@ -594,7 +564,11 @@ export default function PurchaseOrderPage() {
                         <div key={idx} className="flex justify-between items-start py-2 border-b border-gray-50">
                           <div>
                             <p className="font-medium text-gray-800 text-xs">{item.productName}</p>
-                            <p className="text-xs text-gray-400">{item.quantity} × ₱{Number(item.unitPrice).toLocaleString()}</p>
+                            {/* ✅ Shows qty + unit pill in summary */}
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <UnitPill unit={item.unit} qty={Number(item.quantity)} />
+                              <span className="text-xs text-gray-400">× ₱{Number(item.unitPrice).toLocaleString()}</span>
+                            </div>
                           </div>
                           <span className="text-xs font-semibold text-indigo-700">₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}</span>
                         </div>
@@ -618,7 +592,7 @@ export default function PurchaseOrderPage() {
           {activeTab === "receiving" && (
             <div className="flex flex-col lg:flex-row gap-4">
               <div className="flex-1">
-                <div className="bg-white rounded-2xl p-5 shadow-sm">
+                <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm">
                   <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                     <h2 className="text-sm font-bold text-gray-700">📦 Pending Deliveries — Ready to Receive</h2>
                     <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-44">
@@ -644,9 +618,7 @@ export default function PurchaseOrderPage() {
                         {loading ? (
                           <tr><td colSpan={6} className="p-6 text-center text-gray-400">Loading...</td></tr>
                         ) : paginatedReceiving.length === 0 ? (
-                          <tr><td colSpan={6} className="p-10 text-center">
-                            <div className="flex flex-col items-center gap-2"><span className="text-3xl">📭</span><p className="text-gray-400 text-sm">No pending deliveries.</p></div>
-                          </td></tr>
+                          <tr><td colSpan={6} className="p-10 text-center"><div className="flex flex-col items-center gap-2"><span className="text-3xl">📭</span><p className="text-gray-400 text-sm">No pending deliveries.</p></div></td></tr>
                         ) : paginatedReceiving.map((row) => (
                           <tr key={row.id} className={`border-b border-gray-100 hover:bg-gray-50 ${receivingDelivery?.id === row.id ? "bg-indigo-50" : ""}`}>
                             <td className="p-3"><span className="bg-gray-700 text-white px-3 py-1 rounded-full text-xs font-mono">{row.id.slice(0, 8)}...</span></td>
@@ -680,7 +652,6 @@ export default function PurchaseOrderPage() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {/* ✅ Inline error for receiving */}
                       {receiveError && (
                         <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-2">
                           <span>⚠️</span><span>{receiveError}</span>
@@ -694,19 +665,28 @@ export default function PurchaseOrderPage() {
                         <p className="text-xs text-gray-400 mb-2">Items — enter received quantities</p>
                         <div className="space-y-2">
                           {receivingDelivery.items.map((item, i) => {
-                            const rq = receiveQtys.find((r) => r.deliveryItemId === item.id);
+                            const rq        = receiveQtys.find((r) => r.deliveryItemId === item.id);
                             const remaining = item.orderedQty - item.receivedQty;
+                            const unitAbbr  = getUnitAbbr(item.unit || item.product?.stockUnit);
                             return (
                               <div key={i} className="flex items-center gap-2 py-1.5 border-b border-gray-100 last:border-0">
                                 <div className="flex-1">
                                   <p className="text-xs font-medium text-gray-700">{item.product?.productName || item.productId}</p>
-                                  <p className="text-xs text-gray-400">Ordered: {item.orderedQty} | Received: {item.receivedQty} | Remaining: {remaining}</p>
+                                  {/* ✅ Unit shown next to quantities */}
+                                  <p className="text-xs text-gray-400">
+                                    Ordered: <span className="font-medium">{item.orderedQty} {unitAbbr}</span> ·
+                                    Received: <span className="font-medium">{item.receivedQty} {unitAbbr}</span> ·
+                                    Remaining: <span className="font-medium text-indigo-600">{remaining} {unitAbbr}</span>
+                                  </p>
                                 </div>
-                                <input type="number" min="0" max={remaining} value={rq?.receivedQty ?? 0}
-                                  onChange={(e) => setReceiveQtys((prev) =>
-                                    prev.map((r) => r.deliveryItemId === item.id ? { ...r, receivedQty: Math.min(Number(e.target.value), remaining) } : r)
-                                  )}
-                                  className="w-16 border border-gray-200 rounded-lg px-2 py-1 text-sm text-center outline-none focus:border-indigo-400" />
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <input type="number" min="0" max={remaining} value={rq?.receivedQty ?? 0}
+                                    onChange={(e) => setReceiveQtys((prev) =>
+                                      prev.map((r) => r.deliveryItemId === item.id ? { ...r, receivedQty: Math.min(Number(e.target.value), remaining) } : r)
+                                    )}
+                                    className="w-14 border border-gray-200 rounded-lg px-1.5 py-1 text-sm text-center outline-none focus:border-indigo-400" />
+                                  <span className="text-xs text-gray-400">{unitAbbr}</span>
+                                </div>
                               </div>
                             );
                           })}
@@ -726,7 +706,7 @@ export default function PurchaseOrderPage() {
 
           {/* ══ TAB: HISTORY ══ */}
           {activeTab === "history" && (
-            <div className="bg-white rounded-2xl p-5 shadow-sm">
+            <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <h2 className="text-sm font-bold text-gray-700">🕐 Delivery History</h2>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -766,9 +746,7 @@ export default function PurchaseOrderPage() {
                   { label: "Partial",   count: deliveries.filter(d => d.status==="PARTIALLY_RECEIVED").length, color: "bg-blue-100 text-blue-800"     },
                   { label: "Delivered", count: deliveries.filter(d => d.status==="DELIVERED").length,          color: "bg-green-100 text-green-800"   },
                   { label: "Cancelled", count: deliveries.filter(d => d.status==="CANCELLED").length,          color: "bg-red-100 text-red-700"       },
-                ].map((s) => (
-                  <span key={s.label} className={`${s.color} rounded-full px-3 py-1 text-xs font-semibold`}>{s.label}: {s.count}</span>
-                ))}
+                ].map((s) => <span key={s.label} className={`${s.color} rounded-full px-3 py-1 text-xs font-semibold`}>{s.label}: {s.count}</span>)}
               </div>
 
               <div className="overflow-x-auto">
@@ -787,9 +765,7 @@ export default function PurchaseOrderPage() {
                     {loading ? (
                       <tr><td colSpan={6} className="p-6 text-center text-gray-400">Loading...</td></tr>
                     ) : paginatedHistory.length === 0 ? (
-                      <tr><td colSpan={6} className="p-10 text-center">
-                        <div className="flex flex-col items-center gap-2"><span className="text-3xl">📭</span><p className="text-gray-400 text-sm">No deliveries found.</p></div>
-                      </td></tr>
+                      <tr><td colSpan={6} className="p-10 text-center"><div className="flex flex-col items-center gap-2"><span className="text-3xl">📭</span><p className="text-gray-400 text-sm">No deliveries found.</p></div></td></tr>
                     ) : paginatedHistory.map((row) => (
                       <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="p-3"><span className="bg-gray-700 text-white px-3 py-1 rounded-full text-xs font-mono">{row.id.slice(0, 8)}...</span></td>
@@ -816,7 +792,7 @@ export default function PurchaseOrderPage() {
         </div>
       </main>
 
-      {/* VIEW DELIVERY MODAL */}
+      {/* ✅ VIEW DELIVERY MODAL with unit display */}
       {viewDelivery && (
         <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
@@ -851,15 +827,26 @@ export default function PurchaseOrderPage() {
               <div className="bg-gray-50 rounded-xl p-3">
                 <p className="text-xs text-gray-400 mb-2">Items</p>
                 <div className="space-y-2">
-                  {viewDelivery.items?.map((item, idx) => (
-                    <div key={idx} className="flex justify-between text-sm text-gray-700 py-1 border-b border-gray-100 last:border-0">
-                      <div>
-                        <p className="font-medium">{item.product?.productName || item.productId}</p>
-                        <p className="text-xs text-gray-400">Ordered: {item.orderedQty} | Received: {item.receivedQty} | Returned: {item.returnedQty}</p>
+                  {viewDelivery.items?.map((item, idx) => {
+                    const unitAbbr = getUnitAbbr(item.unit || item.product?.stockUnit);
+                    return (
+                      <div key={idx} className="flex justify-between text-sm text-gray-700 py-1.5 border-b border-gray-100 last:border-0">
+                        <div>
+                          <p className="font-medium">{item.product?.productName || item.productId}</p>
+                          {/* ✅ All quantities show with unit */}
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            <span className="text-xs text-gray-400">Ordered: <span className="font-medium text-gray-600">{item.orderedQty} {unitAbbr}</span></span>
+                            <span className="text-xs text-gray-400">Received: <span className="font-medium text-green-600">{item.receivedQty} {unitAbbr}</span></span>
+                            <span className="text-xs text-gray-400">Returned: <span className="font-medium text-red-500">{item.returnedQty} {unitAbbr}</span></span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <UnitPill unit={item.unit || item.product?.stockUnit} />
+                          <span className="text-gray-500 text-xs">₱{item.costPrice}</span>
+                        </div>
                       </div>
-                      <span className="text-gray-500 text-xs">₱{item.costPrice}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -868,7 +855,6 @@ export default function PurchaseOrderPage() {
         </div>
       )}
 
-      {/* Success Toast */}
       {createSuccess && (
         <div className="fixed bottom-6 right-6 z-50 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
           <span>✅</span><span className="text-sm font-medium">{createSuccess}</span>
