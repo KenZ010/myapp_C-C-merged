@@ -45,7 +45,7 @@ const emptyEmployee = { name: "", phone: "", password: "", role: "CASHIER", user
 const emptyCustomer = { name: "", email: "", phone: "", address: "", password: "", userStatus: "ACTIVE" };
 const ROWS_OPTIONS = [5, 10, 20];
 
-// ✅ Reusable phone input with +63 prefix, numbers only
+// ✅ Phone input - numbers only, +63 prefix
 function PhoneInput({ value, onChange }: { value: string; onChange: (val: string) => void }) {
   const digits = value.startsWith("+63") ? value.slice(3) : value.replace(/^\+63/, "");
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -59,12 +59,45 @@ function PhoneInput({ value, onChange }: { value: string; onChange: (val: string
       </span>
       <input
         type="tel"
+        inputMode="numeric"
         value={digits}
         onChange={handleChange}
         placeholder="9XXXXXXXXX"
         maxLength={10}
         className="flex-1 border border-gray-200 rounded-r-lg px-3 py-2 text-sm outline-none focus:border-indigo-400 text-gray-900"
       />
+    </div>
+  );
+}
+
+// ✅ In-app Alert/Confirm Modal
+function AlertModal({
+  open, type = "alert", title, message, danger, onConfirm, onCancel
+}: {
+  open: boolean; type?: "alert" | "confirm"; title?: string; message: string;
+  danger?: boolean; onConfirm: () => void; onCancel?: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-[9999] px-4">
+      <div className="bg-white rounded-2xl p-6 w-80 shadow-2xl text-center">
+        <p className="text-2xl mb-2">{danger ? "⚠️" : type === "confirm" ? "❓" : "ℹ️"}</p>
+        {title && <h2 className="text-base font-bold text-gray-800 mb-1">{title}</h2>}
+        <p className="text-sm text-gray-500 mb-5">{message}</p>
+        <div className="flex gap-3">
+          {type === "confirm" && (
+            <button onClick={onCancel} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">
+              Cancel
+            </button>
+          )}
+          <button
+            onClick={onConfirm}
+            className={`flex-1 rounded-lg py-2 text-sm text-white font-medium ${danger ? "bg-red-500 hover:bg-red-600" : "bg-indigo-600 hover:bg-indigo-700"}`}
+          >
+            {type === "confirm" ? (danger ? "Delete" : "Confirm") : "OK"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -93,6 +126,17 @@ export default function AccountManagementPage() {
   const [empError, setEmpError] = useState("");
   const [cusSuccess, setCusSuccess] = useState("");
   const [cusError, setCusError] = useState("");
+
+  // ✅ In-app alert/confirm state
+  const [alertModal, setAlertModal] = useState<{
+    open: boolean; type?: "alert" | "confirm"; title?: string;
+    message: string; danger?: boolean;
+    onConfirm: () => void; onCancel?: () => void;
+  }>({ open: false, message: "", onConfirm: () => {} });
+
+  const showAlert = (message: string, title?: string) => {
+    setAlertModal({ open: true, type: "alert", title, message, onConfirm: () => setAlertModal((a) => ({ ...a, open: false })) });
+  };
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loadingEmp, setLoadingEmp] = useState(true);
@@ -174,7 +218,10 @@ export default function AccountManagementPage() {
   };
 
   const saveEmp = async () => {
-    if (!empForm.name) { alert("Full name is required."); return; }
+    if (!empForm.name) {
+      showAlert("Full name is required.", "Missing Field");
+      return;
+    }
     try {
       if (empEditingId !== null) {
         const res = await api.updateEmployee(empEditingId, empForm);
@@ -232,7 +279,10 @@ export default function AccountManagementPage() {
   };
 
   const saveCus = async () => {
-    if (!cusForm.name) { alert("Full name is required."); return; }
+    if (!cusForm.name) {
+      showAlert("Full name is required.", "Missing Field");
+      return;
+    }
     try {
       if (cusEditingId !== null) {
         const res = await api.updateCustomer(cusEditingId, cusForm);
@@ -282,6 +332,9 @@ export default function AccountManagementPage() {
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
+      {/* ✅ In-app AlertModal */}
+      <AlertModal {...alertModal} />
+
       <aside className="hidden md:flex w-52 bg-white flex-col py-6 px-4 border-r border-gray-100 shrink-0">
         <div className="text-center mb-10"><p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide">JULIETA SOFTDRINKS<br />STORE</p></div>
         <nav className="flex flex-col gap-1">
@@ -506,7 +559,7 @@ export default function AccountManagementPage() {
                 <label className="text-xs font-medium text-gray-600">Full Name</label>
                 <input value={empForm.name} onChange={(e) => setEmpForm({ ...empForm, name: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
-              {/* ✅ Phone with +63 prefix */}
+              {/* ✅ Phone with +63 prefix, numbers only */}
               <div>
                 <label className="text-xs font-medium text-gray-600">Phone</label>
                 <PhoneInput value={empForm.phone} onChange={(val) => setEmpForm({ ...empForm, phone: val })} />
@@ -561,7 +614,7 @@ export default function AccountManagementPage() {
                 <label className="text-xs font-medium text-gray-600">Email</label>
                 <input value={cusForm.email} onChange={(e) => setCusForm({ ...cusForm, email: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
-              {/* ✅ Phone with +63 prefix */}
+              {/* ✅ Phone with +63 prefix, numbers only */}
               <div>
                 <label className="text-xs font-medium text-gray-600">Phone</label>
                 <PhoneInput value={cusForm.phone} onChange={(val) => setCusForm({ ...cusForm, phone: val })} />

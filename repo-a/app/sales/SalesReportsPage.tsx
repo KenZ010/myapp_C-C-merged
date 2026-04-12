@@ -8,8 +8,6 @@ import {
 } from "recharts";
 import { api } from "@/lib/api";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
 type Period = "Daily" | "Weekly" | "Monthly";
 
 type OrderLine = {
@@ -31,8 +29,6 @@ type Transaction = {
   items: OrderLine[];
 };
 
-// ─── Nav ─────────────────────────────────────────────────────────────────────
-
 const navItems = [
   { label: "Dashboard",             icon: "🏠", path: "/dashboard"      },
   { label: "Inventory Maintenance", icon: "🛒", path: "/inventory"      },
@@ -45,7 +41,19 @@ const navItems = [
   { label: "Promo Management",      icon: "🎁", path: "/promo"          },
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ✅ Returns human-readable date range for each period
+function getPeriodLabel(period: Period): string {
+  const now = new Date();
+  if (period === "Daily") {
+    return now.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  }
+  if (period === "Weekly") {
+    const start = new Date(now);
+    start.setDate(now.getDate() - 7);
+    return `${start.toLocaleDateString("en-PH", { month: "short", day: "numeric" })} – ${now.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}`;
+  }
+  return now.toLocaleDateString("en-PH", { month: "long", year: "numeric" });
+}
 
 function normalizeTransaction(o: Record<string, unknown>): Transaction {
   const customer = o.customer as Record<string, unknown> | null;
@@ -86,23 +94,18 @@ function filterByPeriod(txs: Transaction[], period: Period): Transaction[] {
   });
 }
 
-/** Group transactions into chart-ready buckets */
 function buildRevenueChart(txs: Transaction[], period: Period) {
   const map: Record<string, number> = {};
   txs.forEach(({ rawDate: d, total }) => {
     let key: string;
     if (period === "Daily") {
       key = d.toLocaleTimeString("en-PH", { hour: "2-digit", hour12: true });
-    } else if (period === "Weekly") {
-      key = d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
     } else {
       key = d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
     }
     map[key] = (map[key] ?? 0) + total;
   });
-  return Object.entries(map)
-    .map(([date, revenue]) => ({ date, revenue }))
-    .slice(-16);
+  return Object.entries(map).map(([date, revenue]) => ({ date, revenue })).slice(-16);
 }
 
 function buildTransactionChart(txs: Transaction[], period: Period) {
@@ -118,9 +121,7 @@ function buildTransactionChart(txs: Transaction[], period: Period) {
     }
     map[key] = (map[key] ?? 0) + 1;
   });
-  return Object.entries(map)
-    .map(([date, transactions]) => ({ date, transactions }))
-    .slice(-16);
+  return Object.entries(map).map(([date, transactions]) => ({ date, transactions })).slice(-16);
 }
 
 function buildTopSelling(txs: Transaction[]) {
@@ -149,8 +150,6 @@ function exportCSV(headers: string[], rows: (string | number)[][], filename: str
   URL.revokeObjectURL(url);
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
 export default function SalesReportsPage() {
   const router   = useRouter();
   const pathname = usePathname();
@@ -160,10 +159,9 @@ export default function SalesReportsPage() {
   const [period,         setPeriod]         = useState<Period>("Monthly");
   const [topSearch,      setTopSearch]      = useState("");
   const [unpopSearch,    setUnpopSearch]    = useState("");
-
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading,      setLoading]      = useState(true);
-  const [error,        setError]        = useState<string | null>(null);
+  const [transactions,   setTransactions]   = useState<Transaction[]>([]);
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -182,16 +180,15 @@ export default function SalesReportsPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // ── Derived data ────────────────────────────────────────────────────────────
-  const filtered     = useMemo(() => filterByPeriod(transactions, period), [transactions, period]);
-  const revenueData  = useMemo(() => buildRevenueChart(filtered, period),  [filtered, period]);
-  const txChartData  = useMemo(() => buildTransactionChart(filtered, period), [filtered, period]);
-  const topSelling   = useMemo(() => buildTopSelling(filtered),  [filtered]);
-  const unpopular    = useMemo(() => buildUnpopular(filtered),   [filtered]);
+  const filtered    = useMemo(() => filterByPeriod(transactions, period), [transactions, period]);
+  const revenueData = useMemo(() => buildRevenueChart(filtered, period),  [filtered, period]);
+  const txChartData = useMemo(() => buildTransactionChart(filtered, period), [filtered, period]);
+  const topSelling  = useMemo(() => buildTopSelling(filtered), [filtered]);
+  const unpopular   = useMemo(() => buildUnpopular(filtered),  [filtered]);
 
-  const totalSales  = useMemo(() => filtered.reduce((s, t) => s + t.total, 0), [filtered]);
-  const txCount     = filtered.length;
-  const avgOrder    = txCount > 0 ? Math.round(totalSales / txCount) : 0;
+  const totalSales = useMemo(() => filtered.reduce((s, t) => s + t.total, 0), [filtered]);
+  const txCount    = filtered.length;
+  const avgOrder   = txCount > 0 ? Math.round(totalSales / txCount) : 0;
 
   const filteredTop   = useMemo(() => topSelling.filter(i =>
     i.name.toLowerCase().includes(topSearch.toLowerCase()) ||
@@ -203,16 +200,14 @@ export default function SalesReportsPage() {
     i.category.toLowerCase().includes(unpopSearch.toLowerCase())
   ), [unpopular, unpopSearch]);
 
-  const navigate    = (path: string) => { router.push(path); setShowMobileMenu(false); };
+  const navigate     = (path: string) => { router.push(path); setShowMobileMenu(false); };
   const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("employee"); router.push("/"); };
-
-  const exportSales = () => exportCSV(
+  const exportSales  = () => exportCSV(
     ["Product Name", "Category", "Units Sold", "Revenue (₱)"],
     topSelling.map(i => [i.name, i.category, i.units, i.revenue]),
     "sales_report.csv"
   );
 
-  // ── Skeleton ─────────────────────────────────────────────────────────────────
   const Skeleton = ({ h, w }: { h: number; w?: string }) => (
     <div style={{ height: h, width: w ?? "100%", borderRadius: 8, background: "linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.4s infinite" }} />
   );
@@ -220,10 +215,8 @@ export default function SalesReportsPage() {
   return (
     <>
       <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
-
       <div className="flex min-h-screen bg-gray-50 font-sans">
 
-        {/* Sidebar */}
         <aside className="hidden md:flex w-52 bg-white flex-col py-6 px-4 border-r border-gray-100 shrink-0">
           <div className="text-center mb-10">
             <p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide">JULIETA SOFTDRINKS<br />STORE</p>
@@ -245,8 +238,6 @@ export default function SalesReportsPage() {
         </aside>
 
         <main className="flex-1 flex flex-col overflow-auto">
-
-          {/* Header */}
           <header className="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-100">
             <button className="md:hidden text-gray-600 text-xl mr-2" onClick={() => setShowMobileMenu(!showMobileMenu)}>
               {showMobileMenu ? "✕" : "☰"}
@@ -272,7 +263,6 @@ export default function SalesReportsPage() {
             </div>
           </header>
 
-          {/* Mobile Menu */}
           {showMobileMenu && (
             <div className="md:hidden bg-white border-b border-gray-100 px-4 py-3 flex flex-col gap-1 z-40">
               {navItems.map((item) => (
@@ -286,7 +276,6 @@ export default function SalesReportsPage() {
 
           <div className="flex-1 p-3 md:p-4 bg-green-50 flex flex-col gap-4">
 
-            {/* Error */}
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-center justify-between">
                 <p className="text-sm text-red-600 font-medium">⚠️ {error}</p>
@@ -294,13 +283,19 @@ export default function SalesReportsPage() {
               </div>
             )}
 
-            {/* Period picker */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3 flex-wrap">
+            {/* ✅ Period picker with specific date label */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm flex flex-wrap items-center gap-3">
               <span className="text-xs text-gray-400">📅 Report Period:</span>
               {(["Daily", "Weekly", "Monthly"] as Period[]).map((p) => (
                 <button key={p} onClick={() => setPeriod(p)}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${period === p ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>{p}</button>
+                  className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${period === p ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                  {p}
+                </button>
               ))}
+              {/* ✅ Shows exact date / range / month */}
+              <span className="text-xs text-indigo-600 font-medium bg-indigo-50 px-3 py-1.5 rounded-lg">
+                📅 {getPeriodLabel(period)}
+              </span>
               <button onClick={fetchData} className="ml-auto flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50">🔄 Refresh</button>
             </div>
 

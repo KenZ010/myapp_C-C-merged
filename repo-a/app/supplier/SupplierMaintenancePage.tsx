@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
 
 type ProductItem = {
@@ -47,7 +48,7 @@ const emptyForm = {
   status: "ACTIVE"
 };
 
-// ✅ Phone input component with +63 prefix, numbers only
+// ✅ Phone input - numbers only, +63 prefix
 function PhoneInput({ value, onChange }: { value: string; onChange: (val: string) => void }) {
   const digits = value.startsWith("+63") ? value.slice(3) : value.replace(/^\+63/, "");
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -61,12 +62,298 @@ function PhoneInput({ value, onChange }: { value: string; onChange: (val: string
       </span>
       <input
         type="tel"
+        inputMode="numeric"
         value={digits}
         onChange={handleChange}
         placeholder="9XXXXXXXXX"
         maxLength={10}
         className="flex-1 border border-gray-200 rounded-r-lg px-3 py-2 text-sm outline-none focus:border-indigo-400 text-gray-900"
       />
+    </div>
+  );
+}
+
+// ✅ In-app Alert/Confirm Modal
+function AlertModal({
+  open, type = "alert", title, message, danger, onConfirm, onCancel
+}: {
+  open: boolean; type?: "alert" | "confirm"; title?: string; message: string;
+  danger?: boolean; onConfirm: () => void; onCancel?: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-[9999] px-4">
+      <div className="bg-white rounded-2xl p-6 w-80 shadow-2xl text-center">
+        <p className="text-2xl mb-2">{danger ? "⚠️" : type === "confirm" ? "❓" : "ℹ️"}</p>
+        {title && <h2 className="text-base font-bold text-gray-800 mb-1">{title}</h2>}
+        <p className="text-sm text-gray-500 mb-5">{message}</p>
+        <div className="flex gap-3">
+          {type === "confirm" && (
+            <button onClick={onCancel} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">
+              Cancel
+            </button>
+          )}
+          <button
+            onClick={onConfirm}
+            className={`flex-1 rounded-lg py-2 text-sm text-white font-medium ${danger ? "bg-red-500 hover:bg-red-600" : "bg-indigo-600 hover:bg-indigo-700"}`}
+          >
+            {type === "confirm" ? (danger ? "Delete" : "Confirm") : "OK"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ✅ Fixed DatePicker — uses fixed positioning via portal so it never gets
+//    clipped by overflow-y-auto on the modal, and always shows all 7 columns.
+function DatePicker({
+  value,
+  onChange,
+  label,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  label?: string;
+}) {
+  const [show, setShow] = useState(false);
+  const [calendarPos, setCalendarPos] = useState({ top: 0, left: 0, width: 280 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const calendarRef = useRef<HTMLDivElement>(null);
+
+  const today = new Date();
+
+  // ✅ No useEffect needed — derive nav state lazily; sync on open
+  const [viewYear, setViewYear] = useState(
+    () => (value ? parseInt(value.split("-")[0]) : today.getFullYear())
+  );
+  const [viewMonth, setViewMonth] = useState(
+    () => (value ? parseInt(value.split("-")[1]) - 1 : today.getMonth())
+  );
+
+  // Reposition calendar and sync nav to the currently selected value on open
+  const openCalendar = () => {
+    // Sync month/year navigation to whatever is currently selected (avoids stale state)
+    setViewYear(value ? parseInt(value.split("-")[0]) : today.getFullYear());
+    setViewMonth(value ? parseInt(value.split("-")[1]) - 1 : today.getMonth());
+
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const calW = 280;
+      // Prefer opening below; flip above if too close to bottom of viewport
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const calH = 320; // approximate calendar height
+      let top = rect.bottom + 6;
+      if (spaceBelow < calH && rect.top > calH) {
+        top = rect.top - calH - 6;
+      }
+      // Prefer left-aligned; shift left if it would overflow right edge
+      let left = rect.left;
+      if (left + calW > window.innerWidth - 12) {
+        left = window.innerWidth - calW - 12;
+      }
+      setCalendarPos({ top, left, width: Math.max(calW, rect.width) });
+    }
+    setShow(true);
+  };
+
+  // Close on outside click
+  useEffect(() => {
+    if (!show) return;
+    const handler = (e: MouseEvent) => {
+      if (
+        calendarRef.current && !calendarRef.current.contains(e.target as Node) &&
+        buttonRef.current && !buttonRef.current.contains(e.target as Node)
+      ) {
+        setShow(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [show]);
+
+  // Close on scroll anywhere (modal scroll will no longer leave it floating)
+  useEffect(() => {
+    if (!show) return;
+    const handler = () => setShow(false);
+    window.addEventListener("scroll", handler, true);
+    return () => window.removeEventListener("scroll", handler, true);
+  }, [show]);
+
+  const MONTHS = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+  const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+  const selectDate = (day: number) => {
+    const month = String(viewMonth + 1).padStart(2, "0");
+    const dayStr = String(day).padStart(2, "0");
+    onChange(`${viewYear}-${month}-${dayStr}`);
+    setShow(false);
+  };
+
+  const displayValue = value
+    ? new Date(value + "T00:00:00").toLocaleDateString("en-PH", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    : "";
+
+  const selectedDay = value ? parseInt(value.split("-")[2]) : null;
+  const selectedMonth = value ? parseInt(value.split("-")[1]) - 1 : null;
+  const selectedYear = value ? parseInt(value.split("-")[0]) : null;
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear((y) => y - 1); }
+    else setViewMonth((m) => m - 1);
+  };
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear((y) => y + 1); }
+    else setViewMonth((m) => m + 1);
+  };
+
+  const calendar = show ? (
+    <div
+      ref={calendarRef}
+      style={{
+        position: "fixed",
+        top: calendarPos.top,
+        left: calendarPos.left,
+        width: 280,
+        zIndex: 99999,
+      }}
+      className="bg-white border border-gray-200 rounded-2xl shadow-2xl p-4"
+    >
+      {/* Month / Year navigation */}
+      <div className="flex items-center justify-between mb-3">
+        <button
+          type="button"
+          onClick={prevMonth}
+          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600 font-medium"
+        >
+          ‹
+        </button>
+        <div className="flex items-center gap-1">
+          <select
+            value={viewMonth}
+            onChange={(e) => setViewMonth(Number(e.target.value))}
+            className="text-sm font-semibold text-gray-800 border-none outline-none bg-transparent cursor-pointer"
+          >
+            {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+          </select>
+          <input
+            type="number"
+            value={viewYear}
+            onChange={(e) => setViewYear(Number(e.target.value))}
+            className="w-16 text-sm font-semibold text-gray-800 border border-gray-200 rounded px-1 text-center outline-none focus:border-indigo-400"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={nextMonth}
+          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600 font-medium"
+        >
+          ›
+        </button>
+      </div>
+
+      {/* Day-of-week headers — full 7 columns */}
+      <div className="grid grid-cols-7 mb-1">
+        {DAYS.map((d) => (
+          <div key={d} className="text-center text-xs font-semibold text-gray-400 py-1">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Day grid */}
+      <div className="grid grid-cols-7 gap-0.5">
+        {Array.from({ length: firstDay }).map((_, i) => (
+          <div key={`empty-${i}`} />
+        ))}
+        {Array.from({ length: daysInMonth }).map((_, i) => {
+          const day = i + 1;
+          const isSelected =
+            day === selectedDay &&
+            viewMonth === selectedMonth &&
+            viewYear === selectedYear;
+          const isToday =
+            day === today.getDate() &&
+            viewMonth === today.getMonth() &&
+            viewYear === today.getFullYear();
+          return (
+            <button
+              key={day}
+              type="button"
+              onClick={() => selectDate(day)}
+              className={`w-full aspect-square flex items-center justify-center rounded-lg text-xs transition-colors
+                ${isSelected
+                  ? "bg-indigo-600 text-white font-semibold"
+                  : isToday
+                  ? "border border-indigo-400 text-indigo-600 font-semibold"
+                  : "text-gray-700 hover:bg-indigo-50"
+                }`}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Today shortcut */}
+      <button
+        type="button"
+        onClick={() => {
+          setViewYear(today.getFullYear());
+          setViewMonth(today.getMonth());
+          selectDate(today.getDate());
+        }}
+        className="w-full mt-3 py-1.5 text-xs font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+      >
+        Today
+      </button>
+    </div>
+  ) : null;
+
+  return (
+    <div className="relative">
+      {label && (
+        <label className="text-xs font-medium text-gray-600">{label}</label>
+      )}
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={openCalendar}
+        className="w-full flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 text-left hover:border-indigo-400 transition-colors focus:outline-none focus:border-indigo-400 bg-white"
+      >
+        <span className="text-gray-400 text-base">📅</span>
+        <span className={`flex-1 truncate ${displayValue ? "text-gray-900" : "text-gray-400"}`}>
+          {displayValue || "Select date"}
+        </span>
+        {value && (
+          <span
+            role="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange("");
+              setShow(false);
+            }}
+            className="ml-auto text-gray-300 hover:text-gray-500 text-xs leading-none"
+          >
+            ✕
+          </span>
+        )}
+      </button>
+
+      {/* Render calendar in a portal so overflow:hidden/auto on modal doesn't clip it */}
+      {typeof document !== "undefined" && calendar
+        ? createPortal(calendar, document.body)
+        : null}
     </div>
   );
 }
@@ -82,10 +369,34 @@ export default function SupplierMaintenancePage() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [checkerFilter, setCheckerFilter] = useState("All");
   const [showCheckerDropdown, setShowCheckerDropdown] = useState(false);
   const [viewItem, setViewItem] = useState<SupplierItem | null>(null);
+  const [success, setSuccess] = useState("");
+  const [error, setError] = useState("");
+
+  const [alertModal, setAlertModal] = useState<{
+    open: boolean; type?: "alert" | "confirm"; title?: string;
+    message: string; danger?: boolean;
+    onConfirm: () => void; onCancel?: () => void;
+  }>({ open: false, message: "", onConfirm: () => {} });
+
+  const showAlert = (message: string, title?: string) => {
+    setAlertModal({ open: true, type: "alert", title, message, onConfirm: () => setAlertModal((a) => ({ ...a, open: false })) });
+  };
+
+  const showConfirm = (message: string, onConfirm: () => void, title?: string, danger = false) => {
+    setAlertModal({
+      open: true, type: "confirm", title, message, danger,
+      onConfirm: () => { setAlertModal((a) => ({ ...a, open: false })); onConfirm(); },
+      onCancel: () => setAlertModal((a) => ({ ...a, open: false })),
+    });
+  };
+
+  const showToast = (msg: string, isError = false) => {
+    if (isError) { setError(msg); setTimeout(() => setError(""), 3000); }
+    else { setSuccess(msg); setTimeout(() => setSuccess(""), 3000); }
+  };
 
   const checkerRef = useRef<HTMLDivElement>(null);
 
@@ -126,7 +437,10 @@ export default function SupplierMaintenancePage() {
   const openAddModal = () => { setForm(emptyForm); setEditingId(null); setShowModal(true); };
 
   const openEditModal = () => {
-    if (selected.length !== 1) { alert("Please select exactly one item to edit."); return; }
+    if (selected.length !== 1) {
+      showAlert("Please select exactly one item to edit.", "Selection Required");
+      return;
+    }
     const item = items.find((i) => i.id === selected[0]);
     if (!item) return;
     setForm({
@@ -136,8 +450,8 @@ export default function SupplierMaintenancePage() {
       agentName: item.agentName || "",
       lastOrdered: item.lastOrdered ?? "",
       lastCheckBy: item.lastCheckBy || "",
-      dateChecked: item.dateChecked ? new Date(item.dateChecked).toISOString().split('T')[0] : "",
-      status: item.status
+      dateChecked: item.dateChecked ? new Date(item.dateChecked).toISOString().split("T")[0] : "",
+      status: item.status,
     });
     setEditingId(item.id);
     setShowModal(true);
@@ -152,8 +466,8 @@ export default function SupplierMaintenancePage() {
       agentName: item.agentName || "",
       lastOrdered: item.lastOrdered ?? "",
       lastCheckBy: item.lastCheckBy || "",
-      dateChecked: item.dateChecked ? new Date(item.dateChecked).toISOString().split('T')[0] : "",
-      status: item.status
+      dateChecked: item.dateChecked ? new Date(item.dateChecked).toISOString().split("T")[0] : "",
+      status: item.status,
     });
     setSelected([item.id]);
     setEditingId(item.id);
@@ -161,21 +475,24 @@ export default function SupplierMaintenancePage() {
   };
 
   const handleSave = async () => {
-    if (!form.supplierName) { alert("Supplier Name is required."); return; }
+    if (!form.supplierName) {
+      showAlert("Supplier Name is required.", "Missing Field");
+      return;
+    }
     try {
-      const saveData = {
-        ...form,
-        lastOrdered: form.lastOrdered === "" ? 0 : Number(form.lastOrdered)
-      };
+      const saveData = { ...form, lastOrdered: form.lastOrdered === "" ? 0 : Number(form.lastOrdered) };
       if (editingId !== null) {
         await api.updateSupplier(editingId, saveData);
+        showToast("Supplier updated successfully!");
       } else {
         await api.createSupplier(saveData);
+        showToast("Supplier added successfully!");
       }
       await fetchSuppliers();
       setShowModal(false);
       setSelected([]);
     } catch (err) {
+      showToast("Failed to save supplier.", true);
       console.error("Failed to save supplier:", err);
     }
   };
@@ -186,8 +503,16 @@ export default function SupplierMaintenancePage() {
   };
 
   const handleDelete = () => {
-    if (selected.length === 0) { alert("Please select at least one item."); return; }
-    setShowDeleteConfirm(true);
+    if (selected.length === 0) {
+      showAlert("Please select at least one item to delete.", "No Selection");
+      return;
+    }
+    showConfirm(
+      `Are you sure you want to delete ${selected.length} supplier(s)? This action cannot be undone.`,
+      confirmDelete,
+      "Delete Suppliers",
+      true
+    );
   };
 
   const confirmDelete = async () => {
@@ -195,9 +520,9 @@ export default function SupplierMaintenancePage() {
       await Promise.all(selected.map((id) => api.deleteSupplier(id)));
       await fetchSuppliers();
       setSelected([]);
-      setShowDeleteConfirm(false);
+      showToast("Supplier(s) deleted successfully!");
     } catch (err) {
-      console.error("Failed to delete supplier:", err);
+      showToast("Failed to delete supplier(s).", true);
     }
   };
 
@@ -211,28 +536,35 @@ export default function SupplierMaintenancePage() {
   };
 
   const handleLogout = () => {
-    document.cookie = 'token=; path=/; max-age=0';
-    localStorage.removeItem('employee');
-    router.push('/');
+    document.cookie = "token=; path=/; max-age=0";
+    localStorage.removeItem("employee");
+    router.push("/");
   };
 
   const navigate = (label: string) => {
-    if (label === "Dashboard") router.push("/dashboard");
-    if (label === "Inventory Maintenance") router.push("/inventory");
-    if (label === "Supplier Maintenance") router.push("/supplier");
-    if (label === "Sales Reports") router.push("/sales");
-    if (label === "Transaction Logs") router.push("/transaction");
-    if (label === "Product Management") router.push("/product");
-    if (label === "Account Management") router.push("/account");
-    if (label === "Purchase Order") router.push("/purchase-order");
-    if (label === "Promo Management") router.push("/promo");
+    const routes: Record<string, string> = {
+      "Dashboard": "/dashboard",
+      "Inventory Maintenance": "/inventory",
+      "Supplier Maintenance": "/supplier",
+      "Sales Reports": "/sales",
+      "Transaction Logs": "/transaction",
+      "Product Management": "/product",
+      "Account Management": "/account",
+      "Purchase Order": "/purchase-order",
+      "Promo Management": "/promo",
+    };
+    if (routes[label]) router.push(routes[label]);
     setShowMobileMenu(false);
   };
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
+      <AlertModal {...alertModal} />
+
       <aside className="hidden md:flex w-52 bg-white flex-col py-6 px-4 border-r border-gray-100 shrink-0">
-        <div className="text-center mb-10"><p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide">JULIETA SOFTDRINKS<br />STORE</p></div>
+        <div className="text-center mb-10">
+          <p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide">JULIETA SOFTDRINKS<br />STORE</p>
+        </div>
         <nav className="flex flex-col gap-1">
           {navItems.map((item) => (
             <div key={item.label} onClick={() => navigate(item.label)}
@@ -248,24 +580,37 @@ export default function SupplierMaintenancePage() {
 
       <main className="flex-1 flex flex-col overflow-auto">
         <header className="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-100">
-          <button className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300"
+          <button
+            className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300"
             style={{ transform: showMobileMenu ? "rotate(90deg)" : "rotate(0deg)" }}
-            onClick={() => setShowMobileMenu(!showMobileMenu)}>
+            onClick={() => setShowMobileMenu(!showMobileMenu)}
+          >
             {showMobileMenu ? "✕" : "☰"}
           </button>
           <h1 className="text-xl md:text-2xl font-bold text-gray-800">Supplier Maintenance</h1>
           <div className="flex items-center gap-2">
-            <div className="relative"><span className="text-xl">🔔</span><div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" /></div>
             <div className="relative">
-              <button onClick={() => setShowUserMenu(!showUserMenu)} className={`flex items-center gap-2 px-2 py-2 rounded-xl transition-colors ${showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"}`}>
+              <span className="text-xl">🔔</span>
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" />
+            </div>
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className={`flex items-center gap-2 px-2 py-2 rounded-xl transition-colors ${showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"}`}
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="https://i.pravatar.cc/40?img=8" alt="User" className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover" />
-                <div className="hidden md:block text-left"><p className="text-sm font-semibold text-gray-800">Ray Teodoro</p><p className="text-xs text-green-500">Admin</p></div>
+                <div className="hidden md:block text-left">
+                  <p className="text-sm font-semibold text-gray-800">Ray Teodoro</p>
+                  <p className="text-xs text-green-500">Admin</p>
+                </div>
               </button>
               {showUserMenu && (
                 <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-lg border border-gray-100 z-50">
                   <button onClick={handleLogout} className="flex items-center gap-2 w-full px-4 py-3 text-sm text-red-500 hover:bg-red-50 rounded-xl">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
                     Log Out
                   </button>
                 </div>
@@ -301,8 +646,10 @@ export default function SupplierMaintenancePage() {
               </div>
               <button className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-600 hover:bg-gray-50">🔖 Status ▾</button>
               <div className="relative" ref={checkerRef}>
-                <button onClick={() => setShowCheckerDropdown(!showCheckerDropdown)}
-                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${checkerFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                <button
+                  onClick={() => setShowCheckerDropdown(!showCheckerDropdown)}
+                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${checkerFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                >
                   🧑 {checkerFilter === "All" ? "Last Check By" : checkerFilter} ▾
                 </button>
                 {showCheckerDropdown && (
@@ -325,7 +672,9 @@ export default function SupplierMaintenancePage() {
               <table className="w-full text-sm min-w-max">
                 <thead>
                   <tr className="bg-indigo-900 text-white text-xs">
-                    <th className="p-3 text-left w-8"><input type="checkbox" onChange={toggleAll} checked={selected.length === filtered.length && filtered.length > 0} /></th>
+                    <th className="p-3 text-left w-8">
+                      <input type="checkbox" onChange={toggleAll} checked={selected.length === filtered.length && filtered.length > 0} />
+                    </th>
                     <th className="p-3 text-left">ID</th>
                     <th className="p-3 text-left">Company Name</th>
                     <th className="p-3 text-left">Last Check By</th>
@@ -395,7 +744,11 @@ export default function SupplierMaintenancePage() {
                 </div>
                 <div className="bg-gray-50 rounded-xl p-3">
                   <p className="text-xs text-gray-400 mb-1">Date Checked</p>
-                  <p className="text-sm font-medium text-gray-800">{viewItem.dateChecked ? new Date(viewItem.dateChecked).toLocaleDateString() : "—"}</p>
+                  <p className="text-sm font-medium text-gray-800">
+                    {viewItem.dateChecked
+                      ? new Date(viewItem.dateChecked).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" })
+                      : "—"}
+                  </p>
                 </div>
               </div>
               <div className="bg-gray-50 rounded-xl p-3">
@@ -429,73 +782,108 @@ export default function SupplierMaintenancePage() {
       {/* Add / Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-screen overflow-y-auto">
-            <h2 className="text-lg font-bold text-gray-800 mb-4">{editingId !== null ? "Edit Supplier" : "Add New Supplier"}</h2>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-bold text-gray-800 mb-4">
+              {editingId !== null ? "Edit Supplier" : "Add New Supplier"}
+            </h2>
             <div className="flex flex-col gap-3">
               <div>
                 <label className="text-xs font-medium text-gray-600">Company Name</label>
-                <input value={form.supplierName} onChange={(e) => setForm({ ...form, supplierName: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                <input
+                  value={form.supplierName}
+                  onChange={(e) => setForm({ ...form, supplierName: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
+                />
               </div>
-              {/* ✅ Phone with +63 prefix */}
+
               <div>
                 <label className="text-xs font-medium text-gray-600">Contact No.</label>
                 <PhoneInput value={form.contactNo} onChange={(val) => setForm({ ...form, contactNo: val })} />
               </div>
+
               <div>
                 <label className="text-xs font-medium text-gray-600">Address</label>
-                <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                <input
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
+                />
               </div>
+
               <div>
                 <label className="text-xs font-medium text-gray-600">Agent Name</label>
-                <input value={form.agentName} onChange={(e) => setForm({ ...form, agentName: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                <input
+                  value={form.agentName}
+                  onChange={(e) => setForm({ ...form, agentName: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
+                />
               </div>
+
+              {/* Last Ordered and Date Checked on same row */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-gray-600">Last Ordered</label>
-                  <input type="number" min="0" value={form.lastOrdered}
-                    onChange={(e) => setForm({ ...form, lastOrdered: e.target.value === "" ? "" : Math.max(0, Number(e.target.value)) })}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.lastOrdered}
+                    onChange={(e) =>
+                      setForm({ ...form, lastOrdered: e.target.value === "" ? "" : Math.max(0, Number(e.target.value)) })
+                    }
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
+                  />
                 </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-600">Date Checked</label>
-                  <input type="date" value={form.dateChecked} onChange={(e) => setForm({ ...form, dateChecked: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
-                </div>
+                {/* ✅ DatePicker renders via portal — never clipped by modal scroll */}
+                <DatePicker
+                  label="Date Checked"
+                  value={form.dateChecked}
+                  onChange={(val) => setForm({ ...form, dateChecked: val })}
+                />
               </div>
+
               <div>
                 <label className="text-xs font-medium text-gray-600">Last Check By</label>
-                <select value={form.lastCheckBy} onChange={(e) => setForm({ ...form, lastCheckBy: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                <select
+                  value={form.lastCheckBy}
+                  onChange={(e) => setForm({ ...form, lastCheckBy: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
+                >
                   <option value="">-- Select --</option>
                   {CHECKERS.map((name) => <option key={name} value={name}>{name}</option>)}
                 </select>
               </div>
+
               <div>
                 <label className="text-xs font-medium text-gray-600">Status</label>
-                <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                <select
+                  value={form.status}
+                  onChange={(e) => setForm({ ...form, status: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
+                >
                   <option value="ACTIVE">Active</option>
                   <option value="INACTIVE">Inactive</option>
                 </select>
               </div>
             </div>
+
             <div className="flex gap-3 mt-5">
               <button onClick={() => setShowModal(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={handleSave} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700">{editingId !== null ? "Save Changes" : "Add Supplier"}</button>
+              <button onClick={handleSave} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700">
+                {editingId !== null ? "Save Changes" : "Add Supplier"}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Delete Confirm Modal */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
-            <p className="text-2xl mb-2">🗑️</p>
-            <h2 className="text-lg font-bold text-gray-800 mb-2">Delete Suppliers?</h2>
-            <p className="text-sm text-gray-500 mb-5">Are you sure you want to delete {selected.length} item(s)?</p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={confirmDelete} className="flex-1 bg-red-500 rounded-lg py-2 text-sm text-white hover:bg-red-600">Delete</button>
-            </div>
-          </div>
+      {success && (
+        <div className="fixed bottom-6 right-6 z-50 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
+          <span>✅</span><span className="text-sm font-medium">{success}</span>
+        </div>
+      )}
+      {error && (
+        <div className="fixed bottom-6 right-6 z-50 bg-red-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
+          <span>❌</span><span className="text-sm font-medium">{error}</span>
         </div>
       )}
     </div>

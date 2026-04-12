@@ -3,214 +3,443 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
+import AlertModal from "@/components/AlertModal";
+
+type PromoType = "Discount" | "Buy 1 Get 1" | "Bundle Deal";
+type PromoStatus = "Active" | "Inactive";
 
 type Promo = {
   id: string;
-  promoName: string;
-  productId: string;
-  alteredPrice: number;
-  discountPercent?: number;
-  dateEffective: string;
-  lastDate: string;
-  isActive: boolean;
-  product?: { id: string; productName: string; price: number };
+  title: string;
+  description: string;
+  type: PromoType;
+  discount?: number;
+  bundleQty?: number;
+  product: string;
+  image: string;
+  status: PromoStatus;
+  startDate: string;
+  endDate: string;
 };
 
-type Product = { id: string; productName: string; price: number };
-
 const navItems = [
-  { label: "Dashboard",             icon: "🏠", path: "/dashboard"      },
-  { label: "Inventory Maintenance", icon: "🛒", path: "/inventory"      },
-  { label: "Supplier Maintenance",  icon: "📊", path: "/supplier"       },
-  { label: "Sales Reports",         icon: "🌐", path: "/sales"          },
-  { label: "Transaction Logs",      icon: "▦",  path: "/transaction"    },
-  { label: "Product Management",    icon: "🗒️", path: "/product"        },
-  { label: "Account Management",    icon: "👤", path: "/account"        },
-  { label: "Purchase Order",        icon: "📋", path: "/purchase-order" },
-  { label: "Promo Management",      icon: "🎁", path: "/promo"          },
+  { label: "Dashboard", icon: "🏠", path: "/dashboard" },
+  { label: "Inventory Maintenance", icon: "🛒", path: "/inventory" },
+  { label: "Supplier Maintenance", icon: "📊", path: "/supplier" },
+  { label: "Sales Reports", icon: "🌐", path: "/sales" },
+  { label: "Transaction Logs", icon: "▦", path: "/transaction" },
+  { label: "Product Management", icon: "🗒️", path: "/product" },
+  { label: "Account Management", icon: "👤", path: "/account" },
+  { label: "Promo Management", icon: "🎁", path: "/promo" },
 ];
 
+const PROMO_TYPES: PromoType[] = ["Discount", "Buy 1 Get 1", "Bundle Deal"];
+
+const TYPE_COLORS: Record<PromoType, string> = {
+  "Discount": "bg-blue-100 text-blue-600",
+  "Buy 1 Get 1": "bg-purple-100 text-purple-600",
+  "Bundle Deal": "bg-orange-100 text-orange-600",
+};
+
+const TYPE_ICONS: Record<PromoType, string> = {
+  "Discount": "🏷️",
+  "Buy 1 Get 1": "🎀",
+  "Bundle Deal": "📦",
+};
+
 const emptyForm = {
-  productId:       "",
-  promoName:       "",
-  alteredPrice:    "" as number | "",
-  discountPercent: "" as number | "",
-  dateEffective:   "",
-  lastDate:        "",
-  isActive:        true,
+  title: "",
+  description: "",
+  type: "Discount" as PromoType,
+  discount: undefined as number | undefined,
+  bundleQty: undefined as number | undefined,
+  product: "",
+  image: "",
+  status: "Active" as PromoStatus,
+  startDate: "",
+  endDate: "",
 };
 
 const ITEMS_PER_PAGE = 18;
 
-export default function PromoManagementPage() {
-  const router   = useRouter();
-  const pathname = usePathname();
+// ✅ Safe — guards against undefined discount/bundleQty
+const getPromoLabel = (promo: Promo) => {
+  if (promo.type === "Discount") return promo.discount != null ? `${promo.discount}% OFF` : "Discount";
+  if (promo.type === "Buy 1 Get 1") return "BOGO";
+  if (promo.type === "Bundle Deal") return promo.bundleQty != null ? `${promo.bundleQty} for 2` : "Bundle";
+  return "";
+};
 
-  const [showUserMenu,   setShowUserMenu]   = useState(false);
+// ✅ Helper to parse year/month from a date string safely
+const parseYear = (val: string) => val ? parseInt(val.split("-")[0]) : new Date().getFullYear();
+const parseMonth = (val: string) => val ? parseInt(val.split("-")[1]) - 1 : new Date().getMonth();
+
+// ✅ Fixed DatePicker — no setState inside useEffect
+function DatePicker({
+  value,
+  onChange,
+  label,
+  placeholder = "Select date",
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  label?: string;
+  placeholder?: string;
+}) {
+  const [show, setShow] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const today = new Date();
+
+  const [viewYear, setViewYear] = useState(() => parseYear(value));
+  const [viewMonth, setViewMonth] = useState(() => parseMonth(value));
+
+  // Sync nav to current value when opening (not in useEffect)
+  const handleToggle = () => {
+    if (!show) {
+      setViewYear(parseYear(value));
+      setViewMonth(parseMonth(value));
+    }
+    setShow(!show);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setShow(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const MONTHS = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+  const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+  const selectDate = (day: number) => {
+    const month = String(viewMonth + 1).padStart(2, "0");
+    const dayStr = String(day).padStart(2, "0");
+    onChange(`${viewYear}-${month}-${dayStr}`);
+    setShow(false);
+  };
+
+  const displayValue = value
+    ? new Date(value + "T00:00:00").toLocaleDateString("en-PH", {
+        year: "numeric", month: "short", day: "numeric",
+      })
+    : "";
+
+  const selectedDay = value ? parseInt(value.split("-")[2]) : null;
+  const selectedMonth = value ? parseInt(value.split("-")[1]) - 1 : null;
+  const selectedYear = value ? parseInt(value.split("-")[0]) : null;
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear((y) => y - 1); }
+    else setViewMonth((m) => m - 1);
+  };
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear((y) => y + 1); }
+    else setViewMonth((m) => m + 1);
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      {label && <p className="text-xs text-gray-400 mb-1">{label}</p>}
+      <button
+        type="button"
+        onClick={handleToggle}
+        className="w-full flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-left hover:border-indigo-400 transition-colors focus:outline-none focus:border-indigo-400 bg-white"
+      >
+        <span className="text-gray-400 text-xs">📅</span>
+        <span className={`flex-1 ${displayValue ? "text-gray-900" : "text-gray-400"}`}>
+          {displayValue || placeholder}
+        </span>
+        {value && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onChange(""); }}
+            className="text-gray-300 hover:text-gray-500 text-xs ml-auto"
+          >
+            ✕
+          </button>
+        )}
+      </button>
+
+      {show && (
+        <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-2xl shadow-xl z-[9999] w-64 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <button type="button" onClick={prevMonth} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600 text-sm">‹</button>
+            <div className="flex items-center gap-1">
+              <select
+                value={viewMonth}
+                onChange={(e) => setViewMonth(Number(e.target.value))}
+                className="text-xs font-semibold text-gray-800 border-none outline-none bg-transparent cursor-pointer"
+              >
+                {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+              </select>
+              <input
+                type="number"
+                value={viewYear}
+                onChange={(e) => setViewYear(Number(e.target.value))}
+                className="w-14 text-xs font-semibold text-gray-800 border border-gray-200 rounded px-1 text-center outline-none focus:border-indigo-400"
+              />
+            </div>
+            <button type="button" onClick={nextMonth} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600 text-sm">›</button>
+          </div>
+
+          <div className="grid grid-cols-7 mb-1">
+            {DAYS.map((d) => (
+              <div key={d} className="text-center text-xs font-medium text-gray-400 py-0.5">{d}</div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-0.5">
+            {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const day = i + 1;
+              const isSelected = day === selectedDay && viewMonth === selectedMonth && viewYear === selectedYear;
+              const isToday = day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => selectDate(day)}
+                  className={`w-full aspect-square flex items-center justify-center rounded-lg text-xs transition-colors
+                    ${isSelected ? "bg-indigo-600 text-white font-semibold"
+                      : isToday ? "border border-indigo-400 text-indigo-600 font-semibold"
+                      : "text-gray-700 hover:bg-indigo-50"}`}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => { setViewYear(today.getFullYear()); setViewMonth(today.getMonth()); selectDate(today.getDate()); }}
+            className="w-full mt-2 py-1 text-xs font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+          >
+            Today
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function PromoManagementPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [promos,         setPromos]         = useState<Promo[]>([]);
-  const [products,       setProducts]       = useState<Product[]>([]);
-  const [loading,        setLoading]        = useState(true);
-  const [search,         setSearch]         = useState("");
-  const [statusFilter,   setStatusFilter]   = useState("All");
-  const [currentPage,    setCurrentPage]    = useState(1);
+  const [promos, setPromos] = useState<Promo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addForm,      setAddForm]      = useState(emptyForm);
-  const [isDirty,      setIsDirty]      = useState(false);
-  const [addLoading,   setAddLoading]   = useState(false);
-  const [addError,     setAddError]     = useState("");
+  const [addForm, setAddForm] = useState(emptyForm);
+  const [isDirty, setIsDirty] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
 
-  const [showPromoModal,     setShowPromoModal]     = useState(false);
-  const [selectedPromo,      setSelectedPromo]      = useState<Promo | null>(null);
-  const [isEditing,          setIsEditing]          = useState(false);
-  const [editForm,           setEditForm]           = useState(emptyForm);
-  const [editLoading,        setEditLoading]        = useState(false);
-  const [editError,          setEditError]          = useState("");
-  const [showDeleteConfirm,  setShowDeleteConfirm]  = useState(false);
-  const [deleteLoading,      setDeleteLoading]      = useState(false);
+  const [showPromoModal, setShowPromoModal] = useState(false);
+  const [selectedPromo, setSelectedPromo] = useState<Promo | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState(emptyForm);
+  const [editLoading, setEditLoading] = useState(false);
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
-  const [showUnsavedModal,   setShowUnsavedModal]   = useState(false);
   const [success, setSuccess] = useState("");
-  const [error,   setError]   = useState("");
+  const [error, setError] = useState("");
 
+  const [alertModal, setAlertModal] = useState<{
+    open: boolean; type?: "alert" | "confirm"; title?: string;
+    message: string; danger?: boolean;
+    onConfirm: () => void; onCancel?: () => void;
+  }>({ open: false, message: "", onConfirm: () => {} });
+
+  const showAlert = (message: string, title?: string) => {
+    setAlertModal({ open: true, type: "alert", title, message, onConfirm: () => setAlertModal((a) => ({ ...a, open: false })) });
+  };
+
+  const showConfirm = (message: string, onConfirm: () => void, title?: string, danger = false) => {
+    setAlertModal({
+      open: true, type: "confirm", title, message, danger,
+      onConfirm: () => { setAlertModal((a) => ({ ...a, open: false })); onConfirm(); },
+      onCancel: () => setAlertModal((a) => ({ ...a, open: false })),
+    });
+  };
+
+  const typeRef = useRef<HTMLDivElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (statusRef.current && !statusRef.current.contains(e.target as Node))
-        setShowStatusDropdown(false);
+    const handleClickOutside = (e: MouseEvent) => {
+      if (typeRef.current && !typeRef.current.contains(e.target as Node)) setShowTypeDropdown(false);
+      if (statusRef.current && !statusRef.current.contains(e.target as Node)) setShowStatusDropdown(false);
     };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const fetchAll = async () => {
+  const fetchPromos = async () => {
     try {
       setLoading(true);
-      const [promosData, productsData] = await Promise.all([
-        api.getPromos(),
-        api.getProducts(),
-      ]);
-      setPromos(Array.isArray(promosData) ? promosData : []);
-      setProducts(Array.isArray(productsData) ? productsData : []);
+      const data = await api.getPromos();
+      setPromos(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error("Failed to fetch:", err);
-      setError("Failed to load data. Please try again.");
+      console.error("Failed to fetch promos:", err);
+      setError("Failed to load promos.");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { fetchPromos(); }, []);
 
   const showToast = (msg: string, isError = false) => {
     if (isError) { setError(msg); setTimeout(() => setError(""), 3000); }
-    else         { setSuccess(msg); setTimeout(() => setSuccess(""), 3000); }
+    else { setSuccess(msg); setTimeout(() => setSuccess(""), 3000); }
   };
 
+  // ✅ Safe filter — guards against null/undefined title and product
   const filtered = promos.filter((p) => {
-    const matchSearch = p.promoName.toLowerCase().includes(search.toLowerCase()) ||
-      (p.product?.productName || "").toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "All" ||
-      (statusFilter === "Active" && p.isActive) ||
-      (statusFilter === "Inactive" && !p.isActive);
-    return matchSearch && matchStatus;
+    const q = search.toLowerCase();
+    const matchSearch = (p.title ?? "").toLowerCase().includes(q) || (p.product ?? "").toLowerCase().includes(q);
+    const matchType = typeFilter === "All" || p.type === typeFilter;
+    const matchStatus = statusFilter === "All" || p.status === statusFilter;
+    return matchSearch && matchType && matchStatus;
   });
 
-  const totalPages  = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-  const paginated   = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-  const totalActive = promos.filter((p) => p.isActive).length;
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  const totalActive = promos.filter((p) => p.status === "Active").length;
+  const totalDiscount = promos.filter((p) => p.type === "Discount").length;
+  const totalBogo = promos.filter((p) => p.type === "Buy 1 Get 1").length;
 
   const handleCardClick = (promo: Promo) => {
     setSelectedPromo(promo);
     setEditForm({
-      productId:       promo.productId,
-      promoName:       promo.promoName,
-      alteredPrice:    promo.alteredPrice,
-      discountPercent: promo.discountPercent ?? "",
-      dateEffective:   promo.dateEffective?.split("T")[0] || "",
-      lastDate:        promo.lastDate?.split("T")[0] || "",
-      isActive:        promo.isActive,
+      title: promo.title ?? "",
+      description: promo.description ?? "",
+      type: promo.type,
+      discount: promo.discount,
+      bundleQty: promo.bundleQty,
+      product: promo.product ?? "",
+      image: promo.image ?? "",
+      status: promo.status,
+      startDate: promo.startDate?.split("T")[0] || "",
+      endDate: promo.endDate?.split("T")[0] || "",
     });
     setIsEditing(false);
-    setEditError("");
     setShowPromoModal(true);
   };
 
   const handleSaveEdit = async () => {
-    if (!editForm.productId)   { setEditError("Please select a product."); return; }
-    if (!editForm.promoName)   { setEditError("Promo name is required."); return; }
-    if (!editForm.alteredPrice || Number(editForm.alteredPrice) <= 0) { setEditError("Please enter a valid promo price."); return; }
-    if (!editForm.dateEffective || !editForm.lastDate) { setEditError("Start and end dates are required."); return; }
-    if (new Date(editForm.dateEffective) > new Date(editForm.lastDate)) { setEditError("Start date must be before end date."); return; }
+    if (!editForm.title) { showAlert("Promo title is required.", "Missing Field"); return; }
+    if (!editForm.product) { showAlert("Product is required.", "Missing Field"); return; }
+    if (!editForm.startDate || !editForm.endDate) { showAlert("Start and End dates are required.", "Missing Field"); return; }
+    if (new Date(editForm.startDate) > new Date(editForm.endDate)) { showAlert("Start date must be before end date.", "Invalid Date"); return; }
+    if (editForm.type === "Discount" && (!editForm.discount || Number(editForm.discount) <= 0)) { showAlert("Please enter a valid discount percentage.", "Missing Field"); return; }
     try {
-      setEditLoading(true); setEditError("");
+      setEditLoading(true);
       await api.updatePromo(selectedPromo!.id, {
-        productId: editForm.productId, promoName: editForm.promoName,
-        alteredPrice: Number(editForm.alteredPrice),
-        discountPercent: editForm.discountPercent !== "" ? Number(editForm.discountPercent) : undefined,
-        dateEffective: editForm.dateEffective, lastDate: editForm.lastDate, isActive: editForm.isActive,
+        ...editForm,
+        discount: editForm.discount ? Number(editForm.discount) : undefined,
+        bundleQty: editForm.bundleQty ? Number(editForm.bundleQty) : undefined,
       });
-      await fetchAll(); setIsEditing(false); setShowPromoModal(false);
+      await fetchPromos();
+      setIsEditing(false);
+      setShowPromoModal(false);
       showToast("Promo updated successfully!");
-    } catch (err) { console.error(err); setEditError("Failed to update promo."); }
-    finally { setEditLoading(false); }
+    } catch (err) {
+      showToast("Failed to update promo.", true);
+    } finally {
+      setEditLoading(false);
+    }
   };
 
   const handleToggleStatus = async (promo: Promo) => {
     try {
-      await api.togglePromo(promo.id); await fetchAll();
-      showToast(`Promo ${promo.isActive ? "deactivated" : "activated"}!`);
-    } catch (err) { console.error(err); showToast("Failed to toggle promo status.", true); }
+      await api.togglePromo(promo.id);
+      await fetchPromos();
+      showToast(`Promo ${promo.status === "Active" ? "deactivated" : "activated"}!`);
+    } catch (err) {
+      showToast("Failed to toggle promo status.", true);
+    }
   };
 
   const confirmDelete = async () => {
     try {
       setDeleteLoading(true);
-      await api.deletePromo(selectedPromo!.id); await fetchAll();
-      setShowDeleteConfirm(false); setShowPromoModal(false); setSelectedPromo(null);
+      await api.deletePromo(selectedPromo!.id);
+      await fetchPromos();
+      setShowDeleteConfirm(false);
+      setShowPromoModal(false);
+      setSelectedPromo(null);
       showToast("Promo deleted successfully!");
-    } catch (err) { console.error(err); showToast("Failed to delete promo.", true); }
-    finally { setDeleteLoading(false); }
+    } catch (err) {
+      showToast("Failed to delete promo.", true);
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   const handleAddPromo = async () => {
-    if (!addForm.productId)   { setAddError("Please select a product."); return; }
-    if (!addForm.promoName)   { setAddError("Promo name is required."); return; }
-    if (!addForm.alteredPrice || Number(addForm.alteredPrice) <= 0) { setAddError("Please enter a valid promo price."); return; }
-    if (!addForm.dateEffective || !addForm.lastDate) { setAddError("Start and end dates are required."); return; }
-    if (new Date(addForm.dateEffective) > new Date(addForm.lastDate)) { setAddError("Start date must be before end date."); return; }
+    if (!addForm.title) { showAlert("Promo title is required.", "Missing Field"); return; }
+    if (!addForm.product) { showAlert("Product is required.", "Missing Field"); return; }
+    if (!addForm.startDate || !addForm.endDate) { showAlert("Start and End dates are required.", "Missing Field"); return; }
+    if (new Date(addForm.startDate) > new Date(addForm.endDate)) { showAlert("Start date must be before end date.", "Invalid Date"); return; }
+    if (addForm.type === "Discount" && (!addForm.discount || Number(addForm.discount) <= 0)) { showAlert("Please enter a valid discount percentage.", "Missing Field"); return; }
     try {
-      setAddLoading(true); setAddError("");
+      setAddLoading(true);
       await api.createPromo({
-        productId: addForm.productId, promoName: addForm.promoName,
-        alteredPrice: Number(addForm.alteredPrice),
-        discountPercent: addForm.discountPercent !== "" ? Number(addForm.discountPercent) : undefined,
-        dateEffective: addForm.dateEffective, lastDate: addForm.lastDate, isActive: addForm.isActive,
+        ...addForm,
+        discount: addForm.discount ? Number(addForm.discount) : undefined,
+        bundleQty: addForm.bundleQty ? Number(addForm.bundleQty) : undefined,
       });
-      await fetchAll(); setShowAddModal(false); setAddForm(emptyForm); setIsDirty(false);
+      await fetchPromos();
+      setShowAddModal(false);
+      setAddForm(emptyForm);
+      setIsDirty(false);
       showToast("Promo added successfully!");
-    } catch (err) { console.error(err); setAddError("Failed to add promo."); }
-    finally { setAddLoading(false); }
+    } catch (err) {
+      showToast("Failed to add promo.", true);
+    } finally {
+      setAddLoading(false);
+    }
   };
 
-  // ✅ Replaced confirm() with in-app modal
   const handleCloseAddModal = () => {
-    if (isDirty) { setShowUnsavedModal(true); return; }
-    setShowAddModal(false); setAddForm(emptyForm); setAddError(""); setIsDirty(false);
+    if (isDirty) {
+      showConfirm("You have unsaved changes. Are you sure you want to close?", () => {
+        setShowAddModal(false); setAddForm(emptyForm); setIsDirty(false);
+      }, "Unsaved Changes");
+    } else {
+      setShowAddModal(false); setAddForm(emptyForm); setIsDirty(false);
+    }
   };
 
   const handleExport = () => {
-    const headers = ["ID","Promo Name","Product","Altered Price","Discount%","Start Date","End Date","Active"];
-    const rows = promos.map((p) => [p.id, p.promoName, p.product?.productName || p.productId, p.alteredPrice, p.discountPercent || "", p.dateEffective, p.lastDate, p.isActive]);
+    const headers = ["Title", "Product", "Type", "Discount%", "Bundle Qty", "Status", "Start Date", "End Date"];
+    const rows = promos.map((p) => [p.title, p.product, p.type, p.discount || "", p.bundleQty || "", p.status, p.startDate, p.endDate]);
     const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = "promos.csv"; a.click();
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "promos.csv"; a.click(); URL.revokeObjectURL(url);
   };
 
-  const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("token"); localStorage.removeItem("employee"); router.push("/"); };
+  const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("employee"); router.push("/"); };
   const navigate = (path: string) => { router.push(path); setShowMobileMenu(false); };
 
   const getPageNumbers = () => {
@@ -226,79 +455,12 @@ export default function PromoManagementPage() {
     return pages;
   };
 
-  // ✅ Shared form with inline errors and fixed date inputs
-  const renderFormFields = (
-    form: typeof emptyForm,
-    setForm: (f: typeof emptyForm) => void,
-    formError: string,
-    markDirty?: () => void
-  ) => {
-    const update = (patch: Partial<typeof emptyForm>) => { setForm({ ...form, ...patch }); markDirty?.(); };
-    return (
-      <div className="flex flex-col gap-3">
-        {formError && (
-          <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-2">
-            <span>⚠️</span><span>{formError}</span>
-          </div>
-        )}
-        <div>
-          <label className="text-xs font-medium text-gray-600">Product <span className="text-red-400">*</span></label>
-          <select value={form.productId} onChange={(e) => update({ productId: e.target.value })}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-            <option value="">— Select a product —</option>
-            {products.map((p) => <option key={p.id} value={p.id}>{p.productName} (₱{p.price})</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="text-xs font-medium text-gray-600">Promo Name <span className="text-red-400">*</span></label>
-          <input value={form.promoName} onChange={(e) => update({ promoName: e.target.value })}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
-            placeholder="e.g. Summer Sale" />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-gray-600">Promo Price (₱) <span className="text-red-400">*</span></label>
-          <input type="number" min="0" step="0.01" value={form.alteredPrice}
-            onChange={(e) => update({ alteredPrice: e.target.value === "" ? "" : Number(e.target.value) })}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
-            placeholder="e.g. 59.00" />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-gray-600">Discount % <span className="text-gray-400">(optional)</span></label>
-          <input type="number" min="0" max="100" value={form.discountPercent}
-            onChange={(e) => update({ discountPercent: e.target.value === "" ? "" : Number(e.target.value) })}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
-            placeholder="e.g. 20" />
-        </div>
-        {/* ✅ Fixed date UI: [color-scheme:light] forces the native picker to show correctly */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs font-medium text-gray-600">Start Date <span className="text-red-400">*</span></label>
-            <input type="date" value={form.dateEffective} onChange={(e) => update({ dateEffective: e.target.value })}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900 [color-scheme:light]" />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-gray-600">End Date <span className="text-red-400">*</span></label>
-            <input type="date" value={form.lastDate} onChange={(e) => update({ lastDate: e.target.value })}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900 [color-scheme:light]" />
-          </div>
-        </div>
-        <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-          <span className="text-sm text-gray-600 flex-1">Active immediately</span>
-          <button type="button" onClick={() => update({ isActive: !form.isActive })}
-            className={`w-11 h-6 rounded-full transition-colors relative ${form.isActive ? "bg-green-500" : "bg-gray-300"}`}>
-            <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.isActive ? "translate-x-5" : "translate-x-0.5"}`} />
-          </button>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
+      <AlertModal {...alertModal} />
+
       <aside className="hidden md:flex w-52 bg-white flex-col py-6 px-4 border-r border-gray-100 shrink-0">
-        <div className="text-center mb-10">
-          <p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide">JULIETA SOFTDRINKS<br />STORE</p>
-        </div>
+        <div className="text-center mb-10"><p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide">JULIETA SOFTDRINKS<br />STORE</p></div>
         <nav className="flex flex-col gap-1">
           {navItems.map((item) => {
             const isActive = pathname === item.path;
@@ -317,17 +479,14 @@ export default function PromoManagementPage() {
 
       <main className="flex-1 flex flex-col overflow-auto">
         <header className="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-100">
-          <button className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300"
-            style={{ transform: showMobileMenu ? "rotate(90deg)" : "rotate(0deg)" }}
-            onClick={() => setShowMobileMenu(!showMobileMenu)}>
+          <button className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300" style={{ transform: showMobileMenu ? "rotate(90deg)" : "rotate(0deg)" }} onClick={() => setShowMobileMenu(!showMobileMenu)}>
             {showMobileMenu ? "✕" : "☰"}
           </button>
           <h1 className="text-xl md:text-2xl font-bold text-gray-800">Promo Management</h1>
           <div className="flex items-center gap-2">
             <div className="relative"><span className="text-xl">🔔</span><div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" /></div>
             <div className="relative">
-              <button onClick={() => setShowUserMenu(!showUserMenu)}
-                className={`flex items-center gap-2 px-2 py-2 rounded-xl transition-colors ${showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"}`}>
+              <button onClick={() => setShowUserMenu(!showUserMenu)} className={`flex items-center gap-2 px-2 py-2 rounded-xl transition-colors ${showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="https://i.pravatar.cc/40?img=8" alt="User" className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover" />
                 <div className="hidden md:block text-left"><p className="text-sm font-semibold text-gray-800">Ray Teodoro</p><p className="text-xs text-green-500">Admin</p></div>
@@ -359,83 +518,70 @@ export default function PromoManagementPage() {
         )}
 
         <div className="flex-1 p-3 md:p-4 bg-green-50">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
-            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-lg">🎁</div>
-              <div><p className="text-xs text-gray-400">Total Promos</p><p className="text-xl font-bold text-gray-800">{promos.length}</p></div>
-            </div>
-            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-lg">✅</div>
-              <div><p className="text-xs text-gray-400">Active</p><p className="text-xl font-bold text-green-600">{totalActive}</p></div>
-            </div>
-            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-lg">⏸️</div>
-              <div><p className="text-xs text-gray-400">Inactive</p><p className="text-xl font-bold text-gray-500">{promos.length - totalActive}</p></div>
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-lg">🎁</div><div><p className="text-xs text-gray-400">Total Promos</p><p className="text-xl font-bold text-gray-800">{promos.length}</p></div></div>
+            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-lg">✅</div><div><p className="text-xs text-gray-400">Active</p><p className="text-xl font-bold text-green-600">{totalActive}</p></div></div>
+            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-lg">💙</div><div><p className="text-xs text-gray-400">Discounts</p><p className="text-xl font-bold text-blue-600">{totalDiscount}</p></div></div>
+            <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-lg">🎀</div><div><p className="text-xs text-gray-400">BOGO</p><p className="text-xl font-bold text-purple-600">{totalBogo}</p></div></div>
           </div>
 
           <div className="bg-white rounded-2xl p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-6 flex-wrap">
               <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-40 md:w-48">
                 <span className="text-gray-400 text-sm">🔍</span>
-                <input type="text" placeholder="Search promos..." value={search}
-                  onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-                  className="outline-none text-sm text-gray-700 w-full" />
+                <input type="text" placeholder="Search promos..." value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} className="outline-none text-sm text-gray-700 w-full" />
               </div>
-              <div className="relative" ref={statusRef}>
-                <button onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                  className={`flex items-center gap-1 border rounded-lg px-3 py-2 text-sm transition-colors ${statusFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                  🔖 {statusFilter === "All" ? "Status" : statusFilter} ▾
+              <div className="relative" ref={typeRef}>
+                <button onClick={() => { setShowTypeDropdown(!showTypeDropdown); setShowStatusDropdown(false); }} className={`flex items-center gap-1 border rounded-lg px-3 py-2 text-sm transition-colors ${typeFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                  🎁 {typeFilter === "All" ? "Type" : typeFilter} ▾
                 </button>
-                {showStatusDropdown && (
-                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-40">
-                    {["All","Active","Inactive"].map((opt) => (
-                      <button key={opt} onClick={() => { setStatusFilter(opt); setShowStatusDropdown(false); setCurrentPage(1); }}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${statusFilter === opt ? "text-indigo-600 font-semibold" : "text-gray-600"}`}>
-                        {opt === "All" ? "All Statuses" : opt}
-                      </button>
+                {showTypeDropdown && (
+                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44">
+                    {["All", ...PROMO_TYPES].map((opt) => (
+                      <button key={opt} onClick={() => { setTypeFilter(opt); setShowTypeDropdown(false); setCurrentPage(1); }} className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${typeFilter === opt ? "text-indigo-600 font-semibold" : "text-gray-600"}`}>{opt === "All" ? "All Types" : opt}</button>
                     ))}
                   </div>
                 )}
               </div>
-              {statusFilter !== "All" && (
-                <button onClick={() => { setStatusFilter("All"); setCurrentPage(1); }}
-                  className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
+              <div className="relative" ref={statusRef}>
+                <button onClick={() => { setShowStatusDropdown(!showStatusDropdown); setShowTypeDropdown(false); }} className={`flex items-center gap-1 border rounded-lg px-3 py-2 text-sm transition-colors ${statusFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                  🔖 {statusFilter === "All" ? "Status" : statusFilter} ▾
+                </button>
+                {showStatusDropdown && (
+                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-40">
+                    {["All", "Active", "Inactive"].map((opt) => (
+                      <button key={opt} onClick={() => { setStatusFilter(opt); setShowStatusDropdown(false); setCurrentPage(1); }} className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${statusFilter === opt ? "text-indigo-600 font-semibold" : "text-gray-600"}`}>{opt === "All" ? "All Statuses" : opt}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {(typeFilter !== "All" || statusFilter !== "All") && (
+                <button onClick={() => { setTypeFilter("All"); setStatusFilter("All"); setCurrentPage(1); }} className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
               )}
               <button onClick={handleExport} className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">📤 Export</button>
-              <button onClick={() => { setShowAddModal(true); setIsDirty(false); setAddError(""); }}
-                className="ml-auto flex items-center gap-1 bg-gray-900 rounded-lg px-3 py-2 text-sm text-white hover:bg-gray-700">
-                + Add Promo
-              </button>
+              <button onClick={() => { setShowAddModal(true); setIsDirty(false); }} className="ml-auto flex items-center gap-1 bg-gray-900 rounded-lg px-3 py-2 text-sm text-white hover:bg-gray-700">+ Add Promo</button>
             </div>
 
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <p className="text-4xl mb-3 animate-bounce">🎁</p>
-                <p className="text-gray-400 text-sm">Loading promos...</p>
-              </div>
+              <div className="flex flex-col items-center justify-center py-16 text-center"><p className="text-4xl mb-3 animate-bounce">🎁</p><p className="text-gray-400 text-sm">Loading promos...</p></div>
             ) : paginated.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <p className="text-4xl mb-3">🎁</p>
-                <p className="text-gray-500 font-medium">No promos found</p>
-                <p className="text-gray-400 text-sm mt-1">{search ? `No results for "${search}"` : "Add your first promo!"}</p>
-              </div>
+              <div className="flex flex-col items-center justify-center py-16 text-center"><p className="text-4xl mb-3">🎁</p><p className="text-gray-500 font-medium">No promos found</p><p className="text-gray-400 text-sm mt-1">{search ? `No results for "${search}"` : "Add your first promo!"}</p></div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
                 {paginated.map((promo) => (
-                  <div key={promo.id} onClick={() => handleCardClick(promo)}
-                    className="flex flex-col rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow cursor-pointer">
-                    <div className="w-full aspect-square bg-indigo-50 rounded-t-2xl flex flex-col items-center justify-center relative">
-                      <span className="text-4xl">🎁</span>
-                      <span className={`absolute top-2 right-2 text-xs px-2 py-0.5 rounded-full font-medium ${promo.isActive ? "bg-green-100 text-green-600" : "bg-gray-200 text-gray-500"}`}>
-                        {promo.isActive ? "Active" : "Inactive"}
-                      </span>
+                  <div key={promo.id} onClick={() => handleCardClick(promo)} className="flex flex-col rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow cursor-pointer">
+                    <div className="w-full aspect-square bg-gray-100 rounded-t-2xl flex flex-col items-center justify-center relative">
+                      {promo.image
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img src={promo.image} alt={promo.title ?? "Promo"} className="w-full h-full object-cover" />
+                        : <span className="text-4xl">{TYPE_ICONS[promo.type] ?? "🎁"}</span>}
+                      <span className={`absolute top-2 right-2 text-xs px-2 py-0.5 rounded-full font-medium ${promo.status === "Active" ? "bg-green-100 text-green-600" : "bg-gray-200 text-gray-500"}`}>{promo.status}</span>
                     </div>
                     <div className="p-2">
-                      <p className="text-sm font-semibold text-gray-800 mt-1 truncate">{promo.promoName}</p>
-                      <p className="text-xs text-gray-500 truncate">{promo.product?.productName || promo.productId}</p>
-                      <p className="text-xs font-bold text-indigo-600 mt-0.5">₱{promo.alteredPrice}</p>
-                      {promo.discountPercent && <p className="text-xs text-green-600">{promo.discountPercent}% off</p>}
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_COLORS[promo.type] ?? "bg-gray-100 text-gray-600"}`}>{promo.type}</span>
+                      <p className="text-sm font-semibold text-gray-800 mt-1 truncate">{promo.title ?? "—"}</p>
+                      <p className="text-xs text-gray-500 truncate">{promo.product ?? "—"}</p>
+                      <p className="text-xs font-bold text-indigo-600 mt-0.5">{getPromoLabel(promo)}</p>
                     </div>
                   </div>
                 ))}
@@ -448,10 +594,7 @@ export default function PromoManagementPage() {
                 <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-2 py-1 rounded-lg text-sm text-gray-500 hover:bg-gray-100 disabled:opacity-30">‹</button>
                 {getPageNumbers().map((page, i) => (
                   page === "..." ? <span key={i} className="px-2 py-1 text-gray-400">...</span> : (
-                    <button key={i} onClick={() => setCurrentPage(Number(page))}
-                      className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${currentPage === page ? "bg-indigo-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}>
-                      {page}
-                    </button>
+                    <button key={i} onClick={() => setCurrentPage(Number(page))} className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${currentPage === page ? "bg-indigo-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}>{page}</button>
                   )
                 ))}
                 <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-2 py-1 rounded-lg text-sm text-gray-500 hover:bg-gray-100 disabled:opacity-30">›</button>
@@ -467,28 +610,56 @@ export default function PromoManagementPage() {
         <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
             <p className="text-xs text-gray-400 mb-3 font-medium">Promo {isEditing ? "Editing" : "Details"}</p>
-            {isEditing ? renderFormFields(editForm, setEditForm, editError) : (
-              <div className="flex flex-col gap-3">
-                <div><p className="text-xs text-gray-400">Promo Name</p><p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedPromo.promoName}</p></div>
-                <div><p className="text-xs text-gray-400">Product</p><p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedPromo.product?.productName || selectedPromo.productId}</p></div>
-                <div><p className="text-xs text-gray-400">Promo Price</p><p className="text-sm font-bold text-indigo-600 mt-0.5">₱{selectedPromo.alteredPrice}</p></div>
-                {selectedPromo.discountPercent && <div><p className="text-xs text-gray-400">Discount</p><p className="text-sm text-green-600 mt-0.5">{selectedPromo.discountPercent}% off</p></div>}
-                <div><p className="text-xs text-gray-400">Duration</p><p className="text-sm text-gray-700 mt-0.5">{selectedPromo.dateEffective?.split("T")[0]} → {selectedPromo.lastDate?.split("T")[0]}</p></div>
-                <div><p className="text-xs text-gray-400">Status</p>
-                  <button onClick={() => handleToggleStatus(selectedPromo)}
-                    className={`text-xs px-3 py-1 rounded-full font-medium inline-block mt-0.5 cursor-pointer transition-colors ${selectedPromo.isActive ? "bg-green-100 text-green-600 hover:bg-green-200" : "bg-gray-200 text-gray-500 hover:bg-gray-300"}`}>
-                    {selectedPromo.isActive ? "Active" : "Inactive"} (click to toggle)
-                  </button>
-                </div>
+            <div className="flex gap-4">
+              <div className="w-32 h-32 bg-gray-100 rounded-xl shrink-0 flex items-center justify-center text-5xl">
+                {selectedPromo.image
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={selectedPromo.image} alt={selectedPromo.title ?? "Promo"} className="w-full h-full object-cover rounded-xl" />
+                  : (TYPE_ICONS[selectedPromo.type] ?? "🎁")}
               </div>
-            )}
+              <div className="flex-1 flex flex-col gap-3">
+                {isEditing ? (
+                  <>
+                    <div><p className="text-xs text-gray-400">Promo Title</p><input value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+                    <div><p className="text-xs text-gray-400">Description</p><textarea value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900 resize-none" rows={2} /></div>
+                    <div><p className="text-xs text-gray-400">Product</p><input value={editForm.product} onChange={(e) => setEditForm({ ...editForm, product: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+                    <div><p className="text-xs text-gray-400">Promo Type</p><select value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value as PromoType })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">{PROMO_TYPES.map((t) => <option key={t}>{t}</option>)}</select></div>
+                    {editForm.type === "Discount" && <div><p className="text-xs text-gray-400">Discount (%)</p><input type="number" min="1" max="100" value={editForm.discount ?? ""} onChange={(e) => setEditForm({ ...editForm, discount: e.target.value === "" ? undefined : Number(e.target.value) })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>}
+                    {editForm.type === "Bundle Deal" && <div><p className="text-xs text-gray-400">Bundle Qty</p><input type="number" min="3" value={editForm.bundleQty ?? ""} onChange={(e) => setEditForm({ ...editForm, bundleQty: e.target.value === "" ? undefined : Number(e.target.value) })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>}
+                    <DatePicker label="Start Date" value={editForm.startDate} onChange={(val) => setEditForm({ ...editForm, startDate: val })} />
+                    <DatePicker label="End Date" value={editForm.endDate} onChange={(val) => setEditForm({ ...editForm, endDate: val })} />
+                    <div><p className="text-xs text-gray-400">Status</p><select value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value as PromoStatus })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
+                    <div><p className="text-xs text-gray-400">Image URL (optional)</p><input value={editForm.image} onChange={(e) => setEditForm({ ...editForm, image: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="https://..." /></div>
+                  </>
+                ) : (
+                  <>
+                    <div><p className="text-xs text-gray-400">Promo Title</p><p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedPromo.title ?? "—"}</p></div>
+                    <div><p className="text-xs text-gray-400">Product</p><p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedPromo.product ?? "—"}</p></div>
+                    <div><p className="text-xs text-gray-400">Type</p><span className={`text-xs px-2 py-0.5 rounded-full font-medium mt-0.5 inline-block ${TYPE_COLORS[selectedPromo.type] ?? "bg-gray-100 text-gray-600"}`}>{selectedPromo.type}</span></div>
+                    <div><p className="text-xs text-gray-400">Deal</p><p className="text-sm font-bold text-indigo-600 mt-0.5">{getPromoLabel(selectedPromo)}</p></div>
+                    <div>
+                      <p className="text-xs text-gray-400">Duration</p>
+                      <p className="text-sm text-gray-700 mt-0.5">
+                        {selectedPromo.startDate ? new Date(selectedPromo.startDate.split("T")[0] + "T00:00:00").toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }) : "—"}
+                        {" → "}
+                        {selectedPromo.endDate ? new Date(selectedPromo.endDate.split("T")[0] + "T00:00:00").toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }) : "—"}
+                      </p>
+                    </div>
+                    <div><p className="text-xs text-gray-400">Status</p>
+                      <button onClick={() => handleToggleStatus(selectedPromo)} className={`text-xs px-3 py-1 rounded-full font-medium inline-block mt-0.5 cursor-pointer transition-colors ${selectedPromo.status === "Active" ? "bg-green-100 text-green-600 hover:bg-green-200" : "bg-gray-200 text-gray-500 hover:bg-gray-300"}`}>
+                        {selectedPromo.status} (click to toggle)
+                      </button>
+                    </div>
+                    {selectedPromo.description && <div><p className="text-xs text-gray-400">Description</p><p className="text-xs text-gray-600 mt-0.5">{selectedPromo.description}</p></div>}
+                  </>
+                )}
+              </div>
+            </div>
             <div className="flex gap-2 mt-5 justify-end">
               {isEditing ? (
                 <>
-                  <button onClick={() => { setIsEditing(false); setEditError(""); }} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-                  <button onClick={handleSaveEdit} disabled={editLoading} className="px-4 py-2 bg-green-500 rounded-lg text-sm text-white font-medium hover:bg-green-600 disabled:opacity-60">
-                    {editLoading ? "Saving..." : "Save"}
-                  </button>
+                  <button onClick={() => setIsEditing(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+                  <button onClick={handleSaveEdit} disabled={editLoading} className="px-4 py-2 bg-green-500 rounded-lg text-sm text-white font-medium hover:bg-green-600 disabled:opacity-60">{editLoading ? "Saving..." : "Save"}</button>
                 </>
               ) : (
                 <>
@@ -507,29 +678,33 @@ export default function PromoManagementPage() {
         <div className="fixed inset-0 bg-black bg-opacity-10 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-bold text-gray-800 mb-4">Add New Promo</h2>
-            {renderFormFields(addForm, setAddForm, addError, () => setIsDirty(true))}
+            <div className="flex flex-col gap-3">
+              <div><label className="text-xs font-medium text-gray-600">Promo Title</label><input value={addForm.title} onChange={(e) => { setAddForm({ ...addForm, title: e.target.value }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="e.g. Summer Sale" /></div>
+              <div><label className="text-xs font-medium text-gray-600">Description</label><textarea value={addForm.description} onChange={(e) => { setAddForm({ ...addForm, description: e.target.value }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900 resize-none" rows={2} placeholder="Describe the promo..." /></div>
+              <div><label className="text-xs font-medium text-gray-600">Product</label><input value={addForm.product} onChange={(e) => { setAddForm({ ...addForm, product: e.target.value }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="e.g. Coca Cola 1.5L" /></div>
+              <div><label className="text-xs font-medium text-gray-600">Promo Type</label><select value={addForm.type} onChange={(e) => { setAddForm({ ...addForm, type: e.target.value as PromoType }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">{PROMO_TYPES.map((t) => <option key={t}>{t}</option>)}</select></div>
+              {addForm.type === "Discount" && <div><label className="text-xs font-medium text-gray-600">Discount Percentage (%)</label><input type="number" min="1" max="100" value={addForm.discount ?? ""} onChange={(e) => { setAddForm({ ...addForm, discount: e.target.value === "" ? undefined : Number(e.target.value) }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="e.g. 20" /></div>}
+              {addForm.type === "Bundle Deal" && <div><label className="text-xs font-medium text-gray-600">Buy how many? (pay for 2)</label><input type="number" min="3" value={addForm.bundleQty ?? ""} onChange={(e) => { setAddForm({ ...addForm, bundleQty: e.target.value === "" ? undefined : Number(e.target.value) }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="e.g. 3" /></div>}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-gray-600">Start Date</label>
+                  <div className="mt-1">
+                    <DatePicker value={addForm.startDate} onChange={(val) => { setAddForm({ ...addForm, startDate: val }); setIsDirty(true); }} placeholder="Start date" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600">End Date</label>
+                  <div className="mt-1">
+                    <DatePicker value={addForm.endDate} onChange={(val) => { setAddForm({ ...addForm, endDate: val }); setIsDirty(true); }} placeholder="End date" />
+                  </div>
+                </div>
+              </div>
+              <div><label className="text-xs font-medium text-gray-600">Status</label><select value={addForm.status} onChange={(e) => { setAddForm({ ...addForm, status: e.target.value as PromoStatus }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
+              <div><label className="text-xs font-medium text-gray-600">Promo Image URL <span className="text-gray-400">(optional)</span></label><input value={addForm.image} onChange={(e) => { setAddForm({ ...addForm, image: e.target.value }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="https://..." /></div>
+            </div>
             <div className="flex gap-3 mt-5">
               <button onClick={handleCloseAddModal} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={handleAddPromo} disabled={addLoading} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-60">
-                {addLoading ? "Adding..." : "Add Promo"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ✅ Unsaved changes modal — replaces browser confirm() */}
-      {showUnsavedModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-[60] px-4">
-          <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
-            <p className="text-2xl mb-2">⚠️</p>
-            <h2 className="text-lg font-bold text-gray-800 mb-2">Unsaved Changes</h2>
-            <p className="text-sm text-gray-500 mb-5">You have unsaved changes. Are you sure you want to close?</p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowUnsavedModal(false)}
-                className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Keep Editing</button>
-              <button onClick={() => { setShowUnsavedModal(false); setShowAddModal(false); setAddForm(emptyForm); setAddError(""); setIsDirty(false); }}
-                className="flex-1 bg-red-500 rounded-lg py-2 text-sm text-white hover:bg-red-600">Discard</button>
+              <button onClick={handleAddPromo} disabled={addLoading} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-60">{addLoading ? "Adding..." : "Add Promo"}</button>
             </div>
           </div>
         </div>
@@ -541,27 +716,17 @@ export default function PromoManagementPage() {
           <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
             <p className="text-2xl mb-2">🗑️</p>
             <h2 className="text-lg font-bold text-gray-800 mb-2">Delete Promo?</h2>
-            <p className="text-sm text-gray-500 mb-5">Are you sure you want to delete <span className="font-semibold text-gray-700">{selectedPromo?.promoName}</span>?</p>
+            <p className="text-sm text-gray-500 mb-5">Are you sure you want to delete <span className="font-semibold text-gray-700">{selectedPromo?.title ?? "this promo"}</span>?</p>
             <div className="flex gap-3">
               <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={confirmDelete} disabled={deleteLoading} className="flex-1 bg-red-500 rounded-lg py-2 text-sm text-white hover:bg-red-600 disabled:opacity-60">
-                {deleteLoading ? "Deleting..." : "Delete"}
-              </button>
+              <button onClick={confirmDelete} disabled={deleteLoading} className="flex-1 bg-red-500 rounded-lg py-2 text-sm text-white hover:bg-red-600 disabled:opacity-60">{deleteLoading ? "Deleting..." : "Delete"}</button>
             </div>
           </div>
         </div>
       )}
 
-      {success && (
-        <div className="fixed bottom-6 right-6 z-50 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
-          <span>✅</span><span className="text-sm font-medium">{success}</span>
-        </div>
-      )}
-      {error && (
-        <div className="fixed bottom-6 right-6 z-50 bg-red-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
-          <span>❌</span><span className="text-sm font-medium">{error}</span>
-        </div>
-      )}
+      {success && <div className="fixed bottom-6 right-6 z-50 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2"><span>✅</span><span className="text-sm font-medium">{success}</span></div>}
+      {error && <div className="fixed bottom-6 right-6 z-50 bg-red-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2"><span>❌</span><span className="text-sm font-medium">{error}</span></div>}
     </div>
   );
 }
