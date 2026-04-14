@@ -289,23 +289,6 @@ export default function InventoryLayout({
                 background: "#4caf50",
               }}
             />
-            <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.7)" }}>
-              Online
-            </span>
-            <div
-              style={{
-                width: "34px",
-                height: "34px",
-                borderRadius: "50%",
-                background: "rgba(255,255,255,0.15)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "15px",
-              }}
-            >
-              👤
-            </div>
           </div>
         </header>
 
