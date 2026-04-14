@@ -9,7 +9,14 @@ type Supplier = {
   name: string;
   contact: string;
   address: string;
-  products: { id: number; name: string; unit: string; unitCost: number }[];
+  products: {
+    id: number;
+    name: string;
+    unit: string;
+    unitCost: number;
+    stock: number;
+    minStock: number;
+  }[];
 };
 
 type POItem = {
@@ -38,10 +45,38 @@ const suppliers: Supplier[] = [
     contact: "09171234567",
     address: "123 Rizal St, Manila",
     products: [
-      { id: 1, name: "Coca Cola 1.5L", unit: "Case", unitCost: 480 },
-      { id: 2, name: "Sprite 1.5L", unit: "Case", unitCost: 450 },
-      { id: 3, name: "Royal 500ml", unit: "Case", unitCost: 300 },
-      { id: 4, name: "Coke Zero 1.5L", unit: "Case", unitCost: 480 },
+      {
+        id: 1,
+        name: "Coca Cola 1.5L",
+        unit: "Case",
+        unitCost: 480,
+        stock: 4,
+        minStock: 10,
+      },
+      {
+        id: 2,
+        name: "Sprite 1.5L",
+        unit: "Case",
+        unitCost: 450,
+        stock: 0,
+        minStock: 10,
+      },
+      {
+        id: 3,
+        name: "Royal 500ml",
+        unit: "Case",
+        unitCost: 300,
+        stock: 15,
+        minStock: 10,
+      },
+      {
+        id: 4,
+        name: "Coke Zero 1.5L",
+        unit: "Case",
+        unitCost: 480,
+        stock: 7,
+        minStock: 10,
+      },
     ],
   },
   {
@@ -50,10 +85,38 @@ const suppliers: Supplier[] = [
     contact: "09281234567",
     address: "456 EDSA, Quezon City",
     products: [
-      { id: 5, name: "Pepsi 1.5L", unit: "Case", unitCost: 450 },
-      { id: 6, name: "Mountain Dew 1.5L", unit: "Case", unitCost: 480 },
-      { id: 7, name: "7UP 1.5L", unit: "Case", unitCost: 450 },
-      { id: 8, name: "Mirinda 500ml", unit: "Case", unitCost: 300 },
+      {
+        id: 5,
+        name: "Pepsi 1.5L",
+        unit: "Case",
+        unitCost: 450,
+        stock: 2,
+        minStock: 10,
+      },
+      {
+        id: 6,
+        name: "Mountain Dew 1.5L",
+        unit: "Case",
+        unitCost: 480,
+        stock: 12,
+        minStock: 10,
+      },
+      {
+        id: 7,
+        name: "7UP 1.5L",
+        unit: "Case",
+        unitCost: 450,
+        stock: 0,
+        minStock: 10,
+      },
+      {
+        id: 8,
+        name: "Mirinda 500ml",
+        unit: "Case",
+        unitCost: 300,
+        stock: 8,
+        minStock: 10,
+      },
     ],
   },
   {
@@ -62,9 +125,30 @@ const suppliers: Supplier[] = [
     contact: "09991234567",
     address: "789 Ayala Ave, Makati",
     products: [
-      { id: 9, name: "Cobra Energy", unit: "Case", unitCost: 600 },
-      { id: 10, name: "Summit Water", unit: "Case", unitCost: 250 },
-      { id: 11, name: "Absolute Juice", unit: "Case", unitCost: 550 },
+      {
+        id: 9,
+        name: "Cobra Energy",
+        unit: "Case",
+        unitCost: 600,
+        stock: 0,
+        minStock: 8,
+      },
+      {
+        id: 10,
+        name: "Summit Water",
+        unit: "Case",
+        unitCost: 250,
+        stock: 20,
+        minStock: 8,
+      },
+      {
+        id: 11,
+        name: "Absolute Juice",
+        unit: "Case",
+        unitCost: 550,
+        stock: 3,
+        minStock: 8,
+      },
     ],
   },
 ];
@@ -173,17 +257,45 @@ export default function PurchaseOrderPage() {
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
+
   const total = orderItems.reduce((s, i) => s + i.unitCost * i.orderedQty, 0);
+
+  // Low stock products from selected supplier
+  const lowStockProducts = useMemo(() => {
+    if (!selectedSupplier) return [];
+    return selectedSupplier.products.filter((p) => p.stock < p.minStock);
+  }, [selectedSupplier]);
+
+  const outOfStockProducts = useMemo(
+    () => lowStockProducts.filter((p) => p.stock === 0),
+    [lowStockProducts],
+  );
+  const criticalProducts = useMemo(
+    () => lowStockProducts.filter((p) => p.stock > 0 && p.stock < p.minStock),
+    [lowStockProducts],
+  );
 
   const addProduct = (p: {
     id: number;
     name: string;
     unit: string;
     unitCost: number;
+    stock: number;
+    minStock: number;
   }) => {
     setOrderItems((prev) => {
       if (prev.find((i) => i.id === p.id)) return prev;
-      return [...prev, { ...p, orderedQty: 1, receivedQty: 0 }];
+      return [
+        ...prev,
+        {
+          id: p.id,
+          name: p.name,
+          unit: p.unit,
+          unitCost: p.unitCost,
+          orderedQty: 1,
+          receivedQty: 0,
+        },
+      ];
     });
   };
 
@@ -255,6 +367,15 @@ export default function PurchaseOrderPage() {
       ),
     [history, searchHistory],
   );
+
+  // Stock bar color helper
+  const getStockBarColor = (stock: number, minStock: number) => {
+    if (stock === 0) return "#e53935";
+    const ratio = stock / minStock;
+    if (ratio < 0.3) return "#e53935";
+    if (ratio < 0.7) return "#ff9800";
+    return "#2e7d32";
+  };
 
   return (
     <div style={{ padding: "28px" }}>
@@ -375,44 +496,70 @@ export default function PurchaseOrderPage() {
                       overflow: "hidden",
                     }}
                   >
-                    {suppliers.map((s) => (
-                      <div
-                        key={s.id}
-                        onClick={() => {
-                          setSelectedSupplier(s);
-                          setShowSupplierDrop(false);
-                          setOrderItems([]);
-                        }}
-                        style={{
-                          padding: "14px 18px",
-                          cursor: "pointer",
-                          borderBottom: "0.5px solid #f5f5f5",
-                        }}
-                        onMouseEnter={(e) =>
-                          ((
-                            e.currentTarget as HTMLDivElement
-                          ).style.background = "#f0faf2")
-                        }
-                        onMouseLeave={(e) =>
-                          ((
-                            e.currentTarget as HTMLDivElement
-                          ).style.background = "#fff")
-                        }
-                      >
-                        <p
-                          style={{
-                            fontSize: "14px",
-                            fontWeight: 600,
-                            color: "#1a1a1a",
+                    {suppliers.map((s) => {
+                      const lowCount = s.products.filter(
+                        (p) => p.stock < p.minStock,
+                      ).length;
+                      return (
+                        <div
+                          key={s.id}
+                          onClick={() => {
+                            setSelectedSupplier(s);
+                            setShowSupplierDrop(false);
+                            setOrderItems([]);
                           }}
+                          style={{
+                            padding: "14px 18px",
+                            cursor: "pointer",
+                            borderBottom: "0.5px solid #f5f5f5",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                          onMouseEnter={(e) =>
+                            ((
+                              e.currentTarget as HTMLDivElement
+                            ).style.background = "#f0faf2")
+                          }
+                          onMouseLeave={(e) =>
+                            ((
+                              e.currentTarget as HTMLDivElement
+                            ).style.background = "#fff")
+                          }
                         >
-                          {s.name}
-                        </p>
-                        <p style={{ fontSize: "12px", color: "#aaa" }}>
-                          📞 {s.contact} • 📍 {s.address}
-                        </p>
-                      </div>
-                    ))}
+                          <div>
+                            <p
+                              style={{
+                                fontSize: "14px",
+                                fontWeight: 600,
+                                color: "#1a1a1a",
+                              }}
+                            >
+                              {s.name}
+                            </p>
+                            <p style={{ fontSize: "12px", color: "#aaa" }}>
+                              📞 {s.contact} • 📍 {s.address}
+                            </p>
+                          </div>
+                          {lowCount > 0 && (
+                            <span
+                              style={{
+                                background: "#fff3e0",
+                                color: "#e65100",
+                                padding: "3px 10px",
+                                borderRadius: "20px",
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                flexShrink: 0,
+                                marginLeft: "10px",
+                              }}
+                            >
+                              ⚠️ {lowCount} low
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -448,6 +595,284 @@ export default function PurchaseOrderPage() {
               )}
             </div>
 
+            {/* ── LOW STOCK ALERT ── */}
+            {selectedSupplier && lowStockProducts.length > 0 && (
+              <div
+                style={{
+                  background: "#fff",
+                  borderRadius: "16px",
+                  border: "1.5px solid #ffcc80",
+                  padding: "20px 24px",
+                }}
+              >
+                {/* Header */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: "16px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "34px",
+                        height: "34px",
+                        borderRadius: "10px",
+                        background: "#fff3e0",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "16px",
+                      }}
+                    >
+                      ⚠️
+                    </div>
+                    <div>
+                      <p
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: 700,
+                          color: "#1a1a1a",
+                        }}
+                      >
+                        Low Stock Alert
+                      </p>
+                      <p style={{ fontSize: "12px", color: "#e65100" }}>
+                        {selectedSupplier.name} — {lowStockProducts.length} item
+                        {lowStockProducts.length > 1 ? "s" : ""} need restocking
+                      </p>
+                    </div>
+                  </div>
+                  {/* Summary badges */}
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    {outOfStockProducts.length > 0 && (
+                      <span
+                        style={{
+                          background: "#ffebee",
+                          color: "#c62828",
+                          padding: "4px 12px",
+                          borderRadius: "20px",
+                          fontSize: "12px",
+                          fontWeight: 700,
+                        }}
+                      >
+                        🔴 {outOfStockProducts.length} Out of Stock
+                      </span>
+                    )}
+                    {criticalProducts.length > 0 && (
+                      <span
+                        style={{
+                          background: "#fff3e0",
+                          color: "#e65100",
+                          padding: "4px 12px",
+                          borderRadius: "20px",
+                          fontSize: "12px",
+                          fontWeight: 700,
+                        }}
+                      >
+                        🟠 {criticalProducts.length} Low Stock
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Low stock items list */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                  }}
+                >
+                  {lowStockProducts.map((p) => {
+                    const inOrder = orderItems.find((i) => i.id === p.id);
+                    const stockPct = Math.min(
+                      100,
+                      Math.round((p.stock / p.minStock) * 100),
+                    );
+                    const barColor = getStockBarColor(p.stock, p.minStock);
+                    const isOut = p.stock === 0;
+                    return (
+                      <div
+                        key={p.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "14px",
+                          padding: "14px 16px",
+                          borderRadius: "12px",
+                          background: isOut ? "#fff8f8" : "#fffdf5",
+                          border: isOut
+                            ? "1px solid #ffcdd2"
+                            : "1px solid #ffe0b2",
+                        }}
+                      >
+                        {/* Status dot */}
+                        <div
+                          style={{
+                            width: "10px",
+                            height: "10px",
+                            borderRadius: "50%",
+                            background: barColor,
+                            flexShrink: 0,
+                          }}
+                        />
+
+                        {/* Product info + stock bar */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              marginBottom: "6px",
+                            }}
+                          >
+                            <p
+                              style={{
+                                fontSize: "13px",
+                                fontWeight: 600,
+                                color: "#1a1a1a",
+                              }}
+                            >
+                              {p.name}
+                            </p>
+                            <span
+                              style={{
+                                fontSize: "12px",
+                                fontWeight: 700,
+                                color: barColor,
+                              }}
+                            >
+                              {isOut
+                                ? "Out of Stock"
+                                : `${p.stock} / ${p.minStock} ${p.unit}s`}
+                            </span>
+                          </div>
+                          {/* Stock progress bar */}
+                          <div
+                            style={{
+                              height: "6px",
+                              borderRadius: "20px",
+                              background: "#f0f0f0",
+                              overflow: "hidden",
+                            }}
+                          >
+                            <div
+                              style={{
+                                height: "100%",
+                                width: `${stockPct}%`,
+                                borderRadius: "20px",
+                                background: barColor,
+                                transition: "width 0.3s ease",
+                              }}
+                            />
+                          </div>
+                          <p
+                            style={{
+                              fontSize: "11px",
+                              color: "#aaa",
+                              marginTop: "4px",
+                            }}
+                          >
+                            Min. required: {p.minStock} {p.unit}s • ₱
+                            {p.unitCost.toLocaleString()} per {p.unit}
+                          </p>
+                        </div>
+
+                        {/* Add to order button */}
+                        {inOrder ? (
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              fontWeight: 700,
+                              color: "#2e7d32",
+                              background: "#e8f5e9",
+                              padding: "5px 12px",
+                              borderRadius: "20px",
+                              flexShrink: 0,
+                            }}
+                          >
+                            ✓ Added
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => addProduct(p)}
+                            style={{
+                              padding: "7px 16px",
+                              borderRadius: "20px",
+                              border: "none",
+                              background: isOut ? "#e53935" : "#e65100",
+                              color: "#fff",
+                              fontSize: "12px",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              flexShrink: 0,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            + Add
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* No low stock message */}
+            {selectedSupplier && lowStockProducts.length === 0 && (
+              <div
+                style={{
+                  background: "#fff",
+                  borderRadius: "16px",
+                  border: "1.5px solid #a5d6a7",
+                  padding: "18px 24px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    width: "34px",
+                    height: "34px",
+                    borderRadius: "10px",
+                    background: "#e8f5e9",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "16px",
+                  }}
+                >
+                  ✅
+                </div>
+                <div>
+                  <p
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: 700,
+                      color: "#2e7d32",
+                    }}
+                  >
+                    All Stocks OK
+                  </p>
+                  <p style={{ fontSize: "12px", color: "#555" }}>
+                    All products from {selectedSupplier.name} are within stock
+                    levels.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Product List from Supplier */}
             {selectedSupplier && (
               <div
@@ -477,6 +902,7 @@ export default function PurchaseOrderPage() {
                 >
                   {selectedSupplier.products.map((p) => {
                     const inOrder = orderItems.find((i) => i.id === p.id);
+                    const isLowStock = p.stock < p.minStock;
                     return (
                       <div
                         key={p.id}
@@ -508,15 +934,39 @@ export default function PurchaseOrderPage() {
                           🥤
                         </div>
                         <div style={{ flex: 1 }}>
-                          <p
+                          <div
                             style={{
-                              fontSize: "13px",
-                              fontWeight: 600,
-                              color: "#1a1a1a",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              marginBottom: "2px",
                             }}
                           >
-                            {p.name}
-                          </p>
+                            <p
+                              style={{
+                                fontSize: "13px",
+                                fontWeight: 600,
+                                color: "#1a1a1a",
+                              }}
+                            >
+                              {p.name}
+                            </p>
+                            {isLowStock && (
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  fontWeight: 700,
+                                  padding: "2px 8px",
+                                  borderRadius: "20px",
+                                  background:
+                                    p.stock === 0 ? "#ffebee" : "#fff3e0",
+                                  color: p.stock === 0 ? "#c62828" : "#e65100",
+                                }}
+                              >
+                                {p.stock === 0 ? "Out" : "Low"}
+                              </span>
+                            )}
+                          </div>
                           <p style={{ fontSize: "12px", color: "#1a1a1a" }}>
                             {p.unit} • ₱{p.unitCost.toLocaleString()} per case
                           </p>
@@ -805,7 +1255,6 @@ export default function PurchaseOrderPage() {
       {/* ── RECEIVING ── */}
       {step === "receiving" && (
         <div>
-          {/* POs for Receiving */}
           {!receivingPO ? (
             <div
               style={{ display: "flex", flexDirection: "column", gap: "14px" }}
@@ -926,7 +1375,6 @@ export default function PurchaseOrderPage() {
               )}
             </div>
           ) : (
-            /* Receiving Form */
             <div
               style={{
                 display: "grid",
@@ -1137,7 +1585,6 @@ export default function PurchaseOrderPage() {
                 </div>
               </div>
 
-              {/* Receiving Summary */}
               <div
                 style={{
                   background: "#fff",
@@ -1293,7 +1740,6 @@ export default function PurchaseOrderPage() {
       {/* ── PO HISTORY ── */}
       {step === "history" && (
         <div>
-          {/* Search + Stats */}
           <div
             style={{
               display: "grid",
@@ -1353,7 +1799,6 @@ export default function PurchaseOrderPage() {
             ))}
           </div>
 
-          {/* Search */}
           <div
             style={{
               background: "#fff",
@@ -1399,14 +1844,12 @@ export default function PurchaseOrderPage() {
                 fontSize: "12px",
                 color: "#888",
                 fontWeight: 500,
-                flexWrap: "wrap",
               }}
             >
               {filteredHistory.length} purchase orders
             </span>
           </div>
 
-          {/* History Table */}
           <div
             style={{
               background: "#fff",
@@ -1577,6 +2020,7 @@ export default function PurchaseOrderPage() {
           </div>
         </div>
       )}
+
       {/* ── View Details Modal ── */}
       {viewPO && (
         <>
@@ -1604,7 +2048,6 @@ export default function PurchaseOrderPage() {
               overflowY: "auto",
             }}
           >
-            {/* Header */}
             <div
               style={{
                 background: "#1a3c2e",
@@ -1659,9 +2102,7 @@ export default function PurchaseOrderPage() {
                 </button>
               </div>
             </div>
-
             <div style={{ padding: "24px" }}>
-              {/* Info */}
               <div
                 style={{
                   background: "#f9f9f9",
@@ -1702,8 +2143,6 @@ export default function PurchaseOrderPage() {
                   </div>
                 ))}
               </div>
-
-              {/* Items Table */}
               <p
                 style={{
                   fontSize: "13px",
@@ -1723,7 +2162,11 @@ export default function PurchaseOrderPage() {
                 }}
               >
                 <table
-                  style={{ minWidth: "650px", borderCollapse: "collapse" }}
+                  style={{
+                    minWidth: "400px",
+                    borderCollapse: "collapse",
+                    width: "100%",
+                  }}
                 >
                   <thead>
                     <tr style={{ background: "#1a3c2e" }}>
@@ -1855,8 +2298,6 @@ export default function PurchaseOrderPage() {
                   </tbody>
                 </table>
               </div>
-
-              {/* Total */}
               <div
                 style={{
                   background: "#f0faf2",
