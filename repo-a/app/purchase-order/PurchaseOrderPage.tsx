@@ -4,36 +4,39 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 
-// ─── UNIFIED UNIT SYSTEM (same as product page) ────────────────────────────
-type StockUnit = "cs" | "btl" | "pk" | "pcs" | "box";
+// ─── CASE UNIT SYSTEM ────────────────────────────────────────────────────────
+type CaseUnit = "case_24" | "case_12" | "case_6" | "btl" | "pcs";
 
-const STOCK_UNITS: { value: StockUnit; label: string; abbr: string }[] = [
-  { value: "cs",  label: "Cases",   abbr: "cs"  },
-  { value: "btl", label: "Bottles", abbr: "btl" },
-  { value: "pk",  label: "Packs",   abbr: "pk"  },
-  { value: "pcs", label: "Pieces",  abbr: "pcs" },
-  { value: "box", label: "Boxes",   abbr: "box" },
+const CASE_UNITS: { value: CaseUnit; label: string; abbr: string; bottlesPerCase: number | null; detail: string }[] = [
+  { value: "case_24", label: "Case (24 pcs)", abbr: "case/24", bottlesPerCase: 24, detail: "1 case = 24 bottles" },
+  { value: "case_12", label: "Case (12 pcs)", abbr: "case/12", bottlesPerCase: 12, detail: "1 case = 12 bottles" },
+  { value: "case_6",  label: "Case (6 pcs)",  abbr: "case/6",  bottlesPerCase: 6,  detail: "1 case = 6 bottles"  },
+  { value: "btl",     label: "Bottles",        abbr: "btl",     bottlesPerCase: null, detail: "Individual bottle" },
+  { value: "pcs",     label: "Pieces",         abbr: "pcs",     bottlesPerCase: null, detail: "Single piece"      },
 ];
 
-const getUnitAbbr  = (u?: string) => STOCK_UNITS.find((x) => x.value === u)?.abbr  ?? "cs";
-const getUnitLabel = (u?: string) => STOCK_UNITS.find((x) => x.value === u)?.label ?? "Cases";
+const getUnit     = (u?: string) => CASE_UNITS.find((x) => x.value === u) ?? CASE_UNITS[0];
+const getUnitAbbr = (u?: string) => getUnit(u).abbr;
 
-// Compact inline unit selector for line item rows (mobile-friendly)
-function InlineUnitSelect({ value, onChange }: { value: string; onChange: (v: StockUnit) => void }) {
+function getCaseBreakdown(qty: number, unit?: string): string | null {
+  const u = getUnit(unit);
+  if (!u.bottlesPerCase) return null;
+  return `${qty} × ${u.bottlesPerCase} = ${qty * u.bottlesPerCase} btl`;
+}
+
+// Compact select for line item rows
+function InlineCaseSelect({ value, onChange }: { value: string; onChange: (v: CaseUnit) => void }) {
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value as StockUnit)}
-      className="w-full border border-gray-200 rounded-lg px-1.5 py-1.5 text-xs outline-none focus:border-indigo-400 text-gray-900 bg-white"
-    >
-      {STOCK_UNITS.map((u) => (
+    <select value={value} onChange={(e) => onChange(e.target.value as CaseUnit)}
+      className="w-full border border-gray-200 rounded-lg px-1.5 py-1.5 text-xs outline-none focus:border-indigo-400 text-gray-900 bg-white">
+      {CASE_UNITS.map((u) => (
         <option key={u.value} value={u.value}>{u.abbr} — {u.label}</option>
       ))}
     </select>
   );
 }
 
-// Unit pill badge
+// Unit pill with optional qty
 function UnitPill({ unit, qty }: { unit?: string; qty?: number }) {
   const abbr = getUnitAbbr(unit);
   return (
@@ -44,7 +47,7 @@ function UnitPill({ unit, qty }: { unit?: string; qty?: number }) {
   );
 }
 
-// ─── TYPES ─────────────────────────────────────────────────────────────────
+// ─── TYPES ───────────────────────────────────────────────────────────────────
 type DeliveryItem = {
   id: string; productId: string;
   orderedQty: number; receivedQty: number; returnedQty: number;
@@ -63,7 +66,7 @@ type Delivery = {
 type LineItem = {
   productId: string; productName: string;
   quantity: number | string; unitPrice: number | string;
-  unit: StockUnit;
+  unit: CaseUnit;
 };
 
 type DeliveryForm = { supplierId: string; deliveryDate: string; lineItems: LineItem[]; notes: string };
@@ -91,7 +94,7 @@ const navItems = [
 ];
 
 const ITEMS_PER_PAGE = 8;
-const emptyLineItem  = (): LineItem => ({ productId: "", productName: "", quantity: 1, unitPrice: 0, unit: "cs" });
+const emptyLineItem  = (): LineItem => ({ productId: "", productName: "", quantity: 1, unitPrice: 0, unit: "case_24" });
 const makeEmptyForm  = (): DeliveryForm => ({
   supplierId: "", deliveryDate: new Date().toISOString().split("T")[0],
   lineItems: [emptyLineItem()], notes: "",
@@ -118,7 +121,7 @@ export default function PurchaseOrderPage() {
   const [createSuccess, setCreateSuccess] = useState("");
   const [receiveError,  setReceiveError]  = useState("");
 
-  const showConfirm = (message: string, fn: () => void) => setConfirmModal({ show: true, message, onConfirm: fn });
+  const showConfirm = (msg: string, fn: () => void) => setConfirmModal({ show: true, message: msg, onConfirm: fn });
 
   const [historySearch,         setHistorySearch]         = useState("");
   const [historyStatus,         setHistoryStatus]         = useState("All");
@@ -163,7 +166,7 @@ export default function PurchaseOrderPage() {
   };
 
   const calculateTotal = (items: LineItem[]) =>
-    items.reduce((sum, i) => sum + Number(i.quantity) * Number(i.unitPrice), 0);
+    items.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0);
 
   const validLineItems = form.lineItems.filter((i) => i.productId);
 
@@ -178,7 +181,7 @@ export default function PurchaseOrderPage() {
         notes: form.notes || "",
         items: validLineItems.map((i) => ({
           productId: i.productId, quantity: Number(i.quantity) || 1,
-          costPrice: Number(i.unitPrice) || 0, unit: i.unit || "cs",
+          costPrice: Number(i.unitPrice) || 0, unit: i.unit || "case_24",
         })),
       });
       if (res?.error || res?.message?.toLowerCase().includes("error")) {
@@ -201,16 +204,16 @@ export default function PurchaseOrderPage() {
     const items = [...form.lineItems];
     if (field === "productId") {
       const p = supplierProducts.find((p) => p.id === value);
-      // ✅ auto-fill unit from product's stockUnit
-      items[idx] = { ...items[idx], productId: String(value), productName: p?.productName || "", unitPrice: p?.price || 0, unit: (p?.stockUnit as StockUnit) || "cs" };
+      // ✅ Auto-fill case unit from product's stockUnit
+      items[idx] = { ...items[idx], productId: String(value), productName: p?.productName || "", unitPrice: p?.price || 0, unit: (p?.stockUnit as CaseUnit) || "case_24" };
     } else {
       items[idx] = { ...items[idx], [field]: value };
     }
     setForm({ ...form, lineItems: items });
   };
 
-  const pendingDeliveries   = deliveries.filter((d) => d.status === "PENDING" || d.status === "PARTIALLY_RECEIVED");
-  const filteredReceiving   = pendingDeliveries.filter((d) =>
+  const pendingDeliveries  = deliveries.filter((d) => d.status === "PENDING" || d.status === "PARTIALLY_RECEIVED");
+  const filteredReceiving  = pendingDeliveries.filter((d) =>
     d.id.toLowerCase().includes(receivingSearch.toLowerCase()) ||
     (d.supplier?.supplierName || "").toLowerCase().includes(receivingSearch.toLowerCase())
   );
@@ -281,7 +284,6 @@ export default function PurchaseOrderPage() {
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
 
-      {/* Confirm Modal */}
       {confirmModal.show && (
         <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-[60] px-4">
           <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
@@ -383,7 +385,7 @@ export default function PurchaseOrderPage() {
 
         <div className="flex-1 p-3 md:p-5 bg-green-50">
 
-          {/* ══ TAB: CREATE ══ */}
+          {/* ══ CREATE ══ */}
           {activeTab === "create" && (
             <div className="flex flex-col lg:flex-row gap-4">
               <div className="flex-1 flex flex-col gap-4">
@@ -429,7 +431,7 @@ export default function PurchaseOrderPage() {
                   </div>
                 </div>
 
-                {/* Step 2 — Line items with unit */}
+                {/* Step 2 — Products with case unit */}
                 <div className={`bg-white rounded-2xl p-4 md:p-5 shadow-sm transition-opacity ${!form.supplierId ? "opacity-50 pointer-events-none" : ""}`}>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
@@ -451,7 +453,6 @@ export default function PurchaseOrderPage() {
                     <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-gray-200 rounded-xl">
                       <span className="text-3xl mb-2">🏢</span>
                       <p className="text-sm text-gray-400 font-medium">Select a supplier first</p>
-                      <p className="text-xs text-gray-300 mt-1">Products will appear based on the supplier you choose</p>
                     </div>
                   )}
 
@@ -464,65 +465,69 @@ export default function PurchaseOrderPage() {
 
                   {form.supplierId && supplierProducts.length > 0 && (
                     <div className="space-y-2">
-                      {/* ✅ Responsive column headers */}
+                      {/* Desktop headers */}
                       <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-medium text-gray-400 px-1">
                         <div className="col-span-4">Product</div>
                         <div className="col-span-2 text-center">Qty</div>
-                        <div className="col-span-2 text-center">Unit</div>
+                        <div className="col-span-3 text-center">Case Type</div>
                         <div className="col-span-2">Cost (₱)</div>
-                        <div className="col-span-2 text-right">Subtotal</div>
+                        <div className="col-span-1 text-right">Sub</div>
                       </div>
 
-                      {form.lineItems.map((item, idx) => (
-                        <div key={idx} className="bg-gray-50 rounded-xl p-2">
-                          {/* Mobile: stack vertically; desktop: grid */}
-                          <div className="grid grid-cols-2 md:grid-cols-12 gap-2 items-center">
-                            {/* Product — full width on mobile */}
-                            <div className="col-span-2 md:col-span-4">
-                              <label className="text-xs text-gray-400 md:hidden">Product</label>
-                              <select value={item.productId} onChange={(e) => updateLineItem(idx, "productId", e.target.value)}
-                                className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white">
-                                <option value="">— Select Product —</option>
-                                {supplierProducts.map((p) => (
-                                  <option key={p.id} value={p.id} disabled={form.lineItems.some((li, i) => i !== idx && li.productId === p.id)}>
-                                    {p.productName} {p.stockUnit ? `(${getUnitAbbr(p.stockUnit)})` : ""}
-                                  </option>
-                                ))}
-                              </select>
+                      {form.lineItems.map((item, idx) => {
+                        const breakdown = getCaseBreakdown(Number(item.quantity), item.unit);
+                        return (
+                          <div key={idx} className="bg-gray-50 rounded-xl p-2.5">
+                            <div className="grid grid-cols-2 md:grid-cols-12 gap-2 items-center">
+                              {/* Product */}
+                              <div className="col-span-2 md:col-span-4">
+                                <label className="text-xs text-gray-400 md:hidden">Product</label>
+                                <select value={item.productId} onChange={(e) => updateLineItem(idx, "productId", e.target.value)}
+                                  className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white">
+                                  <option value="">— Select Product —</option>
+                                  {supplierProducts.map((p) => (
+                                    <option key={p.id} value={p.id} disabled={form.lineItems.some((li, i) => i !== idx && li.productId === p.id)}>
+                                      {p.productName}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              {/* Qty */}
+                              <div className="col-span-1 md:col-span-2">
+                                <label className="text-xs text-gray-400 md:hidden">Qty</label>
+                                <input type="number" min="1" value={item.quantity}
+                                  onChange={(e) => updateLineItem(idx, "quantity", e.target.value)}
+                                  className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-center text-gray-900 bg-white" />
+                              </div>
+                              {/* ✅ Case type dropdown */}
+                              <div className="col-span-1 md:col-span-3">
+                                <label className="text-xs text-gray-400 md:hidden">Case Type</label>
+                                <InlineCaseSelect value={item.unit} onChange={(v) => updateLineItem(idx, "unit", v)} />
+                              </div>
+                              {/* Cost */}
+                              <div className="col-span-1 md:col-span-2">
+                                <label className="text-xs text-gray-400 md:hidden">Cost (₱)</label>
+                                <input type="number" min="0" step="0.01" value={item.unitPrice}
+                                  onChange={(e) => updateLineItem(idx, "unitPrice", e.target.value)}
+                                  className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white" placeholder="₱0" />
+                              </div>
+                              {/* Subtotal + remove */}
+                              <div className="col-span-1 md:col-span-1 flex items-center justify-end gap-1">
+                                <span className="text-xs font-medium text-gray-700 whitespace-nowrap">₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}</span>
+                                {form.lineItems.length > 1 && (
+                                  <button onClick={() => removeLineItem(idx)} className="text-red-400 hover:text-red-600 ml-1 text-sm shrink-0">✕</button>
+                                )}
+                              </div>
                             </div>
-
-                            {/* Qty */}
-                            <div className="col-span-1 md:col-span-2">
-                              <label className="text-xs text-gray-400 md:hidden">Qty</label>
-                              <input type="number" min="1" value={item.quantity}
-                                onChange={(e) => updateLineItem(idx, "quantity", e.target.value)}
-                                className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-center text-gray-900 bg-white" />
-                            </div>
-
-                            {/* ✅ Unit — auto-filled from product, editable */}
-                            <div className="col-span-1 md:col-span-2">
-                              <label className="text-xs text-gray-400 md:hidden">Unit</label>
-                              <InlineUnitSelect value={item.unit} onChange={(v) => updateLineItem(idx, "unit", v)} />
-                            </div>
-
-                            {/* Cost price */}
-                            <div className="col-span-1 md:col-span-2">
-                              <label className="text-xs text-gray-400 md:hidden">Cost (₱)</label>
-                              <input type="number" min="0" step="0.01" value={item.unitPrice}
-                                onChange={(e) => updateLineItem(idx, "unitPrice", e.target.value)}
-                                className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white" placeholder="₱0" />
-                            </div>
-
-                            {/* Subtotal + remove */}
-                            <div className="col-span-1 md:col-span-2 flex items-center justify-end gap-1">
-                              <span className="text-xs font-medium text-gray-700">₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}</span>
-                              {form.lineItems.length > 1 && (
-                                <button onClick={() => removeLineItem(idx)} className="text-red-400 hover:text-red-600 ml-1 text-sm">✕</button>
-                              )}
-                            </div>
+                            {/* ✅ Case breakdown shown below each row */}
+                            {breakdown && item.productId && (
+                              <p className="text-xs text-indigo-500 font-medium mt-1.5 pl-1">
+                                📦 {item.quantity} {getUnitAbbr(item.unit)} = {breakdown.split("= ")[1]}
+                              </p>
+                            )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -539,7 +544,7 @@ export default function PurchaseOrderPage() {
                 </div>
               </div>
 
-              {/* ✅ Order Summary — with unit displayed */}
+              {/* ✅ Order Summary with case breakdown */}
               <div className="w-full lg:w-72 shrink-0">
                 <div className="bg-white rounded-2xl p-5 shadow-sm sticky top-4">
                   <h2 className="text-sm font-bold text-gray-700 mb-4">📋 Order Summary</h2>
@@ -556,23 +561,31 @@ export default function PurchaseOrderPage() {
                   {validLineItems.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-8 text-center">
                       <span className="text-4xl mb-3">📋</span>
-                      <p className="text-xs text-gray-400">No items yet. Select a supplier and add products.</p>
+                      <p className="text-xs text-gray-400">No items yet.</p>
                     </div>
                   ) : (
                     <div className="space-y-2 mb-4">
-                      {validLineItems.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-start py-2 border-b border-gray-50">
-                          <div>
-                            <p className="font-medium text-gray-800 text-xs">{item.productName}</p>
-                            {/* ✅ Shows qty + unit pill in summary */}
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <UnitPill unit={item.unit} qty={Number(item.quantity)} />
-                              <span className="text-xs text-gray-400">× ₱{Number(item.unitPrice).toLocaleString()}</span>
+                      {validLineItems.map((item, idx) => {
+                        const breakdown = getCaseBreakdown(Number(item.quantity), item.unit);
+                        return (
+                          <div key={idx} className="py-2 border-b border-gray-50">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className="font-medium text-gray-800 text-xs">{item.productName}</p>
+                                {/* ✅ Case pill + breakdown in summary */}
+                                <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                                  <UnitPill unit={item.unit} qty={Number(item.quantity)} />
+                                  <span className="text-xs text-gray-400">× ₱{Number(item.unitPrice).toLocaleString()}</span>
+                                </div>
+                                {breakdown && (
+                                  <p className="text-xs text-indigo-500 font-medium mt-0.5">{breakdown}</p>
+                                )}
+                              </div>
+                              <span className="text-xs font-semibold text-indigo-700 ml-2 shrink-0">₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}</span>
                             </div>
                           </div>
-                          <span className="text-xs font-semibold text-indigo-700">₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}</span>
-                        </div>
-                      ))}
+                        );
+                      })}
                       <div className="pt-2 flex justify-between items-center">
                         <span className="text-sm font-semibold text-gray-600">Total</span>
                         <span className="text-base font-bold text-indigo-900">₱{calculateTotal(validLineItems).toLocaleString()}</span>
@@ -588,7 +601,7 @@ export default function PurchaseOrderPage() {
             </div>
           )}
 
-          {/* ══ TAB: RECEIVING ══ */}
+          {/* ══ RECEIVING ══ */}
           {activeTab === "receiving" && (
             <div className="flex flex-col lg:flex-row gap-4">
               <div className="flex-1">
@@ -663,29 +676,33 @@ export default function PurchaseOrderPage() {
                       </div>
                       <div className="bg-gray-50 rounded-xl p-3">
                         <p className="text-xs text-gray-400 mb-2">Items — enter received quantities</p>
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           {receivingDelivery.items.map((item, i) => {
                             const rq        = receiveQtys.find((r) => r.deliveryItemId === item.id);
                             const remaining = item.orderedQty - item.receivedQty;
                             const unitAbbr  = getUnitAbbr(item.unit || item.product?.stockUnit);
+                            const unitInfo  = getUnit(item.unit || item.product?.stockUnit);
+                            const receivedBtl = rq?.receivedQty && unitInfo.bottlesPerCase
+                              ? rq.receivedQty * unitInfo.bottlesPerCase : null;
                             return (
-                              <div key={i} className="flex items-center gap-2 py-1.5 border-b border-gray-100 last:border-0">
-                                <div className="flex-1">
-                                  <p className="text-xs font-medium text-gray-700">{item.product?.productName || item.productId}</p>
-                                  {/* ✅ Unit shown next to quantities */}
-                                  <p className="text-xs text-gray-400">
-                                    Ordered: <span className="font-medium">{item.orderedQty} {unitAbbr}</span> ·
-                                    Received: <span className="font-medium">{item.receivedQty} {unitAbbr}</span> ·
-                                    Remaining: <span className="font-medium text-indigo-600">{remaining} {unitAbbr}</span>
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-1 shrink-0">
+                              <div key={i} className="py-1.5 border-b border-gray-100 last:border-0">
+                                <p className="text-xs font-medium text-gray-700 mb-1">{item.product?.productName || item.productId}</p>
+                                <p className="text-xs text-gray-400 mb-1.5">
+                                  Ordered: <span className="font-medium">{item.orderedQty} {unitAbbr}</span> ·
+                                  Received: <span className="font-medium">{item.receivedQty} {unitAbbr}</span> ·
+                                  Remaining: <span className="font-medium text-indigo-600">{remaining} {unitAbbr}</span>
+                                </p>
+                                <div className="flex items-center gap-2">
                                   <input type="number" min="0" max={remaining} value={rq?.receivedQty ?? 0}
                                     onChange={(e) => setReceiveQtys((prev) =>
                                       prev.map((r) => r.deliveryItemId === item.id ? { ...r, receivedQty: Math.min(Number(e.target.value), remaining) } : r)
                                     )}
-                                    className="w-14 border border-gray-200 rounded-lg px-1.5 py-1 text-sm text-center outline-none focus:border-indigo-400" />
-                                  <span className="text-xs text-gray-400">{unitAbbr}</span>
+                                    className="w-16 border border-gray-200 rounded-lg px-1.5 py-1 text-sm text-center outline-none focus:border-indigo-400" />
+                                  <span className="text-xs text-gray-500 font-medium">{unitAbbr}</span>
+                                  {/* ✅ Live bottle total as you type */}
+                                  {receivedBtl !== null && receivedBtl > 0 && (
+                                    <span className="text-xs text-indigo-500 font-medium">= {receivedBtl} btl</span>
+                                  )}
                                 </div>
                               </div>
                             );
@@ -704,7 +721,7 @@ export default function PurchaseOrderPage() {
             </div>
           )}
 
-          {/* ══ TAB: HISTORY ══ */}
+          {/* ══ HISTORY ══ */}
           {activeTab === "history" && (
             <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -792,7 +809,7 @@ export default function PurchaseOrderPage() {
         </div>
       </main>
 
-      {/* ✅ VIEW DELIVERY MODAL with unit display */}
+      {/* ✅ VIEW DELIVERY MODAL with full case breakdown */}
       {viewDelivery && (
         <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
@@ -826,23 +843,37 @@ export default function PurchaseOrderPage() {
               )}
               <div className="bg-gray-50 rounded-xl p-3">
                 <p className="text-xs text-gray-400 mb-2">Items</p>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {viewDelivery.items?.map((item, idx) => {
-                    const unitAbbr = getUnitAbbr(item.unit || item.product?.stockUnit);
+                    const unitInfo    = getUnit(item.unit || item.product?.stockUnit);
+                    const unitAbbr    = unitInfo.abbr;
+                    const orderedBtl  = unitInfo.bottlesPerCase ? item.orderedQty  * unitInfo.bottlesPerCase : null;
+                    const receivedBtl = unitInfo.bottlesPerCase ? item.receivedQty * unitInfo.bottlesPerCase : null;
                     return (
-                      <div key={idx} className="flex justify-between text-sm text-gray-700 py-1.5 border-b border-gray-100 last:border-0">
-                        <div>
-                          <p className="font-medium">{item.product?.productName || item.productId}</p>
-                          {/* ✅ All quantities show with unit */}
-                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                            <span className="text-xs text-gray-400">Ordered: <span className="font-medium text-gray-600">{item.orderedQty} {unitAbbr}</span></span>
-                            <span className="text-xs text-gray-400">Received: <span className="font-medium text-green-600">{item.receivedQty} {unitAbbr}</span></span>
-                            <span className="text-xs text-gray-400">Returned: <span className="font-medium text-red-500">{item.returnedQty} {unitAbbr}</span></span>
+                      <div key={idx} className="py-2 border-b border-gray-100 last:border-0">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <p className="font-medium text-sm text-gray-800">{item.product?.productName || item.productId}</p>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <UnitPill unit={item.unit || item.product?.stockUnit} />
+                              <span className="text-xs text-gray-400">{unitInfo.label}</span>
+                            </div>
+                            {/* ✅ Per-item case breakdown */}
+                            <div className="mt-1.5 space-y-0.5">
+                              <p className="text-xs text-gray-500">
+                                Ordered: <span className="font-medium text-gray-700">{item.orderedQty} {unitAbbr}</span>
+                                {orderedBtl !== null && <span className="text-indigo-500 ml-1">= {orderedBtl} btl</span>}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                Received: <span className="font-medium text-green-600">{item.receivedQty} {unitAbbr}</span>
+                                {receivedBtl !== null && <span className="text-green-500 ml-1">= {receivedBtl} btl</span>}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                Returned: <span className="font-medium text-red-500">{item.returnedQty} {unitAbbr}</span>
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex flex-col items-end gap-1">
-                          <UnitPill unit={item.unit || item.product?.stockUnit} />
-                          <span className="text-gray-500 text-xs">₱{item.costPrice}</span>
+                          <span className="text-gray-500 text-xs ml-3 shrink-0">₱{item.costPrice}</span>
                         </div>
                       </div>
                     );

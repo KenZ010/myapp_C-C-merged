@@ -4,44 +4,55 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 
-// ─── UNIFIED UNIT SYSTEM (same as product page) ────────────────────────────
-type StockUnit = "cs" | "btl" | "pk" | "pcs" | "box";
+// ─── CASE UNIT SYSTEM ────────────────────────────────────────────────────────
+type CaseUnit = "case_24" | "case_12" | "case_6" | "btl" | "pcs";
 
-const STOCK_UNITS = [
-  { value: "cs",  label: "Cases",   abbr: "cs"  },
-  { value: "btl", label: "Bottles", abbr: "btl" },
-  { value: "pk",  label: "Packs",   abbr: "pk"  },
-  { value: "pcs", label: "Pieces",  abbr: "pcs" },
-  { value: "box", label: "Boxes",   abbr: "box" },
+const CASE_UNITS: { value: CaseUnit; label: string; abbr: string; bottlesPerCase: number | null }[] = [
+  { value: "case_24", label: "Case (24 pcs)", abbr: "case/24", bottlesPerCase: 24 },
+  { value: "case_12", label: "Case (12 pcs)", abbr: "case/12", bottlesPerCase: 12 },
+  { value: "case_6",  label: "Case (6 pcs)",  abbr: "case/6",  bottlesPerCase: 6  },
+  { value: "btl",     label: "Bottles",        abbr: "btl",     bottlesPerCase: null },
+  { value: "pcs",     label: "Pieces",         abbr: "pcs",     bottlesPerCase: null },
 ];
 
-const getUnitAbbr = (u?: string) => STOCK_UNITS.find((x) => x.value === u)?.abbr ?? "cs";
+const getUnit     = (u?: string) => CASE_UNITS.find((x) => x.value === u) ?? CASE_UNITS[0];
+const getUnitAbbr = (u?: string) => getUnit(u).abbr;
 
-// Stock badge identical to product page
-function UnitBadge({ quantity, unit }: { quantity: number; unit?: string }) {
-  const abbr  = getUnitAbbr(unit);
-  const color = quantity === 0
+function getCaseBreakdown(qty: number, unit?: string): string | null {
+  const u = getUnit(unit);
+  if (!u.bottlesPerCase) return null;
+  return `${qty} × ${u.bottlesPerCase} = ${qty * u.bottlesPerCase} btl`;
+}
+
+// Stock badge with case + bottle breakdown
+function CaseBadge({ quantity, unit }: { quantity: number; unit?: string }) {
+  const u         = getUnit(unit);
+  const breakdown = getCaseBreakdown(quantity, unit);
+  const color     = quantity === 0
     ? "bg-red-100 text-red-700 border-red-200"
     : quantity <= 10
     ? "bg-yellow-100 text-yellow-700 border-yellow-200"
     : "bg-green-100 text-green-700 border-green-200";
   return (
-    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border ${color}`}>
-      {quantity}<span className="font-normal opacity-80">{abbr}</span>
-    </span>
+    <div className="flex flex-col gap-0.5">
+      <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border w-fit ${color}`}>
+        {quantity} <span className="font-normal opacity-80">{u.abbr}</span>
+      </span>
+      {breakdown && <span className="text-xs text-indigo-500 font-medium">{breakdown}</span>}
+    </div>
   );
 }
 
-// Small unit pill for table cells
+// Small unit pill for log table
 function UnitPill({ unit }: { unit?: string }) {
   return (
-    <span className="inline-flex items-center text-xs text-indigo-600 font-medium bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">
+    <span className="inline-flex items-center text-xs text-indigo-600 font-medium bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full whitespace-nowrap">
       {getUnitAbbr(unit)}
     </span>
   );
 }
 
-// ─── TYPES ─────────────────────────────────────────────────────────────────
+// ─── TYPES ───────────────────────────────────────────────────────────────────
 type InventoryItem = {
   id: string; barcode: string; productName: string; category: string;
   expiryDate: string; stock: number; stockUnit?: string; status: string;
@@ -73,8 +84,8 @@ const EMOJI_MAP: Record<string, string> = {
   SOFTDRINKS: "🥤", ENERGY_DRINK: "⚡", BEER: "🍺",
   JUICE: "🍹", WATER: "💧", OTHER: "🛒",
 };
-const getEmoji     = (cat?: string) => EMOJI_MAP[cat?.toUpperCase() || ""] || "🥤";
-const rankColors   = ["#e53935","#fb8c00","#f9a825","#aaa","#aaa","#aaa","#aaa","#aaa"];
+const getEmoji   = (cat?: string) => EMOJI_MAP[cat?.toUpperCase() || ""] || "🥤";
+const rankColors = ["#e53935","#fb8c00","#f9a825","#aaa","#aaa","#aaa","#aaa","#aaa"];
 
 function normalizeTransaction(o: Record<string, unknown>): Transaction {
   const customer = o.customer as Record<string, unknown> | null;
@@ -142,14 +153,12 @@ export default function InventoryMaintenancePage() {
 
   const [items,        setItems]        = useState<InventoryItem[]>([]);
   const [itemsLoading, setItemsLoading] = useState(true);
-
   const [logs,           setLogs]           = useState<InventoryLog[]>([]);
   const [logsTotal,      setLogsTotal]      = useState(0);
   const [logsPage,       setLogsPage]       = useState(1);
   const [logsTotalPages, setLogsTotalPages] = useState(1);
   const [logsLoading,    setLogsLoading]    = useState(true);
   const [logTypeFilter,  setLogTypeFilter]  = useState<string>("ALL");
-
   const [showUserMenu,   setShowUserMenu]   = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
@@ -165,7 +174,7 @@ export default function InventoryMaintenancePage() {
           category: p.category,
           expiryDate: p.expiryDate ? new Date(p.expiryDate).toISOString().split("T")[0] : "—",
           stock: Number(p.stockQuantity ?? p.stock ?? 0),
-          stockUnit: p.stockUnit || "cs",
+          stockUnit: p.stockUnit || "case_24",
           status: p.status,
         })));
       } catch (err) { console.error("Failed to fetch products", err); }
@@ -312,30 +321,37 @@ export default function InventoryMaintenancePage() {
                 <table className="w-full text-sm min-w-max">
                   <thead>
                     <tr className="bg-indigo-900 text-white text-xs">
-                      {["Date & Time","Product","Category","Type","Qty Change","Unit","Reason","Reference","Employee"].map((h) => (
+                      {["Date & Time","Product","Category","Type","Qty","Unit","Total Bottles","Reason","Reference","Employee"].map((h) => (
                         <th key={h} className="p-3 text-left whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {logs.map((log) => {
-                      const style = LOG_TYPE_STYLE[log.type];
-                      const isIn  = log.type === "STOCK_IN"  || log.type === "RETURN_IN";
-                      const isOut = log.type === "STOCK_OUT" || log.type === "RETURN_OUT";
-                      const sign  = isIn ? "+" : isOut ? "-" : "±";
+                      const style     = LOG_TYPE_STYLE[log.type];
+                      const isIn      = log.type === "STOCK_IN"  || log.type === "RETURN_IN";
+                      const isOut     = log.type === "STOCK_OUT" || log.type === "RETURN_OUT";
+                      const sign      = isIn ? "+" : isOut ? "-" : "±";
+                      const qty       = Math.abs(log.quantity);
+                      const unitInfo  = getUnit(log.product.stockUnit);
+                      const totalBtl  = unitInfo.bottlesPerCase ? qty * unitInfo.bottlesPerCase : null;
                       return (
                         <tr key={log.id} className="border-b border-gray-100 hover:bg-gray-50">
                           <td className="p-3 text-gray-500 whitespace-nowrap text-xs">{fmtDate(log.createdAt)}</td>
                           <td className="p-3 font-medium text-gray-800">{log.product.productName}</td>
                           <td className="p-3"><span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs">{log.product.category}</span></td>
                           <td className="p-3"><span className="px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: style.bg, color: style.color }}>{style.label}</span></td>
-                          {/* ✅ Qty change with color */}
-                          <td className="p-3 font-bold" style={{ color: isIn ? "#2e7d32" : isOut ? "#c62828" : "#1565c0" }}>
-                            {sign}{Math.abs(log.quantity)}
+                          {/* ✅ Qty with sign */}
+                          <td className="p-3 font-bold text-sm" style={{ color: isIn ? "#2e7d32" : isOut ? "#c62828" : "#1565c0" }}>
+                            {sign}{qty}
                           </td>
-                          {/* ✅ Unit column */}
+                          {/* ✅ Unit pill */}
                           <td className="p-3"><UnitPill unit={log.product.stockUnit} /></td>
-                          <td className="p-3 text-gray-500 text-xs max-w-[140px] truncate">{log.reason ?? "—"}</td>
+                          {/* ✅ Total bottles breakdown */}
+                          <td className="p-3 text-xs text-indigo-500 font-medium whitespace-nowrap">
+                            {totalBtl !== null ? `${qty} × ${unitInfo.bottlesPerCase} = ${totalBtl} btl` : "—"}
+                          </td>
+                          <td className="p-3 text-gray-500 text-xs max-w-[120px] truncate">{log.reason ?? "—"}</td>
                           <td className="p-3 text-xs text-gray-400">
                             {log.referenceId ? <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-600">{log.referenceType}: {log.referenceId}</span> : "—"}
                           </td>
@@ -372,10 +388,10 @@ export default function InventoryMaintenancePage() {
           {/* ── Charts ── */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-            {/* ✅ Product Stock table with UnitBadge */}
+            {/* ✅ Product Stock with CaseBadge */}
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <h2 className="font-bold text-gray-800 mb-1">Product Stock</h2>
-              <p className="text-xs text-gray-400 mb-3">Current stock levels from inventory</p>
+              <p className="text-xs text-gray-400 mb-3">Current stock levels — cases & total bottles</p>
               {itemsLoading ? (
                 <div className="flex items-center justify-center h-[260px] text-gray-400 text-sm">Loading...</div>
               ) : productStockData.length === 0 ? (
@@ -386,8 +402,7 @@ export default function InventoryMaintenancePage() {
                     <thead>
                       <tr className="border-b border-gray-100">
                         <th className="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">Product</th>
-                        {/* ✅ Stock + Unit combined */}
-                        <th className="pb-2 text-right text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">Stock</th>
+                        <th className="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">Stock</th>
                         <th className="pb-2 text-right text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">Status</th>
                       </tr>
                     </thead>
@@ -401,9 +416,9 @@ export default function InventoryMaintenancePage() {
                         return (
                           <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
                             <td className="py-2 px-2 font-medium text-gray-800">{item.name}</td>
-                            {/* ✅ UnitBadge shows qty + unit abbreviation */}
-                            <td className="py-2 px-2 text-right">
-                              <UnitBadge quantity={item.stock} unit={item.stockUnit} />
+                            {/* ✅ Shows e.g. "5 case/24" + "5 × 24 = 120 btl" */}
+                            <td className="py-2 px-2">
+                              <CaseBadge quantity={item.stock} unit={item.stockUnit} />
                             </td>
                             <td className="py-2 px-2 text-right">
                               <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${status.cls}`}>{status.label}</span>
@@ -438,7 +453,7 @@ export default function InventoryMaintenancePage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100">
-                        {["Rank", "Product", "Qty Sold", "Revenue"].map((h) => (
+                        {["Rank","Product","Qty Sold","Revenue"].map((h) => (
                           <th key={h} className="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">{h}</th>
                         ))}
                       </tr>

@@ -4,110 +4,131 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 
-// ─── UNIFIED UNIT SYSTEM ───────────────────────────────────────────────────
-export type StockUnit = "cs" | "btl" | "pk" | "pcs" | "box";
+// ─── CASE UNIT SYSTEM ────────────────────────────────────────────────────────
+export type CaseUnit = "case_24" | "case_12" | "case_6" | "btl" | "pcs";
 
-export const STOCK_UNITS: { value: StockUnit; label: string; abbr: string; detail: string }[] = [
-  { value: "cs",  label: "Cases",   abbr: "cs",  detail: "Case of bottles" },
-  { value: "btl", label: "Bottles", abbr: "btl", detail: "Individual bottle" },
-  { value: "pk",  label: "Packs",   abbr: "pk",  detail: "Bundled pack" },
-  { value: "pcs", label: "Pieces",  abbr: "pcs", detail: "Single piece" },
-  { value: "box", label: "Boxes",   abbr: "box", detail: "Box unit" },
+export const CASE_UNITS: {
+  value: CaseUnit; label: string; abbr: string;
+  bottlesPerCase: number | null; detail: string;
+}[] = [
+  { value: "case_24", label: "Case (24 pcs)", abbr: "case/24", bottlesPerCase: 24, detail: "1 case = 24 bottles" },
+  { value: "case_12", label: "Case (12 pcs)", abbr: "case/12", bottlesPerCase: 12, detail: "1 case = 12 bottles" },
+  { value: "case_6",  label: "Case (6 pcs)",  abbr: "case/6",  bottlesPerCase: 6,  detail: "1 case = 6 bottles"  },
+  { value: "btl",     label: "Bottles",        abbr: "btl",     bottlesPerCase: null, detail: "Individual bottle" },
+  { value: "pcs",     label: "Pieces",         abbr: "pcs",     bottlesPerCase: null, detail: "Single piece"      },
 ];
 
-export const getUnitAbbr  = (u?: string) => STOCK_UNITS.find((x) => x.value === u)?.abbr  ?? "cs";
-export const getUnitLabel = (u?: string) => STOCK_UNITS.find((x) => x.value === u)?.label ?? "Cases";
+const getUnit     = (u?: string) => CASE_UNITS.find((x) => x.value === u) ?? CASE_UNITS[0];
+const getUnitAbbr = (u?: string) => getUnit(u).abbr;
 
-// ── Fused number + unit dropdown (works on mobile) ─────────────────────────
-export function UnitQuantityInput({
-  quantity, unit, onQuantityChange, onUnitChange, size = "md",
+/** e.g. qty=3, unit=case_24 → "3 × 24 = 72 btl" */
+function getCaseBreakdown(qty: number, unit?: string): string | null {
+  const u = getUnit(unit);
+  if (!u.bottlesPerCase) return null;
+  return `${qty} × ${u.bottlesPerCase} = ${qty * u.bottlesPerCase} btl`;
+}
+
+// ── Fused qty + case-unit dropdown (mobile-friendly) ─────────────────────────
+function CaseUnitInput({
+  quantity, unit, onQuantityChange, onUnitChange,
 }: {
-  quantity: number | string; unit: StockUnit;
-  onQuantityChange: (v: number) => void; onUnitChange: (u: StockUnit) => void;
-  size?: "sm" | "md";
+  quantity: number | string; unit: CaseUnit;
+  onQuantityChange: (v: number) => void; onUnitChange: (u: CaseUnit) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const sel = STOCK_UNITS.find((u) => u.value === unit) ?? STOCK_UNITS[0];
-  const py  = size === "sm" ? "py-1.5" : "py-2";
-  const px  = size === "sm" ? "px-2" : "px-3";
-  const ts  = size === "sm" ? "text-xs" : "text-sm";
+  const sel = getUnit(unit);
 
   useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  return (
-    <div className="flex mt-1" ref={ref}>
-      <input
-        type="number" min={0} value={quantity}
-        onChange={(e) => onQuantityChange(Math.max(0, Number(e.target.value)))}
-        className={`flex-1 border border-r-0 border-gray-200 rounded-l-lg ${px} ${py} ${ts} outline-none focus:border-indigo-400 text-gray-900 min-w-0`}
-      />
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className={`relative flex items-center gap-1 border border-gray-200 rounded-r-lg ${px} ${py} ${ts} font-medium transition-colors select-none whitespace-nowrap shrink-0
-          ${open ? "border-indigo-400 bg-indigo-50 text-indigo-700" : "bg-gray-50 text-gray-600 hover:bg-gray-100"}`}
-      >
-        <span>{sel.abbr}</span>
-        <svg className={`w-3 h-3 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
-          fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+  const breakdown = getCaseBreakdown(Number(quantity), unit);
 
-        {open && (
-          <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] w-44 overflow-hidden">
-            {STOCK_UNITS.map((u) => (
-              <button
-                key={u.value} type="button"
-                onClick={(e) => { e.stopPropagation(); onUnitChange(u.value); setOpen(false); }}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors
-                  ${unit === u.value ? "bg-indigo-50" : "hover:bg-gray-50"}`}
-              >
-                <div>
-                  <p className={`text-sm font-medium ${unit === u.value ? "text-indigo-700" : "text-gray-800"}`}>{u.label}</p>
-                  <p className="text-xs text-gray-400">{u.detail}</p>
-                </div>
-                <span className={`text-xs px-1.5 py-0.5 rounded font-mono ml-2 shrink-0
-                  ${unit === u.value ? "bg-indigo-100 text-indigo-600" : "bg-gray-100 text-gray-400"}`}>{u.abbr}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </button>
+  return (
+    <div ref={ref}>
+      <div className="flex mt-1">
+        <input type="number" min={0} value={quantity}
+          onChange={(e) => onQuantityChange(Math.max(0, Number(e.target.value)))}
+          className="flex-1 border border-r-0 border-gray-200 rounded-l-lg px-3 py-2 text-sm outline-none focus:border-indigo-400 text-gray-900 min-w-0" />
+        <button type="button" onClick={() => setOpen(!open)}
+          className={`relative flex items-center gap-1 border border-gray-200 rounded-r-lg px-3 py-2 text-sm font-medium transition-colors select-none whitespace-nowrap shrink-0
+            ${open ? "border-indigo-400 bg-indigo-50 text-indigo-700" : "bg-gray-50 text-gray-600 hover:bg-gray-100"}`}>
+          <span className="hidden sm:inline">{sel.abbr}</span>
+          <span className="sm:hidden text-xs">{sel.abbr}</span>
+          <svg className={`w-3 h-3 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+          {open && (
+            <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] w-52 overflow-hidden">
+              {CASE_UNITS.map((u) => (
+                <button key={u.value} type="button"
+                  onClick={(e) => { e.stopPropagation(); onUnitChange(u.value); setOpen(false); }}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors
+                    ${unit === u.value ? "bg-indigo-50" : "hover:bg-gray-50"}`}>
+                  <div>
+                    <p className={`text-sm font-medium ${unit === u.value ? "text-indigo-700" : "text-gray-800"}`}>{u.label}</p>
+                    <p className="text-xs text-gray-400">{u.detail}</p>
+                  </div>
+                  <span className={`text-xs px-1.5 py-0.5 rounded font-mono ml-2 shrink-0 ${unit === u.value ? "bg-indigo-100 text-indigo-600" : "bg-gray-100 text-gray-400"}`}>
+                    {u.abbr}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </button>
+      </div>
+      {/* ✅ Live case breakdown hint */}
+      {breakdown && (
+        <p className="text-xs text-indigo-500 mt-1 font-medium">= {breakdown.split("= ")[1]}</p>
+      )}
     </div>
   );
 }
 
-// ── Color-coded stock badge with qty + unit ────────────────────────────────
-export function UnitBadge({ quantity, unit, showLabel = false }: {
-  quantity: number; unit?: StockUnit | string; showLabel?: boolean;
+// ── Stock badge with qty + unit + optional bottle total ───────────────────────
+function CaseBadge({ quantity, unit, compact = false }: {
+  quantity: number; unit?: string; compact?: boolean;
 }) {
-  const u = STOCK_UNITS.find((x) => x.value === unit) ?? STOCK_UNITS[0];
-  const color = quantity === 0
+  const u         = getUnit(unit);
+  const breakdown = getCaseBreakdown(quantity, unit);
+  const color     = quantity === 0
     ? "bg-red-100 text-red-700 border-red-200"
     : quantity <= 10
     ? "bg-yellow-100 text-yellow-700 border-yellow-200"
     : "bg-green-100 text-green-700 border-green-200";
+
+  if (compact) {
+    return (
+      <div className="flex flex-col gap-0.5">
+        <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border w-fit ${color}`}>
+          {quantity} <span className="font-normal opacity-80">{u.abbr}</span>
+        </span>
+        {breakdown && <span className="text-xs text-gray-400">{breakdown}</span>}
+      </div>
+    );
+  }
+
   return (
-    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border ${color}`}>
-      {quantity}
-      <span className="font-normal opacity-80">{u.abbr}</span>
-      {showLabel && <span className="font-normal opacity-60 hidden sm:inline">({u.label})</span>}
-    </span>
+    <div className="flex flex-col gap-0.5">
+      <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border w-fit ${color}`}>
+        {quantity} <span className="font-normal opacity-80">{u.abbr}</span>
+      </span>
+      {breakdown && (
+        <span className="text-xs text-indigo-500 font-medium">{breakdown}</span>
+      )}
+    </div>
   );
 }
 
-// ─── PAGE SETUP ────────────────────────────────────────────────────────────
+// ─── Page setup ───────────────────────────────────────────────────────────────
 type Product = {
   id: string; productName: string; size: string | null;
   price: number; category: string; stockQuantity: number;
-  stockUnit: StockUnit; status: string; supplierId: string; image: string | null;
+  stockUnit: CaseUnit; status: string; supplierId: string; image: string | null;
 };
 
 const categories = ["All", "SOFTDRINKS", "ENERGY_DRINK", "BEER", "JUICE", "WATER", "OTHER"];
@@ -133,7 +154,7 @@ const navItems = [
 ];
 
 function AlertModal({ open, type = "alert", title, message, danger, onConfirm, onCancel }: {
-  open: boolean; type?: "alert"|"confirm"; title?: string; message: string;
+  open: boolean; type?: "alert" | "confirm"; title?: string; message: string;
   danger?: boolean; onConfirm: () => void; onCancel?: () => void;
 }) {
   if (!open) return null;
@@ -157,7 +178,7 @@ function AlertModal({ open, type = "alert", title, message, danger, onConfirm, o
 const defaultForm = () => ({
   productName: "", size: "500ml", price: 0,
   category: "SOFTDRINKS", stockQuantity: 0,
-  stockUnit: "cs" as StockUnit, supplierId: "", status: "ACTIVE",
+  stockUnit: "case_24" as CaseUnit, supplierId: "", status: "ACTIVE",
 });
 
 export default function ProductManagementPage() {
@@ -177,10 +198,10 @@ export default function ProductManagementPage() {
   const [success,  setSuccess]  = useState("");
   const [error,    setError]    = useState("");
 
-  const [showAddModal,      setShowAddModal]      = useState(false);
-  const [showProductModal,  setShowProductModal]  = useState(false);
-  const [selectedProduct,   setSelectedProduct]   = useState<Product | null>(null);
-  const [isEditing,         setIsEditing]         = useState(false);
+  const [showAddModal,     setShowAddModal]     = useState(false);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [selectedProduct,  setSelectedProduct]  = useState<Product | null>(null);
+  const [isEditing,        setIsEditing]        = useState(false);
   const [addForm,  setAddForm]  = useState(defaultForm());
   const [editForm, setEditForm] = useState(defaultForm());
 
@@ -190,7 +211,7 @@ export default function ProductManagementPage() {
   const sizeRef     = useRef<HTMLDivElement>(null);
 
   const [alertModal, setAlertModal] = useState<{
-    open: boolean; type?: "alert"|"confirm"; title?: string;
+    open: boolean; type?: "alert" | "confirm"; title?: string;
     message: string; danger?: boolean; onConfirm: () => void; onCancel?: () => void;
   }>({ open: false, message: "", onConfirm: () => {} });
 
@@ -221,7 +242,7 @@ export default function ProductManagementPage() {
     try {
       setLoading(true);
       const data = await api.getProducts();
-      setProducts(data.map((p: Product) => ({ ...p, stockUnit: p.stockUnit ?? "cs" })));
+      setProducts(data.map((p: Product) => ({ ...p, stockUnit: p.stockUnit ?? "case_24" })));
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -231,10 +252,10 @@ export default function ProductManagementPage() {
     api.getSuppliers().then(setSuppliers).catch(console.error);
   }, []);
 
-  const navigate    = (path: string) => { router.push(path); setShowMobileMenu(false); };
+  const navigate     = (path: string) => { router.push(path); setShowMobileMenu(false); };
   const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("employee"); router.push("/"); };
 
-  const filtered = products.filter((p) =>
+  const filtered   = products.filter((p) =>
     (p.productName ?? "").toLowerCase().includes(search.toLowerCase())
     && (selectedCategory === "All" || p.category === selectedCategory)
     && (selectedSize === "All" || p.size === selectedSize)
@@ -251,7 +272,7 @@ export default function ProductManagementPage() {
     setSelectedProduct(product);
     setEditForm({ productName: product.productName, size: product.size || "500ml",
       price: product.price, category: product.category, stockQuantity: product.stockQuantity,
-      stockUnit: product.stockUnit ?? "cs", supplierId: product.supplierId, status: product.status });
+      stockUnit: product.stockUnit ?? "case_24", supplierId: product.supplierId, status: product.status });
     setIsEditing(false); setShowProductModal(true);
   };
 
@@ -457,15 +478,13 @@ export default function ProductManagementPage() {
                         : <span className="text-3xl">🥤</span>}
                     </div>
                     <div className="p-2">
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${getCategoryColor(product.category)}`}>
-                        {product.category}
-                      </span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${getCategoryColor(product.category)}`}>{product.category}</span>
                       <p className="text-xs md:text-sm font-semibold text-gray-800 mt-1 truncate">{product.productName}</p>
                       <p className="text-xs text-gray-400 truncate">{product.size}</p>
                       <p className="text-xs text-gray-500 font-medium">₱{product.price}</p>
-                      {/* ✅ Unit badge — always visible, including on mobile */}
+                      {/* ✅ Case badge with bottle breakdown */}
                       <div className="mt-1.5">
-                        <UnitBadge quantity={product.stockQuantity} unit={product.stockUnit} />
+                        <CaseBadge quantity={product.stockQuantity} unit={product.stockUnit} compact />
                       </div>
                     </div>
                   </div>
@@ -503,7 +522,7 @@ export default function ProductManagementPage() {
                   ? <img src={selectedProduct.image} alt={selectedProduct.productName} className="w-full h-full object-cover rounded-xl" />
                   : "🥤"}
               </div>
-              <div className="flex-1 flex flex-col gap-2.5">
+              <div className="flex-1 flex flex-col gap-2.5 min-w-0">
                 {isEditing ? (
                   <>
                     <div><p className="text-xs text-gray-400">Product Name</p>
@@ -517,9 +536,9 @@ export default function ProductManagementPage() {
                       <input type="number" min="0" value={editForm.price}
                         onChange={(e) => setEditForm({ ...editForm, price: Math.max(0, Number(e.target.value)) })}
                         className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-                    {/* ✅ Stock + unit */}
-                    <div><p className="text-xs text-gray-400">Stock Quantity & Unit</p>
-                      <UnitQuantityInput quantity={editForm.stockQuantity} unit={editForm.stockUnit}
+                    {/* ✅ Cases input */}
+                    <div><p className="text-xs text-gray-400">Stock Quantity & Case Type</p>
+                      <CaseUnitInput quantity={editForm.stockQuantity} unit={editForm.stockUnit}
                         onQuantityChange={(v) => setEditForm({ ...editForm, stockQuantity: v })}
                         onUnitChange={(u) => setEditForm({ ...editForm, stockUnit: u })} /></div>
                     <div><p className="text-xs text-gray-400">Category</p>
@@ -539,11 +558,12 @@ export default function ProductManagementPage() {
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium mt-0.5 inline-block ${getCategoryColor(selectedProduct.category)}`}>{selectedProduct.category}</span></div>
                     <div><p className="text-xs text-gray-400">Size</p><p className="text-sm font-semibold text-gray-800 mt-0.5">{selectedProduct.size ?? "—"}</p></div>
                     <div><p className="text-xs text-gray-400">Price</p><p className="text-sm font-semibold text-gray-800 mt-0.5">₱{selectedProduct.price}</p></div>
-                    {/* ✅ Stock with full unit info */}
+                    {/* ✅ Full case breakdown in detail view */}
                     <div>
                       <p className="text-xs text-gray-400">Stock</p>
-                      <div className="mt-1 flex items-center gap-2 flex-wrap">
-                        <UnitBadge quantity={selectedProduct.stockQuantity} unit={selectedProduct.stockUnit} showLabel />
+                      <div className="mt-1">
+                        <CaseBadge quantity={selectedProduct.stockQuantity} unit={selectedProduct.stockUnit} />
+                        <p className="text-xs text-gray-400 mt-0.5">{getUnit(selectedProduct.stockUnit).label}</p>
                       </div>
                     </div>
                     <div><p className="text-xs text-gray-400">Status</p>
@@ -597,15 +617,13 @@ export default function ProductManagementPage() {
                 <input type="number" min="0" value={addForm.price}
                   onChange={(e) => setAddForm({ ...addForm, price: Math.max(0, Number(e.target.value)) })}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
-              {/* ✅ Stock + unit picker with hint */}
+              {/* ✅ Cases input with live breakdown */}
               <div>
-                <label className="text-xs font-medium text-gray-600">Stock Quantity & Unit</label>
-                <UnitQuantityInput quantity={addForm.stockQuantity} unit={addForm.stockUnit}
+                <label className="text-xs font-medium text-gray-600">Stock Quantity & Case Type</label>
+                <CaseUnitInput quantity={addForm.stockQuantity} unit={addForm.stockUnit}
                   onQuantityChange={(v) => setAddForm({ ...addForm, stockQuantity: v })}
                   onUnitChange={(u) => setAddForm({ ...addForm, stockUnit: u })} />
-                <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">
-                  e.g. <strong>24 cs</strong> = 24 cases · <strong>48 btl</strong> = 48 individual bottles
-                </p>
+                <p className="text-xs text-gray-400 mt-1">e.g. 3 case/24 = 72 individual bottles</p>
               </div>
               <div><label className="text-xs font-medium text-gray-600">Supplier</label>
                 <select value={addForm.supplierId} onChange={(e) => setAddForm({ ...addForm, supplierId: e.target.value })}
