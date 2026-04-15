@@ -292,31 +292,36 @@ export default function PromoManagementPage() {
   }, []);
 
   const fetchPromos = async () => {
-    try {
-      setLoading(true);
-      const data = await api.getPromos();
-      const normalize = (item: any): Promo => ({
-      id: String(item.id ?? item._id ?? ""),
+  try {
+    setLoading(true);
+    const data = await api.getPromos();
+    // Handle wrapped responses: { promos: [] } or { data: [] } or plain []
+    const raw = Array.isArray(data) ? data : (data?.promos ?? data?.data ?? []);
+    const normalize = (item: any): Promo => ({
+      id: String(item._id ?? item.id ?? ""),
       title: String(item.title ?? item.name ?? ""),
       description: String(item.description ?? ""),
-      type: (["Discount", "Buy 1 Get 1", "Bundle Deal"].includes(item.type) ? item.type : "Discount") as PromoType,
+      type: (["Discount", "Buy 1 Get 1", "Bundle Deal"].includes(item.type)
+        ? item.type
+        : "Discount") as PromoType,
       discount: item.discount != null ? Number(item.discount) : undefined,
       bundleQty: item.bundleQty != null ? Number(item.bundleQty) : undefined,
       product: String(item.product ?? item.productName ?? ""),
       image: String(item.image ?? ""),
-      status: (item.status === "Active" || item.status === "Inactive" ? item.status : "Inactive") as PromoStatus,
+      status: (item.status === "Active" || item.status === "Inactive"
+        ? item.status
+        : "Inactive") as PromoStatus,
       startDate: String(item.startDate ?? ""),
       endDate: String(item.endDate ?? ""),
     });
-
-    setPromos(Array.isArray(data) ? data.map(normalize) : []);
-    } catch (err) {
-      console.error("Failed to fetch promos:", err);
-      setError("Failed to load promos.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    setPromos(raw.map(normalize));
+  } catch (err) {
+    console.error("Failed to fetch promos:", err);
+    setError("Failed to load promos.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => { fetchPromos(); }, []);
 
@@ -384,14 +389,18 @@ export default function PromoManagementPage() {
   };
 
   const handleToggleStatus = async (promo: Promo) => {
-    try {
-      await api.togglePromo(promo.id);
-      await fetchPromos();
-      showToast(`Promo ${promo.status === "Active" ? "deactivated" : "activated"}!`);
-    } catch (err) {
-      showToast("Failed to toggle promo status.", true);
-    }
-  };
+  try {
+    await api.togglePromo(promo.id);
+    await fetchPromos();
+    // Update selectedPromo to reflect new status
+    setSelectedPromo((prev) =>
+      prev ? { ...prev, status: prev.status === "Active" ? "Inactive" : "Active" } : prev
+    );
+    showToast(`Promo ${promo.status === "Active" ? "deactivated" : "activated"}!`);
+  } catch (err) {
+    showToast("Failed to toggle promo status.", true);
+  }
+};
 
   const confirmDelete = async () => {
     try {
