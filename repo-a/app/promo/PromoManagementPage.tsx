@@ -295,7 +295,21 @@ export default function PromoManagementPage() {
     try {
       setLoading(true);
       const data = await api.getPromos();
-      setPromos(Array.isArray(data) ? data : []);
+      const normalize = (item: any): Promo => ({
+      id: String(item.id ?? item._id ?? ""),
+      title: String(item.title ?? item.name ?? ""),
+      description: String(item.description ?? ""),
+      type: (["Discount", "Buy 1 Get 1", "Bundle Deal"].includes(item.type) ? item.type : "Discount") as PromoType,
+      discount: item.discount != null ? Number(item.discount) : undefined,
+      bundleQty: item.bundleQty != null ? Number(item.bundleQty) : undefined,
+      product: String(item.product ?? item.productName ?? ""),
+      image: String(item.image ?? ""),
+      status: (item.status === "Active" || item.status === "Inactive" ? item.status : "Inactive") as PromoStatus,
+      startDate: String(item.startDate ?? ""),
+      endDate: String(item.endDate ?? ""),
+    });
+
+    setPromos(Array.isArray(data) ? data.map(normalize) : []);
     } catch (err) {
       console.error("Failed to fetch promos:", err);
       setError("Failed to load promos.");
