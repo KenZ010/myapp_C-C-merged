@@ -236,6 +236,37 @@ const initialHistory: PurchaseOrder[] = [
   },
 ];
 
+// ── Shared stock helpers ──────────────────────────────────────────────────────
+function getStockLevel(stock: number, minStock: number): "out" | "low" | "ok" {
+  if (stock === 0) return "out";
+  if (stock < minStock) return "low";
+  return "ok";
+}
+
+const stockTheme = {
+  out: {
+    dot: "#e53935",
+    bar: "#e53935",
+    badge: { bg: "#ffebee", color: "#c62828", label: "Out of Stock" },
+    row: { bg: "#fff8f8", border: "1px solid #ffcdd2" },
+    addBtn: { bg: "#e53935" },
+  },
+  low: {
+    dot: "#ff9800",
+    bar: "#ff9800",
+    badge: { bg: "#fff3e0", color: "#e65100", label: "Low Stock" },
+    row: { bg: "#fffdf5", border: "1px solid #ffe0b2" },
+    addBtn: { bg: "#ff9800" },
+  },
+  ok: {
+    dot: "#2e7d32",
+    bar: "#2e7d32",
+    badge: { bg: "#e8f5e9", color: "#2e7d32", label: "In Stock" },
+    row: { bg: "#f9f9f9", border: "1px solid #f0f0f0" },
+    addBtn: { bg: "#1a3c2e" },
+  },
+};
+
 export default function PurchaseOrderPage() {
   const [isNarrow, setIsNarrow] = useState(false);
   const [step, setStep] = useState<POStep>("create");
@@ -260,7 +291,6 @@ export default function PurchaseOrderPage() {
 
   const total = orderItems.reduce((s, i) => s + i.unitCost * i.orderedQty, 0);
 
-  // Low stock products from selected supplier
   const lowStockProducts = useMemo(() => {
     if (!selectedSupplier) return [];
     return selectedSupplier.products.filter((p) => p.stock < p.minStock);
@@ -332,9 +362,7 @@ export default function PurchaseOrderPage() {
 
   const openReceiving = (po: PurchaseOrder) => {
     setReceivingPO(po);
-    setReceivingItems(
-      po.items.map((i) => ({ ...i, receivedQty: i.receivedQty })),
-    );
+    setReceivingItems(po.items.map((i) => ({ ...i })));
     setStep("receiving");
   };
 
@@ -368,29 +396,18 @@ export default function PurchaseOrderPage() {
     [history, searchHistory],
   );
 
-  // Stock bar color helper
-  const getStockBarColor = (stock: number, minStock: number) => {
-    if (stock === 0) return "#e53935";
-    const ratio = stock / minStock;
-    if (ratio < 0.3) return "#e53935";
-    if (ratio < 0.7) return "#ff9800";
-    return "#2e7d32";
-  };
-
   return (
     <div style={{ padding: "28px" }}>
       {/* Step Tabs */}
       <div
         style={{
           display: "flex",
-          gap: "0",
           marginBottom: "24px",
           background: "#fff",
           borderRadius: "14px",
           border: "0.5px solid #e8e8e8",
           overflow: "hidden",
           flexWrap: "wrap",
-          width: "100%",
         }}
       >
         {(
@@ -431,7 +448,7 @@ export default function PurchaseOrderPage() {
             alignItems: "start",
           }}
         >
-          {/* Left */}
+          {/* Left column */}
           <div
             style={{ display: "flex", flexDirection: "column", gap: "16px" }}
           >
@@ -497,8 +514,11 @@ export default function PurchaseOrderPage() {
                     }}
                   >
                     {suppliers.map((s) => {
+                      const outCount = s.products.filter(
+                        (p) => p.stock === 0,
+                      ).length;
                       const lowCount = s.products.filter(
-                        (p) => p.stock < p.minStock,
+                        (p) => p.stock > 0 && p.stock < p.minStock,
                       ).length;
                       return (
                         <div
@@ -541,22 +561,43 @@ export default function PurchaseOrderPage() {
                               📞 {s.contact} • 📍 {s.address}
                             </p>
                           </div>
-                          {lowCount > 0 && (
-                            <span
-                              style={{
-                                background: "#fff3e0",
-                                color: "#e65100",
-                                padding: "3px 10px",
-                                borderRadius: "20px",
-                                fontSize: "11px",
-                                fontWeight: 700,
-                                flexShrink: 0,
-                                marginLeft: "10px",
-                              }}
-                            >
-                              ⚠️ {lowCount} low
-                            </span>
-                          )}
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "6px",
+                              flexShrink: 0,
+                              marginLeft: "10px",
+                            }}
+                          >
+                            {outCount > 0 && (
+                              <span
+                                style={{
+                                  background: "#ffebee",
+                                  color: "#c62828",
+                                  padding: "3px 10px",
+                                  borderRadius: "20px",
+                                  fontSize: "11px",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                🔴 {outCount} out
+                              </span>
+                            )}
+                            {lowCount > 0 && (
+                              <span
+                                style={{
+                                  background: "#fff3e0",
+                                  color: "#e65100",
+                                  padding: "3px 10px",
+                                  borderRadius: "20px",
+                                  fontSize: "11px",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                🟠 {lowCount} low
+                              </span>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -564,7 +605,6 @@ export default function PurchaseOrderPage() {
                 )}
               </div>
 
-              {/* Supplier Info */}
               {selectedSupplier && (
                 <div
                   style={{
@@ -612,6 +652,8 @@ export default function PurchaseOrderPage() {
                     alignItems: "center",
                     justifyContent: "space-between",
                     marginBottom: "16px",
+                    flexWrap: "wrap",
+                    gap: "10px",
                   }}
                 >
                   <div
@@ -651,8 +693,9 @@ export default function PurchaseOrderPage() {
                       </p>
                     </div>
                   </div>
-                  {/* Summary badges */}
-                  <div style={{ display: "flex", gap: "8px" }}>
+                  <div
+                    style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}
+                  >
                     {outOfStockProducts.length > 0 && (
                       <span
                         style={{
@@ -684,7 +727,7 @@ export default function PurchaseOrderPage() {
                   </div>
                 </div>
 
-                {/* Low stock items list */}
+                {/* Low stock items */}
                 <div
                   style={{
                     display: "flex",
@@ -694,12 +737,12 @@ export default function PurchaseOrderPage() {
                 >
                   {lowStockProducts.map((p) => {
                     const inOrder = orderItems.find((i) => i.id === p.id);
+                    const level = getStockLevel(p.stock, p.minStock);
+                    const theme = stockTheme[level];
                     const stockPct = Math.min(
                       100,
                       Math.round((p.stock / p.minStock) * 100),
                     );
-                    const barColor = getStockBarColor(p.stock, p.minStock);
-                    const isOut = p.stock === 0;
                     return (
                       <div
                         key={p.id}
@@ -709,10 +752,8 @@ export default function PurchaseOrderPage() {
                           gap: "14px",
                           padding: "14px 16px",
                           borderRadius: "12px",
-                          background: isOut ? "#fff8f8" : "#fffdf5",
-                          border: isOut
-                            ? "1px solid #ffcdd2"
-                            : "1px solid #ffe0b2",
+                          background: theme.row.bg,
+                          border: theme.row.border,
                         }}
                       >
                         {/* Status dot */}
@@ -721,12 +762,12 @@ export default function PurchaseOrderPage() {
                             width: "10px",
                             height: "10px",
                             borderRadius: "50%",
-                            background: barColor,
+                            background: theme.dot,
                             flexShrink: 0,
                           }}
                         />
 
-                        {/* Product info + stock bar */}
+                        {/* Info + bar */}
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div
                             style={{
@@ -748,15 +789,14 @@ export default function PurchaseOrderPage() {
                               style={{
                                 fontSize: "12px",
                                 fontWeight: 700,
-                                color: barColor,
+                                color: theme.dot,
                               }}
                             >
-                              {isOut
+                              {level === "out"
                                 ? "Out of Stock"
                                 : `${p.stock} / ${p.minStock} ${p.unit}s`}
                             </span>
                           </div>
-                          {/* Stock progress bar */}
                           <div
                             style={{
                               height: "6px",
@@ -770,8 +810,7 @@ export default function PurchaseOrderPage() {
                                 height: "100%",
                                 width: `${stockPct}%`,
                                 borderRadius: "20px",
-                                background: barColor,
-                                transition: "width 0.3s ease",
+                                background: theme.bar,
                               }}
                             />
                           </div>
@@ -787,7 +826,7 @@ export default function PurchaseOrderPage() {
                           </p>
                         </div>
 
-                        {/* Add to order button */}
+                        {/* Add button */}
                         {inOrder ? (
                           <span
                             style={{
@@ -809,7 +848,7 @@ export default function PurchaseOrderPage() {
                               padding: "7px 16px",
                               borderRadius: "20px",
                               border: "none",
-                              background: isOut ? "#e53935" : "#e65100",
+                              background: theme.addBtn.bg,
                               color: "#fff",
                               fontSize: "12px",
                               fontWeight: 600,
@@ -828,7 +867,7 @@ export default function PurchaseOrderPage() {
               </div>
             )}
 
-            {/* No low stock message */}
+            {/* All stocks OK */}
             {selectedSupplier && lowStockProducts.length === 0 && (
               <div
                 style={{
@@ -873,7 +912,7 @@ export default function PurchaseOrderPage() {
               </div>
             )}
 
-            {/* Product List from Supplier */}
+            {/* ── AVAILABLE PRODUCTS — with same stock color system ── */}
             {selectedSupplier && (
               <div
                 style={{
@@ -902,7 +941,12 @@ export default function PurchaseOrderPage() {
                 >
                   {selectedSupplier.products.map((p) => {
                     const inOrder = orderItems.find((i) => i.id === p.id);
-                    const isLowStock = p.stock < p.minStock;
+                    const level = getStockLevel(p.stock, p.minStock);
+                    const theme = stockTheme[level];
+                    const stockPct = Math.min(
+                      100,
+                      Math.round((p.stock / p.minStock) * 100),
+                    );
                     return (
                       <div
                         key={p.id}
@@ -910,36 +954,46 @@ export default function PurchaseOrderPage() {
                           display: "flex",
                           alignItems: "center",
                           gap: "14px",
-                          padding: "12px 16px",
-                          borderRadius: "10px",
-                          background: inOrder ? "#f0faf2" : "#f9f9f9",
+                          padding: "14px 16px",
+                          borderRadius: "12px",
+                          background: inOrder ? "#f0faf2" : theme.row.bg,
                           border: inOrder
                             ? "1.5px solid #a5d6a7"
-                            : "1px solid #f0f0f0",
+                            : theme.row.border,
+                          transition: "border 0.2s",
                         }}
                       >
+                        {/* Colored icon circle */}
                         <div
                           style={{
-                            width: "38px",
-                            height: "38px",
-                            borderRadius: "10px",
-                            background: "#1a3c2e",
+                            width: "40px",
+                            height: "40px",
+                            borderRadius: "12px",
+                            background:
+                              level === "out"
+                                ? "#ffebee"
+                                : level === "low"
+                                  ? "#fff3e0"
+                                  : "#e8f5e9",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            fontSize: "18px",
+                            fontSize: "20px",
                             flexShrink: 0,
+                            border: `2px solid ${theme.dot}`,
                           }}
                         >
                           🥤
                         </div>
-                        <div style={{ flex: 1 }}>
+
+                        {/* Product info + stock bar */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
                           <div
                             style={{
                               display: "flex",
                               alignItems: "center",
                               gap: "8px",
-                              marginBottom: "2px",
+                              marginBottom: "4px",
                             }}
                           >
                             <p
@@ -951,26 +1005,70 @@ export default function PurchaseOrderPage() {
                             >
                               {p.name}
                             </p>
-                            {isLowStock && (
-                              <span
-                                style={{
-                                  fontSize: "10px",
-                                  fontWeight: 700,
-                                  padding: "2px 8px",
-                                  borderRadius: "20px",
-                                  background:
-                                    p.stock === 0 ? "#ffebee" : "#fff3e0",
-                                  color: p.stock === 0 ? "#c62828" : "#e65100",
-                                }}
-                              >
-                                {p.stock === 0 ? "Out" : "Low"}
-                              </span>
-                            )}
+                            {/* Stock badge */}
+                            <span
+                              style={{
+                                fontSize: "10px",
+                                fontWeight: 700,
+                                padding: "2px 8px",
+                                borderRadius: "20px",
+                                background: theme.badge.bg,
+                                color: theme.badge.color,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {theme.badge.label}
+                            </span>
                           </div>
-                          <p style={{ fontSize: "12px", color: "#1a1a1a" }}>
+                          <p
+                            style={{
+                              fontSize: "12px",
+                              color: "#1a1a1a",
+                              marginBottom: "6px",
+                            }}
+                          >
                             {p.unit} • ₱{p.unitCost.toLocaleString()} per case
                           </p>
+                          {/* Stock bar */}
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                            }}
+                          >
+                            <div
+                              style={{
+                                flex: 1,
+                                height: "5px",
+                                borderRadius: "20px",
+                                background: "#f0f0f0",
+                                overflow: "hidden",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  height: "100%",
+                                  width: `${stockPct}%`,
+                                  borderRadius: "20px",
+                                  background: theme.bar,
+                                }}
+                              />
+                            </div>
+                            <span
+                              style={{
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                color: theme.dot,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {level === "out" ? "0" : p.stock}/{p.minStock}
+                            </span>
+                          </div>
                         </div>
+
+                        {/* Add / Added button */}
                         {inOrder ? (
                           <span
                             style={{
@@ -978,8 +1076,9 @@ export default function PurchaseOrderPage() {
                               fontWeight: 700,
                               color: "#2e7d32",
                               background: "#e8f5e9",
-                              padding: "4px 12px",
+                              padding: "6px 14px",
                               borderRadius: "20px",
+                              flexShrink: 0,
                             }}
                           >
                             ✓ Added
@@ -988,14 +1087,16 @@ export default function PurchaseOrderPage() {
                           <button
                             onClick={() => addProduct(p)}
                             style={{
-                              padding: "7px 16px",
+                              padding: "8px 16px",
                               borderRadius: "20px",
                               border: "none",
-                              background: "#1a3c2e",
+                              background: theme.addBtn.bg,
                               color: "#fff",
                               fontSize: "12px",
                               fontWeight: 600,
                               cursor: "pointer",
+                              flexShrink: 0,
+                              whiteSpace: "nowrap",
                             }}
                           >
                             + Add
@@ -1188,7 +1289,6 @@ export default function PurchaseOrderPage() {
                     </div>
                   ))}
                 </div>
-
                 <div
                   style={{
                     height: "1px",
