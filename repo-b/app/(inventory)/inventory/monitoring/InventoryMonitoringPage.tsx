@@ -601,7 +601,7 @@ export default function InventoryMonitoringPage() {
               marginBottom: "20px",
             }}
           >
-            📈 Top Selling Products
+            📈 Top Selling Products Cases
           </p>
           <div
             style={{ display: "flex", flexDirection: "column", gap: "12px" }}
