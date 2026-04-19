@@ -292,17 +292,43 @@ export default function PromoManagementPage() {
   }, []);
 
   const fetchPromos = async () => {
-    try {
-      setLoading(true);
-      const data = await api.getPromos();
-      setPromos(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("Failed to fetch promos:", err);
-      setError("Failed to load promos.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    setLoading(true);
+    const data = await api.getPromos();
+    const raw = Array.isArray(data) ? data : (data?.promos ?? data?.data ?? []);
+
+    const normalize = (item: any): Promo => ({
+      id: String(item.id ?? ""),
+      title: String(item.promoName ?? ""),                          // ← promoName
+      description: String(item.description ?? ""),
+      type: (["Discount", "Buy 1 Get 1", "Bundle Deal"].includes(item.type)
+        ? item.type
+        : "Discount") as PromoType,                                 // ← no type in DB, default Discount
+      discount: item.discountPercent != null
+        ? Number(item.discountPercent)
+        : undefined,                                                 // ← discountPercent
+      bundleQty: item.bundleQty != null ? Number(item.bundleQty) : undefined,
+      product: typeof item.product === "object"
+        ? String(item.product?.name ?? item.product?.productName ?? "")
+        : String(item.product ?? ""),                               // ← product is a populated object
+      image: String(item.image ?? item.product?.image ?? ""),       // ← try product image
+      status: item.isActive === true ? "Active" : "Inactive",      // ← isActive boolean
+      startDate: item.dateEffective
+        ? String(item.dateEffective).split("T")[0]
+        : "",                                                        // ← dateEffective
+      endDate: item.lastDate
+        ? String(item.lastDate).split("T")[0]
+        : "",                                                        // ← lastDate
+    });
+
+    setPromos(raw.map(normalize));
+  } catch (err) {
+    console.error("Failed to fetch promos:", err);
+    setError("Failed to load promos.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => { fetchPromos(); }, []);
 
@@ -354,9 +380,12 @@ export default function PromoManagementPage() {
     try {
       setEditLoading(true);
       await api.updatePromo(selectedPromo!.id, {
-        ...editForm,
-        discount: editForm.discount ? Number(editForm.discount) : undefined,
-        bundleQty: editForm.bundleQty ? Number(editForm.bundleQty) : undefined,
+        promoName:       editForm.title,
+        discountPercent: editForm.discount ? Number(editForm.discount) : null,
+        alteredPrice:    0,
+        dateEffective:   editForm.startDate,
+        lastDate:        editForm.endDate,
+        isActive:        editForm.status === "Active",
       });
       await fetchPromos();
       setIsEditing(false);
@@ -370,14 +399,18 @@ export default function PromoManagementPage() {
   };
 
   const handleToggleStatus = async (promo: Promo) => {
-    try {
-      await api.togglePromo(promo.id);
-      await fetchPromos();
-      showToast(`Promo ${promo.status === "Active" ? "deactivated" : "activated"}!`);
-    } catch (err) {
-      showToast("Failed to toggle promo status.", true);
-    }
-  };
+  try {
+    await api.togglePromo(promo.id);
+    await fetchPromos();
+    // Update selectedPromo to reflect new status
+    setSelectedPromo((prev) =>
+      prev ? { ...prev, status: prev.status === "Active" ? "Inactive" : "Active" } : prev
+    );
+    showToast(`Promo ${promo.status === "Active" ? "deactivated" : "activated"}!`);
+  } catch (err) {
+    showToast("Failed to toggle promo status.", true);
+  }
+};
 
   const confirmDelete = async () => {
     try {
@@ -396,29 +429,32 @@ export default function PromoManagementPage() {
   };
 
   const handleAddPromo = async () => {
-    if (!addForm.title) { showAlert("Promo title is required.", "Missing Field"); return; }
-    if (!addForm.product) { showAlert("Product is required.", "Missing Field"); return; }
-    if (!addForm.startDate || !addForm.endDate) { showAlert("Start and End dates are required.", "Missing Field"); return; }
-    if (new Date(addForm.startDate) > new Date(addForm.endDate)) { showAlert("Start date must be before end date.", "Invalid Date"); return; }
-    if (addForm.type === "Discount" && (!addForm.discount || Number(addForm.discount) <= 0)) { showAlert("Please enter a valid discount percentage.", "Missing Field"); return; }
-    try {
-      setAddLoading(true);
-      await api.createPromo({
-        ...addForm,
-        discount: addForm.discount ? Number(addForm.discount) : undefined,
-        bundleQty: addForm.bundleQty ? Number(addForm.bundleQty) : undefined,
-      });
-      await fetchPromos();
-      setShowAddModal(false);
-      setAddForm(emptyForm);
-      setIsDirty(false);
-      showToast("Promo added successfully!");
-    } catch (err) {
-      showToast("Failed to add promo.", true);
-    } finally {
-      setAddLoading(false);
-    }
-  };
+  if (!addForm.title) { showAlert("Promo title is required.", "Missing Field"); return; }
+  if (!addForm.product) { showAlert("Product ID is required.", "Missing Field"); return; }
+  if (!addForm.startDate || !addForm.endDate) { showAlert("Start and End dates are required.", "Missing Field"); return; }
+  if (new Date(addForm.startDate) > new Date(addForm.endDate)) { showAlert("Start date must be before end date.", "Invalid Date"); return; }
+  try {
+    setAddLoading(true);
+    await api.createPromo({
+      promoName:       addForm.title,                              // ← title → promoName
+      productId:       addForm.product,                            // ← product is productId for create
+      discountPercent: addForm.discount ? Number(addForm.discount) : null,
+      alteredPrice:    0,                                          // ← required by backend
+      dateEffective:   addForm.startDate,                          // ← startDate → dateEffective
+      lastDate:        addForm.endDate,                            // ← endDate → lastDate
+      isActive:        addForm.status === "Active",                // ← status → isActive boolean
+    });
+    await fetchPromos();
+    setShowAddModal(false);
+    setAddForm(emptyForm);
+    setIsDirty(false);
+    showToast("Promo added successfully!");
+  } catch (err) {
+    showToast("Failed to add promo.", true);
+  } finally {
+    setAddLoading(false);
+  }
+};
 
   const handleCloseAddModal = () => {
     if (isDirty) {

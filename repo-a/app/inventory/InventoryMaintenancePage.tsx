@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 
@@ -274,7 +274,11 @@ export default function InventoryMaintenancePage() {
   const [logTypeFilter,  setLogTypeFilter]  = useState<string>("ALL");
   const [showUserMenu,   setShowUserMenu]   = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+<<<<<<< HEAD
   const [selectedLog,    setSelectedLog]    = useState<InventoryLog | null>(null);
+=======
+  const logsCache = useRef<Record<string, InventoryLog[]>>({});
+>>>>>>> 1adb9eb727f7a31441147d9692b4052f0787246d
 
   useEffect(() => {
     const fetchData = async () => {
@@ -298,6 +302,7 @@ export default function InventoryMaintenancePage() {
     fetchData();
   }, []);
 
+<<<<<<< HEAD
   const fetchLogs = useCallback(async (page = 1, type = "ALL") => {
     try {
       setLogsLoading(true);
@@ -313,8 +318,52 @@ export default function InventoryMaintenancePage() {
     } catch (err) { console.error("Failed to fetch logs", err); }
     finally { setLogsLoading(false); }
   }, []);
+=======
+const fetchLogs = useCallback(async (page = 1, type = "ALL") => {
+  const cacheKey = `${type}_${page}`;
+  
+  // Show cached data instantly if available
+  if (logsCache.current[cacheKey]) {
+    setLogs(logsCache.current[cacheKey]);
+    setLogsPage(page);
+    setLogsLoading(false);
+  } else {
+    setLogsLoading(true);
+  }
+>>>>>>> 1adb9eb727f7a31441147d9692b4052f0787246d
 
-  useEffect(() => { fetchLogs(1, logTypeFilter); }, [logTypeFilter, fetchLogs]);
+  try {
+    const data = await api.getInventoryLogs({ page, limit: LOGS_PER_PAGE, type: type === "ALL" ? undefined : type });
+    if (data?.message) return;
+    const newLogs = data.logs ?? [];
+    logsCache.current[cacheKey] = newLogs;   // cache it
+    setLogs(newLogs);
+    setLogsTotal(data.total ?? 0);
+    setLogsTotalPages(data.totalPages ?? 1);
+    setLogsPage(page);
+  } catch (err) { console.error("Failed to fetch logs", err); }
+  finally { setLogsLoading(false); }
+}, []);
+
+  // Replace your existing logTypeFilter useEffect with this:
+    useEffect(() => {
+      logsCache.current = {};   // clear cache on filter change
+      fetchLogs(1, logTypeFilter);
+    }, [logTypeFilter, fetchLogs]);
+
+    // Add this effect to pre-fetch the next page silently
+    useEffect(() => {
+      if (logsPage < logsTotalPages) {
+        const nextKey = `${logTypeFilter}_${logsPage + 1}`;
+        if (!logsCache.current[nextKey]) {
+          api.getInventoryLogs({ page: logsPage + 1, limit: LOGS_PER_PAGE, type: logTypeFilter === "ALL" ? undefined : logTypeFilter })
+            .then((data) => {
+              if (data?.logs) logsCache.current[nextKey] = data.logs;
+            })
+            .catch(() => {});
+        }
+      }
+    }, [logsPage, logsTotalPages, logTypeFilter]);
 
   const stockMap = useMemo(() => {
     const map: Record<string, { stock: number; stockUnit: string; size?: string | null }> = {};
@@ -616,24 +665,35 @@ export default function InventoryMaintenancePage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
+                      // Replace the 3-header row with:
                       <tr className="border-b border-gray-100">
+<<<<<<< HEAD
                         <th className="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">
                           Product &amp; Remaining Stock
                         </th>
                         <th className="pb-2 text-right text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">
                           Status
                         </th>
+=======
+                        {["Product", "Stock", "Total Btl", "Status"].map((h) => (
+                          <th key={h} className="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">{h}</th>
+                        ))}
+>>>>>>> 1adb9eb727f7a31441147d9692b4052f0787246d
                       </tr>
                     </thead>
                     <tbody>
+                      {/* Replace the Product Stock table body rows with this: */}
                       {productStockData.map((item, i) => {
+                        const u = getUnit(item.stockUnit);
+                        const totalBottles = u.bottlesPerCase ? item.stock * u.bottlesPerCase : null;
                         const status = item.stock === 0
                           ? { label: "Out of Stock", cls: "bg-red-100 text-red-600" }
-                          : item.stock <= 10
+                          : item.stock <= 3                          // ← lowered from 10 to 3 cases
                           ? { label: "Low Stock",    cls: "bg-yellow-100 text-yellow-700" }
                           : { label: "In Stock",     cls: "bg-green-100 text-green-700" };
                         return (
                           <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
+<<<<<<< HEAD
                             <td className="py-2.5 px-2">
                               <div className="flex items-center gap-1.5 flex-wrap mb-1">
                                 <span className="font-medium text-gray-800">{item.name}</span>
@@ -649,6 +709,17 @@ export default function InventoryMaintenancePage() {
                               <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${status.cls}`}>
                                 {status.label}
                               </span>
+=======
+                            <td className="py-2 px-2 font-medium text-gray-800">{item.name}</td>
+                            <td className="py-2 px-2">
+                              <CaseBadge quantity={item.stock} unit={item.stockUnit} />
+                            </td>
+                            <td className="py-2 px-2 text-center text-xs text-indigo-500 font-medium">
+                              {totalBottles !== null ? `${totalBottles} btl` : "—"}
+                            </td>
+                            <td className="py-2 px-2 text-right">
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${status.cls}`}>{status.label}</span>
+>>>>>>> 1adb9eb727f7a31441147d9692b4052f0787246d
                             </td>
                           </tr>
                         );
