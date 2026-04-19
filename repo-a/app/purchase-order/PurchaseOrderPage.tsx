@@ -7,16 +7,16 @@ import { api } from "@/lib/api";
 // ─── CASE UNIT SYSTEM ────────────────────────────────────────────────────────
 type CaseUnit = "case_24" | "case_12" | "case_6" | "btl" | "pcs";
 
-const CASE_UNITS: { value: CaseUnit; label: string; abbr: string; bottlesPerCase: number | null; detail: string }[] = [
-  { value: "case_24", label: "Case (24 pcs)", abbr: "case/24", bottlesPerCase: 24, detail: "1 case = 24 bottles" },
-  { value: "case_12", label: "Case (12 pcs)", abbr: "case/12", bottlesPerCase: 12, detail: "1 case = 12 bottles" },
-  { value: "case_6",  label: "Case (6 pcs)",  abbr: "case/6",  bottlesPerCase: 6,  detail: "1 case = 6 bottles"  },
-  { value: "btl",     label: "Bottles",        abbr: "btl",     bottlesPerCase: null, detail: "Individual bottle" },
-  { value: "pcs",     label: "Pieces",         abbr: "pcs",     bottlesPerCase: null, detail: "Single piece"      },
+const CASE_UNITS: { value: CaseUnit; label: string; short: string; bottlesPerCase: number | null; detail: string }[] = [
+  { value: "case_24", label: "Case (24 pcs)", short: "24-cs", bottlesPerCase: 24, detail: "1 case = 24 bottles" },
+  { value: "case_12", label: "Case (12 pcs)", short: "12-cs", bottlesPerCase: 12, detail: "1 case = 12 bottles" },
+  { value: "case_6",  label: "Case (6 pcs)",  short: "6-cs",  bottlesPerCase: 6,  detail: "1 case = 6 bottles"  },
+  { value: "btl",     label: "Bottles",        short: "btl",   bottlesPerCase: null, detail: "Individual bottle" },
+  { value: "pcs",     label: "Pieces",         short: "pcs",   bottlesPerCase: null, detail: "Single piece"      },
 ];
 
-const getUnit     = (u?: string) => CASE_UNITS.find((x) => x.value === u) ?? CASE_UNITS[0];
-const getUnitAbbr = (u?: string) => getUnit(u).abbr;
+const getUnit      = (u?: string) => CASE_UNITS.find((x) => x.value === u) ?? CASE_UNITS[0];
+const getUnitShort = (u?: string) => getUnit(u).short;
 
 function getCaseBreakdown(qty: number, unit?: string): string | null {
   const u = getUnit(unit);
@@ -24,25 +24,25 @@ function getCaseBreakdown(qty: number, unit?: string): string | null {
   return `${qty} × ${u.bottlesPerCase} = ${qty * u.bottlesPerCase} btl`;
 }
 
-// Compact select for line item rows
+// ✅ Compact select with cleaner labels
 function InlineCaseSelect({ value, onChange }: { value: string; onChange: (v: CaseUnit) => void }) {
   return (
     <select value={value} onChange={(e) => onChange(e.target.value as CaseUnit)}
       className="w-full border border-gray-200 rounded-lg px-1.5 py-1.5 text-xs outline-none focus:border-indigo-400 text-gray-900 bg-white">
       {CASE_UNITS.map((u) => (
-        <option key={u.value} value={u.value}>{u.abbr} — {u.label}</option>
+        <option key={u.value} value={u.value}>{u.short} — {u.label}</option>
       ))}
     </select>
   );
 }
 
-// Unit pill with optional qty
+// ✅ Clean unit pill
 function UnitPill({ unit, qty }: { unit?: string; qty?: number }) {
-  const abbr = getUnitAbbr(unit);
+  const u = getUnit(unit);
   return (
     <span className="inline-flex items-center gap-0.5 text-xs text-indigo-600 font-medium bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full whitespace-nowrap">
       {qty != null && <span className="text-gray-700 font-semibold">{qty}</span>}
-      <span>{abbr}</span>
+      <span>{u.short}</span>
     </span>
   );
 }
@@ -52,7 +52,7 @@ type DeliveryItem = {
   id: string; productId: string;
   orderedQty: number; receivedQty: number; returnedQty: number;
   costPrice: number; unit?: string;
-  product?: { id: string; productName: string; price: number; stockUnit?: string };
+  product?: { id: string; productName: string; price: number; stockUnit?: string; size?: string | null };
 };
 
 type Delivery = {
@@ -71,7 +71,8 @@ type LineItem = {
 
 type DeliveryForm = { supplierId: string; deliveryDate: string; lineItems: LineItem[]; notes: string };
 type Supplier    = { id: string; supplierName: string };
-type Product     = { id: string; productName: string; price: number; supplierId: string; status?: string; stockUnit?: string };
+// ✅ Added size and stockQuantity
+type Product     = { id: string; productName: string; price: number; supplierId: string; status?: string; stockUnit?: string; stockQuantity?: number; size?: string | null };
 type ReceiveQty  = { deliveryItemId: string; receivedQty: number };
 
 const STATUS_CONFIG: Record<string, { bg: string; text: string }> = {
@@ -204,7 +205,6 @@ export default function PurchaseOrderPage() {
     const items = [...form.lineItems];
     if (field === "productId") {
       const p = supplierProducts.find((p) => p.id === value);
-      // ✅ Auto-fill case unit from product's stockUnit
       items[idx] = { ...items[idx], productId: String(value), productName: p?.productName || "", unitPrice: p?.price || 0, unit: (p?.stockUnit as CaseUnit) || "case_24" };
     } else {
       items[idx] = { ...items[idx], [field]: value };
@@ -362,7 +362,6 @@ export default function PurchaseOrderPage() {
           </div>
         )}
 
-        {/* Tab Bar */}
         <div className="bg-white border-b border-gray-100 px-4 md:px-6">
           <div className="flex">
             {([
@@ -390,7 +389,6 @@ export default function PurchaseOrderPage() {
             <div className="flex flex-col lg:flex-row gap-4">
               <div className="flex-1 flex flex-col gap-4">
 
-                {/* Step 1 */}
                 <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm">
                   <div className="flex items-center gap-2 mb-3">
                     <div className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold">1</div>
@@ -431,7 +429,6 @@ export default function PurchaseOrderPage() {
                   </div>
                 </div>
 
-                {/* Step 2 — Products with case unit */}
                 <div className={`bg-white rounded-2xl p-4 md:p-5 shadow-sm transition-opacity ${!form.supplierId ? "opacity-50 pointer-events-none" : ""}`}>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
@@ -465,7 +462,6 @@ export default function PurchaseOrderPage() {
 
                   {form.supplierId && supplierProducts.length > 0 && (
                     <div className="space-y-2">
-                      {/* Desktop headers */}
                       <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-medium text-gray-400 px-1">
                         <div className="col-span-4">Product</div>
                         <div className="col-span-2 text-center">Qty</div>
@@ -479,7 +475,6 @@ export default function PurchaseOrderPage() {
                         return (
                           <div key={idx} className="bg-gray-50 rounded-xl p-2.5">
                             <div className="grid grid-cols-2 md:grid-cols-12 gap-2 items-center">
-                              {/* Product */}
                               <div className="col-span-2 md:col-span-4">
                                 <label className="text-xs text-gray-400 md:hidden">Product</label>
                                 <select value={item.productId} onChange={(e) => updateLineItem(idx, "productId", e.target.value)}
@@ -487,31 +482,28 @@ export default function PurchaseOrderPage() {
                                   <option value="">— Select Product —</option>
                                   {supplierProducts.map((p) => (
                                     <option key={p.id} value={p.id} disabled={form.lineItems.some((li, i) => i !== idx && li.productId === p.id)}>
-                                      {p.productName}
+                                      {/* ✅ Product name + size + stock left in dropdown */}
+                                      {p.productName}{p.size ? ` ${p.size}` : ""}{p.stockQuantity != null ? ` (${p.stockQuantity} ${getUnitShort(p.stockUnit)} left)` : ""}
                                     </option>
                                   ))}
                                 </select>
                               </div>
-                              {/* Qty */}
                               <div className="col-span-1 md:col-span-2">
                                 <label className="text-xs text-gray-400 md:hidden">Qty</label>
                                 <input type="number" min="1" value={item.quantity}
                                   onChange={(e) => updateLineItem(idx, "quantity", e.target.value)}
                                   className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-center text-gray-900 bg-white" />
                               </div>
-                              {/* ✅ Case type dropdown */}
                               <div className="col-span-1 md:col-span-3">
                                 <label className="text-xs text-gray-400 md:hidden">Case Type</label>
                                 <InlineCaseSelect value={item.unit} onChange={(v) => updateLineItem(idx, "unit", v)} />
                               </div>
-                              {/* Cost */}
                               <div className="col-span-1 md:col-span-2">
                                 <label className="text-xs text-gray-400 md:hidden">Cost (₱)</label>
                                 <input type="number" min="0" step="0.01" value={item.unitPrice}
                                   onChange={(e) => updateLineItem(idx, "unitPrice", e.target.value)}
                                   className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white" placeholder="₱0" />
                               </div>
-                              {/* Subtotal + remove */}
                               <div className="col-span-1 md:col-span-1 flex items-center justify-end gap-1">
                                 <span className="text-xs font-medium text-gray-700 whitespace-nowrap">₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}</span>
                                 {form.lineItems.length > 1 && (
@@ -519,10 +511,9 @@ export default function PurchaseOrderPage() {
                                 )}
                               </div>
                             </div>
-                            {/* ✅ Case breakdown shown below each row */}
                             {breakdown && item.productId && (
                               <p className="text-xs text-indigo-500 font-medium mt-1.5 pl-1">
-                                📦 {item.quantity} {getUnitAbbr(item.unit)} = {breakdown.split("= ")[1]}
+                                📦 {item.quantity} {getUnitShort(item.unit)} = {breakdown.split("= ")[1]}
                               </p>
                             )}
                           </div>
@@ -532,7 +523,6 @@ export default function PurchaseOrderPage() {
                   )}
                 </div>
 
-                {/* Step 3 */}
                 <div className={`bg-white rounded-2xl p-4 md:p-5 shadow-sm transition-opacity ${!form.supplierId ? "opacity-50 pointer-events-none" : ""}`}>
                   <div className="flex items-center gap-2 mb-3">
                     <div className={`w-6 h-6 rounded-full text-white text-xs flex items-center justify-center font-bold ${form.supplierId ? "bg-indigo-600" : "bg-gray-300"}`}>3</div>
@@ -544,7 +534,6 @@ export default function PurchaseOrderPage() {
                 </div>
               </div>
 
-              {/* ✅ Order Summary with case breakdown */}
               <div className="w-full lg:w-72 shrink-0">
                 <div className="bg-white rounded-2xl p-5 shadow-sm sticky top-4">
                   <h2 className="text-sm font-bold text-gray-700 mb-4">📋 Order Summary</h2>
@@ -572,14 +561,11 @@ export default function PurchaseOrderPage() {
                             <div className="flex justify-between items-start">
                               <div>
                                 <p className="font-medium text-gray-800 text-xs">{item.productName}</p>
-                                {/* ✅ Case pill + breakdown in summary */}
                                 <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                                   <UnitPill unit={item.unit} qty={Number(item.quantity)} />
                                   <span className="text-xs text-gray-400">× ₱{Number(item.unitPrice).toLocaleString()}</span>
                                 </div>
-                                {breakdown && (
-                                  <p className="text-xs text-indigo-500 font-medium mt-0.5">{breakdown}</p>
-                                )}
+                                {breakdown && <p className="text-xs text-indigo-500 font-medium mt-0.5">{breakdown}</p>}
                               </div>
                               <span className="text-xs font-semibold text-indigo-700 ml-2 shrink-0">₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}</span>
                             </div>
@@ -654,7 +640,6 @@ export default function PurchaseOrderPage() {
                 </div>
               </div>
 
-              {/* Receive sidebar */}
               <div className="w-full lg:w-80 shrink-0">
                 <div className="bg-white rounded-2xl p-5 shadow-sm sticky top-4">
                   <h2 className="text-sm font-bold text-gray-700 mb-4">Receive Items</h2>
@@ -680,17 +665,20 @@ export default function PurchaseOrderPage() {
                           {receivingDelivery.items.map((item, i) => {
                             const rq        = receiveQtys.find((r) => r.deliveryItemId === item.id);
                             const remaining = item.orderedQty - item.receivedQty;
-                            const unitAbbr  = getUnitAbbr(item.unit || item.product?.stockUnit);
                             const unitInfo  = getUnit(item.unit || item.product?.stockUnit);
                             const receivedBtl = rq?.receivedQty && unitInfo.bottlesPerCase
                               ? rq.receivedQty * unitInfo.bottlesPerCase : null;
                             return (
                               <div key={i} className="py-1.5 border-b border-gray-100 last:border-0">
-                                <p className="text-xs font-medium text-gray-700 mb-1">{item.product?.productName || item.productId}</p>
+                                {/* ✅ Product name + size in receiving sidebar */}
+                                <p className="text-xs font-medium text-gray-700 mb-1">
+                                  {item.product?.productName || item.productId}
+                                  {item.product?.size && <span className="text-gray-400 ml-1">{item.product.size}</span>}
+                                </p>
                                 <p className="text-xs text-gray-400 mb-1.5">
-                                  Ordered: <span className="font-medium">{item.orderedQty} {unitAbbr}</span> ·
-                                  Received: <span className="font-medium">{item.receivedQty} {unitAbbr}</span> ·
-                                  Remaining: <span className="font-medium text-indigo-600">{remaining} {unitAbbr}</span>
+                                  Ordered: <span className="font-medium">{item.orderedQty} {unitInfo.short}</span> ·
+                                  Received: <span className="font-medium">{item.receivedQty} {unitInfo.short}</span> ·
+                                  Remaining: <span className="font-medium text-indigo-600">{remaining} {unitInfo.short}</span>
                                 </p>
                                 <div className="flex items-center gap-2">
                                   <input type="number" min="0" max={remaining} value={rq?.receivedQty ?? 0}
@@ -698,8 +686,7 @@ export default function PurchaseOrderPage() {
                                       prev.map((r) => r.deliveryItemId === item.id ? { ...r, receivedQty: Math.min(Number(e.target.value), remaining) } : r)
                                     )}
                                     className="w-16 border border-gray-200 rounded-lg px-1.5 py-1 text-sm text-center outline-none focus:border-indigo-400" />
-                                  <span className="text-xs text-gray-500 font-medium">{unitAbbr}</span>
-                                  {/* ✅ Live bottle total as you type */}
+                                  <span className="text-xs text-gray-500 font-medium">{unitInfo.short}</span>
                                   {receivedBtl !== null && receivedBtl > 0 && (
                                     <span className="text-xs text-indigo-500 font-medium">= {receivedBtl} btl</span>
                                   )}
@@ -809,7 +796,7 @@ export default function PurchaseOrderPage() {
         </div>
       </main>
 
-      {/* ✅ VIEW DELIVERY MODAL with full case breakdown */}
+      {/* VIEW DELIVERY MODAL */}
       {viewDelivery && (
         <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
@@ -846,30 +833,32 @@ export default function PurchaseOrderPage() {
                 <div className="space-y-3">
                   {viewDelivery.items?.map((item, idx) => {
                     const unitInfo    = getUnit(item.unit || item.product?.stockUnit);
-                    const unitAbbr    = unitInfo.abbr;
                     const orderedBtl  = unitInfo.bottlesPerCase ? item.orderedQty  * unitInfo.bottlesPerCase : null;
                     const receivedBtl = unitInfo.bottlesPerCase ? item.receivedQty * unitInfo.bottlesPerCase : null;
                     return (
                       <div key={idx} className="py-2 border-b border-gray-100 last:border-0">
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
-                            <p className="font-medium text-sm text-gray-800">{item.product?.productName || item.productId}</p>
+                            {/* ✅ Name + size in view modal */}
+                            <p className="font-medium text-sm text-gray-800">
+                              {item.product?.productName || item.productId}
+                              {item.product?.size && <span className="text-gray-500 font-normal ml-1">{item.product.size}</span>}
+                            </p>
                             <div className="flex items-center gap-1 mt-0.5">
                               <UnitPill unit={item.unit || item.product?.stockUnit} />
                               <span className="text-xs text-gray-400">{unitInfo.label}</span>
                             </div>
-                            {/* ✅ Per-item case breakdown */}
                             <div className="mt-1.5 space-y-0.5">
                               <p className="text-xs text-gray-500">
-                                Ordered: <span className="font-medium text-gray-700">{item.orderedQty} {unitAbbr}</span>
+                                Ordered: <span className="font-medium text-gray-700">{item.orderedQty} {unitInfo.short}</span>
                                 {orderedBtl !== null && <span className="text-indigo-500 ml-1">= {orderedBtl} btl</span>}
                               </p>
                               <p className="text-xs text-gray-500">
-                                Received: <span className="font-medium text-green-600">{item.receivedQty} {unitAbbr}</span>
+                                Received: <span className="font-medium text-green-600">{item.receivedQty} {unitInfo.short}</span>
                                 {receivedBtl !== null && <span className="text-green-500 ml-1">= {receivedBtl} btl</span>}
                               </p>
                               <p className="text-xs text-gray-500">
-                                Returned: <span className="font-medium text-red-500">{item.returnedQty} {unitAbbr}</span>
+                                Returned: <span className="font-medium text-red-500">{item.returnedQty} {unitInfo.short}</span>
                               </p>
                             </div>
                           </div>
