@@ -30,6 +30,7 @@ const navItems = [
   { label: "Transaction Logs", icon: "▦", path: "/transaction" },
   { label: "Product Management", icon: "🗒️", path: "/product" },
   { label: "Account Management", icon: "👤", path: "/account" },
+  { label: "Purchase Order",        icon: "📋", path: "/purchase-order" },
   { label: "Promo Management", icon: "🎁", path: "/promo" },
 ];
 

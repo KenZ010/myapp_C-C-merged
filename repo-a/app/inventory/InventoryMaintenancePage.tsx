@@ -40,7 +40,7 @@ function CaseBadge({ quantity, unit }: { quantity: number; unit?: string }) {
   const breakdown = getCaseBreakdown(quantity, unit);
   const color     = quantity === 0
     ? "bg-red-100 text-red-700 border-red-200"
-    : quantity <= 10
+    : quantity <= 3
     ? "bg-yellow-100 text-yellow-700 border-yellow-200"
     : "bg-green-100 text-green-700 border-green-200";
   return (
@@ -151,7 +151,7 @@ function fmtDate(str: string) {
   return new Date(str).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" });
 }
 
-// ─── LOG DETAIL MODAL ─────────────────────────────────────────────────────────
+// ─── LOG DETAIL MODAL ────────────────────────────────────────────────────────
 function LogDetailModal({ log, onClose }: { log: InventoryLog; onClose: () => void }) {
   const style    = LOG_TYPE_STYLE[log.type];
   const isIn     = log.type === "STOCK_IN"  || log.type === "RETURN_IN";
@@ -170,7 +170,6 @@ function LogDetailModal({ log, onClose }: { log: InventoryLog; onClose: () => vo
         className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-start justify-between mb-5">
           <div>
             <h3 className="font-bold text-gray-900 text-lg">Movement Details</h3>
@@ -179,27 +178,20 @@ function LogDetailModal({ log, onClose }: { log: InventoryLog; onClose: () => vo
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg p-1.5 transition-colors"
-          >
-            ✕
-          </button>
+          >✕</button>
         </div>
 
-        {/* Product + type summary */}
         <div className="flex items-center gap-3 bg-gray-50 rounded-xl p-3 mb-4">
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-gray-800 truncate">{log.product.productName}</p>
             <span
               className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-semibold"
               style={{ background: style.bg, color: style.color }}
-            >
-              {style.label}
-            </span>
+            >{style.label}</span>
           </div>
           <div className="text-right shrink-0">
-            <p
-              className="text-2xl font-extrabold"
-              style={{ color: isIn ? "#2e7d32" : isOut ? "#c62828" : "#1565c0" }}
-            >
+            <p className="text-2xl font-extrabold"
+              style={{ color: isIn ? "#2e7d32" : isOut ? "#c62828" : "#1565c0" }}>
               {sign}{qty}
             </p>
             <p className="text-xs text-indigo-500 font-medium">
@@ -208,18 +200,13 @@ function LogDetailModal({ log, onClose }: { log: InventoryLog; onClose: () => vo
           </div>
         </div>
 
-        {/* Detail rows */}
         <div className="flex flex-col gap-3">
-
-          {/* Reason */}
           <div className="bg-gray-50 rounded-xl p-3">
             <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Reason</p>
             <p className="text-sm text-gray-800 leading-relaxed">
               {log.reason && log.reason.trim() !== "" ? log.reason : "No reason provided"}
             </p>
           </div>
-
-          {/* Reference */}
           <div className="bg-gray-50 rounded-xl p-3">
             <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Reference</p>
             {log.referenceId ? (
@@ -231,8 +218,6 @@ function LogDetailModal({ log, onClose }: { log: InventoryLog; onClose: () => vo
               <p className="text-sm text-gray-400">No reference</p>
             )}
           </div>
-
-          {/* Approved By */}
           <div className="bg-gray-50 rounded-xl p-3">
             <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-1">Approved By</p>
             <div className="flex items-center gap-2">
@@ -245,21 +230,18 @@ function LogDetailModal({ log, onClose }: { log: InventoryLog; onClose: () => vo
               </div>
             </div>
           </div>
-
         </div>
 
         <button
           onClick={onClose}
           className="mt-5 w-full py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors"
-        >
-          Close
-        </button>
+        >Close</button>
       </div>
     </div>
   );
 }
 
-// ─── MAIN PAGE ────────────────────────────────────────────────────────────────
+// ─── MAIN PAGE ───────────────────────────────────────────────────────────────
 export default function InventoryMaintenancePage() {
   const router   = useRouter();
   const pathname = usePathname();
@@ -274,11 +256,10 @@ export default function InventoryMaintenancePage() {
   const [logTypeFilter,  setLogTypeFilter]  = useState<string>("ALL");
   const [showUserMenu,   setShowUserMenu]   = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-<<<<<<< HEAD
   const [selectedLog,    setSelectedLog]    = useState<InventoryLog | null>(null);
-=======
+
+  // Cache for instant page switching
   const logsCache = useRef<Record<string, InventoryLog[]>>({});
->>>>>>> 1adb9eb727f7a31441147d9692b4052f0787246d
 
   useEffect(() => {
     const fetchData = async () => {
@@ -289,8 +270,7 @@ export default function InventoryMaintenancePage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setItems(data.map((p: any) => ({
           id: p.id, barcode: p.barcode ?? "—", productName: p.productName,
-          category: p.category,
-          size: p.size ?? null,
+          category: p.category, size: p.size ?? null,
           expiryDate: p.expiryDate ? new Date(p.expiryDate).toISOString().split("T")[0] : "—",
           stock: Number(p.stockQuantity ?? p.stock ?? 0),
           stockUnit: p.stockUnit || "case_24",
@@ -302,68 +282,54 @@ export default function InventoryMaintenancePage() {
     fetchData();
   }, []);
 
-<<<<<<< HEAD
   const fetchLogs = useCallback(async (page = 1, type = "ALL") => {
-    try {
+    const cacheKey = `${type}_${page}`;
+
+    // Show cached data instantly if available
+    if (logsCache.current[cacheKey]) {
+      setLogs(logsCache.current[cacheKey]);
+      setLogsPage(page);
+      setLogsLoading(false);
+    } else {
       setLogsLoading(true);
+    }
+
+    try {
       const data = await api.getInventoryLogs({
         page, limit: LOGS_PER_PAGE,
         type: type === "ALL" ? undefined : type,
       });
       if (data?.message) return;
-      setLogs(data.logs ?? []);
+      const newLogs = data.logs ?? [];
+      logsCache.current[cacheKey] = newLogs;
+      setLogs(newLogs);
       setLogsTotal(data.total ?? 0);
       setLogsTotalPages(data.totalPages ?? 1);
       setLogsPage(page);
     } catch (err) { console.error("Failed to fetch logs", err); }
     finally { setLogsLoading(false); }
   }, []);
-=======
-const fetchLogs = useCallback(async (page = 1, type = "ALL") => {
-  const cacheKey = `${type}_${page}`;
-  
-  // Show cached data instantly if available
-  if (logsCache.current[cacheKey]) {
-    setLogs(logsCache.current[cacheKey]);
-    setLogsPage(page);
-    setLogsLoading(false);
-  } else {
-    setLogsLoading(true);
-  }
->>>>>>> 1adb9eb727f7a31441147d9692b4052f0787246d
 
-  try {
-    const data = await api.getInventoryLogs({ page, limit: LOGS_PER_PAGE, type: type === "ALL" ? undefined : type });
-    if (data?.message) return;
-    const newLogs = data.logs ?? [];
-    logsCache.current[cacheKey] = newLogs;   // cache it
-    setLogs(newLogs);
-    setLogsTotal(data.total ?? 0);
-    setLogsTotalPages(data.totalPages ?? 1);
-    setLogsPage(page);
-  } catch (err) { console.error("Failed to fetch logs", err); }
-  finally { setLogsLoading(false); }
-}, []);
+  // Clear cache and reload when filter changes
+  useEffect(() => {
+    logsCache.current = {};
+    fetchLogs(1, logTypeFilter);
+  }, [logTypeFilter, fetchLogs]);
 
-  // Replace your existing logTypeFilter useEffect with this:
-    useEffect(() => {
-      logsCache.current = {};   // clear cache on filter change
-      fetchLogs(1, logTypeFilter);
-    }, [logTypeFilter, fetchLogs]);
-
-    // Add this effect to pre-fetch the next page silently
-    useEffect(() => {
-      if (logsPage < logsTotalPages) {
-        const nextKey = `${logTypeFilter}_${logsPage + 1}`;
-        if (!logsCache.current[nextKey]) {
-          api.getInventoryLogs({ page: logsPage + 1, limit: LOGS_PER_PAGE, type: logTypeFilter === "ALL" ? undefined : logTypeFilter })
-            .then((data) => {
-              if (data?.logs) logsCache.current[nextKey] = data.logs;
-            })
-            .catch(() => {});
-        }
+  // Pre-fetch next page silently
+  useEffect(() => {
+    if (logsPage < logsTotalPages) {
+      const nextKey = `${logTypeFilter}_${logsPage + 1}`;
+      if (!logsCache.current[nextKey]) {
+        api.getInventoryLogs({
+          page: logsPage + 1, limit: LOGS_PER_PAGE,
+          type: logTypeFilter === "ALL" ? undefined : logTypeFilter,
+        }).then((data) => {
+          if (data?.logs) logsCache.current[nextKey] = data.logs;
+        }).catch(() => {});
       }
-    }, [logsPage, logsTotalPages, logTypeFilter]);
+    }
+  }, [logsPage, logsTotalPages, logTypeFilter]);
 
   const stockMap = useMemo(() => {
     const map: Record<string, { stock: number; stockUnit: string; size?: string | null }> = {};
@@ -417,7 +383,6 @@ const fetchLogs = useCallback(async (page = 1, type = "ALL") => {
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
 
-      {/* ── Detail Modal ── */}
       {selectedLog && (
         <LogDetailModal log={selectedLog} onClose={() => setSelectedLog(null)} />
       )}
@@ -462,8 +427,7 @@ const fetchLogs = useCallback(async (page = 1, type = "ALL") => {
               <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" />
             </div>
             <div className="relative">
-              <button
-                onClick={() => setShowUserMenu(!showUserMenu)}
+              <button onClick={() => setShowUserMenu(!showUserMenu)}
                 className={`flex items-center gap-2 px-2 py-2 rounded-xl transition-colors ${
                   showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"
                 }`}>
@@ -518,7 +482,7 @@ const fetchLogs = useCallback(async (page = 1, type = "ALL") => {
                   </button>
                 ))}
                 <button
-                  onClick={() => fetchLogs(logsPage, logTypeFilter)}
+                  onClick={() => { logsCache.current = {}; fetchLogs(logsPage, logTypeFilter); }}
                   className="px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-500 hover:bg-gray-200">
                   🔄
                 </button>
@@ -555,11 +519,7 @@ const fetchLogs = useCallback(async (page = 1, type = "ALL") => {
                       const size      = log.product.size || stockInfo?.size || null;
                       return (
                         <tr key={log.id} className="border-b border-gray-100 hover:bg-gray-50">
-
-                          {/* Date */}
                           <td className="p-3 text-gray-500 whitespace-nowrap text-xs">{fmtDate(log.createdAt)}</td>
-
-                          {/* Product */}
                           <td className="p-3">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-medium text-gray-800">{log.product.productName}</span>
@@ -575,37 +535,25 @@ const fetchLogs = useCallback(async (page = 1, type = "ALL") => {
                               </p>
                             )}
                           </td>
-
-                          {/* Category */}
                           <td className="p-3">
                             <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs">
                               {log.product.category}
                             </span>
                           </td>
-
-                          {/* Type */}
                           <td className="p-3">
                             <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
                               style={{ background: style.bg, color: style.color }}>
                               {style.label}
                             </span>
                           </td>
-
-                          {/* Qty */}
                           <td className="p-3 font-bold text-sm"
                             style={{ color: isIn ? "#2e7d32" : isOut ? "#c62828" : "#1565c0" }}>
                             {sign}{qty}
                           </td>
-
-                          {/* Unit */}
                           <td className="p-3"><UnitPill unit={log.product.stockUnit} /></td>
-
-                          {/* Total Bottles */}
                           <td className="p-3 text-xs text-indigo-500 font-medium whitespace-nowrap">
                             {totalBtl !== null ? `${qty} × ${unitInfo.bottlesPerCase} = ${totalBtl} btl` : "—"}
                           </td>
-
-                          {/* View Details */}
                           <td className="p-3">
                             <button
                               onClick={() => setSelectedLog(log)}
@@ -614,7 +562,6 @@ const fetchLogs = useCallback(async (page = 1, type = "ALL") => {
                               View Details
                             </button>
                           </td>
-
                         </tr>
                       );
                     })}
@@ -665,61 +612,41 @@ const fetchLogs = useCallback(async (page = 1, type = "ALL") => {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      // Replace the 3-header row with:
                       <tr className="border-b border-gray-100">
-<<<<<<< HEAD
-                        <th className="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">
-                          Product &amp; Remaining Stock
-                        </th>
-                        <th className="pb-2 text-right text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">
-                          Status
-                        </th>
-=======
                         {["Product", "Stock", "Total Btl", "Status"].map((h) => (
                           <th key={h} className="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">{h}</th>
                         ))}
->>>>>>> 1adb9eb727f7a31441147d9692b4052f0787246d
                       </tr>
                     </thead>
                     <tbody>
-                      {/* Replace the Product Stock table body rows with this: */}
                       {productStockData.map((item, i) => {
-                        const u = getUnit(item.stockUnit);
+                        const u           = getUnit(item.stockUnit);
                         const totalBottles = u.bottlesPerCase ? item.stock * u.bottlesPerCase : null;
                         const status = item.stock === 0
                           ? { label: "Out of Stock", cls: "bg-red-100 text-red-600" }
-                          : item.stock <= 3                          // ← lowered from 10 to 3 cases
+                          : item.stock <= 3
                           ? { label: "Low Stock",    cls: "bg-yellow-100 text-yellow-700" }
                           : { label: "In Stock",     cls: "bg-green-100 text-green-700" };
                         return (
                           <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-<<<<<<< HEAD
-                            <td className="py-2.5 px-2">
-                              <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                                <span className="font-medium text-gray-800">{item.name}</span>
-                                {item.size && (
-                                  <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                                    {item.size}
-                                  </span>
-                                )}
-                              </div>
-                              <CaseBadge quantity={item.stock} unit={item.stockUnit} />
+                            <td className="py-2 px-2">
+                              <span className="font-medium text-gray-800">{item.name}</span>
+                              {item.size && (
+                                <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full ml-1.5 whitespace-nowrap">
+                                  {item.size}
+                                </span>
+                              )}
                             </td>
-                            <td className="py-2.5 px-2 text-right align-top pt-3">
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${status.cls}`}>
-                                {status.label}
-                              </span>
-=======
-                            <td className="py-2 px-2 font-medium text-gray-800">{item.name}</td>
                             <td className="py-2 px-2">
                               <CaseBadge quantity={item.stock} unit={item.stockUnit} />
                             </td>
-                            <td className="py-2 px-2 text-center text-xs text-indigo-500 font-medium">
+                            <td className="py-2 px-2 text-xs text-indigo-500 font-medium whitespace-nowrap">
                               {totalBottles !== null ? `${totalBottles} btl` : "—"}
                             </td>
-                            <td className="py-2 px-2 text-right">
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${status.cls}`}>{status.label}</span>
->>>>>>> 1adb9eb727f7a31441147d9692b4052f0787246d
+                            <td className="py-2 px-2">
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${status.cls}`}>
+                                {status.label}
+                              </span>
                             </td>
                           </tr>
                         );
