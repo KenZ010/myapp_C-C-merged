@@ -26,6 +26,14 @@ type Customer = {
 
 export default function PaymentPage() {
   const router = useRouter();
+  const [isNarrow, setIsNarrow] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsNarrow(window.innerWidth < 900);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
@@ -78,10 +86,8 @@ export default function PaymentPage() {
   const [newStore, setNewStore] = useState("");
   const [newPhone, setNewPhone] = useState("");
 
-  // Validation errors
   const [nameError, setNameError] = useState("");
   const [storeError, setStoreError] = useState("");
-  const [phoneError, setPhoneError] = useState("");
 
   const [gcashRef, setGcashRef] = useState("");
   const [gcashImage, setGcashImage] = useState<string | null>(null);
@@ -122,9 +128,7 @@ export default function PaymentPage() {
   const paid = parseFloat(amountPaid) || 0;
   const change = paid - subtotal;
 
-  // Phone must be exactly 10 digits
   const phoneValid = newPhone.trim().length === 10 && /^\d{10}$/.test(newPhone);
-
   const newCustomerValid =
     newName.trim() !== "" &&
     nameError === "" &&
@@ -140,40 +144,29 @@ export default function PaymentPage() {
       ? gcashRef.trim() !== "" && gcashImage !== null
       : paid >= subtotal);
 
-  // ── Input handlers with validation ───────────────────────────────────────
-
-  // Only letters, spaces, dots, hyphens — no numbers
   const lettersOnlyRegex = /^[a-zA-ZÀ-ÖØ-öø-ÿ\s.\-']*$/;
 
   const handleNameChange = (val: string) => {
-    if (!lettersOnlyRegex.test(val)) {
-      setNameError("Name cannot contain numbers or special characters.");
-    } else {
-      setNameError("");
-    }
+    setNameError(
+      lettersOnlyRegex.test(val)
+        ? ""
+        : "Name cannot contain numbers or special characters.",
+    );
     setNewName(val.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ\s.\-']/g, ""));
   };
 
   const handleStoreChange = (val: string) => {
-    if (!lettersOnlyRegex.test(val)) {
-      setStoreError("Store name cannot contain numbers or special characters.");
-    } else {
-      setStoreError("");
-    }
+    setStoreError(
+      lettersOnlyRegex.test(val)
+        ? ""
+        : "Store name cannot contain numbers or special characters.",
+    );
     setNewStore(val.replace(/[^a-zA-ZÀ-ÖØ-öø-ÿ\s.\-']/g, ""));
   };
 
   const handlePhoneChange = (val: string) => {
-    // Strip non-digits
     const digits = val.replace(/\D/g, "").slice(0, 10);
     setNewPhone(digits);
-    if (digits.length > 0 && digits.length < 10) {
-      setPhoneError("Phone number must be exactly 10 digits after +63.");
-    } else if (digits.length === 0) {
-      setPhoneError("Phone number is required.");
-    } else {
-      setPhoneError("");
-    }
   };
 
   const handleSelectCustomer = (c: Customer) => {
@@ -206,9 +199,7 @@ export default function PaymentPage() {
         })),
       };
       const res = await api.placeOrder(payload);
-      if (res?.saleId) {
-        await api.updateOrderStatus(res.saleId, "PROCESSING");
-      }
+      if (res?.saleId) await api.updateOrderStatus(res.saleId, "PROCESSING");
       sessionStorage.removeItem("pendingCart");
       setCompleted(true);
     } catch (err) {
@@ -226,7 +217,6 @@ export default function PaymentPage() {
     setNewPhone("");
     setNameError("");
     setStoreError("");
-    setPhoneError("");
     setGcashRef("");
     setGcashImage(null);
     setAmountPaid("");
@@ -262,9 +252,17 @@ export default function PaymentPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          padding: "20px",
         }}
       >
-        <div style={{ textAlign: "center", padding: "40px" }}>
+        <div
+          style={{
+            textAlign: "center",
+            padding: "40px",
+            maxWidth: "400px",
+            width: "100%",
+          }}
+        >
           <div
             style={{
               width: "90px",
@@ -341,12 +339,18 @@ export default function PaymentPage() {
         overflow: "hidden",
       }}
     >
-      <div style={{ flex: 1, overflowY: "auto", padding: "28px" }}>
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: isNarrow ? "16px" : "28px",
+        }}
+      >
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 360px",
-            gap: "24px",
+            gridTemplateColumns: isNarrow ? "1fr" : "1fr 340px",
+            gap: isNarrow ? "16px" : "24px",
             maxWidth: "960px",
             margin: "0 auto",
           }}
@@ -357,11 +361,11 @@ export default function PaymentPage() {
               background: "#fff",
               borderRadius: "16px",
               border: "0.5px solid #e8e8e8",
-              padding: "28px",
+              padding: isNarrow ? "18px" : "28px",
             }}
           >
             {/* Payment Method */}
-            <div style={{ marginBottom: "22px" }}>
+            <div style={{ marginBottom: "20px" }}>
               <p
                 style={{
                   fontSize: "13px",
@@ -379,7 +383,7 @@ export default function PaymentPage() {
                     onClick={() => setPaymentMethod(m)}
                     style={{
                       flex: 1,
-                      padding: "11px",
+                      padding: "10px 8px",
                       borderRadius: "8px",
                       fontSize: "13px",
                       fontWeight: 600,
@@ -403,7 +407,7 @@ export default function PaymentPage() {
             </div>
 
             {/* Customer Type */}
-            <div style={{ marginBottom: "22px" }}>
+            <div style={{ marginBottom: "20px" }}>
               <p
                 style={{
                   fontSize: "13px",
@@ -429,13 +433,12 @@ export default function PaymentPage() {
                         setNewPhone("");
                         setNameError("");
                         setStoreError("");
-                        setPhoneError("");
                       }}
                       style={{
                         flex: 1,
-                        padding: "11px",
+                        padding: "10px 8px",
                         borderRadius: "8px",
-                        fontSize: "13px",
+                        fontSize: isNarrow ? "11px" : "13px",
                         fontWeight: 600,
                         cursor: "pointer",
                         border:
@@ -455,7 +458,7 @@ export default function PaymentPage() {
 
             {/* ── EXISTING CUSTOMER ── */}
             {customerType === "Existing Customer" && (
-              <div style={{ marginBottom: "22px" }}>
+              <div style={{ marginBottom: "20px" }}>
                 <p
                   style={{
                     fontSize: "12px",
@@ -478,7 +481,7 @@ export default function PaymentPage() {
                     placeholder={
                       loadingCust
                         ? "Loading customers…"
-                        : "Type customer name, store, or phone..."
+                        : "Type name, store, or phone..."
                     }
                     disabled={loadingCust}
                     style={{ ...inputStyle, paddingLeft: "36px" }}
@@ -681,7 +684,7 @@ export default function PaymentPage() {
 
             {/* ── NEW CUSTOMER ── */}
             {customerType === "New Customer" && (
-              <div style={{ marginBottom: "22px" }}>
+              <div style={{ marginBottom: "20px" }}>
                 <p
                   style={{
                     fontSize: "12px",
@@ -699,15 +702,14 @@ export default function PaymentPage() {
                     gap: "14px",
                   }}
                 >
-                  {/* Row 1: Customer Name + Store Name */}
+                  {/* Customer Name + Store Name — stack on very narrow */}
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "14px",
+                      gridTemplateColumns: isNarrow ? "1fr" : "1fr 1fr",
+                      gap: "12px",
                     }}
                   >
-                    {/* Customer Name */}
                     <div>
                       <label
                         style={{
@@ -734,8 +736,6 @@ export default function PaymentPage() {
                       />
                       {nameError && <p style={errorStyle}>⚠️ {nameError}</p>}
                     </div>
-
-                    {/* Store Name */}
                     <div>
                       <label
                         style={{
@@ -763,7 +763,7 @@ export default function PaymentPage() {
                     </div>
                   </div>
 
-                  {/* Row 2: Address */}
+                  {/* Address */}
                   <div>
                     <label
                       style={{
@@ -784,7 +784,7 @@ export default function PaymentPage() {
                     />
                   </div>
 
-                  {/* Row 3: Phone Number */}
+                  {/* Phone */}
                   <div>
                     <label
                       style={{
@@ -798,14 +798,7 @@ export default function PaymentPage() {
                       📞 Phone Number{" "}
                       <span style={{ color: "#e53935" }}>*</span>
                     </label>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0",
-                      }}
-                    >
-                      {/* +63 prefix box */}
+                    <div style={{ display: "flex" }}>
                       <div
                         style={{
                           padding: "10px 12px",
@@ -833,8 +826,7 @@ export default function PaymentPage() {
                           ...inputStyle,
                           borderRadius: "0 8px 8px 0",
                           border:
-                            phoneError ||
-                            (newPhone.length > 0 && newPhone.length < 10)
+                            newPhone.length > 0 && newPhone.length < 10
                               ? "1.5px solid #e53935"
                               : newPhone.length === 10
                                 ? "1.5px solid #2e7d32"
@@ -845,7 +837,6 @@ export default function PaymentPage() {
                         }}
                       />
                     </div>
-                    {/* Phone status feedback */}
                     {newPhone.length === 0 && (
                       <p style={{ ...errorStyle, color: "#aaa" }}>
                         Phone number is required (10 digits after +63)
@@ -1332,184 +1323,31 @@ export default function PaymentPage() {
                 </div>
               </div>
             )}
-          </div>
 
-          {/* ── RIGHT: Summary ── */}
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "16px" }}
-          >
-            <div
-              style={{
-                background: "#fff",
-                borderRadius: "16px",
-                border: "0.5px solid #e8e8e8",
-                padding: "24px",
-              }}
-            >
-              <p
-                style={{
-                  fontSize: "15px",
-                  fontWeight: 700,
-                  color: "#1a1a1a",
-                  marginBottom: "16px",
-                }}
-              >
-                🛒 Order Summary
-              </p>
-              {cartItems.length === 0 ? (
-                <p
-                  style={{
-                    fontSize: "13px",
-                    color: "#aaa",
-                    textAlign: "center",
-                    padding: "20px 0",
-                  }}
-                >
-                  No items in cart.
-                </p>
-              ) : (
-                cartItems.map((item) => (
-                  <div
-                    key={item.id}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      padding: "10px 0",
-                      borderBottom: "0.5px solid #f5f5f5",
-                    }}
-                  >
-                    <div>
-                      <p
-                        style={{
-                          fontSize: "13px",
-                          fontWeight: 500,
-                          color: "#1a1a1a",
-                        }}
-                      >
-                        {item.productName}
-                      </p>
-                      <p style={{ fontSize: "11px", color: "#aaa" }}>
-                        x{item.qty} × ₱{item.finalPrice.toLocaleString()}.00
-                      </p>
-                    </div>
-                    <p
-                      style={{
-                        fontSize: "13px",
-                        fontWeight: 600,
-                        color: "#1a3c2e",
-                      }}
-                    >
-                      ₱{(item.finalPrice * item.qty).toLocaleString()}.00
-                    </p>
-                  </div>
-                ))
-              )}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginTop: "12px",
-                  paddingTop: "10px",
-                  borderTop: "0.5px solid #f0f0f0",
-                }}
-              >
-                <span style={{ fontSize: "13px", color: "#888" }}>
-                  Sub Total
-                </span>
-                <span style={{ fontSize: "13px" }}>
-                  ₱{subtotal.toLocaleString()}.00
-                </span>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginTop: "8px",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "18px",
-                    fontWeight: 700,
-                    color: "#1a1a1a",
-                  }}
-                >
-                  Total
-                </span>
-                <span
-                  style={{
-                    fontSize: "28px",
-                    fontWeight: 800,
-                    color: "#1a3c2e",
-                  }}
-                >
-                  ₱{subtotal.toLocaleString()}.00
-                </span>
-              </div>
-            </div>
-
-            {activeCustomer && (
-              <div
-                style={{
-                  background: "#fff",
-                  borderRadius: "16px",
-                  border: "0.5px solid #e8e8e8",
-                  padding: "20px",
-                }}
-              >
-                <p
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    color: "#1a1a1a",
-                    marginBottom: "12px",
-                  }}
-                >
-                  👤 Customer Info
-                </p>
-                {(
-                  [
-                    ["Name", activeCustomer.customerName],
-                    activeCustomer.address
-                      ? ["Address", activeCustomer.address]
-                      : null,
-                    activeCustomer.storeName
-                      ? ["Store", activeCustomer.storeName]
-                      : null,
-                    activeCustomer.contactNumber
-                      ? ["Phone", activeCustomer.contactNumber]
-                      : null,
-                  ] as ([string, string] | null)[]
-                )
-                  .filter((r): r is [string, string] => r !== null)
-                  .map((row) => (
-                    <div
-                      key={row[0]}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        padding: "7px 0",
-                        borderBottom: "0.5px solid #f5f5f5",
-                      }}
-                    >
-                      <span style={{ fontSize: "12px", color: "#aaa" }}>
-                        {row[0]}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          color: "#333",
-                        }}
-                      >
-                        {row[1]}
-                      </span>
-                    </div>
-                  ))}
+            {/* ── On narrow: Order Summary inline after form ── */}
+            {isNarrow && (
+              <div style={{ marginTop: "20px" }}>
+                <OrderSummaryCard
+                  cartItems={cartItems}
+                  subtotal={subtotal}
+                  activeCustomer={activeCustomer}
+                />
               </div>
             )}
           </div>
+
+          {/* ── RIGHT: Summary (desktop only) ── */}
+          {!isNarrow && (
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "16px" }}
+            >
+              <OrderSummaryCard
+                cartItems={cartItems}
+                subtotal={subtotal}
+                activeCustomer={activeCustomer}
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -1518,24 +1356,26 @@ export default function PaymentPage() {
         style={{
           background: "#fff",
           borderTop: "1px solid #e8e8e8",
-          padding: "14px 28px",
+          padding: isNarrow ? "12px 16px" : "14px 28px",
           display: "flex",
-          gap: "12px",
+          gap: "10px",
           justifyContent: "flex-end",
           boxShadow: "0 -4px 16px rgba(0,0,0,0.06)",
+          flexWrap: "wrap",
         }}
       >
         <button
           onClick={() => router.back()}
           style={{
-            padding: "12px 32px",
+            padding: "12px 24px",
             borderRadius: "20px",
             border: "1.5px solid #e0e0e0",
             background: "#fff",
-            fontSize: "14px",
+            fontSize: "13px",
             fontWeight: 600,
             cursor: "pointer",
             color: "#555",
+            whiteSpace: "nowrap",
           }}
         >
           ← Order More
@@ -1544,20 +1384,198 @@ export default function PaymentPage() {
           onClick={handleComplete}
           disabled={!canComplete}
           style={{
-            padding: "12px 40px",
+            padding: "12px 32px",
             borderRadius: "20px",
             border: "none",
             background: canComplete ? "#1a3c2e" : "#ccc",
             color: "#fff",
-            fontSize: "14px",
+            fontSize: "13px",
             fontWeight: 700,
             cursor: canComplete ? "pointer" : "not-allowed",
             boxShadow: canComplete ? "0 4px 14px rgba(26,60,46,0.3)" : "none",
+            whiteSpace: "nowrap",
           }}
         >
           Complete Order →
         </button>
       </div>
     </div>
+  );
+}
+
+/* ── Extracted Order Summary Card (reused in both layouts) ── */
+function OrderSummaryCard({
+  cartItems,
+  subtotal,
+  activeCustomer,
+}: {
+  cartItems: CartItem[];
+  subtotal: number;
+  activeCustomer: {
+    customerName: string;
+    address?: string;
+    storeName?: string;
+    contactNumber?: string;
+  } | null;
+}) {
+  return (
+    <>
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: "16px",
+          border: "0.5px solid #e8e8e8",
+          padding: "20px",
+        }}
+      >
+        <p
+          style={{
+            fontSize: "15px",
+            fontWeight: 700,
+            color: "#1a1a1a",
+            marginBottom: "16px",
+          }}
+        >
+          🛒 Order Summary
+        </p>
+        {cartItems.length === 0 ? (
+          <p
+            style={{
+              fontSize: "13px",
+              color: "#aaa",
+              textAlign: "center",
+              padding: "20px 0",
+            }}
+          >
+            No items in cart.
+          </p>
+        ) : (
+          cartItems.map((item) => (
+            <div
+              key={item.id}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                padding: "10px 0",
+                borderBottom: "0.5px solid #f5f5f5",
+              }}
+            >
+              <div>
+                <p
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    color: "#1a1a1a",
+                  }}
+                >
+                  {item.productName}
+                </p>
+                <p style={{ fontSize: "11px", color: "#aaa" }}>
+                  x{item.qty} × ₱{item.finalPrice.toLocaleString()}.00
+                </p>
+              </div>
+              <p
+                style={{ fontSize: "13px", fontWeight: 600, color: "#1a3c2e" }}
+              >
+                ₱{(item.finalPrice * item.qty).toLocaleString()}.00
+              </p>
+            </div>
+          ))
+        )}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginTop: "12px",
+            paddingTop: "10px",
+            borderTop: "0.5px solid #f0f0f0",
+          }}
+        >
+          <span style={{ fontSize: "13px", color: "#888" }}>Sub Total</span>
+          <span style={{ fontSize: "13px" }}>
+            ₱{subtotal.toLocaleString()}.00
+          </span>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginTop: "8px",
+          }}
+        >
+          <span style={{ fontSize: "18px", fontWeight: 700, color: "#1a1a1a" }}>
+            Total
+          </span>
+          <span style={{ fontSize: "28px", fontWeight: 800, color: "#1a3c2e" }}>
+            ₱{subtotal.toLocaleString()}.00
+          </span>
+        </div>
+      </div>
+
+      {activeCustomer && (
+        <div
+          style={{
+            background: "#fff",
+            borderRadius: "16px",
+            border: "0.5px solid #e8e8e8",
+            padding: "20px",
+            marginTop: "16px",
+          }}
+        >
+          <p
+            style={{
+              fontSize: "13px",
+              fontWeight: 700,
+              color: "#1a1a1a",
+              marginBottom: "12px",
+            }}
+          >
+            👤 Customer Info
+          </p>
+          {(
+            [
+              ["Name", activeCustomer.customerName],
+              activeCustomer.address
+                ? ["Address", activeCustomer.address]
+                : null,
+              activeCustomer.storeName
+                ? ["Store", activeCustomer.storeName]
+                : null,
+              activeCustomer.contactNumber
+                ? ["Phone", activeCustomer.contactNumber]
+                : null,
+            ] as ([string, string] | null)[]
+          )
+            .filter((r): r is [string, string] => r !== null)
+            .map((row) => (
+              <div
+                key={row[0]}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  padding: "7px 0",
+                  borderBottom: "0.5px solid #f5f5f5",
+                }}
+              >
+                <span style={{ fontSize: "12px", color: "#aaa" }}>
+                  {row[0]}
+                </span>
+                <span
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    color: "#333",
+                    textAlign: "right",
+                    maxWidth: "60%",
+                  }}
+                >
+                  {row[1]}
+                </span>
+              </div>
+            ))}
+        </div>
+      )}
+    </>
   );
 }
