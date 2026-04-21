@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const quickCards = [
   {
@@ -85,13 +85,17 @@ const recentActivity = [
   },
 ];
 
+const INTERVAL_MS = 3500;
+
 export default function HomePage() {
   const [promoIndex, setPromoIndex] = useState(0);
-  const promo = promos[promoIndex];
-
+  const [animating, setAnimating] = useState(false);
+  const [direction, setDirection] = useState<"left" | "right">("left");
   const [isTablet, setIsTablet] = useState(false);
   const [isPhone, setIsPhone] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Responsive
   useEffect(() => {
     const check = () => {
       setIsTablet(window.innerWidth < 1100);
@@ -102,14 +106,55 @@ export default function HomePage() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
+  // Auto-advance
+  const goTo = (next: number, dir: "left" | "right") => {
+    if (animating) return;
+    setDirection(dir);
+    setAnimating(true);
+    setTimeout(() => {
+      setPromoIndex(next);
+      setAnimating(false);
+    }, 350);
+  };
+
+  const startTimer = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setPromoIndex((prev) => {
+        const next = (prev + 1) % promos.length;
+        setDirection("left");
+        setAnimating(true);
+        setTimeout(() => setAnimating(false), 350);
+        return next;
+      });
+    }, INTERVAL_MS);
+  };
+
+  useEffect(() => {
+    startTimer();
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
+  const handleDotClick = (i: number) => {
+    const dir = i > promoIndex ? "left" : "right";
+    goTo(i, dir);
+    startTimer(); // reset timer on manual click
+  };
+
+  const promo = promos[promoIndex];
+
+  const slideStyle: React.CSSProperties = {
+    transition: animating ? "none" : "opacity 0.35s ease, transform 0.35s ease",
+    opacity: animating ? 0 : 1,
+    transform: animating
+      ? `translateX(${direction === "left" ? "18px" : "-18px"})`
+      : "translateX(0)",
+  };
+
   return (
-    <div
-      style={{
-        padding: "24px",
-        maxWidth: "1200px",
-        margin: "0 auto",
-      }}
-    >
+    <div style={{ padding: "24px", maxWidth: "1200px", margin: "0 auto" }}>
       {/* Greeting */}
       <div
         style={{
@@ -138,15 +183,46 @@ export default function HomePage() {
           borderRadius: "20px",
           padding: "28px 32px",
           minHeight: "140px",
-          marginBottom: "20px",
+          marginBottom: "14px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           gap: "12px",
-          transition: "all 0.3s",
+          transition: "background 0.5s ease",
+          position: "relative",
+          overflow: "hidden",
         }}
       >
-        <div>
+        {/* Left arrow */}
+        <button
+          onClick={() => {
+            const prev = (promoIndex - 1 + promos.length) % promos.length;
+            handleDotClick(prev);
+          }}
+          style={{
+            position: "absolute",
+            left: "12px",
+            top: "50%",
+            transform: "translateY(-50%)",
+            background: "rgba(255,255,255,0.2)",
+            border: "none",
+            borderRadius: "50%",
+            width: "30px",
+            height: "30px",
+            cursor: "pointer",
+            color: "#fff",
+            fontSize: "14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 2,
+          }}
+        >
+          ‹
+        </button>
+
+        {/* Content */}
+        <div style={{ ...slideStyle, paddingLeft: "28px", flex: 1 }}>
           <span
             style={{
               fontSize: "10px",
@@ -188,35 +264,106 @@ export default function HomePage() {
             Shop Now →
           </Link>
         </div>
-        <span style={{ fontSize: "52px", flexShrink: 0 }}>{promo.emoji}</span>
+
+        <span
+          style={{
+            ...slideStyle,
+            fontSize: "52px",
+            flexShrink: 0,
+            paddingRight: "28px",
+          }}
+        >
+          {promo.emoji}
+        </span>
+
+        {/* Right arrow */}
+        <button
+          onClick={() => {
+            const next = (promoIndex + 1) % promos.length;
+            handleDotClick(next);
+          }}
+          style={{
+            position: "absolute",
+            right: "12px",
+            top: "50%",
+            transform: "translateY(-50%)",
+            background: "rgba(255,255,255,0.2)",
+            border: "none",
+            borderRadius: "50%",
+            width: "30px",
+            height: "30px",
+            cursor: "pointer",
+            color: "#fff",
+            fontSize: "14px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 2,
+          }}
+        >
+          ›
+        </button>
       </div>
 
-      {/* Promo Dots */}
+      {/* Promo Dots + timer bar */}
       <div
         style={{
           display: "flex",
-          justifyContent: "center",
-          gap: "6px",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "8px",
           marginBottom: "24px",
         }}
       >
-        {promos.map((_, i) => (
-          <button
-            key={i}
-            onClick={() => setPromoIndex(i)}
+        <div style={{ display: "flex", gap: "6px" }}>
+          {promos.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => handleDotClick(i)}
+              style={{
+                width: i === promoIndex ? "20px" : "8px",
+                height: "8px",
+                borderRadius: "20px",
+                border: "none",
+                background: i === promoIndex ? "#2d7a3a" : "#e0e0e0",
+                cursor: "pointer",
+                transition: "all 0.3s",
+                padding: 0,
+              }}
+            />
+          ))}
+        </div>
+        {/* Auto-advance progress bar */}
+        <div
+          style={{
+            width: "80px",
+            height: "3px",
+            borderRadius: "10px",
+            background: "#e0e0e0",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            key={promoIndex} // re-triggers animation on slide change
             style={{
-              width: i === promoIndex ? "20px" : "8px",
-              height: "8px",
-              borderRadius: "20px",
-              border: "none",
-              background: i === promoIndex ? "#2d7a3a" : "#e0e0e0",
-              cursor: "pointer",
-              transition: "all 0.3s",
-              padding: 0,
+              height: "100%",
+              width: "100%",
+              borderRadius: "10px",
+              background: "#2d7a3a",
+              transformOrigin: "left",
+              animation: `promoProgress ${INTERVAL_MS}ms linear forwards`,
             }}
           />
-        ))}
+        </div>
       </div>
+
+      {/* CSS keyframe injected inline */}
+      <style>{`
+        @keyframes promoProgress {
+          from { transform: scaleX(0); }
+          to   { transform: scaleX(1); }
+        }
+      `}</style>
 
       {/* Stats Row */}
       <div
@@ -372,7 +519,7 @@ export default function HomePage() {
         ))}
       </div>
 
-      {/* Recent Activity */}
+      {/* Recent Orders */}
       <div
         style={{
           display: "flex",
