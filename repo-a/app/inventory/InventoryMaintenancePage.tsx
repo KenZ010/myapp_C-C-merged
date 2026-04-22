@@ -264,8 +264,7 @@ export default function InventoryMaintenancePage() {
     const fetchData = async () => {
       try {
         setItemsLoading(true);
-        const res  = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/products`);
-        const data = await res.json();
+        const data = await api.getProducts();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setItems(data.map((p: any) => ({
           id: p.id, barcode: p.barcode ?? "—", productName: p.productName,
