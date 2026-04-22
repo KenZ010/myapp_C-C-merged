@@ -134,8 +134,8 @@ export default function ContactPage() {
                 label: "Store Name",
                 value: "Julieta Soft Drink Store",
               },
-              { icon: "📅", label: "Established", value: "Since 2010" },
-              { icon: "👤", label: "Owner", value: "Julieta R." },
+              { icon: "📅", label: "Established", value: "Since 2006" },
+              { icon: "👤", label: "Owner", value: "Simeon Salinas" },
               {
                 icon: "🥤",
                 label: "Specializes",
@@ -216,7 +216,7 @@ export default function ContactPage() {
             icon: "✉️",
             bg: "#ede7f6",
             label: "Email",
-            value: "julieta.store@email.com",
+            value: "Not Available",
             desc: "We reply within 24 hours",
           },
           {
@@ -325,9 +325,9 @@ export default function ContactPage() {
             }}
           >
             {[
-              ["📌", "Address", "123 Rizal Street, Barangay San Jose"],
-              ["🏙️", "City", "Quezon City, Metro Manila"],
-              ["📮", "ZIP Code", "1100"],
+              ["📌", "Address", "3065 JP Rizal St. Pagasa Camarin"],
+              ["🏙️", "City", "Caloocan City"],
+              ["📮", "ZIP Code", "1400"],
             ].map(([icon, label, val]) => (
               <div
                 key={String(label)}
