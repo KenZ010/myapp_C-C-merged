@@ -53,7 +53,7 @@ function CaseBadge({ quantity, unit }: { quantity: number; unit?: string }) {
   );
 }
 
-// ─── TYPES ───────────────────────────────────────────────────────────────────
+// ─── TYPES ──────────
 type InventoryItem = {
   id: string; barcode: string; productName: string; category: string;
   size?: string | null; expiryDate: string; stock: number; stockUnit?: string; status: string;
@@ -494,7 +494,7 @@ export default function InventoryMaintenancePage() {
                 <table className="w-full text-sm min-w-max">
                   <thead>
                     <tr className="bg-indigo-900 text-white text-xs">
-                      {["Date & Time","Product","Category","Type","Qty","Unit","Total Bottles","Details"].map((h) => (
+                      {["Date & Time","Product","Category","Transaction","Qty","Unit","Total Bottles","Details"].map((h) => (
                         <th key={h} className="p-3 text-left whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
