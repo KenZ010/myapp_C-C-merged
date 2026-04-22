@@ -54,9 +54,8 @@ export default function ContactPage() {
             }}
           >
             {[
-              ["Monday - Friday:", "8:00 AM - 6:00 PM", true],
-              ["Saturday:", "8:00 AM - 5:00 PM", true],
-              ["Sunday:", "Closed", false],
+              ["Monday - Saturday:", "6:00 AM - 6:00 PM", true],
+              ["Sunday:", "7:00 AM - 4:00 PM", true],
             ].map(([day, time, open]) => (
               <div
                 key={String(day)}
@@ -223,7 +222,7 @@ export default function ContactPage() {
             icon: "🔵",
             bg: "#e3f2fd",
             label: "Facebook",
-            value: "Julieta Soft Drinks",
+            value: "Not Available",
             desc: "Message us on Facebook",
           },
         ].map((c) => (
