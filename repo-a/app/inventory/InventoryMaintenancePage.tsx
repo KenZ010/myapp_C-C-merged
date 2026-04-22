@@ -258,7 +258,6 @@ export default function InventoryMaintenancePage() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [selectedLog,    setSelectedLog]    = useState<InventoryLog | null>(null);
 
-  // Cache for instant page switching
   const logsCache = useRef<Record<string, InventoryLog[]>>({});
 
   useEffect(() => {
@@ -284,8 +283,6 @@ export default function InventoryMaintenancePage() {
 
   const fetchLogs = useCallback(async (page = 1, type = "ALL") => {
     const cacheKey = `${type}_${page}`;
-
-    // Show cached data instantly if available
     if (logsCache.current[cacheKey]) {
       setLogs(logsCache.current[cacheKey]);
       setLogsPage(page);
@@ -293,7 +290,6 @@ export default function InventoryMaintenancePage() {
     } else {
       setLogsLoading(true);
     }
-
     try {
       const data = await api.getInventoryLogs({
         page, limit: LOGS_PER_PAGE,
@@ -310,13 +306,11 @@ export default function InventoryMaintenancePage() {
     finally { setLogsLoading(false); }
   }, []);
 
-  // Clear cache and reload when filter changes
   useEffect(() => {
     logsCache.current = {};
     fetchLogs(1, logTypeFilter);
   }, [logTypeFilter, fetchLogs]);
 
-  // Pre-fetch next page silently
   useEffect(() => {
     if (logsPage < logsTotalPages) {
       const nextKey = `${logTypeFilter}_${logsPage + 1}`;
@@ -600,64 +594,59 @@ export default function InventoryMaintenancePage() {
           {/* ── Bottom grid ── */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-            {/* Product Stock */}
+            {/* ── Top Stocked Products (bar chart) ── */}
             <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <h2 className="font-bold text-gray-800 mb-1">Product Stock</h2>
-              <p className="text-xs text-gray-400 mb-3">Current stock levels — cases &amp; total bottles</p>
+              <h2 className="font-bold text-gray-800 mb-1">📈 Top Stocked Products</h2>
+              <p className="text-xs text-gray-400 mb-4">Highest stock levels across all products</p>
               {itemsLoading ? (
                 <div className="flex items-center justify-center h-[260px] text-gray-400 text-sm">Loading...</div>
               ) : productStockData.length === 0 ? (
                 <div className="flex items-center justify-center h-[260px] text-gray-400 text-sm">No products found.</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-100">
-                        {["Product", "Stock", "Total Btl", "Status"].map((h) => (
-                          <th key={h} className="pb-2 text-left text-xs text-gray-400 font-semibold uppercase tracking-wide px-2">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {productStockData.map((item, i) => {
-                        const u           = getUnit(item.stockUnit);
-                        const totalBottles = u.bottlesPerCase ? item.stock * u.bottlesPerCase : null;
-                        const status = item.stock === 0
-                          ? { label: "Out of Stock", cls: "bg-red-100 text-red-600" }
-                          : item.stock <= 3
-                          ? { label: "Low Stock",    cls: "bg-yellow-100 text-yellow-700" }
-                          : { label: "In Stock",     cls: "bg-green-100 text-green-700" };
-                        return (
-                          <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
-                            <td className="py-2 px-2">
-                              <span className="font-medium text-gray-800">{item.name}</span>
-                              {item.size && (
-                                <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full ml-1.5 whitespace-nowrap">
-                                  {item.size}
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-2 px-2">
-                              <CaseBadge quantity={item.stock} unit={item.stockUnit} />
-                            </td>
-                            <td className="py-2 px-2 text-xs text-indigo-500 font-medium whitespace-nowrap">
-                              {totalBottles !== null ? `${totalBottles} btl` : "—"}
-                            </td>
-                            <td className="py-2 px-2">
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${status.cls}`}>
-                                {status.label}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              ) : (() => {
+                const top5     = [...productStockData].sort((a, b) => b.stock - a.stock).slice(0, 5);
+                const maxStock = top5[0]?.stock || 1;
+                const barColors = ["#1a3c2e", "#2d7a3a", "#56ab6e", "#a5d6a7", "#c8e6c9"];
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                    {top5.map((item, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <span style={{ fontSize: "11px", fontWeight: 700, color: "#aaa", width: "18px", textAlign: "right" }}>
+                          #{i + 1}
+                        </span>
+                        <div style={{ width: "100px", flexShrink: 0 }}>
+                          <p style={{ fontSize: "12px", color: "#555", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {item.name}
+                          </p>
+                          {item.size && (
+                            <span style={{ fontSize: "10px", color: "#888", background: "#f0f0f0", padding: "1px 6px", borderRadius: "10px" }}>
+                              {item.size}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ flex: 1, height: "24px", background: "#f0f0f0", borderRadius: "6px", overflow: "hidden" }}>
+                          <div style={{
+                            height: "100%",
+                            width: `${(item.stock / maxStock) * 100}%`,
+                            background: barColors[i] ?? "#a5d6a7",
+                            borderRadius: "6px",
+                            transition: "width 0.5s",
+                          }} />
+                        </div>
+                        <span style={{ fontSize: "12px", fontWeight: 700, color: "#1a3c2e", width: "60px", textAlign: "right", whiteSpace: "nowrap" }}>
+                          {item.stock} {getUnitShort(item.stockUnit)}
+                        </span>
+                      </div>
+                    ))}
+                    <p style={{ fontSize: "11px", color: "#aaa", marginTop: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{ display: "inline-block", width: "12px", height: "12px", background: "#2d7a3a", borderRadius: "3px" }} />
+                      Units in Stock
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
 
-            {/* Top Selling */}
+            {/* ── Top Selling ── */}
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <div className="flex items-center gap-2 mb-3 flex-wrap">
                 <span className="text-lg">📈</span>
