@@ -1,4 +1,4 @@
-const API_URL = 'https://backend-production-da89.up.railway.app/api';
+const API_URL = 'https://backend-production-740c.up.railway.app/api';
 
 const getToken = () => {
   if (typeof window !== 'undefined') {
