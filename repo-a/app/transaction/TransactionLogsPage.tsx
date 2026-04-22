@@ -22,37 +22,25 @@ const EMOJI_MAP: Record<string, string> = {
 };
 const getEmoji = (cat?: string) => EMOJI_MAP[cat?.toUpperCase() || ""] || "🥤";
 
-// ✅ Returns human-readable date range for each period
 function getPeriodLabel(period: string): string {
   const now = new Date();
-  if (period === "Daily") {
-    return now.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-  }
+  if (period === "Daily") return now.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   if (period === "Weekly") {
-    const start = new Date(now);
-    start.setDate(now.getDate() - 7);
+    const start = new Date(now); start.setDate(now.getDate() - 7);
     return `${start.toLocaleDateString("en-PH", { month: "short", day: "numeric" })} – ${now.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}`;
   }
   return now.toLocaleDateString("en-PH", { month: "long", year: "numeric" });
 }
 
 type OrderLine = {
-  productName: string;
-  category:    string;
-  quantity:    number;
-  price:       number;
-  subtotal:    number;
+  productName: string; category: string;
+  quantity: number; price: number; subtotal: number;
 };
 
 type Transaction = {
-  id:            string;
-  customer:      string;
-  customerId:    string | null;
-  cashier:       string;
-  total:         number;
-  paymentMethod: string;
-  createdAt:     string;
-  orderLines:    OrderLine[];
+  id: string; customer: string; customerId: string | null;
+  cashier: string; total: number; paymentMethod: string;
+  createdAt: string; orderLines: OrderLine[];
 };
 
 function normalizeTransaction(o: Record<string, unknown>): Transaction {
@@ -68,11 +56,11 @@ function normalizeTransaction(o: Record<string, unknown>): Transaction {
     total:         Number(o.totalAmount ?? 0),
     paymentMethod: payment ? String(payment.method ?? "CASH") : "CASH",
     createdAt:     String(o.createdAt ?? o.saleDate ?? ""),
-    orderLines:    rawLines.map((l) => {
+    orderLines:    rawLines.map(l => {
       const product = l.product as Record<string, unknown> | null;
       return {
         productName: product ? String(product.productName ?? "Item") : "Item",
-        category:    product ? String(product.category   ?? "")     : "",
+        category:    product ? String(product.category ?? "")     : "",
         quantity:    Number(l.quantity ?? 0),
         price:       Number(l.price    ?? 0),
         subtotal:    Number(l.subtotal ?? 0),
@@ -120,45 +108,33 @@ export default function TransactionLogsPage() {
     setShowMobileMenu(false);
   };
 
-  const handleLogout = () => {
-    document.cookie = "token=; path=/; max-age=0";
-    localStorage.removeItem("employee");
-    router.push("/");
-  };
+  const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("employee"); router.push("/"); };
 
   const fetchTransactions = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
+      setLoading(true); setError(null);
       const data = await api.getCompletedOrders();
       if (data?.message) { setError(data.message); return; }
-      const raw: Record<string, unknown>[] = Array.isArray(data) ? data : [];
-      setTransactions(raw.map(normalizeTransaction));
-    } catch (err) {
-      setError((err as Error).message || "Failed to load transactions.");
-    } finally {
-      setLoading(false);
-    }
+      setTransactions((Array.isArray(data) ? data : []).map(normalizeTransaction));
+    } catch (err) { setError((err as Error).message || "Failed to load transactions."); }
+    finally { setLoading(false); }
   }, []);
 
   useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
 
   const periodKey = activePeriod === "Daily" ? "Today" : activePeriod === "Weekly" ? "Week" : "Month";
 
-  const filtered = transactions.filter((t) => {
-    const matchPeriod = getPeriodKey(t.createdAt) === periodKey;
-    const q = search.toLowerCase();
-    const matchSearch = !q ||
-      t.id.toLowerCase().includes(q) ||
-      t.customer.toLowerCase().includes(q) ||
-      t.cashier.toLowerCase().includes(q);
+  const filtered = transactions.filter(t => {
+    const matchPeriod  = getPeriodKey(t.createdAt) === periodKey;
+    const q            = search.toLowerCase();
+    const matchSearch  = !q || t.id.toLowerCase().includes(q) || t.customer.toLowerCase().includes(q) || t.cashier.toLowerCase().includes(q);
     return matchPeriod && matchSearch;
   });
 
   const sectionLabel = activePeriod === "Daily" ? "Today" : activePeriod === "Weekly" ? "This Week" : "This Month";
   const totalRevenue = filtered.reduce((s, t) => s + t.total, 0);
-  const cashCount    = filtered.filter((t) => t.paymentMethod === "CASH").length;
-  const onlineCount  = filtered.filter((t) => t.paymentMethod !== "CASH").length;
+  const cashCount    = filtered.filter(t => t.paymentMethod === "CASH").length;
+  const onlineCount  = filtered.filter(t => t.paymentMethod !== "CASH").length;
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
@@ -168,7 +144,7 @@ export default function TransactionLogsPage() {
           <p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide">JULIETA SOFTDRINKS<br />STORE</p>
         </div>
         <nav className="flex flex-col gap-1">
-          {navItems.map((item) => (
+          {navItems.map(item => (
             <div key={item.label} onClick={() => navigate(item.label)}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${item.active ? "text-indigo-700 font-semibold" : "text-gray-400 hover:text-gray-600"}`}>
               <div className="relative flex items-center gap-2 w-full">
@@ -189,10 +165,7 @@ export default function TransactionLogsPage() {
           </button>
           <h1 className="text-xl md:text-2xl font-bold text-gray-800">Transaction Logs</h1>
           <div className="flex items-center gap-2">
-            <div className="relative">
-              <span className="text-xl">🔔</span>
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" />
-            </div>
+            <div className="relative"><span className="text-xl">🔔</span><div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" /></div>
             <div className="relative">
               <button onClick={() => setShowUserMenu(!showUserMenu)}
                 className={`flex items-center gap-2 px-2 py-2 rounded-xl transition-colors ${showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"}`}>
@@ -219,7 +192,7 @@ export default function TransactionLogsPage() {
 
         {showMobileMenu && (
           <div className="md:hidden bg-white border-b border-gray-100 px-4 py-3 flex flex-col gap-1 z-40">
-            {navItems.map((item) => (
+            {navItems.map(item => (
               <div key={item.label} onClick={() => navigate(item.label)}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${item.active ? "text-indigo-700 font-semibold" : "text-gray-500"}`}>
                 <span>{item.icon}</span><span>{item.label}</span>
@@ -231,30 +204,30 @@ export default function TransactionLogsPage() {
         <div className="flex-1 p-3 md:p-4 bg-green-50">
           <div className="bg-white rounded-2xl p-4 shadow-sm">
 
-            {/* Period tabs + date label + Search + Refresh */}
+            {/* ✅ Period tabs + date label + Search — NO refresh button */}
             <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
               <div className="flex flex-wrap items-center gap-2">
-                {["Daily", "Weekly", "Monthly"].map((tab) => (
+                {["Daily", "Weekly", "Monthly"].map(tab => (
                   <button key={tab} onClick={() => setActivePeriod(tab)}
                     className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activePeriod === tab ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
                     {tab}
                   </button>
                 ))}
-                {/* ✅ Shows exact date / range / month */}
                 <span className="text-xs text-indigo-600 font-medium bg-indigo-50 px-3 py-1.5 rounded-lg">
                   📅 {getPeriodLabel(activePeriod)}
                 </span>
               </div>
-              <div className="flex gap-2 items-center">
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
-                  <input type="text" placeholder="Search order, customer, cashier..." value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-8 pr-3 py-1.5 rounded-lg border border-gray-200 text-sm outline-none w-56" />
-                </div>
-                <button onClick={fetchTransactions} className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-500 hover:bg-gray-200">
-                  🔄
-                </button>
+
+              {/* ✅ Search with solid text — no refresh button */}
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">🔍</span>
+                <input
+                  type="text"
+                  placeholder="Search order, customer, cashier..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-9 pr-4 py-2 rounded-lg border border-gray-200 text-sm outline-none w-64 text-gray-800 placeholder-gray-400 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-100 bg-white"
+                />
               </div>
             </div>
 
@@ -265,7 +238,7 @@ export default function TransactionLogsPage() {
                   { label: "Total Revenue", value: `₱${totalRevenue.toLocaleString()}`, color: "text-indigo-700", bg: "bg-indigo-50" },
                   { label: "Cash Orders",   value: String(cashCount),                   color: "text-green-700",  bg: "bg-green-50"  },
                   { label: "Online Orders", value: String(onlineCount),                 color: "text-purple-700", bg: "bg-purple-50" },
-                ].map((s) => (
+                ].map(s => (
                   <div key={s.label} className={`${s.bg} rounded-xl p-3 text-center`}>
                     <p className="text-xs text-gray-500 mb-1">{s.label}</p>
                     <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
@@ -284,7 +257,6 @@ export default function TransactionLogsPage() {
 
             {!loading && !error && (
               <div>
-                {/* ✅ Section label with specific date range */}
                 <div className="flex items-center gap-3 mb-3">
                   <span className="text-sm font-semibold text-gray-700">{sectionLabel}</span>
                   <span className="text-xs text-indigo-600 font-medium bg-indigo-50 px-2 py-0.5 rounded-lg">
@@ -300,7 +272,7 @@ export default function TransactionLogsPage() {
                   </p>
                 ) : (
                   <div className="flex flex-col gap-3">
-                    {filtered.map((t) => (
+                    {filtered.map(t => (
                       <div key={t.id} className="border border-gray-200 rounded-2xl p-4 hover:shadow-sm transition-shadow">
                         <div className="flex items-start justify-between flex-wrap gap-2">
                           <div>
@@ -340,10 +312,17 @@ export default function TransactionLogsPage() {
       {/* RECEIPT MODAL */}
       {selectedTx && (
         <>
-          <div onClick={() => setSelectedTx(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 40 }} />
-          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 50, width: "400px", background: "#fff", borderRadius: "20px", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" }}>
+          <div onClick={() => setSelectedTx(null)}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 40 }} />
+          <div style={{
+            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+            zIndex: 50, width: "400px", background: "#fff", borderRadius: "20px",
+            overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+            maxHeight: "90vh", overflowY: "auto",
+          }}>
             <div style={{ background: "linear-gradient(135deg,#1a3c2e,#2d7a3a)", padding: "24px 28px", textAlign: "center", position: "relative" }}>
-              <button onClick={() => setSelectedTx(null)} style={{ position: "absolute", top: "14px", right: "14px", background: "rgba(255,255,255,0.2)", border: "none", borderRadius: "50%", width: "30px", height: "30px", cursor: "pointer", color: "#fff", fontSize: "14px" }}>✕</button>
+              <button onClick={() => setSelectedTx(null)}
+                style={{ position: "absolute", top: "14px", right: "14px", background: "rgba(255,255,255,0.2)", border: "none", borderRadius: "50%", width: "30px", height: "30px", cursor: "pointer", color: "#fff", fontSize: "14px" }}>✕</button>
               <div style={{ width: "56px", height: "56px", borderRadius: "50%", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px", fontSize: "24px" }}>🧾</div>
               <p style={{ color: "#fff", fontSize: "18px", fontWeight: 800, margin: "0 0 2px" }}>Julieta Soft Drinks</p>
               <p style={{ color: "rgba(255,255,255,0.65)", fontSize: "12px", margin: 0 }}>Official Receipt</p>

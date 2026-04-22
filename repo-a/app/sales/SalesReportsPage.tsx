@@ -11,22 +11,13 @@ import { api } from "@/lib/api";
 type Period = "Daily" | "Weekly" | "Monthly";
 
 type OrderLine = {
-  id: string;
-  quantity: number;
-  price: number;
-  subtotal: number;
+  id: string; quantity: number; price: number; subtotal: number;
   product: { productName: string; category: string };
 };
 
 type Transaction = {
-  id: string;
-  date: string;
-  rawDate: Date;
-  customer: string;
-  employeeName: string;
-  total: number;
-  payment: string;
-  items: OrderLine[];
+  id: string; date: string; rawDate: Date; customer: string;
+  employeeName: string; total: number; payment: string; items: OrderLine[];
 };
 
 const navItems = [
@@ -41,15 +32,11 @@ const navItems = [
   { label: "Promo Management",      icon: "🎁", path: "/promo"          },
 ];
 
-// ✅ Returns human-readable date range for each period
 function getPeriodLabel(period: Period): string {
   const now = new Date();
-  if (period === "Daily") {
-    return now.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-  }
+  if (period === "Daily") return now.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   if (period === "Weekly") {
-    const start = new Date(now);
-    start.setDate(now.getDate() - 7);
+    const start = new Date(now); start.setDate(now.getDate() - 7);
     return `${start.toLocaleDateString("en-PH", { month: "short", day: "numeric" })} – ${now.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}`;
   }
   return now.toLocaleDateString("en-PH", { month: "long", year: "numeric" });
@@ -62,20 +49,18 @@ function normalizeTransaction(o: Record<string, unknown>): Transaction {
   const rawLines = (o.orderLines ?? []) as Record<string, unknown>[];
   const rawDate  = o.createdAt ? new Date(String(o.createdAt)) : new Date();
   return {
-    id:           String(o.id ?? ""),
-    date:         rawDate.toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" }),
+    id: String(o.id ?? ""),
+    date: rawDate.toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" }),
     rawDate,
     customer:     customer ? String(customer.name ?? "Walk-in") : "Walk-in",
     employeeName: employee ? String(employee.name ?? "—") : "—",
-    total:        Number(o.totalAmount ?? 0),
-    payment:      payment ? String(payment.method ?? "CASH") : "CASH",
-    items:        rawLines.map((l) => {
+    total:   Number(o.totalAmount ?? 0),
+    payment: payment ? String(payment.method ?? "CASH") : "CASH",
+    items: rawLines.map(l => {
       const product = l.product as Record<string, unknown> | null;
       return {
-        id:       String(l.id ?? ""),
-        quantity: Number(l.quantity ?? 0),
-        price:    Number(l.price ?? 0),
-        subtotal: Number(l.subtotal ?? 0),
+        id: String(l.id ?? ""), quantity: Number(l.quantity ?? 0),
+        price: Number(l.price ?? 0), subtotal: Number(l.subtotal ?? 0),
         product: {
           productName: product ? String(product.productName ?? "Item") : "Item",
           category:    product ? String(product.category ?? "") : "",
@@ -88,8 +73,8 @@ function normalizeTransaction(o: Record<string, unknown>): Transaction {
 function filterByPeriod(txs: Transaction[], period: Period): Transaction[] {
   const now = new Date();
   return txs.filter(({ rawDate: d }) => {
-    if (period === "Daily")   return d.toDateString() === now.toDateString();
-    if (period === "Weekly")  { const w = new Date(now); w.setDate(now.getDate() - 7); return d >= w; }
+    if (period === "Daily")  return d.toDateString() === now.toDateString();
+    if (period === "Weekly") { const w = new Date(now); w.setDate(now.getDate() - 7); return d >= w; }
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   });
 }
@@ -97,12 +82,9 @@ function filterByPeriod(txs: Transaction[], period: Period): Transaction[] {
 function buildRevenueChart(txs: Transaction[], period: Period) {
   const map: Record<string, number> = {};
   txs.forEach(({ rawDate: d, total }) => {
-    let key: string;
-    if (period === "Daily") {
-      key = d.toLocaleTimeString("en-PH", { hour: "2-digit", hour12: true });
-    } else {
-      key = d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
-    }
+    const key = period === "Daily"
+      ? d.toLocaleTimeString("en-PH", { hour: "2-digit", hour12: true })
+      : d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
     map[key] = (map[key] ?? 0) + total;
   });
   return Object.entries(map).map(([date, revenue]) => ({ date, revenue })).slice(-16);
@@ -111,14 +93,11 @@ function buildRevenueChart(txs: Transaction[], period: Period) {
 function buildTransactionChart(txs: Transaction[], period: Period) {
   const map: Record<string, number> = {};
   txs.forEach(({ rawDate: d }) => {
-    let key: string;
-    if (period === "Daily") {
-      key = d.toLocaleTimeString("en-PH", { hour: "2-digit", hour12: true });
-    } else if (period === "Weekly") {
-      key = d.toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" });
-    } else {
-      key = d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
-    }
+    const key = period === "Daily"
+      ? d.toLocaleTimeString("en-PH", { hour: "2-digit", hour12: true })
+      : period === "Weekly"
+      ? d.toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" })
+      : d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
     map[key] = (map[key] ?? 0) + 1;
   });
   return Object.entries(map).map(([date, transactions]) => ({ date, transactions })).slice(-16);
@@ -126,14 +105,12 @@ function buildTransactionChart(txs: Transaction[], period: Period) {
 
 function buildTopSelling(txs: Transaction[]) {
   const map: Record<string, { name: string; category: string; units: number; revenue: number }> = {};
-  txs.forEach((tx) => {
-    tx.items.forEach((line) => {
-      const key = line.product.productName;
-      if (!map[key]) map[key] = { name: key, category: line.product.category, units: 0, revenue: 0 };
-      map[key].units   += line.quantity;
-      map[key].revenue += line.subtotal;
-    });
-  });
+  txs.forEach(tx => tx.items.forEach(line => {
+    const key = line.product.productName;
+    if (!map[key]) map[key] = { name: key, category: line.product.category, units: 0, revenue: 0 };
+    map[key].units   += line.quantity;
+    map[key].revenue += line.subtotal;
+  }));
   return Object.values(map).sort((a, b) => b.units - a.units);
 }
 
@@ -142,12 +119,11 @@ function buildUnpopular(txs: Transaction[]) {
 }
 
 function exportCSV(headers: string[], rows: (string | number)[][], filename: string) {
-  const csv  = [headers, ...rows].map((r) => r.join(",")).join("\n");
+  const csv  = [headers, ...rows].map(r => r.join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
-  const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
+  a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 export default function SalesReportsPage() {
@@ -165,17 +141,12 @@ export default function SalesReportsPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
+      setLoading(true); setError(null);
       const data = await api.getCompletedOrders();
       if (data?.message) { setError(data.message); return; }
-      const raw: Record<string, unknown>[] = Array.isArray(data) ? data : [];
-      setTransactions(raw.map(normalizeTransaction));
-    } catch (err) {
-      setError((err as Error).message || "Failed to load data.");
-    } finally {
-      setLoading(false);
-    }
+      setTransactions((Array.isArray(data) ? data : []).map(normalizeTransaction));
+    } catch (err) { setError((err as Error).message || "Failed to load data."); }
+    finally { setLoading(false); }
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -190,7 +161,7 @@ export default function SalesReportsPage() {
   const txCount    = filtered.length;
   const avgOrder   = txCount > 0 ? Math.round(totalSales / txCount) : 0;
 
-  const filteredTop   = useMemo(() => topSelling.filter(i =>
+  const filteredTop = useMemo(() => topSelling.filter(i =>
     i.name.toLowerCase().includes(topSearch.toLowerCase()) ||
     i.category.toLowerCase().includes(topSearch.toLowerCase())
   ), [topSelling, topSearch]);
@@ -203,7 +174,7 @@ export default function SalesReportsPage() {
   const navigate     = (path: string) => { router.push(path); setShowMobileMenu(false); };
   const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("employee"); router.push("/"); };
   const exportSales  = () => exportCSV(
-    ["Product Name", "Category", "Units Sold", "Revenue (₱)"],
+    ["Product Name","Category","Units Sold","Revenue (₱)"],
     topSelling.map(i => [i.name, i.category, i.units, i.revenue]),
     "sales_report.csv"
   );
@@ -222,7 +193,7 @@ export default function SalesReportsPage() {
             <p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide">JULIETA SOFTDRINKS<br />STORE</p>
           </div>
           <nav className="flex flex-col gap-1">
-            {navItems.map((item) => {
+            {navItems.map(item => {
               const isActive = pathname === item.path;
               return (
                 <div key={item.label} onClick={() => navigate(item.path)}
@@ -265,7 +236,7 @@ export default function SalesReportsPage() {
 
           {showMobileMenu && (
             <div className="md:hidden bg-white border-b border-gray-100 px-4 py-3 flex flex-col gap-1 z-40">
-              {navItems.map((item) => (
+              {navItems.map(item => (
                 <div key={item.label} onClick={() => navigate(item.path)}
                   className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${pathname === item.path ? "text-indigo-700 font-semibold" : "text-gray-500"}`}>
                   <span>{item.icon}</span><span>{item.label}</span>
@@ -283,20 +254,19 @@ export default function SalesReportsPage() {
               </div>
             )}
 
-            {/* ✅ Period picker with specific date label */}
+            {/* ✅ Period picker — NO refresh button */}
             <div className="bg-white rounded-2xl p-4 shadow-sm flex flex-wrap items-center gap-3">
               <span className="text-xs text-gray-400">📅 Report Period:</span>
-              {(["Daily", "Weekly", "Monthly"] as Period[]).map((p) => (
+              {(["Daily", "Weekly", "Monthly"] as Period[]).map(p => (
                 <button key={p} onClick={() => setPeriod(p)}
                   className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${period === p ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
                   {p}
                 </button>
               ))}
-              {/* ✅ Shows exact date / range / month */}
               <span className="text-xs text-indigo-600 font-medium bg-indigo-50 px-3 py-1.5 rounded-lg">
                 📅 {getPeriodLabel(period)}
               </span>
-              <button onClick={fetchData} className="ml-auto flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50">🔄 Refresh</button>
+              {/* ✅ Refresh button removed from here */}
             </div>
 
             {/* Stat cards */}
@@ -334,7 +304,7 @@ export default function SalesReportsPage() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} angle={-15} textAnchor="end" />
                     <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip formatter={(v) => `₱${Number(v).toLocaleString()}`} />
+                    <Tooltip formatter={v => `₱${Number(v).toLocaleString()}`} />
                     <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} dot={false} name="Revenue (₱)" />
                   </LineChart>
                 </ResponsiveContainer>
@@ -353,7 +323,7 @@ export default function SalesReportsPage() {
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} angle={-15} textAnchor="end" />
                     <YAxis tick={{ fontSize: 10 }} />
                     <Tooltip />
-                    <Bar dataKey="transactions" fill="#22c55e" radius={[3, 3, 0, 0]} name="Transactions" />
+                    <Bar dataKey="transactions" fill="#22c55e" radius={[3,3,0,0]} name="Transactions" />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -366,7 +336,8 @@ export default function SalesReportsPage() {
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-1.5">
                     <span className="text-gray-400 text-xs">🔍</span>
-                    <input type="text" placeholder="Search..." value={topSearch} onChange={(e) => setTopSearch(e.target.value)} className="outline-none text-xs text-gray-700 w-28 bg-transparent" />
+                    <input type="text" placeholder="Search..." value={topSearch} onChange={e => setTopSearch(e.target.value)}
+                      className="outline-none text-xs text-gray-700 w-28 bg-transparent" />
                   </div>
                   <button onClick={exportSales} className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50">📤 Export</button>
                 </div>
@@ -403,7 +374,8 @@ export default function SalesReportsPage() {
                 <h2 className="font-bold text-gray-800">Unpopular Items <span className="text-red-400 text-sm">(Needs Attention)</span></h2>
                 <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-1.5">
                   <span className="text-gray-400 text-xs">🔍</span>
-                  <input type="text" placeholder="Search..." value={unpopSearch} onChange={(e) => setUnpopSearch(e.target.value)} className="outline-none text-xs text-gray-700 w-28 bg-transparent" />
+                  <input type="text" placeholder="Search..." value={unpopSearch} onChange={e => setUnpopSearch(e.target.value)}
+                    className="outline-none text-xs text-gray-700 w-28 bg-transparent" />
                 </div>
               </div>
               {loading ? <Skeleton h={120} /> : filteredUnpop.length === 0 ? (

@@ -26,15 +26,15 @@ type SupplierItem = {
 const CHECKERS = ["Rjay Salinas", "Ray Teodoro"];
 
 const navItems = [
-  { label: "Dashboard", icon: "🏠" },
+  { label: "Dashboard",             icon: "🏠" },
   { label: "Inventory Maintenance", icon: "🛒" },
-  { label: "Supplier Maintenance", icon: "📊", active: true },
-  { label: "Sales Reports", icon: "🌐" },
-  { label: "Transaction Logs", icon: "▦" },
-  { label: "Product Management", icon: "🗒️" },
-  { label: "Account Management", icon: "👤" },
-  { label: "Purchase Order", icon: "📋" },
-  { label: "Promo Management", icon: "🎁" },
+  { label: "Supplier Maintenance",  icon: "📊", active: true },
+  { label: "Sales Reports",         icon: "🌐" },
+  { label: "Transaction Logs",      icon: "▦"  },
+  { label: "Product Management",    icon: "🗒️" },
+  { label: "Account Management",    icon: "👤" },
+  { label: "Purchase Order",        icon: "📋" },
+  { label: "Promo Management",      icon: "🎁" },
 ];
 
 const emptyForm = {
@@ -45,10 +45,10 @@ const emptyForm = {
   lastOrdered: "" as string | number,
   lastCheckBy: "",
   dateChecked: "",
-  status: "ACTIVE"
+  status: "ACTIVE",
 };
 
-// ✅ Phone input - numbers only, +63 prefix
+// ── Phone input — numbers only, +63 prefix ─────────────────────────────────
 function PhoneInput({ value, onChange }: { value: string; onChange: (val: string) => void }) {
   const digits = value.startsWith("+63") ? value.slice(3) : value.replace(/^\+63/, "");
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,10 +73,8 @@ function PhoneInput({ value, onChange }: { value: string; onChange: (val: string
   );
 }
 
-// ✅ In-app Alert/Confirm Modal
-function AlertModal({
-  open, type = "alert", title, message, danger, onConfirm, onCancel
-}: {
+// ── In-app Alert / Confirm ─────────────────────────────────────────────────
+function AlertModal({ open, type = "alert", title, message, danger, onConfirm, onCancel }: {
   open: boolean; type?: "alert" | "confirm"; title?: string; message: string;
   danger?: boolean; onConfirm: () => void; onCancel?: () => void;
 }) {
@@ -89,14 +87,10 @@ function AlertModal({
         <p className="text-sm text-gray-500 mb-5">{message}</p>
         <div className="flex gap-3">
           {type === "confirm" && (
-            <button onClick={onCancel} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">
-              Cancel
-            </button>
+            <button onClick={onCancel} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
           )}
-          <button
-            onClick={onConfirm}
-            className={`flex-1 rounded-lg py-2 text-sm text-white font-medium ${danger ? "bg-red-500 hover:bg-red-600" : "bg-indigo-600 hover:bg-indigo-700"}`}
-          >
+          <button onClick={onConfirm}
+            className={`flex-1 rounded-lg py-2 text-sm text-white font-medium ${danger ? "bg-red-500 hover:bg-red-600" : "bg-indigo-600 hover:bg-indigo-700"}`}>
             {type === "confirm" ? (danger ? "Delete" : "Confirm") : "OK"}
           </button>
         </div>
@@ -105,216 +99,108 @@ function AlertModal({
   );
 }
 
-// ✅ Fixed DatePicker — uses fixed positioning via portal so it never gets
-//    clipped by overflow-y-auto on the modal, and always shows all 7 columns.
-function DatePicker({
-  value,
-  onChange,
-  label,
-}: {
-  value: string;
-  onChange: (val: string) => void;
-  label?: string;
-}) {
+// ── DatePicker — portal-based, never clipped by modal scroll ───────────────
+function DatePicker({ value, onChange, label }: { value: string; onChange: (val: string) => void; label?: string }) {
   const [show, setShow] = useState(false);
-  const [calendarPos, setCalendarPos] = useState({ top: 0, left: 0, width: 280 });
-  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [calendarPos, setCalendarPos] = useState({ top: 0, left: 0 });
+  const buttonRef  = useRef<HTMLButtonElement>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
-
   const today = new Date();
 
-  // ✅ No useEffect needed — derive nav state lazily; sync on open
-  const [viewYear, setViewYear] = useState(
-    () => (value ? parseInt(value.split("-")[0]) : today.getFullYear())
-  );
-  const [viewMonth, setViewMonth] = useState(
-    () => (value ? parseInt(value.split("-")[1]) - 1 : today.getMonth())
-  );
+  const [viewYear,  setViewYear]  = useState(() => value ? parseInt(value.split("-")[0]) : today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => value ? parseInt(value.split("-")[1]) - 1 : today.getMonth());
 
-  // Reposition calendar and sync nav to the currently selected value on open
   const openCalendar = () => {
-    // Sync month/year navigation to whatever is currently selected (avoids stale state)
-    setViewYear(value ? parseInt(value.split("-")[0]) : today.getFullYear());
+    setViewYear(value  ? parseInt(value.split("-")[0])     : today.getFullYear());
     setViewMonth(value ? parseInt(value.split("-")[1]) - 1 : today.getMonth());
-
     if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      const calW = 280;
-      // Prefer opening below; flip above if too close to bottom of viewport
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const calH = 320; // approximate calendar height
-      let top = rect.bottom + 6;
-      if (spaceBelow < calH && rect.top > calH) {
-        top = rect.top - calH - 6;
-      }
-      // Prefer left-aligned; shift left if it would overflow right edge
+      const rect  = buttonRef.current.getBoundingClientRect();
+      const calW  = 280;
+      const calH  = 320;
+      let top  = rect.bottom + 6;
       let left = rect.left;
-      if (left + calW > window.innerWidth - 12) {
-        left = window.innerWidth - calW - 12;
-      }
-      setCalendarPos({ top, left, width: Math.max(calW, rect.width) });
+      if (window.innerHeight - rect.bottom < calH && rect.top > calH) top = rect.top - calH - 6;
+      if (left + calW > window.innerWidth - 12) left = window.innerWidth - calW - 12;
+      setCalendarPos({ top, left });
     }
     setShow(true);
   };
 
-  // Close on outside click
   useEffect(() => {
     if (!show) return;
-    const handler = (e: MouseEvent) => {
-      if (
-        calendarRef.current && !calendarRef.current.contains(e.target as Node) &&
-        buttonRef.current && !buttonRef.current.contains(e.target as Node)
-      ) {
-        setShow(false);
-      }
+    const h = (e: MouseEvent) => {
+      if (calendarRef.current  && !calendarRef.current.contains(e.target as Node) &&
+          buttonRef.current    && !buttonRef.current.contains(e.target as Node)) setShow(false);
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
   }, [show]);
 
-  // Close on scroll anywhere (modal scroll will no longer leave it floating)
   useEffect(() => {
     if (!show) return;
-    const handler = () => setShow(false);
-    window.addEventListener("scroll", handler, true);
-    return () => window.removeEventListener("scroll", handler, true);
+    const h = () => setShow(false);
+    window.addEventListener("scroll", h, true);
+    return () => window.removeEventListener("scroll", h, true);
   }, [show]);
 
-  const MONTHS = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December",
-  ];
-  const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-
-  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const DAYS   = ["Su","Mo","Tu","We","Th","Fr","Sa"];
+  const firstDay   = new Date(viewYear, viewMonth, 1).getDay();
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
 
   const selectDate = (day: number) => {
-    const month = String(viewMonth + 1).padStart(2, "0");
-    const dayStr = String(day).padStart(2, "0");
-    onChange(`${viewYear}-${month}-${dayStr}`);
+    onChange(`${viewYear}-${String(viewMonth + 1).padStart(2,"0")}-${String(day).padStart(2,"0")}`);
     setShow(false);
   };
 
   const displayValue = value
-    ? new Date(value + "T00:00:00").toLocaleDateString("en-PH", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })
+    ? new Date(value + "T00:00:00").toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" })
     : "";
 
-  const selectedDay = value ? parseInt(value.split("-")[2]) : null;
-  const selectedMonth = value ? parseInt(value.split("-")[1]) - 1 : null;
-  const selectedYear = value ? parseInt(value.split("-")[0]) : null;
+  const selDay   = value ? parseInt(value.split("-")[2]) : null;
+  const selMonth = value ? parseInt(value.split("-")[1]) - 1 : null;
+  const selYear  = value ? parseInt(value.split("-")[0]) : null;
 
-  const prevMonth = () => {
-    if (viewMonth === 0) { setViewMonth(11); setViewYear((y) => y - 1); }
-    else setViewMonth((m) => m - 1);
-  };
-  const nextMonth = () => {
-    if (viewMonth === 11) { setViewMonth(0); setViewYear((y) => y + 1); }
-    else setViewMonth((m) => m + 1);
-  };
+  const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); };
+  const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); };
 
   const calendar = show ? (
-    <div
-      ref={calendarRef}
-      style={{
-        position: "fixed",
-        top: calendarPos.top,
-        left: calendarPos.left,
-        width: 280,
-        zIndex: 99999,
-      }}
-      className="bg-white border border-gray-200 rounded-2xl shadow-2xl p-4"
-    >
-      {/* Month / Year navigation */}
+    <div ref={calendarRef}
+      style={{ position: "fixed", top: calendarPos.top, left: calendarPos.left, width: 280, zIndex: 99999 }}
+      className="bg-white border border-gray-200 rounded-2xl shadow-2xl p-4">
       <div className="flex items-center justify-between mb-3">
-        <button
-          type="button"
-          onClick={prevMonth}
-          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600 font-medium"
-        >
-          ‹
-        </button>
+        <button type="button" onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600 font-medium">‹</button>
         <div className="flex items-center gap-1">
-          <select
-            value={viewMonth}
-            onChange={(e) => setViewMonth(Number(e.target.value))}
-            className="text-sm font-semibold text-gray-800 border-none outline-none bg-transparent cursor-pointer"
-          >
+          <select value={viewMonth} onChange={(e) => setViewMonth(Number(e.target.value))}
+            className="text-sm font-semibold text-gray-800 border-none outline-none bg-transparent cursor-pointer">
             {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
           </select>
-          <input
-            type="number"
-            value={viewYear}
-            onChange={(e) => setViewYear(Number(e.target.value))}
-            className="w-16 text-sm font-semibold text-gray-800 border border-gray-200 rounded px-1 text-center outline-none focus:border-indigo-400"
-          />
+          <input type="number" value={viewYear} onChange={(e) => setViewYear(Number(e.target.value))}
+            className="w-16 text-sm font-semibold text-gray-800 border border-gray-200 rounded px-1 text-center outline-none focus:border-indigo-400" />
         </div>
-        <button
-          type="button"
-          onClick={nextMonth}
-          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600 font-medium"
-        >
-          ›
-        </button>
+        <button type="button" onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600 font-medium">›</button>
       </div>
-
-      {/* Day-of-week headers — full 7 columns */}
       <div className="grid grid-cols-7 mb-1">
-        {DAYS.map((d) => (
-          <div key={d} className="text-center text-xs font-semibold text-gray-400 py-1">
-            {d}
-          </div>
-        ))}
+        {DAYS.map(d => <div key={d} className="text-center text-xs font-semibold text-gray-400 py-1">{d}</div>)}
       </div>
-
-      {/* Day grid */}
       <div className="grid grid-cols-7 gap-0.5">
-        {Array.from({ length: firstDay }).map((_, i) => (
-          <div key={`empty-${i}`} />
-        ))}
+        {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
         {Array.from({ length: daysInMonth }).map((_, i) => {
           const day = i + 1;
-          const isSelected =
-            day === selectedDay &&
-            viewMonth === selectedMonth &&
-            viewYear === selectedYear;
-          const isToday =
-            day === today.getDate() &&
-            viewMonth === today.getMonth() &&
-            viewYear === today.getFullYear();
+          const isSel  = day === selDay   && viewMonth === selMonth  && viewYear === selYear;
+          const isToday = day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
           return (
-            <button
-              key={day}
-              type="button"
-              onClick={() => selectDate(day)}
+            <button key={day} type="button" onClick={() => selectDate(day)}
               className={`w-full aspect-square flex items-center justify-center rounded-lg text-xs transition-colors
-                ${isSelected
-                  ? "bg-indigo-600 text-white font-semibold"
-                  : isToday
-                  ? "border border-indigo-400 text-indigo-600 font-semibold"
-                  : "text-gray-700 hover:bg-indigo-50"
-                }`}
-            >
+                ${isSel ? "bg-indigo-600 text-white font-semibold" : isToday ? "border border-indigo-400 text-indigo-600 font-semibold" : "text-gray-700 hover:bg-indigo-50"}`}>
               {day}
             </button>
           );
         })}
       </div>
-
-      {/* Today shortcut */}
-      <button
-        type="button"
-        onClick={() => {
-          setViewYear(today.getFullYear());
-          setViewMonth(today.getMonth());
-          selectDate(today.getDate());
-        }}
-        className="w-full mt-3 py-1.5 text-xs font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
-      >
+      <button type="button"
+        onClick={() => { setViewYear(today.getFullYear()); setViewMonth(today.getMonth()); selectDate(today.getDate()); }}
+        className="w-full mt-3 py-1.5 text-xs font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50">
         Today
       </button>
     </div>
@@ -322,90 +208,72 @@ function DatePicker({
 
   return (
     <div className="relative">
-      {label && (
-        <label className="text-xs font-medium text-gray-600">{label}</label>
-      )}
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={openCalendar}
-        className="w-full flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 text-left hover:border-indigo-400 transition-colors focus:outline-none focus:border-indigo-400 bg-white"
-      >
+      {label && <label className="text-xs font-medium text-gray-600">{label}</label>}
+      <button ref={buttonRef} type="button" onClick={openCalendar}
+        className="w-full flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 text-left hover:border-indigo-400 transition-colors focus:outline-none focus:border-indigo-400 bg-white">
         <span className="text-gray-400 text-base">📅</span>
         <span className={`flex-1 truncate ${displayValue ? "text-gray-900" : "text-gray-400"}`}>
           {displayValue || "Select date"}
         </span>
         {value && (
-          <span
-            role="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onChange("");
-              setShow(false);
-            }}
-            className="ml-auto text-gray-300 hover:text-gray-500 text-xs leading-none"
-          >
-            ✕
-          </span>
+          <span role="button" onClick={(e) => { e.stopPropagation(); onChange(""); setShow(false); }}
+            className="ml-auto text-gray-300 hover:text-gray-500 text-xs leading-none">✕</span>
         )}
       </button>
-
-      {/* Render calendar in a portal so overflow:hidden/auto on modal doesn't clip it */}
-      {typeof document !== "undefined" && calendar
-        ? createPortal(calendar, document.body)
-        : null}
+      {typeof document !== "undefined" && calendar ? createPortal(calendar, document.body) : null}
     </div>
   );
 }
 
 export default function SupplierMaintenancePage() {
   const router = useRouter();
-  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showUserMenu,   setShowUserMenu]   = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [search, setSearch] = useState("");
-  const [items, setItems] = useState<SupplierItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<string[]>([]);
-  const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [checkerFilter, setCheckerFilter] = useState("All");
+  const [search,         setSearch]         = useState("");
+  const [items,          setItems]          = useState<SupplierItem[]>([]);
+  const [loading,        setLoading]        = useState(true);
+  const [selected,       setSelected]       = useState<string[]>([]);
+  const [showModal,      setShowModal]      = useState(false);
+  const [form,           setForm]           = useState(emptyForm);
+  const [editingId,      setEditingId]      = useState<string | null>(null);
+  const [checkerFilter,  setCheckerFilter]  = useState("All");
   const [showCheckerDropdown, setShowCheckerDropdown] = useState(false);
-  const [viewItem, setViewItem] = useState<SupplierItem | null>(null);
-  const [success, setSuccess] = useState("");
-  const [error, setError] = useState("");
+  const [viewItem,       setViewItem]       = useState<SupplierItem | null>(null);
+  const [success,        setSuccess]        = useState("");
+  const [error,          setError]          = useState("");
+
+  // ✅ Status filter state
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const statusRef  = useRef<HTMLDivElement>(null);
+  const checkerRef = useRef<HTMLDivElement>(null);
 
   const [alertModal, setAlertModal] = useState<{
     open: boolean; type?: "alert" | "confirm"; title?: string;
-    message: string; danger?: boolean;
-    onConfirm: () => void; onCancel?: () => void;
+    message: string; danger?: boolean; onConfirm: () => void; onCancel?: () => void;
   }>({ open: false, message: "", onConfirm: () => {} });
 
-  const showAlert = (message: string, title?: string) => {
-    setAlertModal({ open: true, type: "alert", title, message, onConfirm: () => setAlertModal((a) => ({ ...a, open: false })) });
-  };
+  const showAlert = (message: string, title?: string) =>
+    setAlertModal({ open: true, type: "alert", title, message, onConfirm: () => setAlertModal(a => ({ ...a, open: false })) });
 
-  const showConfirm = (message: string, onConfirm: () => void, title?: string, danger = false) => {
-    setAlertModal({
-      open: true, type: "confirm", title, message, danger,
-      onConfirm: () => { setAlertModal((a) => ({ ...a, open: false })); onConfirm(); },
-      onCancel: () => setAlertModal((a) => ({ ...a, open: false })),
+  const showConfirm = (message: string, onConfirm: () => void, title?: string, danger = false) =>
+    setAlertModal({ open: true, type: "confirm", title, message, danger,
+      onConfirm: () => { setAlertModal(a => ({ ...a, open: false })); onConfirm(); },
+      onCancel:  () => setAlertModal(a => ({ ...a, open: false })),
     });
-  };
 
   const showToast = (msg: string, isError = false) => {
-    if (isError) { setError(msg); setTimeout(() => setError(""), 3000); }
-    else { setSuccess(msg); setTimeout(() => setSuccess(""), 3000); }
+    if (isError) { setError(msg);   setTimeout(() => setError(""),   3000); }
+    else         { setSuccess(msg); setTimeout(() => setSuccess(""), 3000); }
   };
 
-  const checkerRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
+    const h = (e: MouseEvent) => {
       if (checkerRef.current && !checkerRef.current.contains(e.target as Node)) setShowCheckerDropdown(false);
+      if (statusRef.current  && !statusRef.current.contains(e.target as Node))  setShowStatusDropdown(false);
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
   }, []);
 
   const fetchSuppliers = async () => {
@@ -413,43 +281,35 @@ export default function SupplierMaintenancePage() {
       setLoading(true);
       const data = await api.getSuppliers();
       setItems(data);
-    } catch (err) {
-      console.error("Failed to fetch suppliers:", err);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
   };
 
   useEffect(() => { fetchSuppliers(); }, []);
 
   const filtered = items.filter((row) => {
-    const matchSearch =
-      row.supplierName.toLowerCase().includes(search.toLowerCase()) ||
-      row.id.toLowerCase().includes(search.toLowerCase()) ||
-      row.contactNo.toLowerCase().includes(search.toLowerCase());
+    const matchSearch  = row.supplierName.toLowerCase().includes(search.toLowerCase()) ||
+                         row.id.toLowerCase().includes(search.toLowerCase()) ||
+                         row.contactNo.toLowerCase().includes(search.toLowerCase());
     const matchChecker = checkerFilter === "All" || row.lastCheckBy === checkerFilter;
-    return matchSearch && matchChecker;
+    // ✅ Status filter
+    const matchStatus  = statusFilter === "All" || row.status === statusFilter;
+    return matchSearch && matchChecker && matchStatus;
   });
 
-  const toggleSelect = (id: string) => setSelected((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
-  const toggleAll = () => selected.length === filtered.length ? setSelected([]) : setSelected(filtered.map((r) => r.id));
+  const toggleSelect = (id: string) => setSelected(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  const toggleAll    = () => selected.length === filtered.length ? setSelected([]) : setSelected(filtered.map(r => r.id));
 
   const openAddModal = () => { setForm(emptyForm); setEditingId(null); setShowModal(true); };
 
   const openEditModal = () => {
-    if (selected.length !== 1) {
-      showAlert("Please select exactly one item to edit.", "Selection Required");
-      return;
-    }
-    const item = items.find((i) => i.id === selected[0]);
+    if (selected.length !== 1) { showAlert("Please select exactly one item to edit.", "Selection Required"); return; }
+    const item = items.find(i => i.id === selected[0]);
     if (!item) return;
     setForm({
-      supplierName: item.supplierName,
-      contactNo: item.contactNo,
-      address: item.address || "",
-      agentName: item.agentName || "",
-      lastOrdered: item.lastOrdered ?? "",
-      lastCheckBy: item.lastCheckBy || "",
+      supplierName: item.supplierName, contactNo: item.contactNo,
+      address: item.address || "", agentName: item.agentName || "",
+      lastOrdered: item.lastOrdered ?? "", lastCheckBy: item.lastCheckBy || "",
       dateChecked: item.dateChecked ? new Date(item.dateChecked).toISOString().split("T")[0] : "",
       status: item.status,
     });
@@ -460,12 +320,9 @@ export default function SupplierMaintenancePage() {
   const openEditFromView = (item: SupplierItem) => {
     setViewItem(null);
     setForm({
-      supplierName: item.supplierName,
-      contactNo: item.contactNo,
-      address: item.address || "",
-      agentName: item.agentName || "",
-      lastOrdered: item.lastOrdered ?? "",
-      lastCheckBy: item.lastCheckBy || "",
+      supplierName: item.supplierName, contactNo: item.contactNo,
+      address: item.address || "", agentName: item.agentName || "",
+      lastOrdered: item.lastOrdered ?? "", lastCheckBy: item.lastCheckBy || "",
       dateChecked: item.dateChecked ? new Date(item.dateChecked).toISOString().split("T")[0] : "",
       status: item.status,
     });
@@ -475,10 +332,7 @@ export default function SupplierMaintenancePage() {
   };
 
   const handleSave = async () => {
-    if (!form.supplierName) {
-      showAlert("Supplier Name is required.", "Missing Field");
-      return;
-    }
+    if (!form.supplierName) { showAlert("Supplier Name is required.", "Missing Field"); return; }
     try {
       const saveData = { ...form, lastOrdered: form.lastOrdered === "" ? 0 : Number(form.lastOrdered) };
       if (editingId !== null) {
@@ -491,10 +345,17 @@ export default function SupplierMaintenancePage() {
       await fetchSuppliers();
       setShowModal(false);
       setSelected([]);
-    } catch (err) {
-      showToast("Failed to save supplier.", true);
-      console.error("Failed to save supplier:", err);
-    }
+    } catch (err) { showToast("Failed to save supplier.", true); console.error(err); }
+  };
+
+  // ✅ Toggle status directly from table
+  const handleToggleStatus = async (item: SupplierItem) => {
+    const newStatus = item.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+    try {
+      await api.updateSupplier(item.id, { status: newStatus });
+      await fetchSuppliers();
+      showToast(`Supplier ${newStatus === "ACTIVE" ? "activated" : "deactivated"} successfully!`);
+    } catch (err) { showToast("Failed to update status.", true); console.error(err); }
   };
 
   const openViewModal = async (supplierId: string) => {
@@ -503,54 +364,37 @@ export default function SupplierMaintenancePage() {
   };
 
   const handleDelete = () => {
-    if (selected.length === 0) {
-      showAlert("Please select at least one item to delete.", "No Selection");
-      return;
-    }
-    showConfirm(
-      `Are you sure you want to delete ${selected.length} supplier(s)? This action cannot be undone.`,
-      confirmDelete,
-      "Delete Suppliers",
-      true
-    );
+    if (selected.length === 0) { showAlert("Please select at least one item to delete.", "No Selection"); return; }
+    showConfirm(`Are you sure you want to delete ${selected.length} supplier(s)? This action cannot be undone.`,
+      confirmDelete, "Delete Suppliers", true);
   };
 
   const confirmDelete = async () => {
     try {
-      await Promise.all(selected.map((id) => api.deleteSupplier(id)));
+      await Promise.all(selected.map(id => api.deleteSupplier(id)));
       await fetchSuppliers();
       setSelected([]);
       showToast("Supplier(s) deleted successfully!");
-    } catch (err) {
-      showToast("Failed to delete supplier(s).", true);
-    }
+    } catch (err) { showToast("Failed to delete supplier(s).", true); }
   };
 
   const handleExport = () => {
-    const headers = ["ID", "Company Name", "Contact No", "Address", "Agent Name", "Last Ordered", "Last Check By", "Date Checked", "Status"];
-    const rows = items.map((item) => [item.id, item.supplierName, item.contactNo, item.address, item.agentName, item.lastOrdered, item.lastCheckBy, item.dateChecked, item.status]);
-    const csvContent = [headers, ...rows].map((row) => row.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "suppliers.csv"; a.click(); URL.revokeObjectURL(url);
+    const headers = ["ID","Company Name","Contact No","Address","Agent Name","Last Ordered","Last Check By","Date Checked","Status"];
+    const rows    = items.map(item => [item.id, item.supplierName, item.contactNo, item.address, item.agentName, item.lastOrdered, item.lastCheckBy, item.dateChecked, item.status]);
+    const csv     = [headers, ...rows].map(row => row.join(",")).join("\n");
+    const a       = document.createElement("a");
+    a.href        = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download    = "suppliers.csv"; a.click();
   };
 
-  const handleLogout = () => {
-    document.cookie = "token=; path=/; max-age=0";
-    localStorage.removeItem("employee");
-    router.push("/");
-  };
+  const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("employee"); router.push("/"); };
 
   const navigate = (label: string) => {
     const routes: Record<string, string> = {
-      "Dashboard": "/dashboard",
-      "Inventory Maintenance": "/inventory",
-      "Supplier Maintenance": "/supplier",
-      "Sales Reports": "/sales",
-      "Transaction Logs": "/transaction",
-      "Product Management": "/product",
-      "Account Management": "/account",
-      "Purchase Order": "/purchase-order",
+      "Dashboard": "/dashboard", "Inventory Maintenance": "/inventory",
+      "Supplier Maintenance": "/supplier", "Sales Reports": "/sales",
+      "Transaction Logs": "/transaction", "Product Management": "/product",
+      "Account Management": "/account", "Purchase Order": "/purchase-order",
       "Promo Management": "/promo",
     };
     if (routes[label]) router.push(routes[label]);
@@ -566,7 +410,7 @@ export default function SupplierMaintenancePage() {
           <p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide">JULIETA SOFTDRINKS<br />STORE</p>
         </div>
         <nav className="flex flex-col gap-1">
-          {navItems.map((item) => (
+          {navItems.map(item => (
             <div key={item.label} onClick={() => navigate(item.label)}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${item.active ? "text-indigo-700 font-semibold" : "text-gray-400 hover:text-gray-600"}`}>
               <div className="relative flex items-center gap-2 w-full">
@@ -580,30 +424,20 @@ export default function SupplierMaintenancePage() {
 
       <main className="flex-1 flex flex-col overflow-auto">
         <header className="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-100">
-          <button
-            className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300"
+          <button className="md:hidden text-gray-600 text-xl mr-2 transition-transform duration-300"
             style={{ transform: showMobileMenu ? "rotate(90deg)" : "rotate(0deg)" }}
-            onClick={() => setShowMobileMenu(!showMobileMenu)}
-          >
+            onClick={() => setShowMobileMenu(!showMobileMenu)}>
             {showMobileMenu ? "✕" : "☰"}
           </button>
           <h1 className="text-xl md:text-2xl font-bold text-gray-800">Supplier Maintenance</h1>
           <div className="flex items-center gap-2">
+            <div className="relative"><span className="text-xl">🔔</span><div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" /></div>
             <div className="relative">
-              <span className="text-xl">🔔</span>
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" />
-            </div>
-            <div className="relative">
-              <button
-                onClick={() => setShowUserMenu(!showUserMenu)}
-                className={`flex items-center gap-2 px-2 py-2 rounded-xl transition-colors ${showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"}`}
-              >
+              <button onClick={() => setShowUserMenu(!showUserMenu)}
+                className={`flex items-center gap-2 px-2 py-2 rounded-xl transition-colors ${showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="https://i.pravatar.cc/40?img=8" alt="User" className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover" />
-                <div className="hidden md:block text-left">
-                  <p className="text-sm font-semibold text-gray-800">Ray Teodoro</p>
-                  <p className="text-xs text-green-500">Admin</p>
-                </div>
+                <div className="hidden md:block text-left"><p className="text-sm font-semibold text-gray-800">Ray Teodoro</p><p className="text-xs text-green-500">Admin</p></div>
               </button>
               {showUserMenu && (
                 <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-lg border border-gray-100 z-50">
@@ -621,7 +455,7 @@ export default function SupplierMaintenancePage() {
 
         {showMobileMenu && (
           <div className="md:hidden bg-white border-b border-gray-100 px-4 py-3 flex flex-col gap-1 z-40">
-            {navItems.map((item) => (
+            {navItems.map(item => (
               <div key={item.label} onClick={() => navigate(item.label)}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${item.active ? "text-indigo-700 font-semibold" : "text-gray-500"}`}>
                 <span>{item.icon}</span><span>{item.label}</span>
@@ -632,6 +466,8 @@ export default function SupplierMaintenancePage() {
 
         <div className="flex-1 p-3 md:p-4 bg-green-50">
           <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm">
+
+            {/* Action buttons */}
             <div className="flex items-center gap-2 mb-4 flex-wrap justify-end">
               <button onClick={handleExport} className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-600 hover:bg-gray-50">📤 Export</button>
               <button onClick={handleDelete} className="flex items-center gap-1 border border-red-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-red-500 hover:bg-red-50">🗑️ Delete</button>
@@ -639,22 +475,42 @@ export default function SupplierMaintenancePage() {
               <button onClick={openAddModal} className="flex items-center gap-1 bg-gray-900 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-white hover:bg-gray-700">+ Add Supplier</button>
             </div>
 
+            {/* Filters */}
             <div className="flex items-center gap-2 mb-4 flex-wrap">
               <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-40 md:w-48">
                 <span className="text-gray-400 text-sm">🔍</span>
-                <input type="text" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} className="outline-none text-sm text-gray-700 w-full" />
+                <input type="text" placeholder="Search" value={search} onChange={e => setSearch(e.target.value)}
+                  className="outline-none text-sm text-gray-700 w-full" />
               </div>
-              <button className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-600 hover:bg-gray-50">🔖 Status ▾</button>
+
+              {/* ✅ Functional Status filter */}
+              <div className="relative" ref={statusRef}>
+                <button onClick={() => { setShowStatusDropdown(!showStatusDropdown); setShowCheckerDropdown(false); }}
+                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors
+                    ${statusFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                  🔖 {statusFilter === "All" ? "Status" : statusFilter} ▾
+                </button>
+                {showStatusDropdown && (
+                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-36">
+                    {["All", "ACTIVE", "INACTIVE"].map(opt => (
+                      <button key={opt} onClick={() => { setStatusFilter(opt); setShowStatusDropdown(false); }}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${statusFilter === opt ? "text-indigo-600 font-semibold" : "text-gray-600"}`}>
+                        {opt === "All" ? "All Status" : opt}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="relative" ref={checkerRef}>
-                <button
-                  onClick={() => setShowCheckerDropdown(!showCheckerDropdown)}
-                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors ${checkerFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
-                >
+                <button onClick={() => { setShowCheckerDropdown(!showCheckerDropdown); setShowStatusDropdown(false); }}
+                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors
+                    ${checkerFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
                   🧑 {checkerFilter === "All" ? "Last Check By" : checkerFilter} ▾
                 </button>
                 {showCheckerDropdown && (
                   <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44">
-                    {["All", ...CHECKERS].map((opt) => (
+                    {["All", ...CHECKERS].map(opt => (
                       <button key={opt} onClick={() => { setCheckerFilter(opt); setShowCheckerDropdown(false); }}
                         className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${checkerFilter === opt ? "text-indigo-600 font-semibold" : "text-gray-600"}`}>
                         {opt === "All" ? "All Checkers" : opt}
@@ -663,18 +519,19 @@ export default function SupplierMaintenancePage() {
                   </div>
                 )}
               </div>
-              {checkerFilter !== "All" && (
-                <button onClick={() => setCheckerFilter("All")} className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
+
+              {(statusFilter !== "All" || checkerFilter !== "All") && (
+                <button onClick={() => { setStatusFilter("All"); setCheckerFilter("All"); }}
+                  className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
               )}
             </div>
 
+            {/* Table */}
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-max">
                 <thead>
                   <tr className="bg-indigo-900 text-white text-xs">
-                    <th className="p-3 text-left w-8">
-                      <input type="checkbox" onChange={toggleAll} checked={selected.length === filtered.length && filtered.length > 0} />
-                    </th>
+                    <th className="p-3 text-left w-8"><input type="checkbox" onChange={toggleAll} checked={selected.length === filtered.length && filtered.length > 0} /></th>
                     <th className="p-3 text-left">ID</th>
                     <th className="p-3 text-left">Company Name</th>
                     <th className="p-3 text-left">Last Check By</th>
@@ -688,13 +545,24 @@ export default function SupplierMaintenancePage() {
                   ) : filtered.length === 0 ? (
                     <tr><td colSpan={6} className="p-6 text-center text-gray-400">No suppliers found.</td></tr>
                   ) : (
-                    filtered.map((row) => (
+                    filtered.map(row => (
                       <tr key={row.id} className={`border-b border-gray-100 hover:bg-gray-50 ${selected.includes(row.id) ? "bg-indigo-50" : ""}`}>
                         <td className="p-3"><input type="checkbox" checked={selected.includes(row.id)} onChange={() => toggleSelect(row.id)} /></td>
                         <td className="p-3 text-gray-500 text-xs">{row.id}</td>
                         <td className="p-3"><span className="bg-gray-700 text-white px-3 py-1 rounded-full text-xs">{row.supplierName}</span></td>
-                        <td className="p-3"><span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">{row.lastCheckBy ?? "-"}</span></td>
-                        <td className="p-3"><span className={`px-3 py-1 rounded-full text-xs font-medium ${row.status === "ACTIVE" ? "bg-green-500 text-white" : "bg-yellow-400 text-black"}`}>{row.status}</span></td>
+                        <td className="p-3"><span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">{row.lastCheckBy ?? "—"}</span></td>
+                        <td className="p-3">
+                          {/* ✅ Clickable status badge toggles Active/Inactive */}
+                          <button
+                            onClick={() => handleToggleStatus(row)}
+                            title="Click to toggle status"
+                            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer
+                              ${row.status === "ACTIVE"
+                                ? "bg-green-500 text-white hover:bg-green-600"
+                                : "bg-yellow-400 text-black hover:bg-yellow-500"}`}>
+                            {row.status}
+                          </button>
+                        </td>
                         <td className="p-3">
                           <button onClick={() => openViewModal(row.id)}
                             className="flex items-center gap-1 border border-indigo-300 text-indigo-600 hover:bg-indigo-50 rounded-lg px-3 py-1 text-xs font-medium transition-colors">
@@ -720,7 +588,12 @@ export default function SupplierMaintenancePage() {
                 <h2 className="text-lg font-bold text-gray-800">{viewItem.supplierName}</h2>
                 <p className="text-xs text-gray-400 mt-0.5">Supplier ID: {viewItem.id}</p>
               </div>
-              <span className={`px-3 py-1 rounded-full text-xs font-medium ${viewItem.status === "ACTIVE" ? "bg-green-500 text-white" : "bg-yellow-400 text-black"}`}>{viewItem.status}</span>
+              {/* ✅ Clickable status in view modal too */}
+              <button onClick={() => handleToggleStatus(viewItem)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer
+                  ${viewItem.status === "ACTIVE" ? "bg-green-500 text-white hover:bg-green-600" : "bg-yellow-400 text-black hover:bg-yellow-500"}`}>
+                {viewItem.status} (click to toggle)
+              </button>
             </div>
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-3">
@@ -760,7 +633,7 @@ export default function SupplierMaintenancePage() {
               <p className="text-sm font-semibold text-gray-700 mb-2">Products</p>
               {viewItem.products && viewItem.products.length > 0 ? (
                 <div className="max-h-40 overflow-y-auto flex flex-col gap-2">
-                  {viewItem.products.map((product) => (
+                  {viewItem.products.map(product => (
                     <div key={product.id} className="bg-gray-50 rounded-xl p-3">
                       <p className="text-sm font-medium text-gray-800">{product.productName}</p>
                       <p className="text-xs text-gray-400">ID: {product.id}</p>
@@ -789,77 +662,60 @@ export default function SupplierMaintenancePage() {
             <div className="flex flex-col gap-3">
               <div>
                 <label className="text-xs font-medium text-gray-600">Company Name</label>
-                <input
-                  value={form.supplierName}
-                  onChange={(e) => setForm({ ...form, supplierName: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
-                />
+                <input value={form.supplierName} onChange={e => setForm({ ...form, supplierName: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
-
               <div>
                 <label className="text-xs font-medium text-gray-600">Contact No.</label>
-                <PhoneInput value={form.contactNo} onChange={(val) => setForm({ ...form, contactNo: val })} />
+                <PhoneInput value={form.contactNo} onChange={val => setForm({ ...form, contactNo: val })} />
               </div>
-
               <div>
                 <label className="text-xs font-medium text-gray-600">Address</label>
-                <input
-                  value={form.address}
-                  onChange={(e) => setForm({ ...form, address: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
-                />
+                <input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
-
               <div>
                 <label className="text-xs font-medium text-gray-600">Agent Name</label>
-                <input
-                  value={form.agentName}
-                  onChange={(e) => setForm({ ...form, agentName: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
-                />
+                <input value={form.agentName} onChange={e => setForm({ ...form, agentName: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
 
-              {/* Last Ordered and Date Checked on same row */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-gray-600">Last Ordered</label>
+                  {/* ✅ type="number" with inputMode="numeric" — no letters allowed */}
                   <input
                     type="number"
+                    inputMode="numeric"
                     min="0"
                     value={form.lastOrdered}
-                    onChange={(e) =>
-                      setForm({ ...form, lastOrdered: e.target.value === "" ? "" : Math.max(0, Number(e.target.value)) })
-                    }
+                    onKeyDown={(e) => {
+                      // Block e, +, -, . and other non-digit keys
+                      if (["e","E","+","-","."].includes(e.key)) e.preventDefault();
+                    }}
+                    onChange={e => {
+                      const val = e.target.value.replace(/[^0-9]/g, "");
+                      setForm({ ...form, lastOrdered: val === "" ? "" : Number(val) });
+                    }}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
                   />
                 </div>
-                {/* ✅ DatePicker renders via portal — never clipped by modal scroll */}
-                <DatePicker
-                  label="Date Checked"
-                  value={form.dateChecked}
-                  onChange={(val) => setForm({ ...form, dateChecked: val })}
-                />
+                <DatePicker label="Date Checked" value={form.dateChecked} onChange={val => setForm({ ...form, dateChecked: val })} />
               </div>
 
               <div>
                 <label className="text-xs font-medium text-gray-600">Last Check By</label>
-                <select
-                  value={form.lastCheckBy}
-                  onChange={(e) => setForm({ ...form, lastCheckBy: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
-                >
-                  <option value="">-- Select --</option>
-                  {CHECKERS.map((name) => <option key={name} value={name}>{name}</option>)}
+                {/* ✅ Removed "-- Select --" placeholder option; first real option is default */}
+                <select value={form.lastCheckBy} onChange={e => setForm({ ...form, lastCheckBy: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                  {CHECKERS.map(name => <option key={name} value={name}>{name}</option>)}
                 </select>
               </div>
 
               <div>
                 <label className="text-xs font-medium text-gray-600">Status</label>
-                <select
-                  value={form.status}
-                  onChange={(e) => setForm({ ...form, status: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
-                >
+                <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
                   <option value="ACTIVE">Active</option>
                   <option value="INACTIVE">Inactive</option>
                 </select>
@@ -876,16 +732,8 @@ export default function SupplierMaintenancePage() {
         </div>
       )}
 
-      {success && (
-        <div className="fixed bottom-6 right-6 z-50 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
-          <span>✅</span><span className="text-sm font-medium">{success}</span>
-        </div>
-      )}
-      {error && (
-        <div className="fixed bottom-6 right-6 z-50 bg-red-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
-          <span>❌</span><span className="text-sm font-medium">{error}</span>
-        </div>
-      )}
+      {success && <div className="fixed bottom-6 right-6 z-50 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2"><span>✅</span><span className="text-sm font-medium">{success}</span></div>}
+      {error   && <div className="fixed bottom-6 right-6 z-50 bg-red-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2"><span>❌</span><span className="text-sm font-medium">{error}</span></div>}
     </div>
   );
 }

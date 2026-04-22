@@ -24,7 +24,6 @@ function getCaseBreakdown(qty: number, unit?: string): string | null {
   return `${qty} × ${u.bottlesPerCase} = ${qty * u.bottlesPerCase} btl`;
 }
 
-// ✅ Compact select with cleaner labels
 function InlineCaseSelect({ value, onChange }: { value: string; onChange: (v: CaseUnit) => void }) {
   return (
     <select value={value} onChange={(e) => onChange(e.target.value as CaseUnit)}
@@ -36,7 +35,6 @@ function InlineCaseSelect({ value, onChange }: { value: string; onChange: (v: Ca
   );
 }
 
-// ✅ Clean unit pill
 function UnitPill({ unit, qty }: { unit?: string; qty?: number }) {
   const u = getUnit(unit);
   return (
@@ -44,6 +42,123 @@ function UnitPill({ unit, qty }: { unit?: string; qty?: number }) {
       {qty != null && <span className="text-gray-700 font-semibold">{qty}</span>}
       <span>{u.short}</span>
     </span>
+  );
+}
+
+// ─── CUSTOM SUPPLIER DROPDOWN ─────────────────────────────────────────────────
+function SupplierSelect({
+  value, onChange, suppliers, hint,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+  suppliers: { id: string; supplierName: string }[];
+  hint?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = suppliers.find((s) => s.id === value);
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`w-full flex items-center justify-between border rounded-xl px-4 py-3 text-sm transition-colors bg-white text-left
+          ${open ? "border-indigo-400 ring-2 ring-indigo-100" : "border-gray-200 hover:border-gray-300"}`}
+      >
+        {selected ? (
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold shrink-0">
+              {selected.supplierName.charAt(0).toUpperCase()}
+            </div>
+            <span className="font-medium text-gray-800">{selected.supplierName}</span>
+          </div>
+        ) : (
+          <span className="text-gray-400">Select a supplier...</span>
+        )}
+        <svg className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ml-2 ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] overflow-hidden">
+          {suppliers.length === 0 ? (
+            <div className="px-4 py-3 text-sm text-gray-400 text-center">No suppliers found</div>
+          ) : (
+            suppliers.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => { onChange(s.id); setOpen(false); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-indigo-50
+                  ${value === s.id ? "bg-indigo-50" : ""}`}
+              >
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0
+                  ${value === s.id ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600"}`}>
+                  {s.supplierName.charAt(0).toUpperCase()}
+                </div>
+                <span className={`text-sm font-medium ${value === s.id ? "text-indigo-700" : "text-gray-700"}`}>
+                  {s.supplierName}
+                </span>
+                {value === s.id && <span className="ml-auto text-indigo-600 text-xs">✓</span>}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+      {hint && <p className="text-xs mt-1.5 text-indigo-500">{hint}</p>}
+    </div>
+  );
+}
+
+// ─── CUSTOM DATE PICKER ───────────────────────────────────────────────────────
+function DateField({
+  value, onChange, label,
+}: {
+  value: string; onChange: (v: string) => void; label?: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const display  = value
+    ? new Date(value + "T00:00:00").toLocaleDateString("en-PH", { weekday: "short", year: "numeric", month: "long", day: "numeric" })
+    : "";
+
+  return (
+    <div>
+      {label && <label className="text-xs font-medium text-gray-500 mb-1 block">{label}</label>}
+      <div
+        className="relative w-full border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3 bg-white hover:border-gray-300 cursor-pointer transition-colors"
+        onClick={() => inputRef.current?.showPicker?.()}
+      >
+        <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
+          <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-gray-400">Delivery Date</p>
+          <p className={`text-sm font-medium truncate ${display ? "text-gray-800" : "text-gray-400"}`}>
+            {display || "Pick a date"}
+          </p>
+        </div>
+        <input
+          ref={inputRef}
+          type="date"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+          style={{ colorScheme: "light" }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -71,7 +186,6 @@ type LineItem = {
 
 type DeliveryForm = { supplierId: string; deliveryDate: string; lineItems: LineItem[]; notes: string };
 type Supplier    = { id: string; supplierName: string };
-// ✅ Added size and stockQuantity
 type Product     = { id: string; productName: string; price: number; supplierId: string; status?: string; stockUnit?: string; stockQuantity?: number; size?: string | null };
 type ReceiveQty  = { deliveryItemId: string; receivedQty: number };
 
@@ -103,6 +217,85 @@ const makeEmptyForm  = (): DeliveryForm => ({
 
 type Tab = "create" | "receiving" | "history";
 
+// ─── PRODUCT DROPDOWN (custom, no native select) ──────────────────────────────
+function ProductSelect({
+  value, onChange, products, usedIds, idx,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+  products: Product[];
+  usedIds: string[];
+  idx: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = products.find((p) => p.id === value);
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`w-full flex items-center justify-between border rounded-lg px-2.5 py-1.5 text-sm transition-colors bg-white text-left
+          ${open ? "border-indigo-400" : "border-gray-200 hover:border-gray-300"}`}
+      >
+        {selected ? (
+          <span className="text-gray-800 text-xs truncate">
+            {selected.productName}{selected.size ? ` ${selected.size}` : ""}
+          </span>
+        ) : (
+          <span className="text-gray-400 text-xs">Select product</span>
+        )}
+        <svg className={`w-3 h-3 text-gray-400 shrink-0 ml-1 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] max-h-48 overflow-y-auto">
+          {products.length === 0 ? (
+            <div className="px-4 py-3 text-xs text-gray-400 text-center">No products</div>
+          ) : (
+            products.map((p) => {
+              const isUsed     = usedIds.includes(p.id) && p.id !== value;
+              const stockLabel = p.stockQuantity != null ? `${p.stockQuantity} ${getUnitShort(p.stockUnit)} left` : null;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  disabled={isUsed}
+                  onClick={() => { if (!isUsed) { onChange(p.id); setOpen(false); } }}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors
+                    ${isUsed ? "opacity-40 cursor-not-allowed" : "hover:bg-indigo-50"}
+                    ${value === p.id ? "bg-indigo-50" : ""}`}
+                >
+                  <div className="min-w-0">
+                    <p className={`text-xs font-medium truncate ${value === p.id ? "text-indigo-700" : "text-gray-800"}`}>
+                      {p.productName}
+                      {p.size && <span className="text-gray-400 font-normal ml-1">{p.size}</span>}
+                    </p>
+                    {stockLabel && <p className="text-xs text-gray-400 mt-0.5">{stockLabel}</p>}
+                  </div>
+                  {value === p.id && <span className="text-indigo-600 text-xs ml-2 shrink-0">✓</span>}
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function PurchaseOrderPage() {
   const router   = useRouter();
   const pathname = usePathname();
@@ -290,13 +483,16 @@ export default function PurchaseOrderPage() {
             <p className="text-2xl mb-2">⚠️</p>
             <p className="text-sm text-gray-700 mb-5">{confirmModal.message}</p>
             <div className="flex gap-3">
-              <button onClick={() => setConfirmModal({ show: false, message: "", onConfirm: () => {} })} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={confirmModal.onConfirm} className="flex-1 bg-red-500 rounded-lg py-2 text-sm text-white hover:bg-red-600">Confirm</button>
+              <button onClick={() => setConfirmModal({ show: false, message: "", onConfirm: () => {} })}
+                className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={confirmModal.onConfirm}
+                className="flex-1 bg-red-500 rounded-lg py-2 text-sm text-white hover:bg-red-600">Confirm</button>
             </div>
           </div>
         </div>
       )}
 
+      {/* ── Sidebar ── */}
       <aside className="hidden md:flex w-52 bg-white flex-col py-6 px-4 border-r border-gray-100 shrink-0">
         <div className="text-center mb-10">
           <p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide">JULIETA SOFTDRINKS<br />STORE</p>
@@ -318,8 +514,12 @@ export default function PurchaseOrderPage() {
       </aside>
 
       <main className="flex-1 flex flex-col overflow-auto">
+
+        {/* ── Header ── */}
         <header className="flex items-center justify-between px-4 md:px-6 py-4 bg-white border-b border-gray-100">
-          <button className="md:hidden text-gray-600 text-xl mr-2" onClick={() => setShowMobileMenu(!showMobileMenu)}>{showMobileMenu ? "✕" : "☰"}</button>
+          <button className="md:hidden text-gray-600 text-xl mr-2" onClick={() => setShowMobileMenu(!showMobileMenu)}>
+            {showMobileMenu ? "✕" : "☰"}
+          </button>
           <div>
             <h1 className="text-xl md:text-2xl font-bold text-gray-800">Purchase Order</h1>
             <p className="text-xs text-gray-400 hidden md:block">Create and manage deliveries from suppliers</p>
@@ -334,12 +534,14 @@ export default function PurchaseOrderPage() {
                 className={`flex items-center gap-2 px-2 py-1.5 rounded-xl transition-colors ${showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="https://i.pravatar.cc/40?img=8" alt="User" className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover" />
-                <div className="hidden md:block text-left"><p className="text-sm font-semibold text-gray-800">Ray Teodoro</p><p className="text-xs text-green-500">Admin</p></div>
+                <div className="hidden md:block text-left">
+                  <p className="text-sm font-semibold text-gray-800">Ray Teodoro</p>
+                  <p className="text-xs text-green-500">Admin</p>
+                </div>
               </button>
               {showUserMenu && (
                 <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-lg border border-gray-100 z-50">
                   <button onClick={handleLogout} className="flex items-center gap-2 w-full px-4 py-3 text-sm text-red-500 hover:bg-red-50 rounded-xl">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
                     Log Out
                   </button>
                 </div>
@@ -348,6 +550,7 @@ export default function PurchaseOrderPage() {
           </div>
         </header>
 
+        {/* ── Mobile nav ── */}
         {showMobileMenu && (
           <div className="md:hidden bg-white border-b border-gray-100 px-4 py-3 flex flex-col gap-1 z-40">
             {navItems.map((item) => {
@@ -362,6 +565,7 @@ export default function PurchaseOrderPage() {
           </div>
         )}
 
+        {/* ── Tabs ── */}
         <div className="bg-white border-b border-gray-100 px-4 md:px-6">
           <div className="flex">
             {([
@@ -389,11 +593,13 @@ export default function PurchaseOrderPage() {
             <div className="flex flex-col lg:flex-row gap-4">
               <div className="flex-1 flex flex-col gap-4">
 
+                {/* Step 1 — Supplier + Date */}
                 <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm">
-                  <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center gap-2 mb-4">
                     <div className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold">1</div>
-                    <h2 className="text-sm font-bold text-gray-700">Select Supplier</h2>
+                    <h2 className="text-sm font-bold text-gray-700">Select Supplier &amp; Date</h2>
                   </div>
+
                   {createError && (
                     <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-2">
                       <span>⚠️</span><span>{createError}</span>
@@ -405,30 +611,35 @@ export default function PurchaseOrderPage() {
                       <span>✅</span><span>{createSuccess}</span>
                     </div>
                   )}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* ✅ Custom supplier picker — no native select, no dashes */}
                     <div>
-                      <label className="text-xs font-medium text-gray-500 mb-1 block">Supplier <span className="text-red-400">*</span></label>
-                      <select value={form.supplierId} onChange={(e) => handleSupplierChange(e.target.value)}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white">
-                        <option value="">— Select a supplier —</option>
-                        {suppliers.map((s) => <option key={s.id} value={s.id}>{s.supplierName}</option>)}
-                      </select>
-                      {form.supplierId && (
-                        <p className="text-xs mt-1 text-indigo-500">
-                          {supplierProducts.length > 0
+                      <label className="text-xs font-medium text-gray-500 mb-1.5 block">
+                        Supplier <span className="text-red-400">*</span>
+                      </label>
+                      <SupplierSelect
+                        value={form.supplierId}
+                        onChange={handleSupplierChange}
+                        suppliers={suppliers}
+                        hint={form.supplierId
+                          ? supplierProducts.length > 0
                             ? `${supplierProducts.length} product${supplierProducts.length > 1 ? "s" : ""} available from ${selectedSupplierName}`
-                            : `⚠️ No active products found for ${selectedSupplierName}`}
-                        </p>
-                      )}
+                            : `⚠️ No active products found for ${selectedSupplierName}`
+                          : undefined}
+                      />
                     </div>
-                    <div>
-                      <label className="text-xs font-medium text-gray-500 mb-1 block">Delivery Date</label>
-                      <input type="date" value={form.deliveryDate} onChange={(e) => setForm({ ...form, deliveryDate: e.target.value })}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white [color-scheme:light]" />
-                    </div>
+
+                    {/* ✅ Custom date field — calendar icon, readable date */}
+                    <DateField
+                      label="Delivery Date"
+                      value={form.deliveryDate}
+                      onChange={(v) => setForm({ ...form, deliveryDate: v })}
+                    />
                   </div>
                 </div>
 
+                {/* Step 2 — Products */}
                 <div className={`bg-white rounded-2xl p-4 md:p-5 shadow-sm transition-opacity ${!form.supplierId ? "opacity-50 pointer-events-none" : ""}`}>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
@@ -471,22 +682,21 @@ export default function PurchaseOrderPage() {
                       </div>
 
                       {form.lineItems.map((item, idx) => {
-                        const breakdown = getCaseBreakdown(Number(item.quantity), item.unit);
+                        const breakdown  = getCaseBreakdown(Number(item.quantity), item.unit);
+                        const usedIds    = form.lineItems.filter((_, i) => i !== idx).map((li) => li.productId).filter(Boolean);
                         return (
                           <div key={idx} className="bg-gray-50 rounded-xl p-2.5">
                             <div className="grid grid-cols-2 md:grid-cols-12 gap-2 items-center">
+                              {/* ✅ Custom product dropdown — no native select placeholder issues */}
                               <div className="col-span-2 md:col-span-4">
                                 <label className="text-xs text-gray-400 md:hidden">Product</label>
-                                <select value={item.productId} onChange={(e) => updateLineItem(idx, "productId", e.target.value)}
-                                  className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white">
-                                  <option value="">— Select Product —</option>
-                                  {supplierProducts.map((p) => (
-                                    <option key={p.id} value={p.id} disabled={form.lineItems.some((li, i) => i !== idx && li.productId === p.id)}>
-                                      {/* ✅ Product name + size + stock left in dropdown */}
-                                      {p.productName}{p.size ? ` ${p.size}` : ""}{p.stockQuantity != null ? ` (${p.stockQuantity} ${getUnitShort(p.stockUnit)} left)` : ""}
-                                    </option>
-                                  ))}
-                                </select>
+                                <ProductSelect
+                                  value={item.productId}
+                                  onChange={(id) => updateLineItem(idx, "productId", id)}
+                                  products={supplierProducts}
+                                  usedIds={usedIds}
+                                  idx={idx}
+                                />
                               </div>
                               <div className="col-span-1 md:col-span-2">
                                 <label className="text-xs text-gray-400 md:hidden">Qty</label>
@@ -505,7 +715,9 @@ export default function PurchaseOrderPage() {
                                   className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white" placeholder="₱0" />
                               </div>
                               <div className="col-span-1 md:col-span-1 flex items-center justify-end gap-1">
-                                <span className="text-xs font-medium text-gray-700 whitespace-nowrap">₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}</span>
+                                <span className="text-xs font-medium text-gray-700 whitespace-nowrap">
+                                  ₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
+                                </span>
                                 {form.lineItems.length > 1 && (
                                   <button onClick={() => removeLineItem(idx)} className="text-red-400 hover:text-red-600 ml-1 text-sm shrink-0">✕</button>
                                 )}
@@ -523,30 +735,48 @@ export default function PurchaseOrderPage() {
                   )}
                 </div>
 
+                {/* Step 3 — Notes */}
                 <div className={`bg-white rounded-2xl p-4 md:p-5 shadow-sm transition-opacity ${!form.supplierId ? "opacity-50 pointer-events-none" : ""}`}>
                   <div className="flex items-center gap-2 mb-3">
                     <div className={`w-6 h-6 rounded-full text-white text-xs flex items-center justify-center font-bold ${form.supplierId ? "bg-indigo-600" : "bg-gray-300"}`}>3</div>
                     <h2 className="text-sm font-bold text-gray-700">Notes (Optional)</h2>
                   </div>
                   <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                    rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white resize-none"
+                    rows={3} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white resize-none"
                     placeholder="Optional notes about this delivery..." />
                 </div>
               </div>
 
+              {/* Order Summary sidebar */}
               <div className="w-full lg:w-72 shrink-0">
                 <div className="bg-white rounded-2xl p-5 shadow-sm sticky top-4">
                   <h2 className="text-sm font-bold text-gray-700 mb-4">📋 Order Summary</h2>
                   {form.supplierId ? (
                     <div className="mb-4 flex items-center gap-2 p-2.5 bg-indigo-50 rounded-xl border border-indigo-100">
                       <span className="text-lg">🏢</span>
-                      <div><p className="text-xs text-indigo-400">Supplier</p><p className="text-sm font-semibold text-indigo-800">{selectedSupplierName}</p></div>
+                      <div>
+                        <p className="text-xs text-indigo-400">Supplier</p>
+                        <p className="text-sm font-semibold text-indigo-800">{selectedSupplierName}</p>
+                      </div>
                     </div>
                   ) : (
                     <div className="mb-4 p-2.5 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center">
                       <p className="text-xs text-gray-400">No supplier selected</p>
                     </div>
                   )}
+
+                  {form.deliveryDate && (
+                    <div className="mb-4 flex items-center gap-2 p-2.5 bg-gray-50 rounded-xl border border-gray-100">
+                      <span className="text-base">📅</span>
+                      <div>
+                        <p className="text-xs text-gray-400">Delivery Date</p>
+                        <p className="text-xs font-semibold text-gray-700">
+                          {new Date(form.deliveryDate + "T00:00:00").toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   {validLineItems.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-8 text-center">
                       <span className="text-4xl mb-3">📋</span>
@@ -567,7 +797,9 @@ export default function PurchaseOrderPage() {
                                 </div>
                                 {breakdown && <p className="text-xs text-indigo-500 font-medium mt-0.5">{breakdown}</p>}
                               </div>
-                              <span className="text-xs font-semibold text-indigo-700 ml-2 shrink-0">₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}</span>
+                              <span className="text-xs font-semibold text-indigo-700 ml-2 shrink-0">
+                                ₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
+                              </span>
                             </div>
                           </div>
                         );
@@ -578,6 +810,7 @@ export default function PurchaseOrderPage() {
                       </div>
                     </div>
                   )}
+
                   <button onClick={handleSave} disabled={saving || validLineItems.length === 0 || !form.supplierId}
                     className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2">
                     {saving ? <><span className="animate-spin inline-block">⏳</span> Submitting...</> : <><span>📤</span> Submit Delivery</>}
@@ -670,7 +903,6 @@ export default function PurchaseOrderPage() {
                               ? rq.receivedQty * unitInfo.bottlesPerCase : null;
                             return (
                               <div key={i} className="py-1.5 border-b border-gray-100 last:border-0">
-                                {/* ✅ Product name + size in receiving sidebar */}
                                 <p className="text-xs font-medium text-gray-700 mb-1">
                                   {item.product?.productName || item.productId}
                                   {item.product?.size && <span className="text-gray-400 ml-1">{item.product.size}</span>}
@@ -839,7 +1071,6 @@ export default function PurchaseOrderPage() {
                       <div key={idx} className="py-2 border-b border-gray-100 last:border-0">
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
-                            {/* ✅ Name + size in view modal */}
                             <p className="font-medium text-sm text-gray-800">
                               {item.product?.productName || item.productId}
                               {item.product?.size && <span className="text-gray-500 font-normal ml-1">{item.product.size}</span>}
