@@ -172,7 +172,7 @@ export default function InventoryMonitoringPage() {
     setItems((prev) => prev.map((p) => ({ ...p, selected: v })));
   };
 
-  const inStock = items.filter((p) => p.stockStatus === "In Stock").length;
+  const inStock = items.reduce((sum, p) => sum + p.remainingStock, 0);
   const lowStock = items.filter((p) => p.stockStatus === "Low Stock").length;
   const outOfStock = items.filter((p) => p.stockStatus === "Out of Stock").length;
   const expiring = items.filter(
@@ -208,7 +208,7 @@ export default function InventoryMonitoringPage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "14px", marginBottom: "24px" }}>
         {[
           { label: "Total Products", value: items.length, icon: "📦", bg: "#e8f5e9", color: "#1a3c2e" },
-          { label: "In Stock", value: inStock, icon: "✅", bg: "#e8f5e9", color: "#2e7d32" },
+          { label: "Total Cases", value: inStock, icon: "✅", bg: "#e8f5e9", color: "#2e7d32" },
           { label: "Low / No Stock", value: lowStock + outOfStock, icon: "⚠️", bg: "#fff9c4", color: "#f57f17" },
           { label: "Expiring / Expired", value: expiring, icon: "⏰", bg: "#ffebee", color: "#c62828" },
         ].map((s) => (
