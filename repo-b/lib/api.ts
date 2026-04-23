@@ -201,4 +201,40 @@ export const api = {
     });
     return res.json();
   },
+  updateDelivery: async (id: string, data: Record<string, unknown>) => {
+    const res = await fetch(`${API_URL}/deliveries/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
+
+  receiveDelivery: async (
+    id: string,
+    employeeId: string,
+    items: { deliveryItemId: string; receivedQty: number }[]
+  ) => {
+    const res = await fetch(`${API_URL}/deliveries/${id}/receive`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${getToken()}`
+      },
+      body: JSON.stringify({ employeeId, items })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to receive delivery');
+    }
+    return data;
+  },
+
+  // SUPPLIERS
+  getSuppliers: async () => {
+    const res = await fetch(`${API_URL}/suppliers`, {
+      headers: { Authorization: `Bearer ${getToken()}` }
+    });
+    return res.json();
+  },
 };
