@@ -24,7 +24,7 @@ function CaseUnitInput({
   quantity, unit, onQuantityChange, onUnitChange,
 }: {
   quantity: number | string; unit: CaseUnit;
-  onQuantityChange: (v: number) => void; onUnitChange: (u: CaseUnit) => void;
+  onQuantityChange: (v: number | string) => void; onUnitChange: (u: CaseUnit) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -45,8 +45,13 @@ function CaseUnitInput({
     <div ref={ref}>
       <div className="flex mt-1">
         <input
-          type="number" min={0} value={quantity}
-          onChange={(e) => onQuantityChange(Math.max(0, Number(e.target.value)))}
+          type="number" inputMode="numeric" min={0} value={quantity}
+          onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
+          onChange={(e) => {
+            const val = e.target.value.replace(/[^0-9]/g, "");
+            onQuantityChange(val);
+          }}
+          placeholder="0"
           className="flex-1 border border-r-0 border-gray-200 rounded-l-lg px-3 py-2 text-sm outline-none focus:border-indigo-400 text-gray-900 min-w-0"
         />
         <button
@@ -173,8 +178,8 @@ function AlertModal({ open, type = "alert", title, message, danger, onConfirm, o
 }
 
 const defaultForm = () => ({
-  productName: "", size: "500ml", price: 0,
-  category: "SOFTDRINKS", stockQuantity: 0,
+  productName: "", size: "500ml", price: "",
+  category: "SOFTDRINKS", stockQuantity: "",
   stockUnit: "case_24" as CaseUnit, supplierId: "", status: "ACTIVE",
 });
 
@@ -290,8 +295,8 @@ export default function ProductManagementPage() {
     setSelectedProduct(product);
     setEditForm({
       productName: product.productName, size: product.size || "500ml",
-      price: product.price, category: product.category,
-      stockQuantity: product.stockQuantity,
+      price: String(product.price), category: product.category,
+      stockQuantity: String(product.stockQuantity),
       stockUnit: product.stockUnit ?? "case_24",
       supplierId: product.supplierId, status: product.status,
     });
@@ -303,10 +308,12 @@ export default function ProductManagementPage() {
     if (!editForm.productName) { showAlert("Product name is required.", "Missing Field"); return; }
     setSaving(true);
     try {
-      const res = await api.updateProduct(selectedProduct!.id, editForm);
+      const price = editForm.price === "" ? 0 : Number(editForm.price);
+      const stockQuantity = editForm.stockQuantity === "" ? 0 : Number(editForm.stockQuantity);
+      const res = await api.updateProduct(selectedProduct!.id, { ...editForm, price, stockQuantity });
       if (res.message && !res.id) { showToast(res.message, true); return; }
       await fetchProducts();
-      setSelectedProduct((prev) => prev ? { ...prev, ...editForm } : prev);
+      setSelectedProduct((prev) => prev ? { ...prev, ...editForm, price, stockQuantity } : prev);
       setIsEditing(false);
       showToast("Product updated successfully!");
     } catch { showToast("Failed to update product.", true); }
@@ -328,7 +335,9 @@ export default function ProductManagementPage() {
     if (!addForm.supplierId)  { showAlert("Please select a supplier.", "Missing Field"); return; }
     setSaving(true);
     try {
-      const res = await api.createProduct(addForm);
+      const price = addForm.price === "" ? 0 : Number(addForm.price);
+      const stockQuantity = addForm.stockQuantity === "" ? 0 : Number(addForm.stockQuantity);
+      const res = await api.createProduct({ ...addForm, price, stockQuantity });
       if (res.message && !res.id) { showToast(res.message, true); return; }
       await fetchProducts();
       setShowAddModal(false);
@@ -626,15 +635,19 @@ export default function ProductManagementPage() {
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Price (₱)</p>
-                      <input type="number" min="0" value={editForm.price}
-                        onChange={(e) => setEditForm({ ...editForm, price: Math.max(0, Number(e.target.value)) })}
+                      <input type="number" inputMode="numeric" min="0" value={editForm.price}
+                        onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9]/g, "");
+                          setEditForm({ ...editForm, price: val });
+                        }}
                         className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Stock Quantity &amp; Case Type</p>
                       <CaseUnitInput
                         quantity={editForm.stockQuantity} unit={editForm.stockUnit}
-                        onQuantityChange={(v) => setEditForm({ ...editForm, stockQuantity: v })}
+                        onQuantityChange={(v) => setEditForm({ ...editForm, stockQuantity: String(v) })}
                         onUnitChange={(u) => setEditForm({ ...editForm, stockUnit: u })} />
                     </div>
                     <div>
@@ -764,15 +777,20 @@ export default function ProductManagementPage() {
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600">Price (₱)</label>
-                <input type="number" min="0" value={addForm.price}
-                  onChange={(e) => setAddForm({ ...addForm, price: Math.max(0, Number(e.target.value)) })}
+                <input type="number" inputMode="numeric" min="0" value={addForm.price}
+                  onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9]/g, "");
+                    setAddForm({ ...addForm, price: val });
+                  }}
+                  placeholder="0"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600">Stock Quantity &amp; Case Type</label>
                 <CaseUnitInput
                   quantity={addForm.stockQuantity} unit={addForm.stockUnit}
-                  onQuantityChange={(v) => setAddForm({ ...addForm, stockQuantity: v })}
+                  onQuantityChange={(v) => setAddForm({ ...addForm, stockQuantity: String(v) })}
                   onUnitChange={(u) => setAddForm({ ...addForm, stockUnit: u })} />
                 <p className="text-xs text-gray-400 mt-1">e.g. 3 cases × 24 = 72 individual bottles</p>
               </div>
