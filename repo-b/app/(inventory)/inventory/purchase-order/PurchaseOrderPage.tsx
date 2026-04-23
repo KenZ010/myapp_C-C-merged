@@ -42,7 +42,7 @@ type Product = {
   supplierId: string;
   status?: string;
   stockUnit?: string;
-  stockQuantity?: number;
+  stock?: number;
   size?: string | null;
 };
 
@@ -187,10 +187,10 @@ export default function PurchaseOrderPage() {
     : [];
 
   const lowStockProducts = supplierProducts.filter(
-    (p) => p.stockQuantity != null && p.stockQuantity < 10
+    (p) => p.stock != null && p.stock < 10
   );
-  const outOfStockProducts = lowStockProducts.filter((p) => p.stockQuantity === 0);
-  const criticalProducts   = lowStockProducts.filter((p) => (p.stockQuantity ?? 0) > 0);
+  const outOfStockProducts = lowStockProducts.filter((p) => p.stock === 0);
+  const criticalProducts   = lowStockProducts.filter((p) => (p.stock ?? 0) > 0);
 
   const validLineItems = form.lineItems.filter((i) => i.productId);
   const total = validLineItems.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0);
@@ -555,8 +555,8 @@ export default function PurchaseOrderPage() {
                       <div style={{ padding: "16px", textAlign: "center", fontSize: "13px", color: "#aaa" }}>No suppliers found</div>
                     ) : suppliers.map((s) => {
                       const sProducts = allProducts.filter((p) => p.supplierId === s.id && p.status !== "INACTIVE");
-                      const outCount  = sProducts.filter((p) => p.stockQuantity === 0).length;
-                      const lowCount  = sProducts.filter((p) => (p.stockQuantity ?? 0) > 0 && (p.stockQuantity ?? 0) < 10).length;
+                      const outCount  = sProducts.filter((p) => p.stock != null && p.stock === 0).length;
+                      const lowCount  = sProducts.filter((p) => p.stock != null && p.stock > 0 && p.stock < 10).length;
                       return (
                         <div
                           key={s.id}
@@ -660,7 +660,7 @@ export default function PurchaseOrderPage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   {lowStockProducts.map((p) => {
                     const inOrder  = validLineItems.find((i) => i.productId === p.id);
-                    const stock    = p.stockQuantity ?? 0;
+                    const stock    = p.stock ?? 0;
                     const minStock = 10;
                     const level    = getStockLevel(stock, minStock);
                     const theme    = stockTheme[level];
@@ -727,12 +727,13 @@ export default function PurchaseOrderPage() {
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   {supplierProducts.map((p) => {
-                    const inOrder  = validLineItems.find((i) => i.productId === p.id);
-                    const stock    = p.stockQuantity ?? 0;
-                    const minStock = 10;
-                    const level    = getStockLevel(stock, minStock);
-                    const theme    = stockTheme[level];
-                    const stockPct = Math.min(100, Math.round((stock / minStock) * 100));
+                    const inOrder       = validLineItems.find((i) => i.productId === p.id);
+                    const stockKnown    = p.stock != null;
+                    const stock         = p.stock ?? 0;
+                    const minStock      = 10;
+                    const level         = stockKnown ? getStockLevel(stock, minStock) : "ok";
+                    const theme         = stockTheme[level];
+                    const stockPct      = stockKnown ? Math.min(100, Math.round((stock / minStock) * 100)) : 100;
                     return (
                       <div key={p.id} style={{
                         display: "flex", alignItems: "center", gap: "14px",
@@ -752,13 +753,16 @@ export default function PurchaseOrderPage() {
                             <p style={{ fontSize: "13px", fontWeight: 600, color: "#1a1a1a" }}>
                               {p.productName}{p.size ? ` ${p.size}` : ""}
                             </p>
-                            <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "20px", background: theme.badge.bg, color: theme.badge.color, flexShrink: 0 }}>
-                              {theme.badge.label}
-                            </span>
+                            {stockKnown && (
+                              <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "20px", background: theme.badge.bg, color: theme.badge.color, flexShrink: 0 }}>
+                                {theme.badge.label}
+                              </span>
+                            )}
                           </div>
                           <p style={{ fontSize: "12px", color: "#1a1a1a", marginBottom: "6px" }}>
                             {getUnit(p.stockUnit).label} • ₱{p.price.toLocaleString()} per {getUnitShort(p.stockUnit)}
                           </p>
+                          {stockKnown && (
                           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                             <div style={{ flex: 1, height: "5px", borderRadius: "20px", background: "#f0f0f0", overflow: "hidden" }}>
                               <div style={{ height: "100%", width: `${stockPct}%`, borderRadius: "20px", background: theme.bar }} />
@@ -767,6 +771,7 @@ export default function PurchaseOrderPage() {
                               {stock}/{minStock}
                             </span>
                           </div>
+                          )}
                         </div>
                         {inOrder ? (
                           <span style={{ fontSize: "12px", fontWeight: 700, color: "#2e7d32", background: "#e8f5e9", padding: "6px 14px", borderRadius: "20px", flexShrink: 0 }}>
