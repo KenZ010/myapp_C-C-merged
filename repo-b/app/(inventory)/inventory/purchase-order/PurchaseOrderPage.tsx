@@ -349,13 +349,30 @@ export default function PurchaseOrderPage() {
 
   const handleReceive = async () => {
     if (!receivingDelivery) return;
-    const employee = JSON.parse(localStorage.getItem("employee") || "{}");
-    if (!employee?.id) { setReceiveError("Employee not found. Please log in again."); return; }
+    const raw = localStorage.getItem("employee") || localStorage.getItem("user") || "{}";
+    const employee = JSON.parse(raw);
+    const employeeId = employee?.id ?? employee?.employeeId ?? employee?._id ?? employee?.userId ?? null;
+    if (!employeeId) {
+      const keys = Object.keys(employee);
+      setReceiveError(
+        keys.length === 0
+          ? "No employee session found. Please log in again."
+          : `Employee ID not found. Session fields: ${keys.join(", ")}`
+      );
+      return;
+    }
+    // ── DEBUG: log token + payload so we can see what's being sent ──
+    const debugToken = localStorage.getItem("token") || "NO TOKEN";
+    const debugPayload = { employeeId, items: receiveQtys.filter((r) => r.receivedQty > 0) };
+    console.log("[receiveDelivery] token:", debugToken);
+    console.log("[receiveDelivery] payload:", JSON.stringify(debugPayload));
+    console.log("[receiveDelivery] deliveryId:", receivingDelivery.id);
+
     try {
       setReceiving(true); setReceiveError("");
       await api.receiveDelivery(
         receivingDelivery.id,
-        employee.id,
+        employeeId,
         receiveQtys.filter((r) => r.receivedQty > 0)
       );
       setReceivingDelivery(null);
