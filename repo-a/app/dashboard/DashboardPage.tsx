@@ -4,6 +4,10 @@ import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { PieChart, Pie, Cell, Tooltip } from "recharts";
 import { api } from "@/lib/api";
+import { 
+  LayoutDashboard, ShoppingCart, Users, BarChart3, 
+  FileText, Package, User, ClipboardList, RotateCcw, Gift 
+} from "lucide-react";
 
 type Employee = {
   id: string;
@@ -44,16 +48,16 @@ const inventoryData = [
 ];
 
 const navItems = [
-  { label: "Dashboard", icon: "🏠", path: "/dashboard" },
-  { label: "Inventory Maintenance", icon: "🛒", path: "/inventory" },
-  { label: "Supplier Maintenance", icon: "📊", path: "/supplier" },
-  { label: "Sales Reports", icon: "🌐", path: "/sales" },
-  { label: "Transaction Logs", icon: "▦", path: "/transaction" },
-  { label: "Product Management", icon: "🗒️", path: "/product" },
-  { label: "Account Management", icon: "👤", path: "/account" },
-  { label: "Purchase Order", icon: "📋", path: "/purchase-order" },
-  { label: "Return", icon: "↩️", path: "/return" },
-  { label: "Promo Management", icon: "🎁", path: "/promo" },
+  { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
+  { label: "Inventory Maintenance", icon: ShoppingCart, path: "/inventory" },
+  { label: "Supplier Maintenance", icon: Users, path: "/supplier" },
+  { label: "Sales Reports", icon: BarChart3, path: "/sales" },
+  { label: "Transaction Logs", icon: FileText, path: "/transaction" },
+  { label: "Product Management", icon: Package, path: "/product" },
+  { label: "Account Management", icon: User, path: "/account" },
+  { label: "Purchase Order", icon: ClipboardList, path: "/purchase-order" },
+  { label: "Return", icon: RotateCcw, path: "/return" },
+  { label: "Promo Management", icon: Gift, path: "/promo" },
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -195,7 +199,7 @@ export default function DashboardPage() {
               <div key={item.label} onClick={() => navigate(item.path)}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${isActive ? "text-indigo-700 font-semibold bg-indigo-50" : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"}`}>
                 <div className="relative flex items-center gap-2 w-full">
-                  <span>{item.icon}</span>
+<item.icon className="w-4 h-4" />
                   <span>{item.label}</span>
                   {isActive && <div className="absolute -right-4 w-1 h-6 bg-green-500 rounded-full" />}
                 </div>
@@ -260,7 +264,7 @@ export default function DashboardPage() {
               return (
                 <div key={item.label} onClick={() => navigate(item.path)}
                   className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${isActive ? "text-indigo-700 font-semibold" : "text-gray-500"}`}>
-                  <span>{item.icon}</span><span>{item.label}</span>
+                  <item.icon className="w-4 h-4" /><span>{item.label}</span>
                 </div>
               );
             })}

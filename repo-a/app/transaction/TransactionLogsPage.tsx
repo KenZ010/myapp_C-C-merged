@@ -1,27 +1,32 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { 
+  LayoutDashboard, ShoppingCart, Users, LineChart, 
+  FileText, Package, User, ClipboardList, RotateCcw, Gift,
+  Coffee, Zap, Beer, Droplets, ShoppingBasket, Calendar, Search, Globe
+} from "lucide-react";
 
 const navItems = [
-  { label: "Dashboard",             icon: "🏠" },
-  { label: "Inventory Maintenance", icon: "🛒" },
-  { label: "Supplier Maintenance",  icon: "📊" },
-  { label: "Sales Reports",         icon: "🌐" },
-  { label: "Transaction Logs",      icon: "▦", active: true },
-  { label: "Product Management",    icon: "🗒️" },
-  { label: "Account Management",    icon: "👤" },
-  { label: "Purchase Order",        icon: "📋" },
-  { label: "Return",               icon: "↩️", path: "/return" },
-  { label: "Promo Management",      icon: "🎁" },
+  { label: "Dashboard",             icon: LayoutDashboard, path: "/dashboard" },
+  { label: "Inventory Maintenance", icon: ShoppingCart, path: "/inventory" },
+  { label: "Supplier Maintenance",  icon: Users, path: "/supplier" },
+  { label: "Sales Reports",         icon: LineChart, path: "/sales" },
+  { label: "Transaction Logs",      icon: FileText, path: "/transaction", active: true },
+  { label: "Product Management",    icon: Package, path: "/product" },
+  { label: "Account Management",    icon: User, path: "/account" },
+  { label: "Purchase Order",        icon: ClipboardList, path: "/purchase-order" },
+  { label: "Return",               icon: RotateCcw, path: "/return" },
+  { label: "Promo Management",      icon: Gift, path: "/promo" },
 ];
 
-const EMOJI_MAP: Record<string, string> = {
-  SOFTDRINKS: "🥤", ENERGY_DRINK: "⚡", BEER: "🍺",
-  JUICE: "🍹", WATER: "💧", OTHER: "🛒",
+const CATEGORY_ICONS: Record<string, typeof Coffee> = {
+  SOFTDRINKS: Coffee, ENERGY_DRINK: Zap, BEER: Beer,
+  JUICE: Droplets, WATER: Droplets, OTHER: ShoppingBasket,
 };
-const getEmoji = (cat?: string) => EMOJI_MAP[cat?.toUpperCase() || ""] || "🥤";
+const getCategoryIcon = (cat?: string) => CATEGORY_ICONS[cat?.toUpperCase() || ""] || Coffee;
 
 function getPeriodLabel(period: string): string {
   const now = new Date();
@@ -149,7 +154,7 @@ export default function TransactionLogsPage() {
             <div key={item.label} onClick={() => navigate(item.label)}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${item.active ? "text-indigo-700 font-semibold" : "text-gray-400 hover:text-gray-600"}`}>
               <div className="relative flex items-center gap-2 w-full">
-                <span>{item.icon}</span><span>{item.label}</span>
+                <item.icon className="w-4 h-4" /><span>{item.label}</span>
                 {item.active && <div className="absolute -right-4 w-1 h-6 bg-green-500 rounded-full" />}
               </div>
             </div>
@@ -196,7 +201,7 @@ export default function TransactionLogsPage() {
             {navItems.map(item => (
               <div key={item.label} onClick={() => navigate(item.label)}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${item.active ? "text-indigo-700 font-semibold" : "text-gray-500"}`}>
-                <span>{item.icon}</span><span>{item.label}</span>
+                <item.icon className="w-4 h-4" /><span>{item.label}</span>
               </div>
             ))}
           </div>
@@ -215,13 +220,13 @@ export default function TransactionLogsPage() {
                   </button>
                 ))}
                 <span className="text-xs text-indigo-600 font-medium bg-indigo-50 px-3 py-1.5 rounded-lg">
-                  📅 {getPeriodLabel(activePeriod)}
+                  <Calendar className="w-3 h-3" /> {getPeriodLabel(activePeriod)}
                 </span>
               </div>
 
               {/* ✅ Search with solid text — no refresh button */}
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">🔍</span>
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                 <input
                   type="text"
                   placeholder="Search order, customer, cashier..."
@@ -280,8 +285,10 @@ export default function TransactionLogsPage() {
                             <p className="font-bold text-indigo-700 text-base">
                               {t.customerId ? t.customer : "Walk-in Customer"}
                             </p>
-                            <p className="text-sm text-gray-500 mt-0.5">
-                              {t.customerId ? "🌐 Online Order" : `👤 Cashier: ${t.cashier}`}
+                            <p className="text-sm text-gray-500 mt-0.5 flex items-center gap-1">
+                              {t.customerId 
+                                ? <><Globe className="w-3 h-3" /> Online Order</>
+                                : <><User className="w-3 h-3" /> Cashier: {t.cashier}</>}
                             </p>
                             <p className="text-sm text-gray-400">{fmtDate(t.createdAt)}</p>
                             <p className="text-xs text-gray-400 mt-0.5">{t.id}</p>
@@ -347,7 +354,7 @@ export default function TransactionLogsPage() {
               {selectedTx.orderLines.map((line, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
                   <div>
-                    <p style={{ fontSize: "13px", color: "#333", margin: 0 }}>{getEmoji(line.category)} {line.productName}</p>
+                    <p style={{ fontSize: "13px", color: "#333", margin: 0 }}>{React.createElement(getCategoryIcon(line.category), { className: "w-4 h-4 inline mr-1" })} {line.productName}</p>
                     <p style={{ fontSize: "11px", color: "#aaa", margin: 0 }}>x{line.quantity} × ₱{line.price.toLocaleString()}.00</p>
                   </div>
                   <span style={{ fontSize: "13px", fontWeight: 600 }}>₱{line.subtotal.toLocaleString()}.00</span>

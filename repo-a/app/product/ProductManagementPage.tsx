@@ -3,21 +3,39 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
+import { 
+  LayoutDashboard, ShoppingCart, Users, LineChart, 
+  FileText, Package, User, ClipboardList, RotateCcw, Gift,
+  FolderOpen, Coffee, Zap, ChevronDown, Search
+} from "lucide-react";
 
-// ─── CASE UNIT SYSTEM (cases only) ───────────────────────────────────────────
-export type CaseUnit = "case_24" | "case_12" | "case_6";
+type CaseUnit = "case_24" | "case_12" | "case_6" | "btl" | "pcs";
 
-export const CASE_UNITS: {
-  value: CaseUnit; label: string; short: string;
-  bottlesPerCase: number; detail: string;
+const CASE_UNITS: {
+  value: CaseUnit; label: string; short: string; bottlesPerCase: number | null;
 }[] = [
-  { value: "case_24", label: "Case (24 pcs)", short: "24-cs", bottlesPerCase: 24, detail: "1 case = 24 bottles" },
-  { value: "case_12", label: "Case (12 pcs)", short: "12-cs", bottlesPerCase: 12, detail: "1 case = 12 bottles" },
-  { value: "case_6",  label: "Case (6 pcs)",  short: "6-cs",  bottlesPerCase: 6,  detail: "1 case = 6 bottles"  },
+  { value: "case_24", label: "Case (24 pcs)", short: "24-cs", bottlesPerCase: 24 },
+  { value: "case_12", label: "Case (12 pcs)", short: "12-cs", bottlesPerCase: 12 },
+  { value: "case_6",  label: "Case (6 pcs)",  short: "6-cs",  bottlesPerCase: 6  },
+  { value: "btl",     label: "Bottles",        short: "btl",   bottlesPerCase: null },
+  { value: "pcs",     label: "Pieces",         short: "pcs",   bottlesPerCase: null },
 ];
 
 const getUnit = (u?: string): typeof CASE_UNITS[number] =>
   CASE_UNITS.find((x) => x.value === u) ?? CASE_UNITS[0];
+
+const navItems = [
+  { label: "Dashboard",             icon: LayoutDashboard, path: "/dashboard"      },
+  { label: "Inventory Maintenance", icon: ShoppingCart, path: "/inventory"      },
+  { label: "Supplier Maintenance",  icon: Users, path: "/supplier"       },
+  { label: "Sales Reports",         icon: LineChart, path: "/sales"          },
+  { label: "Transaction Logs",      icon: FileText, path: "/transaction"    },
+  { label: "Product Management",    icon: Package, path: "/product"        },
+  { label: "Account Management",    icon: User, path: "/account"        },
+  { label: "Purchase Order",        icon: ClipboardList, path: "/purchase-order" },
+  { label: "Return", icon: RotateCcw, path: "/return" },
+  { label: "Promo Management",      icon: Gift, path: "/promo"          },
+];
 
 // ── Fused qty + case-unit dropdown ───────────────────────────────────────────
 function CaseUnitInput({
@@ -39,7 +57,7 @@ function CaseUnitInput({
   }, []);
 
   const qty       = Number(quantity) || 0;
-  const totalBtl  = qty * sel.bottlesPerCase;
+  const totalBtl  = sel.bottlesPerCase ? qty * sel.bottlesPerCase : null;
 
   return (
     <div ref={ref}>
@@ -64,25 +82,24 @@ function CaseUnitInput({
           </svg>
           {open && (
             <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] w-52 overflow-hidden">
-              {CASE_UNITS.map((u) => (
+{CASE_UNITS.map((u) => (
                 <button key={u.value} type="button"
                   onClick={(e) => { e.stopPropagation(); onUnitChange(u.value); setOpen(false); }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors
                     ${unit === u.value ? "bg-indigo-50" : "hover:bg-gray-50"}`}>
                   <div>
                     <p className={`text-sm font-medium ${unit === u.value ? "text-indigo-700" : "text-gray-800"}`}>{u.label}</p>
-                    <p className="text-xs text-gray-400">{u.detail}</p>
+                    <span className={`text-xs px-1.5 py-0.5 rounded font-mono ml-2 shrink-0 ${unit === u.value ? "bg-indigo-100 text-indigo-600" : "bg-gray-100 text-gray-400"}`}>
+                      {u.short}
+                    </span>
                   </div>
-                  <span className={`text-xs px-1.5 py-0.5 rounded font-mono ml-2 shrink-0 ${unit === u.value ? "bg-indigo-100 text-indigo-600" : "bg-gray-100 text-gray-400"}`}>
-                    {u.short}
-                  </span>
                 </button>
               ))}
             </div>
           )}
         </button>
       </div>
-      {qty > 0 && (
+      {qty > 0 && totalBtl !== null && (
         <p className="text-xs text-indigo-500 mt-1 font-medium">
           {qty} × {sel.bottlesPerCase} = {totalBtl} bottles total
         </p>
@@ -97,7 +114,7 @@ function CaseBadge({ quantity, unit, compact = false }: {
 }) {
   const u        = getUnit(unit);
   const qty      = Number(quantity) || 0;
-  const totalBtl = qty * u.bottlesPerCase;
+  const totalBtl = u.bottlesPerCase ? qty * u.bottlesPerCase : null;
 
   const color = qty === 0
     ? "bg-red-100 text-red-700 border-red-200"
@@ -111,7 +128,7 @@ function CaseBadge({ quantity, unit, compact = false }: {
         {qty} <span className="font-normal opacity-80">{u.short}</span>
       </span>
       <span className={`text-xs font-medium ${compact ? "text-gray-400" : "text-indigo-500"}`}>
-        {qty} × {u.bottlesPerCase} = {totalBtl} btl
+        {totalBtl !== null ? `${qty} × ${u.bottlesPerCase} = ${totalBtl} btl` : null}
       </span>
     </div>
   );
@@ -136,19 +153,6 @@ const getCategoryColor = (cat: string) => ({
   WATER:        "bg-cyan-100 text-cyan-600",
   OTHER:        "bg-gray-100 text-gray-600",
 }[cat] || "bg-gray-100 text-gray-600");
-
-const navItems = [
-  { label: "Dashboard",             icon: "🏠", path: "/dashboard"      },
-  { label: "Inventory Maintenance", icon: "🛒", path: "/inventory"      },
-  { label: "Supplier Maintenance",  icon: "📊", path: "/supplier"       },
-  { label: "Sales Reports",         icon: "🌐", path: "/sales"          },
-  { label: "Transaction Logs",      icon: "▦",  path: "/transaction"    },
-  { label: "Product Management",    icon: "🗒️", path: "/product"        },
-  { label: "Account Management",    icon: "👤", path: "/account"        },
-{ label: "Purchase Order",        icon: "📋", path: "/purchase-order" },
-  { label: "Return", icon: "↩️", path: "/return" },
-  { label: "Promo Management",      icon: "🎁", path: "/promo" },
-];
 
 function AlertModal({ open, type = "alert", title, message, danger, onConfirm, onCancel }: {
   open: boolean; type?: "alert" | "confirm"; title?: string; message: string;
@@ -379,7 +383,7 @@ export default function ProductManagementPage() {
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors
                   ${isActive ? "text-indigo-700 font-semibold bg-indigo-50" : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"}`}>
                 <div className="relative flex items-center gap-2 w-full">
-                  <span>{item.icon}</span><span>{item.label}</span>
+                  <item.icon className="w-4 h-4" /><span>{item.label}</span>
                   {isActive && <div className="absolute -right-4 w-1 h-6 bg-green-500 rounded-full" />}
                 </div>
               </div>
@@ -431,7 +435,7 @@ export default function ProductManagementPage() {
               return (
                 <div key={item.label} onClick={() => navigate(item.path)}
                   className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${isActive ? "text-indigo-700 font-semibold" : "text-gray-500"}`}>
-                  <span>{item.icon}</span><span>{item.label}</span>
+                  <item.icon className="w-4 h-4" /><span>{item.label}</span>
                 </div>
               );
             })}
@@ -443,13 +447,15 @@ export default function ProductManagementPage() {
           {/* ── Stat cards ── */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             {[
-              { icon: "🗒️", label: "Total Products",  value: totalProducts,    color: "bg-indigo-100", bold: "text-gray-800"   },
-              { icon: "📂", label: "Categories",       value: totalCategories,  color: "bg-blue-100",   bold: "text-blue-600"   },
-              { icon: "🥤", label: "Soft Drinks",      value: softDrinksCount,  color: "bg-green-100",  bold: "text-green-600"  },
-              { icon: "⚡", label: "Energy Drinks",    value: energyDrinkCount, color: "bg-yellow-100", bold: "text-yellow-600" },
+              { icon: Package, label: "Total Products",  value: totalProducts,    color: "bg-indigo-100", bold: "text-gray-800"   },
+              { icon: FolderOpen, label: "Categories",       value: totalCategories,  color: "bg-blue-100",   bold: "text-blue-600"   },
+              { icon: Coffee, label: "Soft Drinks",      value: softDrinksCount,  color: "bg-green-100",  bold: "text-green-600"  },
+              { icon: Zap, label: "Energy Drinks",    value: energyDrinkCount, color: "bg-yellow-100", bold: "text-yellow-600" },
             ].map((c) => (
               <div key={c.label} className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full ${c.color} flex items-center justify-center text-lg`}>{c.icon}</div>
+                <div className={`w-10 h-10 rounded-full ${c.color} flex items-center justify-center`}>
+                  <c.icon className="w-5 h-5" />
+                </div>
                 <div>
                   <p className="text-xs text-gray-400">{c.label}</p>
                   <p className={`text-xl font-bold ${c.bold}`}>{c.value}</p>
@@ -463,7 +469,7 @@ export default function ProductManagementPage() {
             {/* ── Filters ── */}
             <div className="flex items-center gap-2 mb-4 flex-wrap">
               <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-36 md:w-48">
-                <span className="text-gray-400 text-sm">🔍</span>
+                <Search className="w-3.5 h-3.5 text-gray-400" />
                 <input type="text" placeholder="Search" value={search}
                   onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
                   className="outline-none text-sm text-gray-700 w-full" />
@@ -473,7 +479,7 @@ export default function ProductManagementPage() {
                 <button onClick={() => { setShowCategoryDropdown(!showCategoryDropdown); setShowSizeDropdown(false); }}
                   className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors
                     ${selectedCategory !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                  📂 <span className="hidden sm:inline">{selectedCategory}</span><span className="sm:hidden">Cat</span> ▾
+                  <FolderOpen className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{selectedCategory}</span><span className="sm:hidden">Cat</span> <ChevronDown className="w-3 h-3" />
                 </button>
                 {showCategoryDropdown && (
                   <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44">
@@ -491,7 +497,7 @@ export default function ProductManagementPage() {
                 <button onClick={() => { setShowSizeDropdown(!showSizeDropdown); setShowCategoryDropdown(false); }}
                   className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors
                     ${selectedSize !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                  📦 <span className="hidden sm:inline">{selectedSize}</span><span className="sm:hidden">Size</span> ▾
+                  <Package className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{selectedSize}</span><span className="sm:hidden">Size</span> <ChevronDown className="w-3 h-3" />
                 </button>
                 {showSizeDropdown && (
                   <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-32">
@@ -523,7 +529,7 @@ export default function ProductManagementPage() {
               </div>
             ) : paginated.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
-                <p className="text-4xl mb-3">🔍</p>
+                <Search className="w-12 h-12 text-gray-300 mb-3" />
                 <p className="text-gray-500 font-medium">No products found</p>
                 <p className="text-gray-400 text-sm mt-1">{search ? `No results for "${search}"` : "Add your first product!"}</p>
               </div>
@@ -532,7 +538,7 @@ export default function ProductManagementPage() {
                 {paginated.map((product) => {
                   const u        = getUnit(product.stockUnit);
                   const qty      = Number(product.stockQuantity) || 0;
-                  const totalBtl = qty * u.bottlesPerCase;
+                  const totalBtl = u.bottlesPerCase ? qty * u.bottlesPerCase : null;
                   const badgeColor = qty === 0
                     ? "bg-red-100 text-red-700 border-red-200"
                     : qty <= 10

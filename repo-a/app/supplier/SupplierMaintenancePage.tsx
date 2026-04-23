@@ -4,6 +4,11 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
+import { 
+  LayoutDashboard, ShoppingCart, Users, LineChart, 
+  FileText, Package, User, ClipboardList, RotateCcw, Gift,
+  Calendar, Search
+} from "lucide-react";
 
 type ProductItem = {
   id: string;
@@ -22,16 +27,16 @@ type SupplierItem = {
 };
 
 const navItems = [
-  { label: "Dashboard",             icon: "🏠" },
-  { label: "Inventory Maintenance", icon: "🛒" },
-  { label: "Supplier Maintenance",  icon: "📊", active: true },
-  { label: "Sales Reports",         icon: "🌐" },
-  { label: "Transaction Logs",      icon: "▦"  },
-  { label: "Product Management",    icon: "🗒️" },
-  { label: "Account Management",    icon: "👤" },
-  { label: "Purchase Order",        icon: "📋" },
-  { label: "Return",              icon: "↩️" },
-  { label: "Promo Management",      icon: "🎁" },
+  { label: "Dashboard",             icon: LayoutDashboard, path: "/dashboard" },
+  { label: "Inventory Maintenance", icon: ShoppingCart, path: "/inventory" },
+  { label: "Supplier Maintenance",  icon: Users, path: "/supplier", active: true },
+  { label: "Sales Reports",         icon: LineChart, path: "/sales" },
+  { label: "Transaction Logs",      icon: FileText, path: "/transaction" },
+  { label: "Product Management",    icon: Package, path: "/product" },
+  { label: "Account Management",    icon: User, path: "/account" },
+  { label: "Purchase Order",        icon: ClipboardList, path: "/purchase-order" },
+  { label: "Return",               icon: RotateCcw, path: "/return" },
+  { label: "Promo Management",      icon: Gift, path: "/promo" },
 ];
 
 const emptyForm = {
@@ -206,7 +211,7 @@ function DatePicker({ value, onChange, label }: { value: string; onChange: (val:
       {label && <label className="text-xs font-medium text-gray-600">{label}</label>}
       <button ref={buttonRef} type="button" onClick={openCalendar}
         className="w-full flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 text-left hover:border-indigo-400 transition-colors focus:outline-none focus:border-indigo-400 bg-white">
-        <span className="text-gray-400 text-base">📅</span>
+        <Calendar className="w-4 h-4 text-gray-400" />
         <span className={`flex-1 truncate ${displayValue ? "text-gray-900" : "text-gray-400"}`}>
           {displayValue || "Select date"}
         </span>
@@ -401,7 +406,7 @@ export default function SupplierMaintenancePage() {
             <div key={item.label} onClick={() => navigate(item.label)}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${item.active ? "text-indigo-700 font-semibold" : "text-gray-400 hover:text-gray-600"}`}>
               <div className="relative flex items-center gap-2 w-full">
-                <span>{item.icon}</span><span>{item.label}</span>
+                <item.icon className="w-4 h-4" /><span>{item.label}</span>
                 {item.active && <div className="absolute -right-4 w-1 h-6 bg-green-500 rounded-full" />}
               </div>
             </div>
@@ -445,7 +450,7 @@ export default function SupplierMaintenancePage() {
             {navItems.map(item => (
               <div key={item.label} onClick={() => navigate(item.label)}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${item.active ? "text-indigo-700 font-semibold" : "text-gray-500"}`}>
-                <span>{item.icon}</span><span>{item.label}</span>
+                <item.icon className="w-4 h-4" /><span>{item.label}</span>
               </div>
             ))}
           </div>
@@ -465,7 +470,7 @@ export default function SupplierMaintenancePage() {
             {/* Filters */}
             <div className="flex items-center gap-2 mb-4 flex-wrap">
               <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-40 md:w-48">
-                <span className="text-gray-400 text-sm">🔍</span>
+                <Search className="w-3.5 h-3.5 text-gray-400" />
                 <input type="text" placeholder="Search" value={search} onChange={e => setSearch(e.target.value)}
                   className="outline-none text-sm text-gray-700 w-full" />
               </div>

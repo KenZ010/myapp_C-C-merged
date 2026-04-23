@@ -3,18 +3,23 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
+import { 
+  LayoutDashboard, ShoppingCart, Users, LineChart, 
+  FileText, Package, User, ClipboardList, RotateCcw, Gift,
+  Search, Box
+} from "lucide-react";
 
 const navItems = [
-  { label: "Dashboard",             icon: "🏠", path: "/dashboard"      },
-  { label: "Inventory Maintenance", icon: "🛒", path: "/inventory"      },
-  { label: "Supplier Maintenance",  icon: "📊", path: "/supplier"       },
-  { label: "Sales Reports",         icon: "🌐", path: "/sales"          },
-  { label: "Transaction Logs",      icon: "▦",  path: "/transaction"    },
-  { label: "Product Management",    icon: "🗒️", path: "/product"        },
-  { label: "Account Management",    icon: "👤", path: "/account"        },
-  { label: "Purchase Order",        icon: "📋", path: "/purchase-order" },
-  { label: "Return",              icon: "↩️", path: "/return"         },
-  { label: "Promo Management",      icon: "🎁", path: "/promo"          },
+  { label: "Dashboard",             icon: LayoutDashboard, path: "/dashboard"      },
+  { label: "Inventory Maintenance", icon: ShoppingCart, path: "/inventory"      },
+  { label: "Supplier Maintenance",  icon: Users, path: "/supplier"       },
+  { label: "Sales Reports",         icon: LineChart, path: "/sales"          },
+  { label: "Transaction Logs",      icon: FileText, path: "/transaction"    },
+  { label: "Product Management",    icon: Package, path: "/product"        },
+  { label: "Account Management",    icon: User, path: "/account"        },
+  { label: "Purchase Order",        icon: ClipboardList, path: "/purchase-order" },
+  { label: "Return",              icon: RotateCcw, path: "/return"         },
+  { label: "Promo Management",      icon: Gift, path: "/promo"          },
 ];
 
 const ITEMS_PER_PAGE = 8;
@@ -138,7 +143,7 @@ export default function ReturnPage() {
       {showConfirmModal.show && (
         <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-[60] px-4">
           <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
-            <p className="text-2xl mb-2">↩️</p>
+            <RotateCcw className="w-10 h-10 text-gray-300 mb-2" />
             <p className="text-sm text-gray-700 mb-5">{showConfirmModal.message}</p>
             <div className="flex gap-3">
               <button onClick={() => setShowConfirmModal({ show: false, message: "", onConfirm: () => {} })}
@@ -161,7 +166,7 @@ export default function ReturnPage() {
               <div key={item.label} onClick={() => navigate(item.path)}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${isActive ? "text-indigo-700 font-semibold bg-indigo-50" : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"}`}>
                 <div className="relative flex items-center gap-2 w-full">
-                  <span>{item.icon}</span><span>{item.label}</span>
+                  <item.icon className="w-4 h-4" /><span>{item.label}</span>
                   {isActive && <div className="absolute -right-4 w-1 h-6 bg-green-500 rounded-full" />}
                 </div>
               </div>
@@ -211,7 +216,7 @@ export default function ReturnPage() {
               return (
                 <div key={item.label} onClick={() => navigate(item.path)}
                   className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${isActive ? "text-indigo-700 font-semibold" : "text-gray-500"}`}>
-                  <span>{item.icon}</span><span>{item.label}</span>
+                  <item.icon className="w-4 h-4" /><span>{item.label}</span>
                 </div>
               );
             })}
@@ -237,10 +242,12 @@ export default function ReturnPage() {
         <div className="flex-1 p-3 md:p-5 bg-green-50">
           <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-              <h2 className="text-sm font-bold text-gray-700">↩️ Product Returns</h2>
+              <h2 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                <RotateCcw className="w-4 h-4" />
+                Product Returns</h2>
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-44">
-                  <span className="text-gray-400 text-sm">🔍</span>
+                  <Search className="w-3.5 h-3.5 text-gray-400" />
                   <input type="text" placeholder="Search..." value={search}
                     onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                     className="outline-none text-sm text-gray-700 w-full bg-transparent" />
@@ -269,7 +276,7 @@ export default function ReturnPage() {
                   ) : (activeTab === "pending" ? paginated.length === 0 : historyPaginated.length === 0) ? (
                     <tr><td colSpan={6} className="p-10 text-center">
                       <div className="flex flex-col items-center gap-2">
-                        <span className="text-3xl">📦</span>
+                        <Box className="w-8 h-8 text-gray-300" />
                         <p className="text-gray-400 text-sm">No returns found.</p>
                       </div>
                     </td></tr>

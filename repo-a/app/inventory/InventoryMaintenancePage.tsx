@@ -1,8 +1,14 @@
 "use client";
 
+import React from "react";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
+import { 
+  LayoutDashboard, ShoppingCart, Users, LineChart, 
+  FileText, Package, User, ClipboardList, RotateCcw, Gift,
+  Coffee, Zap, Beer, Droplets, ShoppingBasket, ClipboardListIcon, Inbox
+} from "lucide-react";
 
 // ─── CASE UNIT SYSTEM ────────────────────────────────────────────────────────
 type CaseUnit = "case_24" | "case_12" | "case_6" | "btl" | "pcs";
@@ -81,11 +87,11 @@ type Transaction = {
 
 type Period = "Daily" | "Weekly" | "Monthly";
 
-const EMOJI_MAP: Record<string, string> = {
-  SOFTDRINKS: "🥤", ENERGY_DRINK: "⚡", BEER: "🍺",
-  JUICE: "🍹", WATER: "💧", OTHER: "🛒",
+const CATEGORY_ICONS: Record<string, typeof Coffee> = {
+  SOFTDRINKS: Coffee, ENERGY_DRINK: Zap, BEER: Beer,
+  JUICE: Droplets, WATER: Droplets, OTHER: ShoppingBasket,
 };
-const getEmoji   = (cat?: string) => EMOJI_MAP[cat?.toUpperCase() || ""] || "🥤";
+const getCategoryIcon = (cat?: string) => CATEGORY_ICONS[cat?.toUpperCase() || ""] || Coffee;
 const rankColors = ["#e53935","#fb8c00","#f9a825","#aaa","#aaa","#aaa","#aaa","#aaa"];
 
 function normalizeTransaction(o: Record<string, unknown>): Transaction {
@@ -135,16 +141,16 @@ const LOG_TYPE_STYLE: Record<LogType, { label: string; bg: string; color: string
 const LOGS_PER_PAGE = 10;
 
 const navItems = [
-  { label: "Dashboard",             icon: "🏠", path: "/dashboard"      },
-  { label: "Inventory Maintenance", icon: "🛒", path: "/inventory"      },
-  { label: "Supplier Maintenance",  icon: "📊", path: "/supplier"       },
-  { label: "Sales Reports",         icon: "🌐", path: "/sales"          },
-  { label: "Transaction Logs",      icon: "▦",  path: "/transaction"    },
-  { label: "Product Management",    icon: "🗒️", path: "/product"        },
-  { label: "Account Management",    icon: "👤", path: "/account"        },
-{ label: "Purchase Order",        icon: "📋", path: "/purchase-order" },
-  { label: "Return", icon: "↩️", path: "/return" },
-  { label: "Promo Management",      icon: "🎁", path: "/promo" },
+  { label: "Dashboard",             icon: LayoutDashboard, path: "/dashboard"      },
+  { label: "Inventory Maintenance", icon: ShoppingCart, path: "/inventory"      },
+  { label: "Supplier Maintenance",  icon: Users, path: "/supplier"       },
+  { label: "Sales Reports",         icon: LineChart, path: "/sales"          },
+  { label: "Transaction Logs",      icon: FileText, path: "/transaction"    },
+  { label: "Product Management",    icon: Package, path: "/product"        },
+  { label: "Account Management",    icon: User, path: "/account"        },
+  { label: "Purchase Order",        icon: ClipboardList, path: "/purchase-order" },
+  { label: "Return", icon: RotateCcw, path: "/return" },
+  { label: "Promo Management",      icon: Gift, path: "/promo" },
 ];
 
 function fmtDate(str: string) {
@@ -397,7 +403,7 @@ export default function InventoryMaintenancePage() {
                   isActive ? "text-indigo-700 font-semibold bg-indigo-50" : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
                 }`}>
                 <div className="relative flex items-center gap-2 w-full">
-                  <span>{item.icon}</span>
+                  <item.icon className="w-4 h-4" />
                   <span>{item.label}</span>
                   {isActive && <div className="absolute -right-4 w-1 h-6 bg-green-500 rounded-full" />}
                 </div>
@@ -451,7 +457,7 @@ export default function InventoryMaintenancePage() {
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${
                   pathname === item.path ? "text-indigo-700 font-semibold" : "text-gray-500"
                 }`}>
-                <span>{item.icon}</span><span>{item.label}</span>
+                <span className="w-4 h-4">{React.createElement(item.icon, { className: "w-4 h-4" })}</span><span>{item.label}</span>
               </div>
             ))}
           </div>
@@ -463,7 +469,9 @@ export default function InventoryMaintenancePage() {
           <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm mb-4">
             <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
               <div>
-                <h2 className="font-bold text-gray-800 text-base">📋 Inventory Movement Log</h2>
+                <h2 className="font-bold text-gray-800 text-base flex items-center gap-2">
+                  <ClipboardListIcon className="w-4 h-4 text-indigo-600" />
+                  Inventory Movement Log</h2>
                 <p className="text-xs text-gray-400 mt-0.5">{logsTotal} total records</p>
               </div>
               <div className="flex items-center gap-1.5 flex-wrap">
@@ -482,7 +490,7 @@ export default function InventoryMaintenancePage() {
               <div className="text-center py-10 text-gray-400 text-sm">Loading logs...</div>
             ) : logs.length === 0 ? (
               <div className="text-center py-10">
-                <p className="text-2xl mb-2">📭</p>
+                <Inbox className="w-10 h-10 text-gray-300 mb-2" />
                 <p className="text-sm text-gray-400">No inventory movements recorded yet.</p>
               </div>
             ) : (
@@ -682,7 +690,10 @@ export default function InventoryMaintenancePage() {
                             </td>
                             <td className="py-2 px-2">
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-medium text-gray-800">{getEmoji(item.category)} {item.name}</span>
+                                <span className="font-medium text-gray-800 flex items-center gap-1">
+                                  {React.createElement(getCategoryIcon(item.category), { className: "w-4 h-4" })}
+                                  {item.name}
+                                </span>
                                 {si?.size && (
                                   <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">
                                     {si.size}

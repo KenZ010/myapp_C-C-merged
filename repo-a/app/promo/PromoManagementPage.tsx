@@ -1,9 +1,14 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 import AlertModal from "@/components/AlertModal";
+import { 
+  LayoutDashboard, ShoppingCart, Users, LineChart, 
+  FileText, Package, User, ClipboardList, RotateCcw, Gift,
+  Tag, Ribbon, Package as PackageIcon, Search, Calendar, Plus
+} from "lucide-react";
 
 type PromoType = "Discount" | "Buy 1 Get 1" | "Bundle Deal";
 type PromoStatus = "Active" | "Inactive";
@@ -23,16 +28,16 @@ type Promo = {
 };
 
 const navItems = [
-  { label: "Dashboard", icon: "🏠", path: "/dashboard" },
-  { label: "Inventory Maintenance", icon: "🛒", path: "/inventory" },
-  { label: "Supplier Maintenance", icon: "📊", path: "/supplier" },
-  { label: "Sales Reports", icon: "🌐", path: "/sales" },
-  { label: "Transaction Logs", icon: "▦", path: "/transaction" },
-  { label: "Product Management", icon: "🗒️", path: "/product" },
-  { label: "Account Management", icon: "👤", path: "/account" },
-  { label: "Purchase Order",        icon: "📋", path: "/purchase-order" },
-  { label: "Return", icon: "↩️", path: "/return" },
-  { label: "Promo Management", icon: "🎁", path: "/promo" },
+  { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
+  { label: "Inventory Maintenance", icon: ShoppingCart, path: "/inventory" },
+  { label: "Supplier Maintenance", icon: Users, path: "/supplier" },
+  { label: "Sales Reports", icon: LineChart, path: "/sales" },
+  { label: "Transaction Logs", icon: FileText, path: "/transaction" },
+  { label: "Product Management", icon: Package, path: "/product" },
+  { label: "Account Management", icon: User, path: "/account" },
+  { label: "Purchase Order", icon: ClipboardList, path: "/purchase-order" },
+  { label: "Return", icon: RotateCcw, path: "/return" },
+  { label: "Promo Management", icon: Gift, path: "/promo" },
 ];
 
 const PROMO_TYPES: PromoType[] = ["Discount", "Buy 1 Get 1", "Bundle Deal"];
@@ -43,10 +48,10 @@ const TYPE_COLORS: Record<PromoType, string> = {
   "Bundle Deal": "bg-orange-100 text-orange-600",
 };
 
-const TYPE_ICONS: Record<PromoType, string> = {
-  "Discount": "🏷️",
-  "Buy 1 Get 1": "🎀",
-  "Bundle Deal": "📦",
+const TYPE_ICONS: Record<PromoType, typeof Tag> = {
+  "Discount": Tag,
+  "Buy 1 Get 1": Ribbon,
+  "Bundle Deal": PackageIcon,
 };
 
 const emptyForm = {
@@ -155,7 +160,7 @@ function DatePicker({
         onClick={handleToggle}
         className="w-full flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-left hover:border-indigo-400 transition-colors focus:outline-none focus:border-indigo-400 bg-white"
       >
-        <span className="text-gray-400 text-xs">📅</span>
+        <Calendar className="w-3 h-3 text-gray-400" />
         <span className={`flex-1 ${displayValue ? "text-gray-900" : "text-gray-400"}`}>
           {displayValue || placeholder}
         </span>
@@ -506,7 +511,7 @@ export default function PromoManagementPage() {
               <div key={item.label} onClick={() => navigate(item.path)}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${isActive ? "text-indigo-700 font-semibold bg-indigo-50" : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"}`}>
                 <div className="relative flex items-center gap-2 w-full">
-                  <span>{item.icon}</span><span>{item.label}</span>
+                  <item.icon className="w-4 h-4" /><span>{item.label}</span>
                   {isActive && <div className="absolute -right-4 w-1 h-6 bg-green-500 rounded-full" />}
                 </div>
               </div>
@@ -548,7 +553,7 @@ export default function PromoManagementPage() {
               return (
                 <div key={item.label} onClick={() => navigate(item.path)}
                   className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${isActive ? "text-indigo-700 font-semibold" : "text-gray-500"}`}>
-                  <span>{item.icon}</span><span>{item.label}</span>
+                  <item.icon className="w-4 h-4" /><span>{item.label}</span>
                 </div>
               );
             })}
@@ -566,7 +571,7 @@ export default function PromoManagementPage() {
           <div className="bg-white rounded-2xl p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-6 flex-wrap">
               <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-40 md:w-48">
-                <span className="text-gray-400 text-sm">🔍</span>
+                <Search className="w-3.5 h-3.5 text-gray-400" />
                 <input type="text" placeholder="Search promos..." value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} className="outline-none text-sm text-gray-700 w-full" />
               </div>
               <div className="relative" ref={typeRef}>
@@ -612,7 +617,7 @@ export default function PromoManagementPage() {
                       {promo.image
                         // eslint-disable-next-line @next/next/no-img-element
                         ? <img src={promo.image} alt={promo.title ?? "Promo"} className="w-full h-full object-cover" />
-                        : <span className="text-4xl">{TYPE_ICONS[promo.type] ?? "🎁"}</span>}
+                        : React.createElement(TYPE_ICONS[promo.type] ?? Gift, { className: "w-12 h-12 text-gray-300" })}
                       <span className={`absolute top-2 right-2 text-xs px-2 py-0.5 rounded-full font-medium ${promo.status === "Active" ? "bg-green-100 text-green-600" : "bg-gray-200 text-gray-500"}`}>{promo.status}</span>
                     </div>
                     <div className="p-2">
@@ -653,7 +658,7 @@ export default function PromoManagementPage() {
                 {selectedPromo.image
                   // eslint-disable-next-line @next/next/no-img-element
                   ? <img src={selectedPromo.image} alt={selectedPromo.title ?? "Promo"} className="w-full h-full object-cover rounded-xl" />
-                  : (TYPE_ICONS[selectedPromo.type] ?? "🎁")}
+                  : React.createElement(TYPE_ICONS[selectedPromo.type] ?? Gift, { className: "w-12 h-12" })}
               </div>
               <div className="flex-1 flex flex-col gap-3">
                 {isEditing ? (

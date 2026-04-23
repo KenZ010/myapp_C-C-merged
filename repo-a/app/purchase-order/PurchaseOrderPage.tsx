@@ -4,6 +4,11 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
+import { 
+  LayoutDashboard, ShoppingCart, Users, LineChart, 
+  FileText, Package, User, ClipboardList, RotateCcw, Gift,
+  Building2, Box, Clock, CheckCircle, Calendar, Inbox, Search
+} from "lucide-react";
 
 // ─── CASE UNIT SYSTEM ────────────────────────────────────────────────────────
 type CaseUnit = "case_24" | "case_12" | "case_6" | "btl" | "pcs";
@@ -230,7 +235,7 @@ function DateField({
       {label && <label className="text-xs font-medium text-gray-500 mb-1 block">{label}</label>}
       <button ref={buttonRef} type="button" onClick={openCalendar}
         className="w-full flex items-center gap-2 border border-gray-200 rounded-xl px-4 py-3 text-sm text-left bg-white focus:outline-none focus:border-indigo-400">
-        <span className="text-gray-400 text-base">📅</span>
+        <Calendar className="w-4 h-4 text-gray-400" />
         <span className={`flex-1 truncate ${displayValue ? "text-gray-800 font-medium" : "text-gray-400"}`}>
           {displayValue || "Select date"}
         </span>
@@ -279,23 +284,24 @@ const STATUS_CONFIG: Record<string, { bg: string; text: string }> = {
 };
 
 const navItems = [
-  { label: "Dashboard",             icon: "🏠", path: "/dashboard"      },
-  { label: "Inventory Maintenance", icon: "🛒", path: "/inventory"      },
-  { label: "Supplier Maintenance",  icon: "📊", path: "/supplier"       },
-  { label: "Sales Reports",         icon: "🌐", path: "/sales"          },
-  { label: "Transaction Logs",      icon: "▦",  path: "/transaction"    },
-  { label: "Product Management",    icon: "🗒️", path: "/product"        },
-  { label: "Account Management",    icon: "👤", path: "/account"        },
-  { label: "Purchase Order",        icon: "📋", path: "/purchase-order" },
-  { label: "Return",              icon: "↩️", path: "/return"         },
-  { label: "Promo Management",      icon: "🎁", path: "/promo"          },
+  { label: "Dashboard",             icon: LayoutDashboard, path: "/dashboard"      },
+  { label: "Inventory Maintenance", icon: ShoppingCart, path: "/inventory"      },
+  { label: "Supplier Maintenance",  icon: Users, path: "/supplier"       },
+  { label: "Sales Reports",         icon: LineChart, path: "/sales"          },
+  { label: "Transaction Logs",      icon: FileText, path: "/transaction"    },
+  { label: "Product Management",    icon: Package, path: "/product"        },
+  { label: "Account Management",    icon: User, path: "/account"        },
+  { label: "Purchase Order",        icon: ClipboardList, path: "/purchase-order" },
+  { label: "Return",               icon: RotateCcw, path: "/return"         },
+  { label: "Promo Management",      icon: Gift, path: "/promo"          },
 ];
 
 const ITEMS_PER_PAGE = 8;
 const emptyLineItem  = (): LineItem => ({ productId: "", productName: "", quantity: 1, unitPrice: 0, unit: "case_24" });
 const makeEmptyForm  = (): DeliveryForm => ({
   supplierId: "", deliveryDate: new Date().toISOString().split("T")[0],
-  lineItems: [emptyLineItem()], notes: "",
+  lineItems: [emptyLineItem()],
+  notes: "",
 });
 
 type Tab = "create" | "receiving" | "history";
@@ -591,7 +597,7 @@ export default function PurchaseOrderPage() {
               <div key={item.label} onClick={() => navigate(item.path)}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${isActive ? "text-indigo-700 font-semibold bg-indigo-50" : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"}`}>
                 <div className="relative flex items-center gap-2 w-full">
-                  <span>{item.icon}</span><span>{item.label}</span>
+                  <item.icon className="w-4 h-4" /><span>{item.label}</span>
                   {isActive && <div className="absolute -right-4 w-1 h-6 bg-green-500 rounded-full" />}
                 </div>
               </div>
@@ -645,7 +651,7 @@ export default function PurchaseOrderPage() {
               return (
                 <div key={item.label} onClick={() => navigate(item.path)}
                   className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${isActive ? "text-indigo-700 font-semibold" : "text-gray-500"}`}>
-                  <span>{item.icon}</span><span>{item.label}</span>
+                  <item.icon className="w-4 h-4" /><span>{item.label}</span>
                 </div>
               );
             })}
@@ -656,15 +662,15 @@ export default function PurchaseOrderPage() {
         <div className="bg-white border-b border-gray-100 px-4 md:px-6">
           <div className="flex">
             {([
-              { key: "create",    label: "Create Order", icon: "📋" },
-              { key: "receiving", label: "Receiving",    icon: "📦" },
-              { key: "history",   label: "PO History",   icon: "🕐" },
-            ] as { key: Tab; label: string; icon: string }[]).map((tab) => (
+              { key: "create",    label: "Create Order", icon: ClipboardList },
+              { key: "receiving", label: "Receiving",    icon: Box },
+              { key: "history",   label: "PO History",   icon: Clock },
+            ] as { key: Tab; label: string; icon: typeof ClipboardList }[]).map((tab) => (
               <button key={tab.key} onClick={() => setActiveTab(tab.key)}
                 className={`flex items-center gap-1 md:gap-2 px-3 md:px-6 py-3 text-xs md:text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.key ? "border-indigo-600 text-indigo-700 bg-indigo-50" : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
                 }`}>
-                <span>{tab.icon}</span><span>{tab.label}</span>
+                <tab.icon className="w-4 h-4" /><span>{tab.label}</span>
                 {tab.key === "receiving" && pendingDeliveries.length > 0 && (
                   <span className="bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none ml-1">{pendingDeliveries.length}</span>
                 )}
@@ -747,14 +753,14 @@ export default function PurchaseOrderPage() {
 
                   {!form.supplierId && (
                     <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-gray-200 rounded-xl">
-                      <span className="text-3xl mb-2">🏢</span>
+                      <Building2 className="w-10 h-10 text-gray-300 mb-2" />
                       <p className="text-sm text-gray-400 font-medium">Select a supplier first</p>
                     </div>
                   )}
 
                   {form.supplierId && supplierProducts.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-yellow-200 rounded-xl bg-yellow-50">
-                      <span className="text-3xl mb-2">📦</span>
+                      <Box className="w-10 h-10 text-yellow-300 mb-2" />
                       <p className="text-sm text-yellow-700 font-medium">No products found for this supplier</p>
                     </div>
                   )}
@@ -807,8 +813,8 @@ export default function PurchaseOrderPage() {
                               </div>
                             </div>
                             {breakdown && item.productId && (
-                              <p className="text-xs text-indigo-500 font-medium mt-1.5 pl-1">
-                                📦 {item.quantity} {getUnitShort(item.unit)} = {breakdown.split("= ")[1]}
+                              <p className="text-xs text-indigo-500 font-medium mt-1.5 pl-1 flex items-center gap-1">
+                                <Box className="w-3 h-3" /> {item.quantity} {getUnitShort(item.unit)} = {breakdown.split("= ")[1]}
                               </p>
                             )}
                           </div>
@@ -833,10 +839,12 @@ export default function PurchaseOrderPage() {
               {/* Order Summary sidebar */}
               <div className="w-full lg:w-72 shrink-0">
                 <div className="bg-white rounded-2xl p-5 shadow-sm sticky top-4">
-                  <h2 className="text-sm font-bold text-gray-700 mb-4">📋 Order Summary</h2>
+                  <h2 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
+                    <ClipboardList className="w-4 h-4 text-indigo-600" />
+                    Order Summary</h2>
                   {form.supplierId ? (
                     <div className="mb-4 flex items-center gap-2 p-2.5 bg-indigo-50 rounded-xl border border-indigo-100">
-                      <span className="text-lg">🏢</span>
+                      <Building2 className="w-5 h-5 text-indigo-600" />
                       <div>
                         <p className="text-xs text-indigo-400">Supplier</p>
                         <p className="text-sm font-semibold text-indigo-800">{selectedSupplierName}</p>
@@ -850,7 +858,7 @@ export default function PurchaseOrderPage() {
 
                   {form.deliveryDate && (
                     <div className="mb-4 flex items-center gap-2 p-2.5 bg-gray-50 rounded-xl border border-gray-100">
-                      <span className="text-base">📅</span>
+                      <Calendar className="w-4 h-4 text-gray-400" />
                       <div>
                         <p className="text-xs text-gray-400">Delivery Date</p>
                         <p className="text-xs font-semibold text-gray-700">
@@ -862,7 +870,7 @@ export default function PurchaseOrderPage() {
 
                   {validLineItems.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-8 text-center">
-                      <span className="text-4xl mb-3">📋</span>
+                      <ClipboardList className="w-10 h-10 text-gray-200 mb-3" />
                       <p className="text-xs text-gray-400">No items yet.</p>
                     </div>
                   ) : (
@@ -909,9 +917,11 @@ export default function PurchaseOrderPage() {
               <div className="flex-1">
                 <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm">
                   <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                    <h2 className="text-sm font-bold text-gray-700">📦 Pending Deliveries — Ready to Receive</h2>
+                    <h2 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                    <Box className="w-4 h-4 text-blue-600" />
+                    Pending Deliveries — Ready to Receive</h2>
                     <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-44">
-                      <span className="text-gray-400 text-sm">🔍</span>
+                      <Search className="w-4 h-4 text-gray-400" />
                       <input type="text" placeholder="Search..." value={receivingSearch}
                         onChange={(e) => { setReceivingSearch(e.target.value); setReceivePage(1); }}
                         className="outline-none text-sm text-gray-700 w-full bg-transparent" />
@@ -933,7 +943,7 @@ export default function PurchaseOrderPage() {
                         {loading ? (
                           <tr><td colSpan={6} className="p-6 text-center text-gray-400">Loading...</td></tr>
                         ) : paginatedReceiving.length === 0 ? (
-                          <tr><td colSpan={6} className="p-10 text-center"><div className="flex flex-col items-center gap-2"><span className="text-3xl">📭</span><p className="text-gray-400 text-sm">No pending deliveries.</p></div></td></tr>
+                          <tr><td colSpan={6} className="p-10 text-center"><div className="flex flex-col items-center gap-2"><Inbox className="w-8 h-8 text-gray-300" /><p className="text-gray-400 text-sm">No pending deliveries.</p></div></td></tr>
                         ) : paginatedReceiving.map((row) => (
                           <tr key={row.id} className={`border-b border-gray-100 hover:bg-gray-50 ${receivingDelivery?.id === row.id ? "bg-indigo-50" : ""}`}>
                             <td className="p-3"><span className="bg-gray-700 text-white px-3 py-1 rounded-full text-xs font-mono">{row.id.slice(0, 8)}...</span></td>
@@ -1027,10 +1037,12 @@ export default function PurchaseOrderPage() {
           {activeTab === "history" && (
             <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                <h2 className="text-sm font-bold text-gray-700">🕐 Delivery History</h2>
+                <h2 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-gray-600" />
+                  Delivery History</h2>
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-44">
-                    <span className="text-gray-400 text-sm">🔍</span>
+                    <Search className="w-4 h-4 text-gray-400" />
                     <input type="text" placeholder="Search..." value={historySearch}
                       onChange={(e) => { setHistorySearch(e.target.value); setHistoryPage(1); }}
                       className="outline-none text-sm text-gray-700 w-full bg-transparent" />
@@ -1084,7 +1096,7 @@ export default function PurchaseOrderPage() {
                     {loading ? (
                       <tr><td colSpan={6} className="p-6 text-center text-gray-400">Loading...</td></tr>
                     ) : paginatedHistory.length === 0 ? (
-                      <tr><td colSpan={6} className="p-10 text-center"><div className="flex flex-col items-center gap-2"><span className="text-3xl">📭</span><p className="text-gray-400 text-sm">No deliveries found.</p></div></td></tr>
+                      <tr><td colSpan={6} className="p-10 text-center"><div className="flex flex-col items-center gap-2"><Inbox className="w-8 h-8 text-gray-300" /><p className="text-gray-400 text-sm">No deliveries found.</p></div></td></tr>
                     ) : paginatedHistory.map((row) => (
                       <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="p-3"><span className="bg-gray-700 text-white px-3 py-1 rounded-full text-xs font-mono">{row.id.slice(0, 8)}...</span></td>

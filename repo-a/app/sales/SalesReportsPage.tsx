@@ -7,6 +7,11 @@ import {
   BarChart, Bar,
 } from "recharts";
 import { api } from "@/lib/api";
+import { 
+  LayoutDashboard, ShoppingCart, Users, BarChart3, 
+  FileText, Package, User, ClipboardList, RotateCcw, Gift,
+  Calendar, Search
+} from "lucide-react";
 
 type Period = "Daily" | "Weekly" | "Monthly";
 
@@ -21,16 +26,16 @@ type Transaction = {
 };
 
 const navItems = [
-  { label: "Dashboard",             icon: "🏠", path: "/dashboard"      },
-  { label: "Inventory Maintenance", icon: "🛒", path: "/inventory"      },
-  { label: "Supplier Maintenance",  icon: "📊", path: "/supplier"       },
-  { label: "Sales Reports",         icon: "🌐", path: "/sales"          },
-  { label: "Transaction Logs",      icon: "▦",  path: "/transaction"    },
-  { label: "Product Management",    icon: "🗒️", path: "/product"        },
-  { label: "Account Management",    icon: "👤", path: "/account"        },
-{ label: "Purchase Order",        icon: "📋", path: "/purchase-order" },
-  { label: "Return", icon: "↩️", path: "/return" },
-  { label: "Promo Management",      icon: "🎁", path: "/promo" },
+  { label: "Dashboard",             icon: LayoutDashboard, path: "/dashboard"      },
+  { label: "Inventory Maintenance", icon: ShoppingCart, path: "/inventory"      },
+  { label: "Supplier Maintenance",  icon: Users, path: "/supplier"       },
+  { label: "Sales Reports",         icon: BarChart3, path: "/sales"          },
+  { label: "Transaction Logs",      icon: FileText, path: "/transaction"    },
+  { label: "Product Management",    icon: Package, path: "/product"        },
+  { label: "Account Management",    icon: User, path: "/account"        },
+  { label: "Purchase Order",        icon: ClipboardList, path: "/purchase-order" },
+  { label: "Return", icon: RotateCcw, path: "/return" },
+  { label: "Promo Management",      icon: Gift, path: "/promo" },
 ];
 
 function getPeriodLabel(period: Period): string {
@@ -200,7 +205,7 @@ export default function SalesReportsPage() {
                 <div key={item.label} onClick={() => navigate(item.path)}
                   className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${isActive ? "text-indigo-700 font-semibold bg-indigo-50" : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"}`}>
                   <div className="relative flex items-center gap-2 w-full">
-                    <span>{item.icon}</span><span>{item.label}</span>
+                    <item.icon className="w-4 h-4" /><span>{item.label}</span>
                     {isActive && <div className="absolute -right-4 w-1 h-6 bg-green-500 rounded-full" />}
                   </div>
                 </div>
@@ -240,7 +245,7 @@ export default function SalesReportsPage() {
               {navItems.map(item => (
                 <div key={item.label} onClick={() => navigate(item.path)}
                   className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm ${pathname === item.path ? "text-indigo-700 font-semibold" : "text-gray-500"}`}>
-                  <span>{item.icon}</span><span>{item.label}</span>
+                  <item.icon className="w-4 h-4" /><span>{item.label}</span>
                 </div>
               ))}
             </div>
@@ -257,15 +262,15 @@ export default function SalesReportsPage() {
 
             {/* ✅ Period picker — NO refresh button */}
             <div className="bg-white rounded-2xl p-4 shadow-sm flex flex-wrap items-center gap-3">
-              <span className="text-xs text-gray-400">📅 Report Period:</span>
+              <span className="text-xs text-gray-400 flex items-center gap-1"><Calendar className="w-3 h-3" /> Report Period:</span>
               {(["Daily", "Weekly", "Monthly"] as Period[]).map(p => (
                 <button key={p} onClick={() => setPeriod(p)}
                   className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${period === p ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
                   {p}
                 </button>
               ))}
-              <span className="text-xs text-indigo-600 font-medium bg-indigo-50 px-3 py-1.5 rounded-lg">
-                📅 {getPeriodLabel(period)}
+              <span className="text-xs text-indigo-600 font-medium bg-indigo-50 px-3 py-1.5 rounded-lg flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> {getPeriodLabel(period)}
               </span>
               {/* ✅ Refresh button removed from here */}
             </div>
@@ -284,7 +289,9 @@ export default function SalesReportsPage() {
                   </div>
                   <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center justify-between">
                     <div><p className="text-xs text-gray-400">Total Transactions</p><p className="text-2xl font-bold text-gray-800">{txCount.toLocaleString()}</p></div>
-                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center text-green-500 text-lg">🛒</div>
+                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                    <ShoppingCart className="w-5 h-5 text-green-500" />
+                  </div>
                   </div>
                   <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center justify-between">
                     <div><p className="text-xs text-gray-400">Avg Order Value</p><p className="text-2xl font-bold text-gray-800">₱{avgOrder.toLocaleString()}</p><p className="text-xs text-gray-400">Per transaction</p></div>
@@ -336,7 +343,7 @@ export default function SalesReportsPage() {
                 <h2 className="font-bold text-gray-800">Top Selling Items</h2>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-1.5">
-                    <span className="text-gray-400 text-xs">🔍</span>
+                    <Search className="w-3 h-3 text-gray-400" />
                     <input type="text" placeholder="Search..." value={topSearch} onChange={e => setTopSearch(e.target.value)}
                       className="outline-none text-xs text-gray-700 w-28 bg-transparent" />
                   </div>
@@ -374,7 +381,7 @@ export default function SalesReportsPage() {
               <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <h2 className="font-bold text-gray-800">Unpopular Items <span className="text-red-400 text-sm">(Needs Attention)</span></h2>
                 <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-1.5">
-                  <span className="text-gray-400 text-xs">🔍</span>
+                  <Search className="w-3 h-3 text-gray-400" />
                   <input type="text" placeholder="Search..." value={unpopSearch} onChange={e => setUnpopSearch(e.target.value)}
                     className="outline-none text-xs text-gray-700 w-28 bg-transparent" />
                 </div>
