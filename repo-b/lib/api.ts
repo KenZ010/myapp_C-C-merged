@@ -180,4 +180,25 @@ export const api = {
     const res = await fetch(`${API_URL}/promos/active`);
     return res.json();
   },
+
+  getDeliveries: async () => {
+    const res = await fetch(`${API_URL}/deliveries`, {
+      headers: { Authorization: `Bearer ${getToken()}` }
+    });
+    return res.json();
+  },
+  getDelivery: async (id: string) => {
+    const res = await fetch(`${API_URL}/deliveries/${id}`, {
+      headers: { Authorization: `Bearer ${getToken()}` }
+    });
+    return res.json();
+  },
+  createDelivery: async (data: Record<string, unknown>) => {
+    const res = await fetch(`${API_URL}/deliveries`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
 };
