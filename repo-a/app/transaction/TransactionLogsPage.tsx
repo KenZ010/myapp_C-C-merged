@@ -13,6 +13,7 @@ const navItems = [
   { label: "Product Management",    icon: "🗒️" },
   { label: "Account Management",    icon: "👤" },
   { label: "Purchase Order",        icon: "📋" },
+  { label: "Return",               icon: "↩️", path: "/return" },
   { label: "Promo Management",      icon: "🎁" },
 ];
 
@@ -102,7 +103,7 @@ export default function TransactionLogsPage() {
       "Supplier Maintenance": "/supplier", "Sales Reports": "/sales",
       "Transaction Logs": "/transaction", "Product Management": "/product",
       "Account Management": "/account", "Purchase Order": "/purchase-order",
-      "Promo Management": "/promo",
+      "Return": "/return", "Promo Management": "/promo",
     };
     if (routes[label]) router.push(routes[label]);
     setShowMobileMenu(false);

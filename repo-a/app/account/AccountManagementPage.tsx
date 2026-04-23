@@ -13,6 +13,7 @@ const navItems = [
   { label: "Product Management", icon: "🗒️" },
   { label: "Account Management", icon: "👤", active: true },
   { label: "Purchase Order", icon: "📋" },
+  { label: "Return", icon: "↩️", path: "/return" },
   { label: "Promo Management", icon: "🎁" },
 ];
 
@@ -198,6 +199,7 @@ export default function AccountManagementPage() {
     if (label === "Product Management") router.push("/product");
     if (label === "Account Management") router.push("/account");
     if (label === "Purchase Order") router.push("/purchase-order");
+    if (label === "Return") router.push("/return");
     if (label === "Promo Management") router.push("/promo");
     setShowMobileMenu(false);
   };

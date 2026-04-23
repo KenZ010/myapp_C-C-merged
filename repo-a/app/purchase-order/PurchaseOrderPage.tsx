@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 
@@ -24,17 +25,6 @@ function getCaseBreakdown(qty: number, unit?: string): string | null {
   return `${qty} × ${u.bottlesPerCase} = ${qty * u.bottlesPerCase} btl`;
 }
 
-function InlineCaseSelect({ value, onChange }: { value: string; onChange: (v: CaseUnit) => void }) {
-  return (
-    <select value={value} onChange={(e) => onChange(e.target.value as CaseUnit)}
-      className="w-full border border-gray-200 rounded-lg px-1.5 py-1.5 text-xs outline-none focus:border-indigo-400 text-gray-900 bg-white">
-      {CASE_UNITS.map((u) => (
-        <option key={u.value} value={u.value}>{u.short} — {u.label}</option>
-      ))}
-    </select>
-  );
-}
-
 function UnitPill({ unit, qty }: { unit?: string; qty?: number }) {
   const u = getUnit(unit);
   return (
@@ -47,12 +37,13 @@ function UnitPill({ unit, qty }: { unit?: string; qty?: number }) {
 
 // ─── CUSTOM SUPPLIER DROPDOWN ─────────────────────────────────────────────────
 function SupplierSelect({
-  value, onChange, suppliers, hint,
+  value, onChange, suppliers, hint, lowStockCount,
 }: {
   value: string;
   onChange: (id: string) => void;
   suppliers: { id: string; supplierName: string }[];
   hint?: string;
+  lowStockCount?: number;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -72,7 +63,7 @@ function SupplierSelect({
         type="button"
         onClick={() => setOpen(!open)}
         className={`w-full flex items-center justify-between border rounded-xl px-4 py-3 text-sm transition-colors bg-white text-left
-          ${open ? "border-indigo-400 ring-2 ring-indigo-100" : "border-gray-200 hover:border-gray-300"}`}
+          ${open ? "border-indigo-400 ring-2 ring-indigo-100" : "border-gray-200"}`}
       >
         {selected ? (
           <div className="flex items-center gap-2">
@@ -84,7 +75,7 @@ function SupplierSelect({
         ) : (
           <span className="text-gray-400">Select a supplier...</span>
         )}
-        <svg className={`w-4 h-4 text-gray-400 transition-transform shrink-0 ml-2 ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="w-4 h-4 text-gray-400 shrink-0 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
@@ -106,9 +97,14 @@ function SupplierSelect({
                   ${value === s.id ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600"}`}>
                   {s.supplierName.charAt(0).toUpperCase()}
                 </div>
-                <span className={`text-sm font-medium ${value === s.id ? "text-indigo-700" : "text-gray-700"}`}>
-                  {s.supplierName}
-                </span>
+                <div className="flex-1 min-w-0">
+                  <span className={`text-sm font-medium ${value === s.id ? "text-indigo-700" : "text-gray-700"}`}>
+                    {s.supplierName}
+                  </span>
+                  {value === s.id && lowStockCount != null && lowStockCount > 0 && (
+                    <span className="ml-2 text-xs text-red-500 font-medium">⚠️ {lowStockCount} low stock</span>
+                  )}
+                </div>
                 {value === s.id && <span className="ml-auto text-indigo-600 text-xs">✓</span>}
               </button>
             ))
@@ -126,38 +122,124 @@ function DateField({
 }: {
   value: string; onChange: (v: string) => void; label?: string;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const display  = value
-    ? new Date(value + "T00:00:00").toLocaleDateString("en-PH", { weekday: "short", year: "numeric", month: "long", day: "numeric" })
+  const [show, setShow] = useState(false);
+  const [calendarPos, setCalendarPos] = useState({ top: 0, left: 0 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const calendarRef = useRef<HTMLDivElement>(null);
+  const today = new Date();
+
+  const [viewYear, setViewYear] = useState(() => value ? parseInt(value.split("-")[0]) : today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(() => value ? parseInt(value.split("-")[1]) - 1 : today.getMonth());
+
+  const openCalendar = () => {
+    setViewYear(value ? parseInt(value.split("-")[0]) : today.getFullYear());
+    setViewMonth(value ? parseInt(value.split("-")[1]) - 1 : today.getMonth());
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const calH = 320;
+      let top = rect.bottom + 6;
+      const left = rect.left;
+      if (window.innerHeight - rect.bottom < calH && rect.top > calH) top = rect.top - calH - 6;
+      setCalendarPos({ top, left });
+    }
+    setShow(true);
+  };
+
+  useEffect(() => {
+    if (!show) return;
+    const h = (e: MouseEvent) => {
+      if (calendarRef.current && !calendarRef.current.contains(e.target as Node) &&
+        buttonRef.current && !buttonRef.current.contains(e.target as Node)) setShow(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [show]);
+
+  useEffect(() => {
+    if (!show) return;
+    const h = () => setShow(false);
+    window.addEventListener("scroll", h, true);
+    return () => window.removeEventListener("scroll", h, true);
+  }, [show]);
+
+  const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+  const selectDate = (day: number) => {
+    onChange(`${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
+    setShow(false);
+  };
+
+  const displayValue = value
+    ? new Date(value + "T00:00:00").toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" })
     : "";
 
-  return (
-    <div>
-      {label && <label className="text-xs font-medium text-gray-500 mb-1 block">{label}</label>}
-      <div
-        className="relative w-full border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3 bg-white hover:border-gray-300 cursor-pointer transition-colors"
-        onClick={() => inputRef.current?.showPicker?.()}
-      >
-        <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0">
-          <svg className="w-4 h-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
+  const selDay = value ? parseInt(value.split("-")[2]) : null;
+  const selMonth = value ? parseInt(value.split("-")[1]) - 1 : null;
+  const selYear = value ? parseInt(value.split("-")[0]) : null;
+
+  const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); };
+  const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); };
+
+  const calendar = show ? (
+    <div ref={calendarRef}
+      style={{ position: "fixed", top: calendarPos.top, left: calendarPos.left, width: 280, zIndex: 99999 }}
+      className="bg-white border border-gray-200 rounded-2xl shadow-2xl p-4">
+      <div className="flex items-center justify-between mb-3">
+        <button type="button" onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600 font-medium">‹</button>
+        <div className="flex items-center gap-1">
+          <select value={viewMonth} onChange={(e) => setViewMonth(Number(e.target.value))}
+            className="text-sm font-semibold text-gray-800 border-none outline-none bg-transparent cursor-pointer">
+            {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+          </select>
+          <input type="number" value={viewYear} onChange={(e) => setViewYear(Number(e.target.value))}
+            className="w-16 text-sm font-semibold text-gray-800 border border-gray-200 rounded px-1 text-center outline-none focus:border-indigo-400" />
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs text-gray-400">Delivery Date</p>
-          <p className={`text-sm font-medium truncate ${display ? "text-gray-800" : "text-gray-400"}`}>
-            {display || "Pick a date"}
-          </p>
-        </div>
-        <input
-          ref={inputRef}
-          type="date"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-          style={{ colorScheme: "light" }}
-        />
+        <button type="button" onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600 font-medium">›</button>
       </div>
+      <div className="grid grid-cols-7 mb-1">
+        {DAYS.map(d => <div key={d} className="text-center text-xs font-semibold text-gray-400 py-1">{d}</div>)}
+      </div>
+      <div className="grid grid-cols-7 gap-0.5">
+        {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
+        {Array.from({ length: daysInMonth }).map((_, i) => {
+          const day = i + 1;
+          const isSel = day === selDay && viewMonth === selMonth && viewYear === selYear;
+          const isToday = day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
+          return (
+            <button key={day} type="button" onClick={() => selectDate(day)}
+              className={`w-full aspect-square flex items-center justify-center rounded-lg text-xs transition-colors
+                ${isSel ? "bg-indigo-600 text-white font-semibold" : isToday ? "border border-indigo-400 text-indigo-600 font-semibold" : "text-gray-700 hover:bg-indigo-50"}`}>
+              {day}
+            </button>
+          );
+        })}
+      </div>
+      <button type="button"
+        onClick={() => { setViewYear(today.getFullYear()); setViewMonth(today.getMonth()); selectDate(today.getDate()); }}
+        className="w-full mt-3 py-1.5 text-xs font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50">
+        Today
+      </button>
+    </div>
+  ) : null;
+
+  return (
+    <div className="relative">
+      {label && <label className="text-xs font-medium text-gray-500 mb-1 block">{label}</label>}
+      <button ref={buttonRef} type="button" onClick={openCalendar}
+        className="w-full flex items-center gap-2 border border-gray-200 rounded-xl px-4 py-3 text-sm text-left bg-white focus:outline-none focus:border-indigo-400">
+        <span className="text-gray-400 text-base">📅</span>
+        <span className={`flex-1 truncate ${displayValue ? "text-gray-800 font-medium" : "text-gray-400"}`}>
+          {displayValue || "Select date"}
+        </span>
+        {value && (
+          <span role="button" onClick={(e) => { e.stopPropagation(); onChange(""); setShow(false); }}
+            className="ml-auto text-gray-300 hover:text-gray-500 text-xs leading-none">✕</span>
+        )}
+      </button>
+      {typeof document !== "undefined" && calendar ? createPortal(calendar, document.body) : null}
     </div>
   );
 }
@@ -205,6 +287,7 @@ const navItems = [
   { label: "Product Management",    icon: "🗒️", path: "/product"        },
   { label: "Account Management",    icon: "👤", path: "/account"        },
   { label: "Purchase Order",        icon: "📋", path: "/purchase-order" },
+  { label: "Return",              icon: "↩️", path: "/return"         },
   { label: "Promo Management",      icon: "🎁", path: "/promo"          },
 ];
 
@@ -219,7 +302,7 @@ type Tab = "create" | "receiving" | "history";
 
 // ─── PRODUCT DROPDOWN (custom, no native select) ──────────────────────────────
 function ProductSelect({
-  value, onChange, products, usedIds, idx,
+  value, onChange, products, usedIds,
 }: {
   value: string;
   onChange: (id: string) => void;
@@ -245,7 +328,7 @@ function ProductSelect({
         type="button"
         onClick={() => setOpen(!open)}
         className={`w-full flex items-center justify-between border rounded-lg px-2.5 py-1.5 text-sm transition-colors bg-white text-left
-          ${open ? "border-indigo-400" : "border-gray-200 hover:border-gray-300"}`}
+          ${open ? "border-indigo-400" : "border-gray-200"}`}
       >
         {selected ? (
           <span className="text-gray-800 text-xs truncate">
@@ -254,7 +337,7 @@ function ProductSelect({
         ) : (
           <span className="text-gray-400 text-xs">Select product</span>
         )}
-        <svg className={`w-3 h-3 text-gray-400 shrink-0 ml-1 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="w-3 h-3 text-gray-400 shrink-0 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
@@ -333,6 +416,10 @@ export default function PurchaseOrderPage() {
   const supplierProducts = form.supplierId
     ? allProducts.filter((p) => p.supplierId === form.supplierId && p.status !== "INACTIVE")
     : [];
+
+  const lowStockCount = form.supplierId
+    ? supplierProducts.filter((p) => p.stockQuantity != null && p.stockQuantity <= 10).length
+    : 0;
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -622,6 +709,7 @@ export default function PurchaseOrderPage() {
                         value={form.supplierId}
                         onChange={handleSupplierChange}
                         suppliers={suppliers}
+                        lowStockCount={lowStockCount}
                         hint={form.supplierId
                           ? supplierProducts.length > 0
                             ? `${supplierProducts.length} product${supplierProducts.length > 1 ? "s" : ""} available from ${selectedSupplierName}`
@@ -675,10 +763,9 @@ export default function PurchaseOrderPage() {
                     <div className="space-y-2">
                       <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-medium text-gray-400 px-1">
                         <div className="col-span-4">Product</div>
-                        <div className="col-span-2 text-center">Qty</div>
-                        <div className="col-span-3 text-center">Case Type</div>
+                        <div className="col-span-3 text-center">Cases</div>
                         <div className="col-span-2">Cost (₱)</div>
-                        <div className="col-span-1 text-right">Sub</div>
+                        <div className="col-span-3 text-right">Sub</div>
                       </div>
 
                       {form.lineItems.map((item, idx) => {
@@ -698,15 +785,11 @@ export default function PurchaseOrderPage() {
                                   idx={idx}
                                 />
                               </div>
-                              <div className="col-span-1 md:col-span-2">
-                                <label className="text-xs text-gray-400 md:hidden">Qty</label>
+                              <div className="col-span-1 md:col-span-3">
+                                <label className="text-xs text-gray-400 md:hidden">Cases</label>
                                 <input type="number" min="1" value={item.quantity}
                                   onChange={(e) => updateLineItem(idx, "quantity", e.target.value)}
                                   className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-center text-gray-900 bg-white" />
-                              </div>
-                              <div className="col-span-1 md:col-span-3">
-                                <label className="text-xs text-gray-400 md:hidden">Case Type</label>
-                                <InlineCaseSelect value={item.unit} onChange={(v) => updateLineItem(idx, "unit", v)} />
                               </div>
                               <div className="col-span-1 md:col-span-2">
                                 <label className="text-xs text-gray-400 md:hidden">Cost (₱)</label>
@@ -714,7 +797,7 @@ export default function PurchaseOrderPage() {
                                   onChange={(e) => updateLineItem(idx, "unitPrice", e.target.value)}
                                   className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white" placeholder="₱0" />
                               </div>
-                              <div className="col-span-1 md:col-span-1 flex items-center justify-end gap-1">
+                              <div className="col-span-1 md:col-span-3 flex items-center justify-end gap-1">
                                 <span className="text-xs font-medium text-gray-700 whitespace-nowrap">
                                   ₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
                                 </span>

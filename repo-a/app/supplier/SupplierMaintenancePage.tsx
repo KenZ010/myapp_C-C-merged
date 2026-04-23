@@ -17,13 +17,9 @@ type SupplierItem = {
   address: string | null;
   agentName: string | null;
   lastOrdered: number | null;
-  lastCheckBy: string | null;
-  dateChecked: string | null;
   status: string;
   products?: ProductItem[];
 };
-
-const CHECKERS = ["Rjay Salinas", "Ray Teodoro"];
 
 const navItems = [
   { label: "Dashboard",             icon: "🏠" },
@@ -34,6 +30,7 @@ const navItems = [
   { label: "Product Management",    icon: "🗒️" },
   { label: "Account Management",    icon: "👤" },
   { label: "Purchase Order",        icon: "📋" },
+  { label: "Return",              icon: "↩️" },
   { label: "Promo Management",      icon: "🎁" },
 ];
 
@@ -43,8 +40,6 @@ const emptyForm = {
   address: "",
   agentName: "",
   lastOrdered: "" as string | number,
-  lastCheckBy: "",
-  dateChecked: "",
   status: "ACTIVE",
 };
 
@@ -236,8 +231,6 @@ export default function SupplierMaintenancePage() {
   const [showModal,      setShowModal]      = useState(false);
   const [form,           setForm]           = useState(emptyForm);
   const [editingId,      setEditingId]      = useState<string | null>(null);
-  const [checkerFilter,  setCheckerFilter]  = useState("All");
-  const [showCheckerDropdown, setShowCheckerDropdown] = useState(false);
   const [viewItem,       setViewItem]       = useState<SupplierItem | null>(null);
   const [success,        setSuccess]        = useState("");
   const [error,          setError]          = useState("");
@@ -246,7 +239,6 @@ export default function SupplierMaintenancePage() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const statusRef  = useRef<HTMLDivElement>(null);
-  const checkerRef = useRef<HTMLDivElement>(null);
 
   const [alertModal, setAlertModal] = useState<{
     open: boolean; type?: "alert" | "confirm"; title?: string;
@@ -269,7 +261,6 @@ export default function SupplierMaintenancePage() {
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
-      if (checkerRef.current && !checkerRef.current.contains(e.target as Node)) setShowCheckerDropdown(false);
       if (statusRef.current  && !statusRef.current.contains(e.target as Node))  setShowStatusDropdown(false);
     };
     document.addEventListener("mousedown", h);
@@ -291,10 +282,8 @@ export default function SupplierMaintenancePage() {
     const matchSearch  = row.supplierName.toLowerCase().includes(search.toLowerCase()) ||
                          row.id.toLowerCase().includes(search.toLowerCase()) ||
                          row.contactNo.toLowerCase().includes(search.toLowerCase());
-    const matchChecker = checkerFilter === "All" || row.lastCheckBy === checkerFilter;
-    // ✅ Status filter
     const matchStatus  = statusFilter === "All" || row.status === statusFilter;
-    return matchSearch && matchChecker && matchStatus;
+    return matchSearch && matchStatus;
   });
 
   const toggleSelect = (id: string) => setSelected(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
@@ -309,8 +298,7 @@ export default function SupplierMaintenancePage() {
     setForm({
       supplierName: item.supplierName, contactNo: item.contactNo,
       address: item.address || "", agentName: item.agentName || "",
-      lastOrdered: item.lastOrdered ?? "", lastCheckBy: item.lastCheckBy || "",
-      dateChecked: item.dateChecked ? new Date(item.dateChecked).toISOString().split("T")[0] : "",
+      lastOrdered: item.lastOrdered ?? "",
       status: item.status,
     });
     setEditingId(item.id);
@@ -322,8 +310,7 @@ export default function SupplierMaintenancePage() {
     setForm({
       supplierName: item.supplierName, contactNo: item.contactNo,
       address: item.address || "", agentName: item.agentName || "",
-      lastOrdered: item.lastOrdered ?? "", lastCheckBy: item.lastCheckBy || "",
-      dateChecked: item.dateChecked ? new Date(item.dateChecked).toISOString().split("T")[0] : "",
+      lastOrdered: item.lastOrdered ?? "",
       status: item.status,
     });
     setSelected([item.id]);
@@ -375,12 +362,12 @@ export default function SupplierMaintenancePage() {
       await fetchSuppliers();
       setSelected([]);
       showToast("Supplier(s) deleted successfully!");
-    } catch (err) { showToast("Failed to delete supplier(s).", true); }
+    } catch { showToast("Failed to delete supplier(s).", true); }
   };
 
   const handleExport = () => {
-    const headers = ["ID","Company Name","Contact No","Address","Agent Name","Last Ordered","Last Check By","Date Checked","Status"];
-    const rows    = items.map(item => [item.id, item.supplierName, item.contactNo, item.address, item.agentName, item.lastOrdered, item.lastCheckBy, item.dateChecked, item.status]);
+    const headers = ["ID","Company Name","Contact No","Address","Agent Name","Last Ordered","Status"];
+    const rows    = items.map(item => [item.id, item.supplierName, item.contactNo, item.address, item.agentName, item.lastOrdered, item.status]);
     const csv     = [headers, ...rows].map(row => row.join(",")).join("\n");
     const a       = document.createElement("a");
     a.href        = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
@@ -395,7 +382,7 @@ export default function SupplierMaintenancePage() {
       "Supplier Maintenance": "/supplier", "Sales Reports": "/sales",
       "Transaction Logs": "/transaction", "Product Management": "/product",
       "Account Management": "/account", "Purchase Order": "/purchase-order",
-      "Promo Management": "/promo",
+      "Return": "/return", "Promo Management": "/promo",
     };
     if (routes[label]) router.push(routes[label]);
     setShowMobileMenu(false);
@@ -485,7 +472,7 @@ export default function SupplierMaintenancePage() {
 
               {/* ✅ Functional Status filter */}
               <div className="relative" ref={statusRef}>
-                <button onClick={() => { setShowStatusDropdown(!showStatusDropdown); setShowCheckerDropdown(false); }}
+                <button onClick={() => { setShowStatusDropdown(!showStatusDropdown); }}
                   className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors
                     ${statusFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
                   🔖 {statusFilter === "All" ? "Status" : statusFilter} ▾
@@ -502,26 +489,8 @@ export default function SupplierMaintenancePage() {
                 )}
               </div>
 
-              <div className="relative" ref={checkerRef}>
-                <button onClick={() => { setShowCheckerDropdown(!showCheckerDropdown); setShowStatusDropdown(false); }}
-                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors
-                    ${checkerFilter !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                  🧑 {checkerFilter === "All" ? "Last Check By" : checkerFilter} ▾
-                </button>
-                {showCheckerDropdown && (
-                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44">
-                    {["All", ...CHECKERS].map(opt => (
-                      <button key={opt} onClick={() => { setCheckerFilter(opt); setShowCheckerDropdown(false); }}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${checkerFilter === opt ? "text-indigo-600 font-semibold" : "text-gray-600"}`}>
-                        {opt === "All" ? "All Checkers" : opt}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {(statusFilter !== "All" || checkerFilter !== "All") && (
-                <button onClick={() => { setStatusFilter("All"); setCheckerFilter("All"); }}
+              {(statusFilter !== "All") && (
+                <button onClick={() => { setStatusFilter("All"); }}
                   className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
               )}
             </div>
@@ -534,23 +503,21 @@ export default function SupplierMaintenancePage() {
                     <th className="p-3 text-left w-8"><input type="checkbox" onChange={toggleAll} checked={selected.length === filtered.length && filtered.length > 0} /></th>
                     <th className="p-3 text-left">ID</th>
                     <th className="p-3 text-left">Company Name</th>
-                    <th className="p-3 text-left">Last Check By</th>
                     <th className="p-3 text-left">Status</th>
                     <th className="p-3 text-left">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={6} className="p-6 text-center text-gray-400">Loading suppliers...</td></tr>
+                    <tr><td colSpan={5} className="p-6 text-center text-gray-400">Loading suppliers...</td></tr>
                   ) : filtered.length === 0 ? (
-                    <tr><td colSpan={6} className="p-6 text-center text-gray-400">No suppliers found.</td></tr>
+                    <tr><td colSpan={5} className="p-6 text-center text-gray-400">No suppliers found.</td></tr>
                   ) : (
                     filtered.map(row => (
                       <tr key={row.id} className={`border-b border-gray-100 hover:bg-gray-50 ${selected.includes(row.id) ? "bg-indigo-50" : ""}`}>
                         <td className="p-3"><input type="checkbox" checked={selected.includes(row.id)} onChange={() => toggleSelect(row.id)} /></td>
                         <td className="p-3 text-gray-500 text-xs">{row.id}</td>
                         <td className="p-3"><span className="bg-gray-700 text-white px-3 py-1 rounded-full text-xs">{row.supplierName}</span></td>
-                        <td className="p-3"><span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">{row.lastCheckBy ?? "—"}</span></td>
                         <td className="p-3">
                           {/* ✅ Clickable status badge toggles Active/Inactive */}
                           <button
@@ -615,34 +582,22 @@ export default function SupplierMaintenancePage() {
                   <p className="text-xs text-gray-400 mb-1">Last Ordered</p>
                   <p className="text-sm font-medium text-gray-800">{viewItem.lastOrdered ?? "—"}</p>
                 </div>
-                <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-xs text-gray-400 mb-1">Date Checked</p>
-                  <p className="text-sm font-medium text-gray-800">
-                    {viewItem.dateChecked
-                      ? new Date(viewItem.dateChecked).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" })
-                      : "—"}
-                  </p>
-                </div>
               </div>
-              <div className="bg-gray-50 rounded-xl p-3">
-                <p className="text-xs text-gray-400 mb-1">Last Check By</p>
-                <p className="text-sm font-medium text-gray-800">{viewItem.lastCheckBy || "—"}</p>
+<div className="mt-4">
+                <p className="text-sm font-semibold text-gray-700 mb-2">Products</p>
+                {viewItem.products && viewItem.products.length > 0 ? (
+                  <div className="max-h-40 overflow-y-auto flex flex-col gap-2">
+                    {viewItem.products.map(product => (
+                      <div key={product.id} className="bg-gray-50 rounded-xl p-3">
+                        <p className="text-sm font-medium text-gray-800">{product.productName}</p>
+                        <p className="text-xs text-gray-400">ID: {product.id}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 rounded-xl p-3 text-sm text-gray-400 text-center">No products found</div>
+                )}
               </div>
-            </div>
-            <div className="mt-4">
-              <p className="text-sm font-semibold text-gray-700 mb-2">Products</p>
-              {viewItem.products && viewItem.products.length > 0 ? (
-                <div className="max-h-40 overflow-y-auto flex flex-col gap-2">
-                  {viewItem.products.map(product => (
-                    <div key={product.id} className="bg-gray-50 rounded-xl p-3">
-                      <p className="text-sm font-medium text-gray-800">{product.productName}</p>
-                      <p className="text-xs text-gray-400">ID: {product.id}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="bg-gray-50 rounded-xl p-3 text-sm text-gray-400 text-center">No products found</div>
-              )}
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => setViewItem(null)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Close</button>
@@ -680,17 +635,15 @@ export default function SupplierMaintenancePage() {
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+<div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-gray-600">Last Ordered</label>
-                  {/* ✅ type="number" with inputMode="numeric" — no letters allowed */}
                   <input
                     type="number"
                     inputMode="numeric"
                     min="0"
                     value={form.lastOrdered}
                     onKeyDown={(e) => {
-                      // Block e, +, -, . and other non-digit keys
                       if (["e","E","+","-","."].includes(e.key)) e.preventDefault();
                     }}
                     onChange={e => {
@@ -700,33 +653,22 @@ export default function SupplierMaintenancePage() {
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
                   />
                 </div>
-                <DatePicker label="Date Checked" value={form.dateChecked} onChange={val => setForm({ ...form, dateChecked: val })} />
+                <div>
+                  <label className="text-xs font-medium text-gray-600">Status</label>
+                  <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                    <option value="ACTIVE">Active</option>
+                    <option value="INACTIVE">Inactive</option>
+                  </select>
+                </div>
               </div>
 
-              <div>
-                <label className="text-xs font-medium text-gray-600">Last Check By</label>
-                {/* ✅ Removed "-- Select --" placeholder option; first real option is default */}
-                <select value={form.lastCheckBy} onChange={e => setForm({ ...form, lastCheckBy: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                  {CHECKERS.map(name => <option key={name} value={name}>{name}</option>)}
-                </select>
+              <div className="flex gap-3 mt-5">
+                <button onClick={() => setShowModal(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+                <button onClick={handleSave} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700">
+                  {editingId !== null ? "Save Changes" : "Add Supplier"}
+                </button>
               </div>
-
-              <div>
-                <label className="text-xs font-medium text-gray-600">Status</label>
-                <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                  <option value="ACTIVE">Active</option>
-                  <option value="INACTIVE">Inactive</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowModal(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={handleSave} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700">
-                {editingId !== null ? "Save Changes" : "Add Supplier"}
-              </button>
             </div>
           </div>
         </div>

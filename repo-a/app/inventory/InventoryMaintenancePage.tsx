@@ -142,8 +142,9 @@ const navItems = [
   { label: "Transaction Logs",      icon: "▦",  path: "/transaction"    },
   { label: "Product Management",    icon: "🗒️", path: "/product"        },
   { label: "Account Management",    icon: "👤", path: "/account"        },
-  { label: "Purchase Order",        icon: "📋", path: "/purchase-order" },
-  { label: "Promo Management",      icon: "🎁", path: "/promo"          },
+{ label: "Purchase Order",        icon: "📋", path: "/purchase-order" },
+  { label: "Return", icon: "↩️", path: "/return" },
+  { label: "Promo Management",      icon: "🎁", path: "/promo" },
 ];
 
 function fmtDate(str: string) {
@@ -474,11 +475,6 @@ export default function InventoryMaintenancePage() {
                     {t === "ALL" ? "All" : LOG_TYPE_STYLE[t as LogType]?.label ?? t}
                   </button>
                 ))}
-                <button
-                  onClick={() => { logsCache.current = {}; fetchLogs(logsPage, logTypeFilter); }}
-                  className="px-2.5 py-1 rounded-lg text-xs font-medium bg-gray-100 text-gray-500 hover:bg-gray-200">
-                  🔄
-                </button>
               </div>
             </div>
 
