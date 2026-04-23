@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 import { 
   LayoutDashboard, ShoppingCart, Users, LineChart, 
   FileText, Package, User, ClipboardList, RotateCcw, Gift,
-  FolderOpen, Coffee, Zap, ChevronDown, Search
+  FolderOpen, Coffee, Zap, ChevronDown, Search, Beer, Droplets, ShoppingBasket
 } from "lucide-react";
 
 type CaseUnit = "case_24" | "case_12" | "case_6" | "btl" | "pcs";
@@ -153,6 +153,18 @@ const getCategoryColor = (cat: string) => ({
   WATER:        "bg-cyan-100 text-cyan-600",
   OTHER:        "bg-gray-100 text-gray-600",
 }[cat] || "bg-gray-100 text-gray-600");
+
+const getCategoryIcon = (cat: string) => {
+  const icons: Record<string, { icon: typeof Coffee; color: string }> = {
+    SOFTDRINKS:   { icon: Coffee, color: "text-blue-500" },
+    ENERGY_DRINK: { icon: Zap, color: "text-yellow-500" },
+    BEER:         { icon: Beer, color: "text-amber-600" },
+    JUICE:        { icon: Droplets, color: "text-orange-500" },
+    WATER:        { icon: Droplets, color: "text-cyan-500" },
+    OTHER:        { icon: ShoppingBasket, color: "text-gray-500" },
+  };
+  return icons[cat?.toUpperCase()] || { icon: Coffee, color: "text-gray-500" };
+};
 
 function AlertModal({ open, type = "alert", title, message, danger, onConfirm, onCancel }: {
   open: boolean; type?: "alert" | "confirm"; title?: string; message: string;
@@ -447,18 +459,18 @@ export default function ProductManagementPage() {
           {/* ── Stat cards ── */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             {[
-              { icon: Package, label: "Total Products",  value: totalProducts,    color: "bg-indigo-100", bold: "text-gray-800"   },
-              { icon: FolderOpen, label: "Categories",       value: totalCategories,  color: "bg-blue-100",   bold: "text-blue-600"   },
-              { icon: Coffee, label: "Soft Drinks",      value: softDrinksCount,  color: "bg-green-100",  bold: "text-green-600"  },
-              { icon: Zap, label: "Energy Drinks",    value: energyDrinkCount, color: "bg-yellow-100", bold: "text-yellow-600" },
+              { icon: Package, label: "Total Products",  value: totalProducts,    color: "bg-indigo-100", iconColor: "text-indigo-600" },
+              { icon: FolderOpen, label: "Categories",       value: totalCategories,  color: "bg-blue-100", iconColor: "text-blue-600" },
+              { icon: Coffee, label: "Soft Drinks",      value: softDrinksCount,  color: "bg-green-100", iconColor: "text-green-600" },
+              { icon: Zap, label: "Energy Drinks",    value: energyDrinkCount, color: "bg-yellow-100", iconColor: "text-yellow-600" },
             ].map((c) => (
               <div key={c.label} className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-full ${c.color} flex items-center justify-center`}>
-                  <c.icon className="w-5 h-5" />
+                  <c.icon className={`w-5 h-5 ${c.iconColor}`} />
                 </div>
                 <div>
                   <p className="text-xs text-gray-400">{c.label}</p>
-                  <p className={`text-xl font-bold ${c.bold}`}>{c.value}</p>
+                  <p className={`text-xl font-bold ${c.iconColor}`}>{c.value}</p>
                 </div>
               </div>
             ))}
@@ -552,7 +564,7 @@ export default function ProductManagementPage() {
                         {product.image
                           // eslint-disable-next-line @next/next/no-img-element
                           ? <img src={product.image} alt={product.productName} className="w-full h-full object-cover" />
-                          : <span className="text-3xl">🥤</span>}
+                          : React.createElement(getCategoryIcon(product.category).icon, { className: `w-12 h-12 ${getCategoryIcon(product.category).color}` })}
                       </div>
                       <div className="p-2">
                         <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${getCategoryColor(product.category)}`}>
@@ -620,7 +632,7 @@ export default function ProductManagementPage() {
                 {selectedProduct.image
                   // eslint-disable-next-line @next/next/no-img-element
                   ? <img src={selectedProduct.image} alt={selectedProduct.productName} className="w-full h-full object-cover rounded-xl" />
-                  : "🥤"}
+                  : React.createElement(getCategoryIcon(selectedProduct.category).icon, { className: `w-12 h-12 ${getCategoryIcon(selectedProduct.category).color}` })}
               </div>
               <div className="flex-1 flex flex-col gap-2.5 min-w-0">
                 {isEditing ? (
@@ -649,12 +661,14 @@ export default function ProductManagementPage() {
                         }}
                         className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-400">Stock Quantity &amp; Case Type</p>
-                      <CaseUnitInput
-                        quantity={editForm.stockQuantity} unit={editForm.stockUnit}
-                        onQuantityChange={(v) => setEditForm({ ...editForm, stockQuantity: String(v) })}
-                        onUnitChange={(u) => setEditForm({ ...editForm, stockUnit: u })} />
+<div>
+                      <p className="text-xs text-gray-400">Stock Quantity</p>
+                      <input type="number" inputMode="numeric"
+                        value={editForm.stockQuantity}
+                        onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
+                        onChange={(e) => setEditForm({ ...editForm, stockQuantity: e.target.value.replace(/[^0-9]/g, "") })}
+                        placeholder="0"
+                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Category</p>
@@ -790,15 +804,7 @@ export default function ProductManagementPage() {
                     setAddForm({ ...addForm, price: val });
                   }}
                   placeholder="0"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600">Stock Quantity &amp; Case Type</label>
-                <CaseUnitInput
-                  quantity={addForm.stockQuantity} unit={addForm.stockUnit}
-                  onQuantityChange={(v) => setAddForm({ ...addForm, stockQuantity: String(v) })}
-                  onUnitChange={(u) => setAddForm({ ...addForm, stockUnit: u })} />
-                <p className="text-xs text-gray-400 mt-1">e.g. 3 cases × 24 = 72 individual bottles</p>
+className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600">Supplier</label>
