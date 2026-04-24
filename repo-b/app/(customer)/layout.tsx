@@ -28,36 +28,19 @@ const hideSearchCart = [
 
 function DashboardInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter(); // ✅ moved inside the component
   const [drawerOpen, setDrawerOpen] = useState(false);
   const page = pageTitles[pathname] ?? { title: "Julieta Store", sub: "" };
   const { totalCount } = useCart();
 
-  // ✅ Get customer name from localStorage
   const user = typeof window !== "undefined"
     ? JSON.parse(localStorage.getItem("user") || "{}")
     : {};
   const displayName = user?.name || "Guest";
 
-  const handleLogout = () => {
-    document.cookie = "token=; path=/; max-age=0";
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    router.push("/"); // ✅ router is now defined
-  };
-
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100vh",
-        overflow: "hidden",
-        background: "#f5f5f5",
-        position: "relative",
-      }}
-    >
-      {/* Drawer */}
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", background: "#f5f5f5", position: "relative" }}>
+
+      {/* Drawer handles its own logout internally */}
       <Drawer
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -65,98 +48,36 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
       />
 
       {/* Topbar */}
-      <header
-        style={{
-          background: "#2d7a3a",
-          padding: "0 28px",
-          height: "56px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexShrink: 0,
-          position: "relative",
-          zIndex: 60,
-        }}
-      >
+      <header style={{ background: "#2d7a3a", padding: "0 28px", height: "56px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, position: "relative", zIndex: 60 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          {/* Hamburger */}
           <button
             onClick={() => setDrawerOpen(true)}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              display: "flex",
-              flexDirection: "column",
-              gap: "5px",
-              padding: "6px",
-              borderRadius: "8px",
-            }}
+            style={{ background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", gap: "5px", padding: "6px", borderRadius: "8px" }}
           >
             <div style={{ width: "22px", height: "2px", background: "#fff", borderRadius: "2px" }} />
             <div style={{ width: "22px", height: "2px", background: "#fff", borderRadius: "2px" }} />
             <div style={{ width: "22px", height: "2px", background: "#fff", borderRadius: "2px" }} />
           </button>
           <div>
-            <p style={{ color: "#fff", fontSize: "16px", fontWeight: 500 }}>
-              {page.title}
-            </p>
-            {page.sub && (
-              <p style={{ color: "rgba(255,255,255,0.65)", fontSize: "12px" }}>
-                {page.sub}
-              </p>
-            )}
+            <p style={{ color: "#fff", fontSize: "16px", fontWeight: 500 }}>{page.title}</p>
+            {page.sub && <p style={{ color: "rgba(255,255,255,0.65)", fontSize: "12px" }}>{page.sub}</p>}
           </div>
         </div>
 
-        {/* Right side */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          {/* Cart icon — only on product pages */}
           {!hideSearchCart.includes(pathname) && (
-            <Link
-              href="/cart"
-              style={{
-                width: "38px",
-                height: "38px",
-                borderRadius: "8px",
-                background: "rgba(255,255,255,0.15)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "16px",
-                textDecoration: "none",
-                position: "relative",
-              }}
-            >
+            <Link href="/cart" style={{ width: "38px", height: "38px", borderRadius: "8px", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", textDecoration: "none", position: "relative" }}>
               🛒
               {totalCount > 0 && (
-                <span
-                  style={{
-                    position: "absolute",
-                    top: "4px",
-                    right: "4px",
-                    width: "16px",
-                    height: "16px",
-                    borderRadius: "50%",
-                    background: "#f5c842",
-                    fontSize: "9px",
-                    color: "#2d7a3a",
-                    fontWeight: 700,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
+                <span style={{ position: "absolute", top: "4px", right: "4px", width: "16px", height: "16px", borderRadius: "50%", background: "#f5c842", fontSize: "9px", color: "#2d7a3a", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   {totalCount}
                 </span>
               )}
             </Link>
           )}
-
         </div>
       </header>
 
-      {/* Page Content */}
       <div style={{ flex: 1, overflowY: "auto" }}>{children}</div>
     </div>
   );

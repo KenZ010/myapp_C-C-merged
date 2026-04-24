@@ -25,12 +25,17 @@ const bottomItems = [
 
 export default function Drawer({ isOpen, onClose, customerName = "Customer Name" }: DrawerProps) {
   const pathname = usePathname();
-  const router   = useRouter(); // ✅ inside the component
+  const router   = useRouter();
 
   const handleLogout = () => {
-    document.cookie = "token=; path=/; max-age=0";
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+
+    // Clear both cookies so middleware stops seeing a valid session
+    const expired = "path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    document.cookie = `token=; ${expired}`;
+    document.cookie = `active_token=; ${expired}`;
+
     onClose();
     router.push("/");
   };
@@ -97,7 +102,6 @@ export default function Drawer({ isOpen, onClose, customerName = "Customer Name"
 
           <div style={{ height: "1px", background: "#f0f0f0", margin: "12px 0" }} />
 
-          {/* ✅ Logout now calls handleLogout properly */}
           <button onClick={handleLogout}
             style={{ display: "flex", alignItems: "center", gap: "14px", padding: "11px 12px", borderRadius: "12px", border: "none", background: "transparent", cursor: "pointer", width: "100%", textAlign: "left", marginBottom: "12px" }}>
             <div style={{ width: "40px", height: "40px", borderRadius: "12px", background: "#ffebee", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", flexShrink: 0 }}>
