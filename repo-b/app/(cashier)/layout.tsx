@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 
 const navLinks = [
@@ -11,48 +11,40 @@ const navLinks = [
 ];
 
 const pageTitles: Record<string, { title: string; sub: string }> = {
-  "/cashier/inventory": {
-    title: "Inventory",
-    sub: "View products & stock levels",
-  },
+  "/cashier/inventory": { title: "Inventory", sub: "View products & stock levels" },
   "/cashier/ordering": { title: "Ordering", sub: "Create order for customer" },
   "/cashier/pending": { title: "Pending", sub: "Orders waiting for action" },
-  "/cashier/transactions": {
-    title: "Transaction History",
-    sub: "Sales reports & records",
-  },
+  "/cashier/transactions": { title: "Transaction History", sub: "Sales reports & records" },
   "/cashier/payment": { title: "Payment", sub: "Complete the customer order" },
 };
 
-export default function CashierLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function CashierLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const page = pageTitles[pathname] ?? { title: "Cashier Panel", sub: "" };
 
+  const handleLogout = () => {
+    // Clear localStorage
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+
+    // Clear cookies so middleware stops seeing a valid session
+    const expired = "path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    document.cookie = `token=; ${expired}`;
+    document.cookie = `active_token=; ${expired}`;
+
+    router.push("/");
+  };
+
   return (
-    <div
-      style={{
-        display: "flex",
-        height: "100vh",
-        overflow: "hidden",
-        background: "#f5f5f5",
-      }}
-    >
+    <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "#f5f5f5" }}>
+
       {/* ── Mobile Overlay ── */}
       {sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.4)",
-            zIndex: 40,
-            display: "block",
-          }}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 40, display: "block" }}
           className="lg:hidden"
         />
       )}
@@ -60,85 +52,28 @@ export default function CashierLayout({
       {/* ── Sidebar ── */}
       <aside
         style={{
-          width: "220px",
-          background: "#fff",
-          display: "flex",
-          flexDirection: "column",
-          flexShrink: 0,
-          borderRight: "1px solid #f0f0f0",
-          position: "fixed",
-          top: 0,
-          left: 0,
-          height: "100%",
-          zIndex: 50,
+          width: "220px", background: "#fff", display: "flex", flexDirection: "column",
+          flexShrink: 0, borderRight: "1px solid #f0f0f0", position: "fixed", top: 0,
+          left: 0, height: "100%", zIndex: 50,
           transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)",
           transition: "transform 0.25s cubic-bezier(0.4,0,0.2,1)",
         }}
         className="lg:relative lg:translate-x-0 lg:transform-none"
       >
         {/* Logo */}
-        <div
-          style={{
-            padding: "24px 20px 20px",
-            borderBottom: "1px solid #f0f0f0",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: "4px",
-          }}
-        >
-          <div
-            style={{
-              width: "72px",
-              height: "72px",
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, #ff6b35, #f5c842)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "11px",
-              fontWeight: 800,
-              color: "#fff",
-              textAlign: "center",
-              lineHeight: 1.3,
-              border: "3px solid #1a3c2e",
-            }}
-          >
-            Julieta
-            <br />
-            Store
+        <div style={{ padding: "24px 20px 20px", borderBottom: "1px solid #f0f0f0", display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+          <div style={{ width: "72px", height: "72px", borderRadius: "50%", background: "linear-gradient(135deg, #ff6b35, #f5c842)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 800, color: "#fff", textAlign: "center", lineHeight: 1.3, border: "3px solid #1a3c2e" }}>
+            Julieta<br />Store
           </div>
         </div>
 
         {/* User Info */}
-        <div
-          style={{
-            padding: "16px 20px",
-            borderBottom: "1px solid #f0f0f0",
-            display: "flex",
-            alignItems: "center",
-            gap: "12px",
-          }}
-        >
-          <div
-            style={{
-              width: "40px",
-              height: "40px",
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, #667eea, #764ba2)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "16px",
-              flexShrink: 0,
-            }}
-          >
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid #f0f0f0", display: "flex", alignItems: "center", gap: "12px" }}>
+          <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: "linear-gradient(135deg, #667eea, #764ba2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>
             👤
           </div>
           <div>
-            <p style={{ fontSize: "13px", fontWeight: 700, color: "#1a1a1a" }}>
-              Rjay Salina
-            </p>
+            <p style={{ fontSize: "13px", fontWeight: 700, color: "#1a1a1a" }}>Rjay Salina</p>
             <p style={{ fontSize: "11px", color: "#aaa" }}>Cashier</p>
           </div>
         </div>
@@ -153,19 +88,11 @@ export default function CashierLayout({
                 href={link.href}
                 onClick={() => setSidebarOpen(false)}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "14px",
-                  padding: "13px 20px",
-                  fontSize: "14px",
-                  textDecoration: "none",
-                  color: isActive ? "#1a3c2e" : "#555",
+                  display: "flex", alignItems: "center", gap: "14px", padding: "13px 20px",
+                  fontSize: "14px", textDecoration: "none", color: isActive ? "#1a3c2e" : "#555",
                   background: isActive ? "#f0faf2" : "transparent",
-                  borderLeft: isActive
-                    ? "3px solid #1a3c2e"
-                    : "3px solid transparent",
-                  fontWeight: isActive ? 600 : 400,
-                  transition: "all 0.15s",
+                  borderLeft: isActive ? "3px solid #1a3c2e" : "3px solid transparent",
+                  fontWeight: isActive ? 600 : 400, transition: "all 0.15s",
                 }}
               >
                 <span style={{ fontSize: "18px" }}>{link.icon}</span>
@@ -177,116 +104,43 @@ export default function CashierLayout({
 
         {/* Logout */}
         <div style={{ padding: "16px 20px", borderTop: "1px solid #f0f0f0" }}>
-          <Link
-            href="/"
+          <button
+            onClick={handleLogout}
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "14px",
-              padding: "12px 16px",
-              borderRadius: "12px",
-              textDecoration: "none",
-              background: "#fff5f5",
-              color: "#e53935",
-              fontSize: "14px",
-              fontWeight: 600,
+              width: "100%", display: "flex", alignItems: "center", gap: "14px",
+              padding: "12px 16px", borderRadius: "12px", textDecoration: "none",
+              background: "#fff5f5", color: "#e53935", fontSize: "14px", fontWeight: 600,
+              border: "none", cursor: "pointer",
             }}
           >
             <span style={{ fontSize: "18px" }}>🚪</span>
             Log out
-          </Link>
+          </button>
         </div>
       </aside>
 
       {/* ── Main ── */}
-      <main
-        style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}
-        className=""
-      >
+      <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* Topbar */}
-        <header
-          style={{
-            background: "#1a3c2e",
-            padding: "0 16px",
-            height: "56px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexShrink: 0,
-          }}
-        >
+        <header style={{ background: "#1a3c2e", padding: "0 16px", height: "56px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            {/* Hamburger — mobile only */}
             <button
               onClick={() => setSidebarOpen(true)}
               className="lg:hidden"
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                display: "flex",
-                flexDirection: "column",
-                gap: "5px",
-                padding: "6px",
-                borderRadius: "8px",
-                flexShrink: 0,
-              }}
+              style={{ background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", gap: "5px", padding: "6px", borderRadius: "8px", flexShrink: 0 }}
             >
-              <div
-                style={{
-                  width: "22px",
-                  height: "2px",
-                  background: "#fff",
-                  borderRadius: "2px",
-                }}
-              />
-              <div
-                style={{
-                  width: "22px",
-                  height: "2px",
-                  background: "#fff",
-                  borderRadius: "2px",
-                }}
-              />
-              <div
-                style={{
-                  width: "22px",
-                  height: "2px",
-                  background: "#fff",
-                  borderRadius: "2px",
-                }}
-              />
+              <div style={{ width: "22px", height: "2px", background: "#fff", borderRadius: "2px" }} />
+              <div style={{ width: "22px", height: "2px", background: "#fff", borderRadius: "2px" }} />
+              <div style={{ width: "22px", height: "2px", background: "#fff", borderRadius: "2px" }} />
             </button>
             <div>
-              <p style={{ color: "#fff", fontSize: "16px", fontWeight: 600 }}>
-                {page.title}
-              </p>
-              {page.sub && (
-                <p
-                  style={{ color: "rgba(255,255,255,0.55)", fontSize: "11px" }}
-                >
-                  {page.sub}
-                </p>
-              )}
+              <p style={{ color: "#fff", fontSize: "16px", fontWeight: 600 }}>{page.title}</p>
+              {page.sub && <p style={{ color: "rgba(255,255,255,0.55)", fontSize: "11px" }}>{page.sub}</p>}
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div
-              style={{
-                width: "8px",
-                height: "8px",
-                borderRadius: "50%",
-                background: "#4caf50",
-              }}
-            />
-            <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.7)" }}>
-              Online
-            </span>
+            <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#4caf50" }} />
+            <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.7)" }}>Online</span>
           </div>
         </header>
 
