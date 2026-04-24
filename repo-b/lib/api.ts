@@ -1,5 +1,16 @@
 const API_URL = 'https://backend-production-740c.up.railway.app/api';
 
+// ─── Cookie helpers ───────────────────────────────────────────────────────────
+function setCookie(name: string, value: string) {
+  const isProduction = window.location.protocol === 'https:';
+  document.cookie = `${name}=${value}; path=/; SameSite=Lax${isProduction ? '; Secure' : ''}`;
+}
+
+function deleteCookie(name: string) {
+  document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+}
+
+// ─── Token helpers ────────────────────────────────────────────────────────────
 const getToken = () => {
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('token');
@@ -12,6 +23,22 @@ const getToken = () => {
   return tokenCookie.trim().slice('token='.length);
 };
 
+// Call this after a successful login response
+function persistSession(token: string) {
+  localStorage.setItem('token', token);
+  // Set cookies so Next.js middleware can read them
+  setCookie('token', token);
+  setCookie('active_token', token); // single-session enforcement
+}
+
+// Call this on logout
+export function clearSession() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  deleteCookie('token');
+  deleteCookie('active_token');
+}
+
 export const api = {
   // AUTH
   login: async (name: string, password: string) => {
@@ -20,7 +47,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, password })
     });
-    return res.json();
+    const data = await res.json();
+    if (data.token) persistSession(data.token);
+    return data;
   },
   loginCustomer: async (name: string, password: string) => {
     const res = await fetch(`${API_URL}/customers/login-customer`, {
@@ -28,7 +57,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, password })
     });
-    return res.json();
+    const data = await res.json();
+    if (data.token) persistSession(data.token);
+    return data;
   },
 
   // EMPLOYEES
@@ -144,7 +175,7 @@ export const api = {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Failed to place order');
-    return data; // { message, saleId }
+    return data;
   },
   getActiveOrders: async () => {
     const res = await fetch(`${API_URL}/orders/active`, {
