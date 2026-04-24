@@ -400,6 +400,7 @@ export default function PurchaseOrderPage() {
   const [saving,         setSaving]         = useState(false);
 
   const [confirmModal,  setConfirmModal]  = useState<{ show: boolean; message: string; onConfirm: () => void }>({ show: false, message: "", onConfirm: () => {} });
+  const [previewModal,   setPreviewModal]   = useState(false);
   const [createError,   setCreateError]   = useState("");
   const [createSuccess, setCreateSuccess] = useState("");
   const [receiveError,  setReceiveError]  = useState("");
@@ -423,9 +424,9 @@ export default function PurchaseOrderPage() {
     ? allProducts.filter((p) => p.supplierId === form.supplierId && p.status !== "INACTIVE")
     : [];
 
-  const lowStockCount = form.supplierId
-    ? supplierProducts.filter((p) => p.stockQuantity != null && p.stockQuantity <= 10).length
-    : 0;
+  const lowStockProducts = form.supplierId
+    ? supplierProducts.filter((p) => p.stockQuantity != null && p.stockQuantity <= 10)
+    : [];
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -585,6 +586,96 @@ export default function PurchaseOrderPage() {
         </div>
       )}
 
+      {/* Order Preview Modal */}
+      {previewModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-[60] px-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                  <ClipboardList className="w-5 h-5 text-indigo-600" />
+                  Order Preview
+                </h2>
+                <p className="text-xs text-gray-400 mt-0.5">Please review before submitting</p>
+              </div>
+              <button onClick={() => setPreviewModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+            </div>
+
+            <div className="flex flex-col gap-3 mb-5">
+              <div className="flex items-center gap-2 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
+                <Building2 className="w-5 h-5 text-indigo-600" />
+                <div>
+                  <p className="text-xs text-indigo-400">Supplier</p>
+                  <p className="text-sm font-semibold text-indigo-800">{selectedSupplierName}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                <Calendar className="w-4 h-4 text-gray-400" />
+                <div>
+                  <p className="text-xs text-gray-400">Delivery Date</p>
+                  <p className="text-sm font-medium text-gray-700">
+                    {form.deliveryDate ? new Date(form.deliveryDate + "T00:00:00").toLocaleDateString("en-PH", { weekday: "short", month: "long", day: "numeric", year: "numeric" }) : "Not set"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-xs font-semibold text-gray-600 mb-3">Order Items ({validLineItems.length})</p>
+                <div className="space-y-3 max-h-64 overflow-y-auto">
+                  {validLineItems.map((item, idx) => {
+                    const breakdown = getCaseBreakdown(Number(item.quantity), item.unit);
+                    return (
+                      <div key={idx} className="py-2 border-b border-gray-100 last:border-0">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <p className="font-medium text-sm text-gray-800">{item.productName}</p>
+                            <div className="flex items-center gap-1 mt-1 flex-wrap">
+                              <UnitPill unit={item.unit} qty={Number(item.quantity)} />
+                              <span className="text-xs text-gray-400">× ₱{Number(item.unitPrice).toLocaleString()}</span>
+                            </div>
+                            {breakdown && <p className="text-xs text-indigo-500 font-medium mt-0.5">{breakdown}</p>}
+                          </div>
+                          <span className="text-sm font-semibold text-indigo-700 ml-3 shrink-0">
+                            ₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center bg-indigo-900 text-white rounded-xl p-4">
+                <div>
+                  <p className="text-xs text-indigo-200">Total Amount</p>
+                  <p className="text-xs text-indigo-200">({validLineItems.reduce((s, i) => s + Number(i.quantity), 0)} items)</p>
+                </div>
+                <p className="text-xl font-bold">₱{calculateTotal(validLineItems).toLocaleString()}</p>
+              </div>
+
+              {form.notes && (
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400 mb-1">Notes</p>
+                  <p className="text-sm text-gray-700">{form.notes}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={() => setPreviewModal(false)}
+                className="flex-1 border border-gray-200 rounded-xl py-3 text-sm text-gray-600 hover:bg-gray-50 font-medium">
+                Cancel
+              </button>
+              <button onClick={() => { setPreviewModal(false); handleSave(); }}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2">
+                <span>✅</span> Confirm Order
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Sidebar ── */}
       <aside className="hidden md:flex w-52 bg-white flex-col py-6 px-4 border-r border-gray-100 shrink-0">
         <div className="text-center mb-10">
@@ -715,7 +806,7 @@ export default function PurchaseOrderPage() {
                         value={form.supplierId}
                         onChange={handleSupplierChange}
                         suppliers={suppliers}
-                        lowStockCount={lowStockCount}
+                        lowStockCount={lowStockProducts.length}
                         hint={form.supplierId
                           ? supplierProducts.length > 0
                             ? `${supplierProducts.length} product${supplierProducts.length > 1 ? "s" : ""} available from ${selectedSupplierName}`
@@ -834,6 +925,31 @@ export default function PurchaseOrderPage() {
                     rows={3} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white resize-none"
                     placeholder="Optional notes about this delivery..." />
                 </div>
+
+                {/* Low Stock Alert */}
+                {lowStockProducts.length > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-2xl p-4 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-6 h-6 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-bold">!</div>
+                      <h2 className="text-sm font-bold text-red-700">Low Stock Products</h2>
+                      <span className="text-xs text-red-500 bg-red-100 px-2 py-0.5 rounded-full">{lowStockProducts.length} item{lowStockProducts.length > 1 ? "s" : ""}</span>
+                    </div>
+                    <div className="space-y-2">
+                      {lowStockProducts.map((p) => (
+                        <div key={p.id} className="flex items-center justify-between bg-white rounded-lg p-3 border border-red-100">
+                          <div>
+                            <p className="text-sm font-medium text-gray-800">{p.productName}{p.size ? ` ${p.size}` : ""}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">Current stock</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-red-600">{p.stockQuantity}</p>
+                            <p className="text-xs text-gray-400">{getUnitShort(p.stockUnit)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Order Summary sidebar */}
@@ -902,9 +1018,13 @@ export default function PurchaseOrderPage() {
                     </div>
                   )}
 
-                  <button onClick={handleSave} disabled={saving || validLineItems.length === 0 || !form.supplierId}
+                  <button onClick={() => {
+                      if (!form.supplierId) { setCreateError("Please select a supplier."); return; }
+                      if (validLineItems.length === 0) { setCreateError("Please add at least one product."); return; }
+                      setPreviewModal(true);
+                    }} disabled={saving || validLineItems.length === 0 || !form.supplierId}
                     className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2">
-                    {saving ? <><span className="animate-spin inline-block">⏳</span> Submitting...</> : <><span>📤</span> Submit Delivery</>}
+                    {saving ? <><span className="animate-spin inline-block">⏳</span> Submitting...</> : <><span>📤</span> Review & Submit</>}
                   </button>
                 </div>
               </div>
