@@ -14,9 +14,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  // LoginPage.tsx
-  const [userType, setUserType] = useState<"EMPLOYEE" | "CUSTOMER">("EMPLOYEE");
-
   const handleLogin = async () => {
     setError("");
     if (!username || !password) {
@@ -26,7 +23,6 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      // ✅ Fire both at the same time, use whichever returns a token
       const [employeeRes, customerRes] = await Promise.allSettled([
         api.login(username, password),
         api.loginCustomer(username, password),
@@ -38,14 +34,26 @@ export default function LoginPage() {
       const data = employeeData?.token ? employeeData : customerData?.token ? customerData : null;
 
       if (data?.token) {
-        document.cookie = `token=${data.token}; path=/; max-age=${60 * 60 * 24}`;
-        localStorage.setItem("token", data.token);
-        localStorage.setItem("user", JSON.stringify(data.employee || data.customer));
+        const token = data.token;
+        const user = data.employee || data.customer;
+        const role = user?.role;
 
-        const role = (data.employee || data.customer)?.role;
-        if (role === "CASHIER") router.push("/cashier/ordering");
+        // Persist to localStorage (for API calls)
+        localStorage.setItem("token", token);
+        localStorage.setItem("user", JSON.stringify(user));
+
+        // Persist to cookies (required for Next.js middleware)
+        // active_token enables single-session enforcement:
+        // a new login from another tab overwrites it, kicking the stale tab.
+        const isSecure = window.location.protocol === "https:";
+        const cookieBase = `path=/; max-age=${60 * 60 * 24}; SameSite=Lax${isSecure ? "; Secure" : ""}`;
+        document.cookie = `token=${token}; ${cookieBase}`;
+        document.cookie = `active_token=${token}; ${cookieBase}`;
+
+        // Redirect to their actual pages
+        if (role === "CASHIER")            router.push("/cashier/ordering");
         else if (role === "STOCK_MANAGER") router.push("/inventory/monitoring");
-        else if (role === "CUSTOMER") router.push("/home");
+        else if (role === "CUSTOMER")      router.push("/home");
         else setError("Unknown role. Contact your administrator.");
       } else {
         setError("Invalid credentials");
@@ -72,19 +80,16 @@ export default function LoginPage() {
           borderRadius: "0 0 100px 0",
         }}
       >
-        {/* Decorative background circles */}
         <div className="absolute top-[-60px] left-[-60px] w-64 h-64 rounded-full opacity-10" style={{ background: "#fff" }} />
         <div className="absolute bottom-[-80px] right-[-80px] w-80 h-80 rounded-full opacity-10" style={{ background: "#fff" }} />
         <div className="absolute top-[40%] right-[-40px] w-40 h-40 rounded-full opacity-10" style={{ background: "#fff" }} />
         <div className="absolute bottom-[20%] left-[-30px] w-32 h-32 rounded-full opacity-10" style={{ background: "#fff" }} />
 
-        {/* Floating drink icons */}
         <div className="absolute top-16 right-16 text-4xl opacity-20">🥤</div>
         <div className="absolute bottom-24 left-16 text-3xl opacity-20">🍺</div>
         <div className="absolute top-1/3 left-10 text-2xl opacity-20">💧</div>
         <div className="absolute bottom-16 right-24 text-3xl opacity-20">⚡</div>
 
-        {/* Logo */}
         <div className="flex flex-col items-center gap-4 z-10">
           <div
             className="w-36 h-36 rounded-full bg-orange-400 flex items-center justify-center shadow-2xl"
@@ -104,7 +109,6 @@ export default function LoginPage() {
       {/* RIGHT - Login form */}
       <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 bg-white min-h-screen">
 
-        {/* Mobile logo */}
         <div className="flex md:hidden flex-col items-center mb-8">
           <div className="w-20 h-20 rounded-full bg-orange-400 flex items-center justify-center shadow-xl">
             <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center">
@@ -120,7 +124,6 @@ export default function LoginPage() {
           <h2 className="text-3xl font-bold text-gray-800 mb-1">Welcome Back!</h2>
           <p className="text-gray-400 text-sm mb-8">Login to your account</p>
 
-          {/* ✅ Error message */}
           {error && (
             <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-2">
               <span>⚠️</span>
@@ -130,7 +133,6 @@ export default function LoginPage() {
 
           <div className="flex flex-col gap-5">
 
-            {/* Username */}
             <div>
               <label className="text-xs font-semibold text-gray-600 mb-1 block">Username</label>
               <div
@@ -154,7 +156,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Password */}
             <div>
               <label className="text-xs font-semibold text-gray-600 mb-1 block">Password</label>
               <div
@@ -194,7 +195,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Login Button */}
             <button
               onClick={handleLogin}
               disabled={loading}
