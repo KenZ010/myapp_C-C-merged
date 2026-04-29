@@ -47,6 +47,14 @@ export function middleware(request: NextRequest) {
   const token = request.cookies.get('token')?.value;
   const { pathname } = request.nextUrl;
 
+  // ── Logout ───────────────────────────────────────────────────────────────
+  if (pathname === '/logout') {
+    const response = NextResponse.redirect(new URL('/', request.url));
+    response.cookies.delete('token');
+    response.cookies.delete('active_token');
+    return response;
+  }
+
   const role = token ? decodeRole(token) : null;
   const isLoggedIn = !!token && !!role;
 

@@ -30,14 +30,8 @@ export default function Drawer({ isOpen, onClose, customerName = "Customer Name"
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-
-    // Clear both cookies so middleware stops seeing a valid session
-    const expired = "path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-    document.cookie = `token=; ${expired}`;
-    document.cookie = `active_token=; ${expired}`;
-
     onClose();
-    router.push("/");
+    router.push("/logout"); // middleware intercepts, clears HttpOnly cookies, redirects to /
   };
 
   return (
