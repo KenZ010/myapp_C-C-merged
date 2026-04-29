@@ -82,7 +82,7 @@ function CaseUnitInput({
           </svg>
           {open && (
             <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] w-52 overflow-hidden">
-{CASE_UNITS.map((u) => (
+              {CASE_UNITS.map((u) => (
                 <button key={u.value} type="button"
                   onClick={(e) => { e.stopPropagation(); onUnitChange(u.value); setOpen(false); }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors
@@ -193,6 +193,16 @@ function AlertModal({ open, type = "alert", title, message, danger, onConfirm, o
   );
 }
 
+// ── Spinner icon ──────────────────────────────────────────────────────────────
+function Spinner() {
+  return (
+    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+    </svg>
+  );
+}
+
 const defaultForm = () => ({
   productName: "", size: "500ml", price: "",
   category: "SOFTDRINKS", stockQuantity: "",
@@ -229,6 +239,10 @@ export default function ProductManagementPage() {
   const categoryRef = useRef<HTMLDivElement>(null);
   const sizeRef     = useRef<HTMLDivElement>(null);
 
+  // ── FIX: Refs to prevent double-submission ────────────────────────────────
+  const isAddingRef  = useRef(false);
+  const isEditingRef = useRef(false);
+
   const [alertModal, setAlertModal] = useState<{
     open: boolean; type?: "alert" | "confirm"; title?: string;
     message: string; danger?: boolean; onConfirm: () => void; onCancel?: () => void;
@@ -257,7 +271,6 @@ export default function ProductManagementPage() {
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  // ✅ Normalize product: ensure stockQuantity is a number and stockUnit is a valid CaseUnit
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const normalizeProduct = (p: any): Product => ({
     id:            p.id,
@@ -320,8 +333,17 @@ export default function ProductManagementPage() {
     setShowProductModal(true);
   };
 
+  // ── FIX: handleSaveEdit with ref guard + modal closes first ───────────────
   const handleSaveEdit = async () => {
-    if (!editForm.productName) { showAlert("Product name is required.", "Missing Field"); return; }
+    if (isEditingRef.current) return; // block synchronously
+    isEditingRef.current = true;
+
+    if (!editForm.productName) {
+      showAlert("Product name is required.", "Missing Field");
+      isEditingRef.current = false;
+      return;
+    }
+
     setSaving(true);
     try {
       const price = editForm.price === "" ? 0 : Number(editForm.price);
@@ -333,7 +355,10 @@ export default function ProductManagementPage() {
       setIsEditing(false);
       showToast("Product updated successfully!");
     } catch { showToast("Failed to update product.", true); }
-    finally { setSaving(false); }
+    finally {
+      setSaving(false);
+      isEditingRef.current = false; // reset ref
+    }
   };
 
   const confirmDelete = async () => {
@@ -346,21 +371,47 @@ export default function ProductManagementPage() {
     } catch { showToast("Failed to delete product.", true); }
   };
 
+  // ── FIX: handleAddProduct with ref guard + modal closes immediately ────────
   const handleAddProduct = async () => {
-    if (!addForm.productName) { showAlert("Product name is required.", "Missing Field"); return; }
-    if (!addForm.supplierId)  { showAlert("Please select a supplier.", "Missing Field"); return; }
+    if (isAddingRef.current) return; // block synchronously
+    isAddingRef.current = true;
+
+    if (!addForm.productName) {
+      showAlert("Product name is required.", "Missing Field");
+      isAddingRef.current = false;
+      return;
+    }
+    if (!addForm.supplierId) {
+      showAlert("Please select a supplier.", "Missing Field");
+      isAddingRef.current = false;
+      return;
+    }
+
+    // Close modal immediately so user can't resubmit
+    setShowAddModal(false);
     setSaving(true);
+
     try {
       const price = addForm.price === "" ? 0 : Number(addForm.price);
       const stockQuantity = addForm.stockQuantity === "" ? 0 : Number(addForm.stockQuantity);
       const res = await api.createProduct({ ...addForm, price, stockQuantity });
-      if (res.message && !res.id) { showToast(res.message, true); return; }
+      if (res.message && !res.id) {
+        // Re-open modal with data intact if API returned an error
+        setShowAddModal(true);
+        showToast(res.message, true);
+        return;
+      }
       await fetchProducts();
-      setShowAddModal(false);
       setAddForm(defaultForm());
       showToast("Product added successfully!");
-    } catch { showToast("Failed to add product.", true); }
-    finally { setSaving(false); }
+    } catch {
+      // Re-open modal with data intact on network error
+      setShowAddModal(true);
+      showToast("Failed to add product.", true);
+    } finally {
+      setSaving(false);
+      isAddingRef.current = false; // reset ref
+    }
   };
 
   const getPageNumbers = () => {
@@ -570,7 +621,6 @@ export default function ProductManagementPage() {
                         <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${getCategoryColor(product.category)}`}>
                           {product.category}
                         </span>
-                        {/* Product name + size */}
                         <p className="text-xs md:text-sm font-semibold text-gray-800 mt-1 truncate">
                           {product.productName}
                           {product.size && (
@@ -578,8 +628,6 @@ export default function ProductManagementPage() {
                           )}
                         </p>
                         <p className="text-xs text-gray-500 font-medium">₱{product.price}</p>
-
-                        {/* ✅ Fixed stock badge — no more undefined/NaN */}
                         <div className="mt-1.5">
                           <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border w-fit ${badgeColor}`}>
                             {qty} <span className="font-normal opacity-80">{u.short}</span>
@@ -661,7 +709,7 @@ export default function ProductManagementPage() {
                         }}
                         className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
                     </div>
-<div>
+                    <div>
                       <p className="text-xs text-gray-400">Stock Quantity</p>
                       <input type="number" inputMode="numeric"
                         value={editForm.stockQuantity}
@@ -713,7 +761,6 @@ export default function ProductManagementPage() {
                     <div>
                       <p className="text-xs text-gray-400">Stock</p>
                       <div className="mt-1">
-                        {/* ✅ Fixed detail view badge */}
                         <CaseBadge quantity={selectedProduct.stockQuantity} unit={selectedProduct.stockUnit} />
                         <p className="text-xs text-gray-400 mt-0.5">{getUnit(selectedProduct.stockUnit).label}</p>
                       </div>
@@ -739,9 +786,13 @@ export default function ProductManagementPage() {
                     className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
                     Cancel
                   </button>
+                  {/* ── FIX: spinner + cursor-not-allowed when saving ── */}
                   <button onClick={handleSaveEdit} disabled={saving}
-                    className="px-4 py-2 bg-indigo-600 rounded-lg text-sm text-white font-medium hover:bg-indigo-700 disabled:opacity-60">
-                    {saving ? "Saving..." : "Save Changes"}
+                    className={`px-4 py-2 rounded-lg text-sm text-white font-medium transition-colors
+                      ${saving ? "bg-indigo-400 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"}`}>
+                    {saving ? (
+                      <span className="flex items-center gap-2"><Spinner /> Saving...</span>
+                    ) : "Save Changes"}
                   </button>
                 </>
               ) : (
@@ -804,7 +855,7 @@ export default function ProductManagementPage() {
                     setAddForm({ ...addForm, price: val });
                   }}
                   placeholder="0"
-className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600">Supplier</label>
@@ -831,9 +882,13 @@ className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outli
                 className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">
                 Cancel
               </button>
+              {/* ── FIX: spinner + cursor-not-allowed when saving ── */}
               <button onClick={handleAddProduct} disabled={saving}
-                className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-60">
-                {saving ? "Adding..." : "Add Product"}
+                className={`flex-1 rounded-lg py-2 text-sm text-white font-medium transition-colors
+                  ${saving ? "bg-indigo-400 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"}`}>
+                {saving ? (
+                  <span className="flex items-center justify-center gap-2"><Spinner /> Adding...</span>
+                ) : "Add Product"}
               </button>
             </div>
           </div>
