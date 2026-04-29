@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 
 const navLinks = [
@@ -39,8 +39,22 @@ export default function InventoryLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const page = pageTitles[pathname] ?? { title: "Inventory Manager", sub: "" };
+
+  const handleLogout = () => {
+    // Clear localStorage
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+
+    // Expire cookies so middleware stops seeing a valid session
+    const expired = "path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    document.cookie = `token=; ${expired}`;
+    document.cookie = `active_token=; ${expired}`;
+
+    router.push("/");
+  };
 
   return (
     <div
@@ -180,24 +194,26 @@ export default function InventoryLayout({
 
         {/* Logout */}
         <div style={{ padding: "16px 20px", borderTop: "1px solid #f0f0f0" }}>
-          <Link
-            href="/"
+          <button
+            onClick={handleLogout}
             style={{
+              width: "100%",
               display: "flex",
               alignItems: "center",
               gap: "12px",
               padding: "10px 14px",
               borderRadius: "10px",
-              textDecoration: "none",
+              border: "none",
               background: "#fff5f5",
               color: "#e53935",
               fontSize: "13.5px",
               fontWeight: 600,
+              cursor: "pointer",
             }}
           >
             <span style={{ fontSize: "17px" }}>🚪</span>
             Log out
-          </Link>
+          </button>
         </div>
       </aside>
 
@@ -209,7 +225,6 @@ export default function InventoryLayout({
           flexDirection: "column",
           overflow: "hidden",
         }}
-        className=""
       >
         {/* Topbar */}
         <header
@@ -240,30 +255,9 @@ export default function InventoryLayout({
                 flexShrink: 0,
               }}
             >
-              <div
-                style={{
-                  width: "22px",
-                  height: "2px",
-                  background: "#fff",
-                  borderRadius: "2px",
-                }}
-              />
-              <div
-                style={{
-                  width: "22px",
-                  height: "2px",
-                  background: "#fff",
-                  borderRadius: "2px",
-                }}
-              />
-              <div
-                style={{
-                  width: "22px",
-                  height: "2px",
-                  background: "#fff",
-                  borderRadius: "2px",
-                }}
-              />
+              <div style={{ width: "22px", height: "2px", background: "#fff", borderRadius: "2px" }} />
+              <div style={{ width: "22px", height: "2px", background: "#fff", borderRadius: "2px" }} />
+              <div style={{ width: "22px", height: "2px", background: "#fff", borderRadius: "2px" }} />
             </button>
 
             <div>
@@ -271,9 +265,7 @@ export default function InventoryLayout({
                 {page.title}
               </p>
               {page.sub && (
-                <p
-                  style={{ color: "rgba(255,255,255,0.55)", fontSize: "11px" }}
-                >
+                <p style={{ color: "rgba(255,255,255,0.55)", fontSize: "11px" }}>
                   {page.sub}
                 </p>
               )}
