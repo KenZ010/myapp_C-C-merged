@@ -273,7 +273,7 @@ type LineItem = {
 
 type DeliveryForm = { supplierId: string; deliveryDate: string; lineItems: LineItem[]; notes: string };
 type Supplier    = { id: string; supplierName: string };
-type Product     = { id: string; productName: string; price: number; supplierId: string; status?: string; stockUnit?: string; stockQuantity?: number; size?: string | null };
+type Product     = { id: string; productName: string; price: number; supplierId?: string; supplier?: string; status?: string; stockUnit?: string; stockQuantity?: number; size?: string | null };
 type ReceiveQty  = { deliveryItemId: string; receivedQty: number };
 
 const STATUS_CONFIG: Record<string, { bg: string; text: string }> = {
@@ -425,7 +425,10 @@ export default function PurchaseOrderPage() {
     : [];
 
   const lowStockProducts = form.supplierId
-    ? supplierProducts.filter((p) => p.stockQuantity != null && p.stockQuantity <= 10)
+    ? supplierProducts.filter((p) => { const s = p.stockQuantity ?? 0; return s > 0 && s <= 10; })
+    : [];
+  const outOfStockProducts = form.supplierId
+    ? supplierProducts.filter((p) => (p.stockQuantity ?? 0) === 0)
     : [];
 
   useEffect(() => {
@@ -441,8 +444,14 @@ export default function PurchaseOrderPage() {
       setLoading(true);
       const [d, s, p] = await Promise.all([api.getDeliveries(), api.getSuppliers(), api.getProducts()]);
       setDeliveries(Array.isArray(d) ? d : []);
-      setSuppliers(Array.isArray(s) ? s : []);
-      setAllProducts(Array.isArray(p) ? p : []);
+      setSuppliers((Array.isArray(s) ? s : []).filter((sup: { status?: string }) => sup.status !== "INACTIVE"));
+      const normalized = (Array.isArray(p) ? p : []).map((prod: Product) => ({
+        ...prod,
+        supplierId: prod.supplierId || prod.supplier || "",
+        stockQuantity: prod.stockQuantity ?? 0,
+        stockUnit: (prod.stockUnit as CaseUnit) || "case_24",
+      }));
+      setAllProducts(normalized);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -926,27 +935,93 @@ export default function PurchaseOrderPage() {
                     placeholder="Optional notes about this delivery..." />
                 </div>
 
-                {/* Low Stock Alert */}
-                {lowStockProducts.length > 0 && (
+                {/* Stock Overview — all products with stock status */}
+                {form.supplierId && supplierProducts.length > 0 && (
+                  <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-6 h-6 rounded-full bg-gray-600 text-white text-xs flex items-center justify-center font-bold">#</div>
+                      <h2 className="text-sm font-bold text-gray-700">Stock Overview</h2>
+                      <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{supplierProducts.length} product{supplierProducts.length > 1 ? "s" : ""}</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {supplierProducts.map((p) => {
+                        const stock = p.stockQuantity ?? 0;
+                        const isOutOfStock = stock === 0;
+                        const isLowStock = stock > 0 && stock <= 10;
+                        const badgeColor = isOutOfStock
+                          ? "bg-red-100 text-red-700 border-red-200"
+                          : isLowStock
+                          ? "bg-yellow-100 text-yellow-700 border-yellow-200"
+                          : "bg-green-100 text-green-700 border-green-200";
+                        const dotColor = isOutOfStock
+                          ? "bg-red-500"
+                          : isLowStock
+                          ? "bg-yellow-500"
+                          : "bg-green-500";
+                        const statusText = isOutOfStock ? "Out of Stock" : isLowStock ? "Low Stock" : "In Stock";
+                        return (
+                          <div key={p.id} className={`flex items-center justify-between rounded-lg p-2.5 border ${isOutOfStock ? "border-red-100 bg-red-50/50" : isLowStock ? "border-yellow-100 bg-yellow-50/50" : "border-gray-100 bg-gray-50/50"}`}>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor} ${isOutOfStock ? "animate-pulse" : ""}`} />
+                                <p className="text-xs font-medium text-gray-800 truncate">{p.productName}{p.size ? ` ${p.size}` : ""}</p>
+                              </div>
+                              <p className={`text-xs mt-0.5 font-medium ${isOutOfStock ? "text-red-500" : isLowStock ? "text-yellow-600" : "text-green-600"}`}>{statusText}</p>
+                            </div>
+                            <div className="text-right shrink-0 ml-2">
+                              {isOutOfStock ? (
+                                <span className="text-xs font-bold text-red-500">—</span>
+                              ) : (
+                                <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-1.5 py-0.5 rounded-full border ${badgeColor}`}>
+                                  {stock} {getUnitShort(p.stockUnit)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Low Stock & Out of Stock Alert */}
+                {(lowStockProducts.length > 0 || outOfStockProducts.length > 0) && (
                   <div className="bg-red-50 border border-red-200 rounded-2xl p-4 shadow-sm">
                     <div className="flex items-center gap-2 mb-3">
                       <div className="w-6 h-6 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-bold">!</div>
-                      <h2 className="text-sm font-bold text-red-700">Low Stock Products</h2>
-                      <span className="text-xs text-red-500 bg-red-100 px-2 py-0.5 rounded-full">{lowStockProducts.length} item{lowStockProducts.length > 1 ? "s" : ""}</span>
+                      <h2 className="text-sm font-bold text-red-700">Stock Alert</h2>
+                      <span className="text-xs text-red-500 bg-red-100 px-2 py-0.5 rounded-full">{outOfStockProducts.length + lowStockProducts.length} item{(outOfStockProducts.length + lowStockProducts.length) > 1 ? "s" : ""}</span>
                     </div>
                     <div className="space-y-2">
-                      {lowStockProducts.map((p) => (
-                        <div key={p.id} className="flex items-center justify-between bg-white rounded-lg p-3 border border-red-100">
-                          <div>
-                            <p className="text-sm font-medium text-gray-800">{p.productName}{p.size ? ` ${p.size}` : ""}</p>
-                            <p className="text-xs text-gray-400 mt-0.5">Current stock</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-lg font-bold text-red-600">{p.stockQuantity}</p>
-                            <p className="text-xs text-gray-400">{getUnitShort(p.stockUnit)}</p>
+                      {outOfStockProducts.length > 0 && (
+                        <div>
+                          <p className="text-xs font-bold text-red-600 mb-1.5">⚠️ Out of Stock ({outOfStockProducts.length})</p>
+                          <div className="space-y-1.5">
+                            {outOfStockProducts.map((p) => (
+                              <div key={p.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-red-200">
+                                <p className="text-sm font-medium text-gray-800">{p.productName}{p.size ? ` ${p.size}` : ""}</p>
+                                <span className="text-xs font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">Out of Stock</span>
+                              </div>
+                            ))}
                           </div>
                         </div>
-                      ))}
+                      )}
+                      {lowStockProducts.length > 0 && (
+                        <div>
+                          <p className="text-xs font-bold text-yellow-700 mb-1.5">Low Stock ({lowStockProducts.length})</p>
+                          <div className="space-y-1.5">
+                            {lowStockProducts.map((p) => {
+                              const stock = p.stockQuantity ?? 0;
+                              return (
+                                <div key={p.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-yellow-200">
+                                  <p className="text-sm font-medium text-gray-800">{p.productName}{p.size ? ` ${p.size}` : ""}</p>
+                                  <span className="text-xs font-bold text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded-full">{stock} {getUnitShort(p.stockUnit)}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

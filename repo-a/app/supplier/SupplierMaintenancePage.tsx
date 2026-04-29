@@ -13,6 +13,12 @@ import {
 type ProductItem = {
   id: string;
   productName: string;
+  size: string | null;
+  price: number;
+  category: string;
+  stockQuantity: number;
+  stockUnit: string;
+  status: string;
 };
 
 type SupplierItem = {
@@ -237,6 +243,9 @@ export default function SupplierMaintenancePage() {
   const [form,           setForm]           = useState(emptyForm);
   const [editingId,      setEditingId]      = useState<string | null>(null);
   const [viewItem,       setViewItem]       = useState<SupplierItem | null>(null);
+  const [viewProducts,   setViewProducts]   = useState<ProductItem[]>([]);
+  const [editProducts,   setEditProducts]   = useState<ProductItem[]>([]);
+  const [savingPrice,    setSavingPrice]    = useState<string | null>(null);
   const [success,        setSuccess]        = useState("");
   const [error,          setError]          = useState("");
 
@@ -276,7 +285,7 @@ export default function SupplierMaintenancePage() {
     try {
       setLoading(true);
       const data = await api.getSuppliers();
-      setItems(data);
+      setItems(Array.isArray(data) ? data : []);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
@@ -294,9 +303,27 @@ export default function SupplierMaintenancePage() {
   const toggleSelect = (id: string) => setSelected(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   const toggleAll    = () => selected.length === filtered.length ? setSelected([]) : setSelected(filtered.map(r => r.id));
 
-  const openAddModal = () => { setForm(emptyForm); setEditingId(null); setShowModal(true); };
+  const openAddModal = () => { setForm(emptyForm); setEditingId(null); setEditProducts([]); setShowModal(true); };
 
-  const openEditModal = () => {
+  const loadSupplierProducts = async (supplierId: string) => {
+    const allProducts = await api.getProducts();
+    return (Array.isArray(allProducts) ? allProducts : [])
+      .filter((p: { supplierId?: string; supplier?: string }) =>
+        (p.supplierId || p.supplier) === supplierId
+      )
+      .map((p: Record<string, unknown>) => ({
+        id: (p.id as string) || "",
+        productName: (p.productName as string) || "",
+        size: (p.size as string) || null,
+        price: Number(p.price) || 0,
+        category: (p.category as string) || "OTHER",
+        stockQuantity: Number(p.stockQuantity) || 0,
+        stockUnit: (p.stockUnit as string) || "case_24",
+        status: (p.status as string) || "ACTIVE",
+      }));
+  };
+
+  const openEditModal = async () => {
     if (selected.length !== 1) { showAlert("Please select exactly one item to edit.", "Selection Required"); return; }
     const item = items.find(i => i.id === selected[0]);
     if (!item) return;
@@ -307,10 +334,12 @@ export default function SupplierMaintenancePage() {
       status: item.status,
     });
     setEditingId(item.id);
+    const products = await loadSupplierProducts(item.id);
+    setEditProducts(products);
     setShowModal(true);
   };
 
-  const openEditFromView = (item: SupplierItem) => {
+  const openEditFromView = async (item: SupplierItem) => {
     setViewItem(null);
     setForm({
       supplierName: item.supplierName, contactNo: item.contactNo,
@@ -320,6 +349,8 @@ export default function SupplierMaintenancePage() {
     });
     setSelected([item.id]);
     setEditingId(item.id);
+    const products = await loadSupplierProducts(item.id);
+    setEditProducts(products);
     setShowModal(true);
   };
 
@@ -329,6 +360,7 @@ export default function SupplierMaintenancePage() {
       const saveData = { ...form, lastOrdered: form.lastOrdered === "" ? 0 : Number(form.lastOrdered) };
       if (editingId !== null) {
         await api.updateSupplier(editingId, saveData);
+        await Promise.all(editProducts.map(p => api.updateProduct(p.id, { price: p.price })));
         showToast("Supplier updated successfully!");
       } else {
         await api.createSupplier(saveData);
@@ -353,6 +385,35 @@ export default function SupplierMaintenancePage() {
   const openViewModal = async (supplierId: string) => {
     const supplier = await api.getSupplier(supplierId);
     setViewItem(supplier);
+    const allProducts = await api.getProducts();
+    const supplierProducts = (Array.isArray(allProducts) ? allProducts : [])
+      .filter((p: { supplierId?: string; supplier?: string }) =>
+        (p.supplierId || p.supplier) === supplierId
+      )
+      .map((p: Record<string, unknown>) => ({
+        id: (p.id as string) || "",
+        productName: (p.productName as string) || "",
+        size: (p.size as string) || null,
+        price: Number(p.price) || 0,
+        category: (p.category as string) || "OTHER",
+        stockQuantity: Number(p.stockQuantity) || 0,
+        stockUnit: (p.stockUnit as string) || "case_24",
+        status: (p.status as string) || "ACTIVE",
+      }));
+    setViewProducts(supplierProducts);
+  };
+
+  const handleUpdatePrice = async (productId: string, newPrice: number) => {
+    setSavingPrice(productId);
+    try {
+      await api.updateProduct(productId, { price: newPrice });
+      setViewProducts(prev => prev.map(p => p.id === productId ? { ...p, price: newPrice } : p));
+      showToast(`Price updated for ${viewProducts.find(p => p.id === productId)?.productName}!`);
+    } catch {
+      showToast("Failed to update price.", true);
+    } finally {
+      setSavingPrice(null);
+    }
   };
 
   const handleDelete = () => {
@@ -589,13 +650,36 @@ export default function SupplierMaintenancePage() {
                 </div>
               </div>
 <div className="mt-4">
-                <p className="text-sm font-semibold text-gray-700 mb-2">Products</p>
-                {viewItem.products && viewItem.products.length > 0 ? (
-                  <div className="max-h-40 overflow-y-auto flex flex-col gap-2">
-                    {viewItem.products.map(product => (
-                      <div key={product.id} className="bg-gray-50 rounded-xl p-3">
-                        <p className="text-sm font-medium text-gray-800">{product.productName}</p>
-                        <p className="text-xs text-gray-400">ID: {product.id}</p>
+                <p className="text-sm font-semibold text-gray-700 mb-2">Products &amp; Prices</p>
+                {viewProducts.length > 0 ? (
+                  <div className="max-h-60 overflow-y-auto space-y-2">
+                    {viewProducts.map(product => (
+                      <div key={product.id} className="bg-gray-50 rounded-xl p-3 flex items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-800 truncate">{product.productName}{product.size ? ` ${product.size}` : ""}</p>
+                          <p className="text-xs text-gray-400">{product.category}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-xs text-gray-400">₱</span>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min="0"
+                            value={product.price}
+                            onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
+                            onChange={e => {
+                              const val = e.target.value.replace(/[^0-9]/g, "");
+                              setViewProducts(prev => prev.map(p => p.id === product.id ? { ...p, price: val === "" ? 0 : Number(val) } : p));
+                            }}
+                            className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-sm text-right outline-none focus:border-indigo-400 text-gray-900"
+                          />
+                          <button
+                            onClick={() => handleUpdatePrice(product.id, product.price)}
+                            disabled={savingPrice === product.id}
+                            className="bg-indigo-600 text-white rounded-lg px-2.5 py-1 text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 shrink-0">
+                            {savingPrice === product.id ? "..." : "Save"}
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -667,6 +751,36 @@ export default function SupplierMaintenancePage() {
                   </select>
                 </div>
               </div>
+
+              {editingId !== null && editProducts.length > 0 && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600">Products &amp; Prices</label>
+                  <div className="max-h-48 overflow-y-auto space-y-1.5 mt-1 bg-gray-50 rounded-lg p-2">
+                    {editProducts.map(product => (
+                      <div key={product.id} className="flex items-center justify-between gap-2 bg-white rounded-lg p-2 border border-gray-100">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-gray-800 truncate">{product.productName}{product.size ? ` ${product.size}` : ""}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-xs text-gray-400">₱</span>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min="0"
+                            value={product.price}
+                            onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
+                            onChange={e => {
+                              const val = e.target.value.replace(/[^0-9]/g, "");
+                              setEditProducts(prev => prev.map(p => p.id === product.id ? { ...p, price: val === "" ? 0 : Number(val) } : p));
+                            }}
+                            className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-xs text-right outline-none focus:border-indigo-400 text-gray-900"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-3 mt-5">
                 <button onClick={() => setShowModal(false)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
