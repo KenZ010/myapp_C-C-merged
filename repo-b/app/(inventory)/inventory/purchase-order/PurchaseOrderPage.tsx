@@ -80,6 +80,7 @@ type Delivery = {
   totalItems: number;
   notes?: string;
   createdAt: string;
+  receiptNumber?: string; // ← NEW
   supplier?: { id: string; supplierName: string };
   items: DeliveryItem[];
 };
@@ -153,6 +154,24 @@ export default function PurchaseOrderPage() {
   const [saving,        setSaving]        = useState(false);
   const [createError,   setCreateError]   = useState("");
   const [createSuccess, setCreateSuccess] = useState("");
+
+  // ── NEW: Order Summary Modal ──
+  const [orderSummaryModal, setOrderSummaryModal] = useState<{
+    show: boolean;
+    supplier: Supplier | null;
+    items: LineItem[];
+    total: number;
+    deliveryDate: string;
+    notes: string;
+  }>({ show: false, supplier: null, items: [], total: 0, deliveryDate: "", notes: "" });
+
+  // ── NEW: Receipt Number Modal ──
+  const [receiptModal, setReceiptModal] = useState<{
+    show: boolean;
+    delivery: Delivery | null;
+    receiptNumber: string;
+    error: string;
+  }>({ show: false, delivery: null, receiptNumber: "", error: "" });
 
   // Supplier dropdown state
   const [showSupplierDrop, setShowSupplierDrop] = useState(false);
@@ -306,9 +325,23 @@ export default function PurchaseOrderPage() {
   const removeLineItem = (idx: number) =>
     setForm({ ...form, lineItems: form.lineItems.filter((_, i) => i !== idx) });
 
-  const handleSave = async () => {
+  // ── NEW: Show summary modal before saving ──
+  const handlePreviewOrder = () => {
     if (!form.supplierId) { setCreateError("Please select a supplier."); return; }
     if (validLineItems.length === 0) { setCreateError("Please add at least one product."); return; }
+    setCreateError("");
+    setOrderSummaryModal({
+      show: true,
+      supplier: selectedSupplier,
+      items: validLineItems,
+      total,
+      deliveryDate: form.deliveryDate,
+      notes: form.notes,
+    });
+  };
+
+  const handleSave = async () => {
+    setOrderSummaryModal((m) => ({ ...m, show: false }));
     try {
       setSaving(true); setCreateError("");
       const res = await api.createDelivery({
@@ -336,8 +369,25 @@ export default function PurchaseOrderPage() {
     } finally { setSaving(false); }
   };
 
-  const openReceiving = (delivery: Delivery) => {
-    setReceivingDelivery(delivery);
+  // ── NEW: Open receipt number modal before receiving ──
+  const openReceiptModal = (delivery: Delivery) => {
+    setReceiptModal({ show: true, delivery, receiptNumber: "", error: "" });
+  };
+
+  const handleReceiptConfirm = () => {
+    const trimmed = receiptModal.receiptNumber.trim();
+    if (!trimmed) {
+      setReceiptModal((m) => ({ ...m, error: "Please enter the supplier receipt number." }));
+      return;
+    }
+    const delivery = receiptModal.delivery!;
+    setReceiptModal({ show: false, delivery: null, receiptNumber: "", error: "" });
+    openReceiving(delivery, trimmed);
+  };
+
+  const openReceiving = (delivery: Delivery, receiptNumber?: string) => {
+    const enriched = receiptNumber ? { ...delivery, receiptNumber } : delivery;
+    setReceivingDelivery(enriched);
     setReceiveError("");
     setReceiveQtys(
       delivery.items.map((item) => ({
@@ -361,7 +411,6 @@ export default function PurchaseOrderPage() {
       );
       return;
     }
-    // ── DEBUG: log token + payload so we can see what's being sent ──
     const debugToken = localStorage.getItem("token") || "NO TOKEN";
     const debugPayload = { employeeId, items: receiveQtys.filter((r) => r.receivedQty > 0) };
     console.log("[receiveDelivery] token:", debugToken);
@@ -373,8 +422,18 @@ export default function PurchaseOrderPage() {
       await api.receiveDelivery(
         receivingDelivery.id,
         employeeId,
-        receiveQtys.filter((r) => r.receivedQty > 0)
+        receiveQtys.filter((r) => r.receivedQty > 0),
+        // Pass receipt number if your API supports it:
+        // { receiptNumber: receivingDelivery.receiptNumber }
       );
+      // Update local delivery record with receipt number
+      if (receivingDelivery.receiptNumber) {
+        try {
+          await api.updateDelivery(receivingDelivery.id, {
+            receiptNumber: receivingDelivery.receiptNumber,
+          });
+        } catch (e) { console.warn("Could not save receipt number:", e); }
+      }
       setReceivingDelivery(null);
       await fetchAll();
       setCreateSuccess("Items received and stock updated!");
@@ -398,13 +457,14 @@ export default function PurchaseOrderPage() {
     });
 
   const handleExport = () => {
-    const headers = ["ID", "Supplier", "Delivery Date", "Total Items", "Status", "Notes"];
+    const headers = ["ID", "Supplier", "Delivery Date", "Total Items", "Status", "Receipt No.", "Notes"];
     const rows = deliveries.map((d) => [
       d.id,
       d.supplier?.supplierName || d.supplierId,
       new Date(d.deliveryDate).toLocaleDateString(),
       d.totalItems,
       d.status,
+      d.receiptNumber || "",
       d.notes || "",
     ]);
     const a = document.createElement("a");
@@ -446,6 +506,242 @@ export default function PurchaseOrderPage() {
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div style={{ padding: "28px" }}>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          NEW: ORDER SUMMARY MODAL
+      ══════════════════════════════════════════════════════════════════ */}
+      {orderSummaryModal.show && (
+        <>
+          <div
+            onClick={() => setOrderSummaryModal((m) => ({ ...m, show: false }))}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 40 }}
+          />
+          <div style={{
+            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+            zIndex: 50, background: "#fff", borderRadius: "20px",
+            width: "min(94vw, 560px)", boxShadow: "0 24px 80px rgba(0,0,0,0.18)",
+            maxHeight: "90vh", overflowY: "auto",
+          }}>
+            {/* Header */}
+            <div style={{
+              background: "linear-gradient(135deg, #1a3c2e 0%, #2e7d32 100%)",
+              padding: "24px 28px", borderRadius: "20px 20px 0 0",
+              display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+            }}>
+              <div>
+                <p style={{ fontSize: "18px", fontWeight: 800, color: "#fff", marginBottom: "4px" }}>
+                  📋 Order Summary
+                </p>
+                <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.65)" }}>
+                  Please review before submitting
+                </p>
+              </div>
+              <button
+                onClick={() => setOrderSummaryModal((m) => ({ ...m, show: false }))}
+                style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: "32px", height: "32px", cursor: "pointer", color: "#fff", fontSize: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}
+              >✕</button>
+            </div>
+
+            <div style={{ padding: "24px 28px" }}>
+              {/* Supplier + Date info */}
+              <div style={{
+                background: "#f0faf2", borderRadius: "14px", padding: "16px 20px",
+                border: "1.5px solid #a5d6a7", marginBottom: "20px",
+                display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "10px",
+              }}>
+                <div>
+                  <p style={{ fontSize: "11px", color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>Supplier</p>
+                  <p style={{ fontSize: "15px", fontWeight: 800, color: "#1a3c2e" }}>{orderSummaryModal.supplier?.supplierName}</p>
+                  {orderSummaryModal.supplier?.contact && (
+                    <p style={{ fontSize: "12px", color: "#555" }}>📞 {orderSummaryModal.supplier.contact}</p>
+                  )}
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <p style={{ fontSize: "11px", color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>Delivery Date</p>
+                  <p style={{ fontSize: "14px", fontWeight: 700, color: "#1a3c2e" }}>
+                    📅 {new Date(orderSummaryModal.deliveryDate + "T00:00:00").toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                  </p>
+                </div>
+              </div>
+
+              {/* Items table */}
+              <p style={{ fontSize: "13px", fontWeight: 700, color: "#1a1a1a", marginBottom: "10px" }}>
+                🛒 Items Ordered ({orderSummaryModal.items.length})
+              </p>
+              <div style={{ border: "0.5px solid #e8e8e8", borderRadius: "12px", overflow: "hidden", marginBottom: "20px" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#1a3c2e" }}>
+                      {["Product", "Unit", "Qty", "Unit Price", "Subtotal"].map((h) => (
+                        <th key={h} style={{ padding: "10px 14px", textAlign: h === "Qty" || h === "Unit Price" || h === "Subtotal" ? "right" : "left", fontSize: "11px", color: "#fff", fontWeight: 600 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orderSummaryModal.items.map((item, i) => {
+                      const subtotal   = Number(item.quantity) * Number(item.unitPrice);
+                      const unitInfo   = getUnit(item.unit);
+                      const breakdown  = getCaseBreakdown(Number(item.quantity), item.unit);
+                      return (
+                        <tr key={item.productId} style={{ borderBottom: "0.5px solid #f0f0f0", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                          <td style={{ padding: "12px 14px" }}>
+                            <p style={{ fontSize: "13px", fontWeight: 600, color: "#1a1a1a" }}>{item.productName}</p>
+                            {breakdown && (
+                              <p style={{ fontSize: "11px", color: "#6366f1", marginTop: "2px" }}>{breakdown}</p>
+                            )}
+                          </td>
+                          <td style={{ padding: "12px 14px", fontSize: "12px", color: "#888", textAlign: "right" }}>
+                            {unitInfo.short}
+                          </td>
+                          <td style={{ padding: "12px 14px", fontSize: "14px", fontWeight: 800, color: "#1a3c2e", textAlign: "right" }}>
+                            {item.quantity}
+                          </td>
+                          <td style={{ padding: "12px 14px", fontSize: "13px", color: "#555", textAlign: "right" }}>
+                            ₱{Number(item.unitPrice).toLocaleString()}
+                          </td>
+                          <td style={{ padding: "12px 14px", fontSize: "13px", fontWeight: 700, color: "#1a1a1a", textAlign: "right" }}>
+                            ₱{subtotal.toLocaleString()}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Total cost breakdown */}
+              <div style={{
+                background: "#1a3c2e", borderRadius: "14px", padding: "18px 22px", marginBottom: "20px",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                  <span style={{ fontSize: "13px", color: "rgba(255,255,255,0.7)" }}>
+                    Total Items: <strong style={{ color: "#fff" }}>{orderSummaryModal.items.reduce((s, i) => s + Number(i.quantity), 0)}</strong>
+                  </span>
+                  <span style={{ fontSize: "13px", color: "rgba(255,255,255,0.7)" }}>
+                    SKUs: <strong style={{ color: "#fff" }}>{orderSummaryModal.items.length}</strong>
+                  </span>
+                </div>
+                <div style={{ height: "1px", background: "rgba(255,255,255,0.15)", marginBottom: "12px" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "15px", fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>
+                    Total Order Cost
+                  </span>
+                  <span style={{ fontSize: "28px", fontWeight: 900, color: "#a5d6a7" }}>
+                    ₱{orderSummaryModal.total.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Notes */}
+              {orderSummaryModal.notes && (
+                <div style={{ background: "#fffde7", border: "1px solid #fff176", borderRadius: "10px", padding: "12px 16px", marginBottom: "18px" }}>
+                  <p style={{ fontSize: "12px", fontWeight: 700, color: "#888", marginBottom: "4px" }}>📝 Notes</p>
+                  <p style={{ fontSize: "13px", color: "#555" }}>{orderSummaryModal.notes}</p>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button
+                  onClick={() => setOrderSummaryModal((m) => ({ ...m, show: false }))}
+                  style={{ flex: 1, padding: "12px", borderRadius: "14px", border: "1.5px solid #e0e0e0", background: "#fff", color: "#555", fontSize: "14px", fontWeight: 600, cursor: "pointer" }}
+                >
+                  ← Edit Order
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  style={{ flex: 2, padding: "12px", borderRadius: "14px", border: "none", background: saving ? "#4caf50" : "#1a3c2e", color: "#fff", fontSize: "14px", fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", boxShadow: "0 4px 14px rgba(26,60,46,0.3)", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
+                >
+                  {saving ? "⏳ Submitting..." : "✅ Confirm & Submit"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════
+          NEW: RECEIPT NUMBER MODAL
+      ══════════════════════════════════════════════════════════════════ */}
+      {receiptModal.show && (
+        <>
+          <div
+            onClick={() => setReceiptModal({ show: false, delivery: null, receiptNumber: "", error: "" })}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 40 }}
+          />
+          <div style={{
+            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+            zIndex: 50, background: "#fff", borderRadius: "20px",
+            width: "min(92vw, 400px)", boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
+            overflow: "hidden",
+          }}>
+            {/* Header */}
+            <div style={{
+              background: "linear-gradient(135deg, #1a3c2e 0%, #2e7d32 100%)",
+              padding: "22px 24px",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div style={{ width: "40px", height: "40px", borderRadius: "12px", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", flexShrink: 0 }}>
+                  🧾
+                </div>
+                <div>
+                  <p style={{ fontSize: "16px", fontWeight: 800, color: "#fff" }}>Supplier Receipt Number</p>
+                  <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.65)" }}>
+                    {receiptModal.delivery?.supplier?.supplierName || ""}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: "24px" }}>
+              <p style={{ fontSize: "13px", color: "#555", marginBottom: "16px", lineHeight: "1.6" }}>
+                Please enter the <strong>receipt or delivery note number</strong> provided by the supplier. This will be recorded in the delivery details.
+              </p>
+
+              <label style={{ fontSize: "12px", fontWeight: 700, color: "#555", display: "block", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                Receipt / DR Number *
+              </label>
+              <input
+                type="text"
+                value={receiptModal.receiptNumber}
+                onChange={(e) => setReceiptModal((m) => ({ ...m, receiptNumber: e.target.value, error: "" }))}
+                onKeyDown={(e) => e.key === "Enter" && handleReceiptConfirm()}
+                placeholder="e.g. DR-2024-00123"
+                autoFocus
+                style={{
+                  width: "100%", padding: "12px 16px", borderRadius: "12px",
+                  border: receiptModal.error ? "1.5px solid #e53935" : "1.5px solid #e0e0e0",
+                  fontSize: "15px", fontWeight: 600, outline: "none", color: "#1a1a1a",
+                  background: "#fff", boxSizing: "border-box",
+                  transition: "border 0.2s",
+                  fontFamily: "monospace",
+                }}
+              />
+              {receiptModal.error && (
+                <p style={{ fontSize: "12px", color: "#e53935", marginTop: "6px" }}>⚠️ {receiptModal.error}</p>
+              )}
+
+              <div style={{ height: "1px", background: "#f0f0f0", margin: "20px 0" }} />
+
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button
+                  onClick={() => setReceiptModal({ show: false, delivery: null, receiptNumber: "", error: "" })}
+                  style={{ flex: 1, padding: "11px", borderRadius: "14px", border: "1.5px solid #e0e0e0", background: "#fff", color: "#555", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReceiptConfirm}
+                  style={{ flex: 2, padding: "11px", borderRadius: "14px", border: "none", background: "#1a3c2e", color: "#fff", fontSize: "14px", fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 14px rgba(26,60,46,0.25)" }}
+                >
+                  📦 Proceed to Receive
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ── Confirm Modal ── */}
       {confirmModal.show && (
@@ -915,8 +1211,9 @@ export default function PurchaseOrderPage() {
               </div>
             )}
 
+            {/* ── CHANGED: Button now previews order first ── */}
             <button
-              onClick={handleSave}
+              onClick={handlePreviewOrder}
               disabled={validLineItems.length === 0 || !form.supplierId || saving}
               style={{
                 width: "100%", padding: "13px", borderRadius: "20px", border: "none",
@@ -928,7 +1225,7 @@ export default function PurchaseOrderPage() {
                 display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
               }}
             >
-              {saving ? <><span style={{ display: "inline-block", animation: "spin 1s linear infinite" }}>⏳</span> Submitting...</> : "📤 Submit Purchase Order"}
+              {saving ? <><span>⏳</span> Submitting...</> : "📋 Review & Submit Order"}
             </button>
           </div>
         </div>
@@ -991,8 +1288,9 @@ export default function PurchaseOrderPage() {
                   </p>
                 </div>
                 <div style={{ display: "flex", gap: "8px" }}>
+                  {/* ── CHANGED: Opens receipt modal first ── */}
                   <button
-                    onClick={() => openReceiving(delivery)}
+                    onClick={() => openReceiptModal(delivery)}
                     style={{ padding: "10px 20px", borderRadius: "20px", border: "none", background: "#1a3c2e", color: "#fff", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}
                   >
                     📦 {receivingDelivery?.id === delivery.id ? "Selected" : "Receive"}
@@ -1025,10 +1323,25 @@ export default function PurchaseOrderPage() {
                     ⚠️ {receiveError}
                   </div>
                 )}
-                <div style={{ background: "#f0faf2", borderRadius: "10px", padding: "12px 14px", marginBottom: "16px" }}>
+                <div style={{ background: "#f0faf2", borderRadius: "10px", padding: "12px 14px", marginBottom: "12px" }}>
                   <p style={{ fontSize: "13px", fontWeight: 700, color: "#1a3c2e" }}>{receivingDelivery.supplier?.supplierName || receivingDelivery.supplierId}</p>
                   <p style={{ fontSize: "12px", color: "#888" }}>📅 {new Date(receivingDelivery.deliveryDate).toLocaleDateString()}</p>
                 </div>
+
+                {/* ── NEW: Receipt number display ── */}
+                {receivingDelivery.receiptNumber && (
+                  <div style={{
+                    background: "#fffde7", border: "1.5px solid #fff176", borderRadius: "10px",
+                    padding: "10px 14px", marginBottom: "14px",
+                    display: "flex", alignItems: "center", gap: "10px",
+                  }}>
+                    <span style={{ fontSize: "16px" }}>🧾</span>
+                    <div>
+                      <p style={{ fontSize: "11px", color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>Supplier Receipt No.</p>
+                      <p style={{ fontSize: "14px", fontWeight: 800, color: "#1a1a1a", fontFamily: "monospace" }}>{receivingDelivery.receiptNumber}</p>
+                    </div>
+                  </div>
+                )}
 
                 <p style={{ fontSize: "12px", fontWeight: 700, color: "#555", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                   Enter Received Quantities
@@ -1228,16 +1541,16 @@ export default function PurchaseOrderPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "700px" }}>
               <thead>
                 <tr style={{ background: "#1a3c2e" }}>
-                  {["Delivery ID", "Supplier", "Date", "Items", "Status", "Action"].map((h) => (
+                  {["Delivery ID", "Supplier", "Date", "Items", "Receipt No.", "Status", "Action"].map((h) => (
                     <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: "12px", color: "#fff", fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={6} style={{ padding: "40px", textAlign: "center", color: "#aaa" }}>Loading...</td></tr>
+                  <tr><td colSpan={7} style={{ padding: "40px", textAlign: "center", color: "#aaa" }}>Loading...</td></tr>
                 ) : paginatedHistory.length === 0 ? (
-                  <tr><td colSpan={6} style={{ padding: "48px", textAlign: "center" }}>
+                  <tr><td colSpan={7} style={{ padding: "48px", textAlign: "center" }}>
                     <div style={{ fontSize: "40px", marginBottom: "10px" }}>📭</div>
                     <p style={{ color: "#aaa", fontSize: "14px" }}>No deliveries found</p>
                   </td></tr>
@@ -1259,6 +1572,16 @@ export default function PurchaseOrderPage() {
                     <td style={{ padding: "13px 16px", fontSize: "13px", color: "#555" }}>
                       {delivery.items?.length || 0} item{(delivery.items?.length || 0) > 1 ? "s" : ""}
                     </td>
+                    {/* ── NEW: Receipt Number column ── */}
+                    <td style={{ padding: "13px 16px" }}>
+                      {delivery.receiptNumber ? (
+                        <span style={{ background: "#fffde7", color: "#f57f17", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700, fontFamily: "monospace" }}>
+                          🧾 {delivery.receiptNumber}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: "12px", color: "#ccc" }}>—</span>
+                      )}
+                    </td>
                     <td style={{ padding: "13px 16px" }}>
                       <span style={{ padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, ...statusStyle[delivery.status] }}>
                         {STATUS_LABEL[delivery.status]}
@@ -1273,7 +1596,7 @@ export default function PurchaseOrderPage() {
                         {(delivery.status === "PENDING" || delivery.status === "PARTIALLY_RECEIVED") && (
                           <>
                             <button
-                              onClick={() => { openReceiving(delivery); setStep("receiving"); }}
+                              onClick={() => { openReceiptModal(delivery); setStep("receiving"); }}
                               style={{ padding: "6px 14px", borderRadius: "20px", border: "none", background: "#e8f5e9", color: "#1a3c2e", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
                             >📦 Receive</button>
                             <button
@@ -1325,11 +1648,21 @@ export default function PurchaseOrderPage() {
                   ["Supplier",    viewDelivery.supplier?.supplierName || viewDelivery.supplierId],
                   ["Date",        new Date(viewDelivery.deliveryDate).toLocaleDateString()],
                   ["Total Items", String(viewDelivery.totalItems)],
+                  // ── NEW: receipt number in detail view ──
+                  ...(viewDelivery.receiptNumber ? [["Receipt No.", viewDelivery.receiptNumber]] : []),
                   ...(viewDelivery.notes ? [["Notes", viewDelivery.notes]] : []),
                 ].map(([label, value]) => (
                   <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", flexWrap: "wrap", rowGap: "4px", borderBottom: "0.5px solid #f0f0f0" }}>
                     <span style={{ fontSize: "12px", color: "#888" }}>{label}</span>
-                    <span style={{ fontSize: "13px", fontWeight: 600, color: "#1a1a1a" }}>{value}</span>
+                    <span style={{
+                      fontSize: "13px", fontWeight: 600, color: "#1a1a1a",
+                      fontFamily: label === "Receipt No." ? "monospace" : "inherit",
+                      background: label === "Receipt No." ? "#fffde7" : "transparent",
+                      padding: label === "Receipt No." ? "2px 10px" : "0",
+                      borderRadius: label === "Receipt No." ? "20px" : "0",
+                    }}>
+                      {label === "Receipt No." ? `🧾 ${value}` : value}
+                    </span>
                   </div>
                 ))}
               </div>
