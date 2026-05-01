@@ -867,6 +867,25 @@ export default function ProductManagementPage() {
                 </select>
               </div>
               <div>
+                <label className="text-xs font-medium text-gray-600">Stock Quantity</label>
+                <input type="number" inputMode="numeric" min="0" value={addForm.stockQuantity}
+                  onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9]/g, "");
+                    setAddForm({ ...addForm, stockQuantity: val });
+                  }}
+                  placeholder="0"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Stock Unit</label>
+                <select value={addForm.stockUnit}
+                  onChange={(e) => setAddForm({ ...addForm, stockUnit: e.target.value as CaseUnit })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                  {CASE_UNITS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+                </select>
+              </div>
+              <div>
                 <label className="text-xs font-medium text-gray-600">Status</label>
                 <select value={addForm.status}
                   onChange={(e) => setAddForm({ ...addForm, status: e.target.value })}
