@@ -139,6 +139,7 @@ type Product = {
   id: string; productName: string; size: string | null;
   price: number; category: string; stockQuantity: number;
   stockUnit: CaseUnit; status: string; supplierId: string; image: string | null;
+  supplier?: { id: string; supplierName: string };
 };
 
 const categories = ["All", "SOFTDRINKS", "ENERGY_DRINK", "BEER", "JUICE", "WATER", "OTHER"];
@@ -236,8 +237,11 @@ export default function ProductManagementPage() {
 
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showSizeDropdown,     setShowSizeDropdown]     = useState(false);
+  const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
+  const [selectedSupplier,     setSelectedSupplier]     = useState("All");
   const categoryRef = useRef<HTMLDivElement>(null);
   const sizeRef     = useRef<HTMLDivElement>(null);
+  const supplierRef = useRef<HTMLDivElement>(null);
 
   // ── FIX: Refs to prevent double-submission ────────────────────────────────
   const isAddingRef  = useRef(false);
@@ -266,6 +270,7 @@ export default function ProductManagementPage() {
     const h = (e: MouseEvent) => {
       if (categoryRef.current && !categoryRef.current.contains(e.target as Node)) setShowCategoryDropdown(false);
       if (sizeRef.current && !sizeRef.current.contains(e.target as Node)) setShowSizeDropdown(false);
+      if (supplierRef.current && !supplierRef.current.contains(e.target as Node)) setShowSupplierDropdown(false);
     };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
@@ -296,7 +301,11 @@ export default function ProductManagementPage() {
 
   useEffect(() => {
     fetchProducts();
-    api.getSuppliers().then(setSuppliers).catch(console.error);
+    api.getSuppliers()
+      .then((data) => {
+        setSuppliers(Array.isArray(data) ? data : []);
+      })
+      .catch(console.error);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -311,6 +320,7 @@ export default function ProductManagementPage() {
     (p.productName ?? "").toLowerCase().includes(search.toLowerCase())
     && (selectedCategory === "All" || p.category === selectedCategory)
     && (selectedSize === "All" || p.size === selectedSize)
+    && (selectedSupplier === "All" || p.supplierId === selectedSupplier)
   );
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated  = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
@@ -557,7 +567,7 @@ export default function ProductManagementPage() {
               </div>
 
               <div className="relative" ref={sizeRef}>
-                <button onClick={() => { setShowSizeDropdown(!showSizeDropdown); setShowCategoryDropdown(false); }}
+                <button onClick={() => { setShowSizeDropdown(!showSizeDropdown); setShowCategoryDropdown(false); setShowSupplierDropdown(false); }}
                   className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors
                     ${selectedSize !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
                   <Package className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{selectedSize}</span><span className="sm:hidden">Size</span> <ChevronDown className="w-3 h-3" />
@@ -574,8 +584,31 @@ export default function ProductManagementPage() {
                 )}
               </div>
 
-              {(selectedCategory !== "All" || selectedSize !== "All") && (
-                <button onClick={() => { setSelectedCategory("All"); setSelectedSize("All"); setCurrentPage(1); }}
+              {/* Supplier Filter */}
+              <div className="relative" ref={supplierRef}>
+                <button onClick={() => { setShowSupplierDropdown(!showSupplierDropdown); setShowCategoryDropdown(false); setShowSizeDropdown(false); }}
+                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors
+                    ${selectedSupplier !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                  <Users className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{suppliers.find(s => s.id === selectedSupplier)?.supplierName || "All Suppliers"}</span><span className="sm:hidden">Supplier</span> <ChevronDown className="w-3 h-3" />
+                </button>
+                {showSupplierDropdown && (
+                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-48 max-h-48 overflow-y-auto">
+                    <button key="All" onClick={() => { setSelectedSupplier("All"); setShowSupplierDropdown(false); setCurrentPage(1); }}
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedSupplier === "All" ? "text-indigo-600 font-medium" : "text-gray-600"}`}>
+                      All Suppliers
+                    </button>
+                    {suppliers.map((supplier) => (
+                      <button key={supplier.id} onClick={() => { setSelectedSupplier(supplier.id); setShowSupplierDropdown(false); setCurrentPage(1); }}
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedSupplier === supplier.id ? "text-indigo-600 font-medium" : "text-gray-600"}`}>
+                        {supplier.supplierName}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {(selectedCategory !== "All" || selectedSize !== "All" || selectedSupplier !== "All") && (
+                <button onClick={() => { setSelectedCategory("All"); setSelectedSize("All"); setSelectedSupplier("All"); setCurrentPage(1); }}
                   className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕</button>
               )}
 
@@ -628,6 +661,18 @@ export default function ProductManagementPage() {
                           )}
                         </p>
                         <p className="text-xs text-gray-500 font-medium">₱{product.price}</p>
+<<<<<<< HEAD
+=======
+
+                        {/* Supplier name */}
+                        {product.supplier && (
+                          <p className="text-xs text-indigo-600 font-medium mt-0.5 truncate">
+                            {product.supplier.supplierName}
+                          </p>
+                        )}
+
+                        {/* ✅ Fixed stock badge — no more undefined/NaN */}
+>>>>>>> 1cd88f0474b6461baf33f87f057612f017854621
                         <div className="mt-1.5">
                           <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border w-fit ${badgeColor}`}>
                             {qty} <span className="font-normal opacity-80">{u.short}</span>
