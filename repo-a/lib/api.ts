@@ -12,13 +12,18 @@ const getToken = () => {
   return tokenCookie.trim().slice('token='.length);
 };
 
+const authHeaders = () => ({
+  'Content-Type': 'application/json',
+  Authorization: `Bearer ${getToken()}`,
+});
+
 export const api = {
-  // AUTH
+  // ── AUTH ────────────────────────────────────────────────────────────────────
   login: async (name: string, password: string) => {
     const res = await fetch(`${API_URL}/employees/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, password })
+      body: JSON.stringify({ name, password }),
     });
     return res.json();
   },
@@ -26,7 +31,7 @@ export const api = {
     const res = await fetch(`${API_URL}/employees/login-admin`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, password })
+      body: JSON.stringify({ name, password }),
     });
     if (!res.ok) {
       const err = await res.json();
@@ -35,118 +40,106 @@ export const api = {
     return res.json();
   },
 
-  // EMPLOYEES
+  // ── EMPLOYEES ───────────────────────────────────────────────────────────────
   getEmployees: async () => {
-    const res = await fetch(`${API_URL}/employees`, {
-      headers: { Authorization: `Bearer ${getToken()}` }
-    });
+    const res = await fetch(`${API_URL}/employees`, { headers: authHeaders() });
     return res.json();
   },
   getEmployee: async (id: string) => {
-    const res = await fetch(`${API_URL}/employees/${id}`, {
-      headers: { Authorization: `Bearer ${getToken()}` }
-    });
+    const res = await fetch(`${API_URL}/employees/${id}`, { headers: authHeaders() });
     return res.json();
   },
   createEmployee: async (data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/employees`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify(data)
+      headers: authHeaders(),
+      body: JSON.stringify(data),
     });
     return res.json();
   },
   updateEmployee: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/employees/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify(data)
+      headers: authHeaders(),
+      body: JSON.stringify(data),
     });
     return res.json();
   },
   deleteEmployee: async (id: string) => {
     const res = await fetch(`${API_URL}/employees/${id}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${getToken()}` }
+      headers: authHeaders(),
     });
     return res.json();
   },
 
-  // SUPPLIERS
+  // ── SUPPLIERS ───────────────────────────────────────────────────────────────
   getSuppliers: async () => {
-    const res = await fetch(`${API_URL}/suppliers`, {
-      headers: { Authorization: `Bearer ${getToken()}` }
-    });
+    const res = await fetch(`${API_URL}/suppliers`, { headers: authHeaders() });
     return res.json();
   },
   getSupplier: async (id: string) => {
-    const res = await fetch(`${API_URL}/suppliers/${id}`, {
-      headers: { Authorization: `Bearer ${getToken()}` }
-    });
+    const res = await fetch(`${API_URL}/suppliers/${id}`, { headers: authHeaders() });
     return res.json();
   },
   createSupplier: async (data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/suppliers`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify(data)
+      headers: authHeaders(),
+      body: JSON.stringify(data),
     });
     return res.json();
   },
   updateSupplier: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/suppliers/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify(data)
+      headers: authHeaders(),
+      body: JSON.stringify(data),
     });
     return res.json();
   },
   deleteSupplier: async (id: string) => {
     const res = await fetch(`${API_URL}/suppliers/${id}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${getToken()}` }
+      headers: authHeaders(),
     });
     return res.json();
   },
 
-  // CUSTOMERS
+  // ── CUSTOMERS ───────────────────────────────────────────────────────────────
   getCustomers: async () => {
-    const res = await fetch(`${API_URL}/customers`, {
-      headers: { Authorization: `Bearer ${getToken()}` }
-    });
+    const res = await fetch(`${API_URL}/customers`, { headers: authHeaders() });
     return res.json();
   },
   getCustomer: async (id: string) => {
-    const res = await fetch(`${API_URL}/customers/${id}`, {
-      headers: { Authorization: `Bearer ${getToken()}` }
-    });
+    const res = await fetch(`${API_URL}/customers/${id}`, { headers: authHeaders() });
     return res.json();
   },
   createCustomer: async (data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/customers`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify(data)
+      headers: authHeaders(),
+      body: JSON.stringify(data),
     });
     return res.json();
   },
   updateCustomer: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/customers/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify(data)
+      headers: authHeaders(),
+      body: JSON.stringify(data),
     });
     return res.json();
   },
   deleteCustomer: async (id: string) => {
     const res = await fetch(`${API_URL}/customers/${id}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${getToken()}` }
+      headers: authHeaders(),
     });
     return res.json();
   },
 
-  // PRODUCTS
+  // ── PRODUCTS ────────────────────────────────────────────────────────────────
   getProducts: async () => {
     const res = await fetch(`${API_URL}/products`);
     return res.json();
@@ -158,50 +151,49 @@ export const api = {
   createProduct: async (data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/products`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      headers: authHeaders(),
+      body: JSON.stringify(data),
     });
     return res.json();
   },
   updateProduct: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/products/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      headers: authHeaders(),
+      body: JSON.stringify(data),
     });
     return res.json();
   },
   deleteProduct: async (id: string) => {
-    const res = await fetch(`${API_URL}/products/${id}`, { method: 'DELETE' });
+    const res = await fetch(`${API_URL}/products/${id}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
     return res.json();
   },
 
-  // DELIVERIES
+  // ── DELIVERIES ──────────────────────────────────────────────────────────────
   getDeliveries: async () => {
-    const res = await fetch(`${API_URL}/deliveries`, {
-      headers: { Authorization: `Bearer ${getToken()}` }
-    });
+    const res = await fetch(`${API_URL}/deliveries`, { headers: authHeaders() });
     return res.json();
   },
   getDelivery: async (id: string) => {
-    const res = await fetch(`${API_URL}/deliveries/${id}`, {
-      headers: { Authorization: `Bearer ${getToken()}` }
-    });
+    const res = await fetch(`${API_URL}/deliveries/${id}`, { headers: authHeaders() });
     return res.json();
   },
   createDelivery: async (data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/deliveries`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify(data)
+      headers: authHeaders(),
+      body: JSON.stringify(data),
     });
     return res.json();
   },
   updateDelivery: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/deliveries/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify(data)
+      method: 'PATCH',                                        // FIX: was PUT, backend uses PATCH
+      headers: authHeaders(),
+      body: JSON.stringify(data),
     });
     return res.json();
   },
@@ -212,54 +204,42 @@ export const api = {
   ) => {
     const res = await fetch(`${API_URL}/deliveries/${id}/receive`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${getToken()}`
-      },
-      body: JSON.stringify({ employeeId, items })
+      headers: authHeaders(),
+      body: JSON.stringify({ employeeId, items }),
     });
     const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.message || 'Failed to receive delivery');
-    }
+    if (!res.ok) throw new Error(data.message || 'Failed to receive delivery');
     return data;
   },
   deleteDelivery: async (id: string) => {
     const res = await fetch(`${API_URL}/deliveries/${id}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${getToken()}` }
+      headers: authHeaders(),
     });
     return res.json();
   },
 
-  // ✅ PROMOS
-  // Public - customer side (no auth needed)
+  // ── PROMOS ──────────────────────────────────────────────────────────────────
   getActivePromos: async () => {
     const res = await fetch(`${API_URL}/promos/active`);
     if (!res.ok) throw new Error('Failed to fetch active promos');
     return res.json();
   },
-
-  // Admin only
   getPromos: async () => {
-    const res = await fetch(`${API_URL}/promos`, {
-      headers: { Authorization: `Bearer ${getToken()}` }
-    });
+    const res = await fetch(`${API_URL}/promos`, { headers: authHeaders() });
     if (!res.ok) throw new Error('Failed to fetch promos');
     return res.json();
   },
   getPromo: async (id: string) => {
-    const res = await fetch(`${API_URL}/promos/${id}`, {
-      headers: { Authorization: `Bearer ${getToken()}` }
-    });
+    const res = await fetch(`${API_URL}/promos/${id}`, { headers: authHeaders() });
     if (!res.ok) throw new Error('Failed to fetch promo');
     return res.json();
   },
   createPromo: async (data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/promos`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify(data)
+      headers: authHeaders(),
+      body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error('Failed to create promo');
     return res.json();
@@ -267,8 +247,8 @@ export const api = {
   updatePromo: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/promos/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify(data)
+      headers: authHeaders(),
+      body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error('Failed to update promo');
     return res.json();
@@ -276,7 +256,7 @@ export const api = {
   togglePromo: async (id: string) => {
     const res = await fetch(`${API_URL}/promos/${id}`, {
       method: 'PATCH',
-      headers: { Authorization: `Bearer ${getToken()}` }
+      headers: authHeaders(),
     });
     if (!res.ok) throw new Error('Failed to toggle promo');
     return res.json();
@@ -284,28 +264,125 @@ export const api = {
   deletePromo: async (id: string) => {
     const res = await fetch(`${API_URL}/promos/${id}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${getToken()}` }
+      headers: authHeaders(),
     });
     if (!res.ok) throw new Error('Failed to delete promo');
     return res.json();
   },
-  
-  getCompletedOrders: async () => {
-  const res = await fetch(`${API_URL}/orders/completed`, {
-    headers: { Authorization: `Bearer ${getToken()}` },
-  });
-  return res.json();
-},
 
- getInventoryLogs: async (params?: { page?: number; limit?: number; type?: string; product?: string }) => {
-    const query = new URLSearchParams();
-    if (params?.page)    query.set('page',    String(params.page));
-    if (params?.limit)   query.set('limit',   String(params.limit));
-    if (params?.type)    query.set('type',    params.type);
-    if (params?.product) query.set('product', params.product);
-    const res = await fetch(`${API_URL}/inventory/logs?${query.toString()}`, {
-      headers: { Authorization: `Bearer ${getToken()}` },
+  // ── ORDERS ──────────────────────────────────────────────────────────────────
+  getActiveOrders: async () => {
+    const res = await fetch(`${API_URL}/orders/active`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch active orders');
+    return res.json();
+  },
+  getCompletedOrders: async () => {
+    const res = await fetch(`${API_URL}/orders/completed`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch completed orders');
+    return res.json();
+  },
+  updateOrderStatus: async (id: string, status: string) => {
+    const res = await fetch(`${API_URL}/orders/${id}/status`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({ status }),
     });
+    if (!res.ok) throw new Error('Failed to update order status');
+    return res.json();
+  },
+
+  // ── RETURNS ─────────────────────────────────────────────────────────────────
+  processReturn: async (
+    orderId: string,
+    items: { orderLineId: string; returnQty: number }[]
+  ) => {
+    const res = await fetch(`${API_URL}/orders/${orderId}/returns`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ items }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || 'Failed to process return');
+    }
+    return res.json();
+  },
+  getOrderReturns: async (orderId: string) => {
+    const res = await fetch(`${API_URL}/orders/${orderId}/returns`, {
+      headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error('Failed to fetch return summary');
+    return res.json();
+  },
+
+  // ── LOSS REPORTS ────────────────────────────────────────────────────────────
+  fileLossReport: async (data: {
+    productId:  string;
+    quantity:   number;
+    lossReason: 'EXPIRED' | 'DAMAGED' | 'THEFT' | 'COUNT_ERROR' | 'OTHER';
+    reason?:    string;
+  }) => {
+    const res = await fetch(`${API_URL}/loss-reports`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || 'Failed to file loss report');
+    }
+    return res.json();
+  },
+  getLossReports: async (params?: {
+    lossReason?: string;
+    productId?:  string;
+    from?:       string;
+    to?:         string;
+    page?:       number;
+    limit?:      number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.lossReason) query.set('lossReason', params.lossReason);
+    if (params?.productId)  query.set('productId',  params.productId);
+    if (params?.from)       query.set('from',        params.from);
+    if (params?.to)         query.set('to',          params.to);
+    if (params?.page)       query.set('page',        String(params.page));
+    if (params?.limit)      query.set('limit',       String(params.limit));
+    const res = await fetch(`${API_URL}/loss-reports?${query.toString()}`, {
+      headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error('Failed to fetch loss reports');
+    return res.json();
+  },
+  getLossReportSummary: async (params?: { from?: string; to?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.from) query.set('from', params.from);
+    if (params?.to)   query.set('to',   params.to);
+    const res = await fetch(`${API_URL}/loss-reports/summary?${query.toString()}`, {
+      headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error('Failed to fetch loss report summary');
+    return res.json();
+  },
+
+  // ── INVENTORY LOGS ──────────────────────────────────────────────────────────
+  getInventoryLogs: async (params?: {
+    page?:       number;
+    limit?:      number;
+    type?:       string;
+    product?:    string;
+    lossReason?: string;              // NEW: filter by loss reason
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.page)       query.set('page',       String(params.page));
+    if (params?.limit)      query.set('limit',      String(params.limit));
+    if (params?.type)       query.set('type',       params.type);
+    if (params?.product)    query.set('product',    params.product);
+    if (params?.lossReason) query.set('lossReason', params.lossReason);
+    const res = await fetch(`${API_URL}/inventory-logs?${query.toString()}`, { // FIX: was /inventory/logs
+      headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error('Failed to fetch inventory logs');
     return res.json();
   },
 };
