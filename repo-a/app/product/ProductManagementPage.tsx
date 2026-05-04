@@ -367,17 +367,30 @@ export default function ProductManagementPage() {
     try {
       const price = editForm.price === "" ? 0 : Number(editForm.price);
       const stockQuantity = editForm.stockQuantity === "" ? 0 : Number(editForm.stockQuantity);
-      const pcs = Number(editForm.piecesPerCase) || 24;
+      const pcs = Number(editForm.piecesPerCase);
       const stockUnitMap: Record<number, CaseUnit> = { 24: "case_24", 12: "case_12", 6: "case_6", 1: "pcs" };
-      const stockUnit = stockUnitMap[pcs] || "case_24";
-      const { piecesPerCase: _, ...payload } = editForm;
-      const res = await api.updateProduct(selectedProduct!.id, { ...payload, price, stockQuantity, stockUnit });
+      const stockUnit = stockUnitMap[pcs];
+      if (!stockUnit) {
+        showToast("Piece per case must be 24, 12, 6, or 1.", true);
+        setIsEditing(true);
+        setSaving(false);
+        isEditingRef.current = false;
+        return;
+      }
+      const { piecesPerCase: _ppc, supplierId, ...payload } = editForm;
+      const body = { ...payload, price, stockQuantity, stockUnit, piecesPerCase: pcs };
+      console.log("Saving product:", body);
+      const res = await api.updateProduct(selectedProduct!.id, body);
+      console.log("Save response:", res);
       if (res.message && !res.id) { showToast(res.message, true); return; }
       await fetchProducts();
-      setSelectedProduct((prev) => prev ? { ...prev, ...editForm, price, stockQuantity, stockUnit } : prev);
+      setSelectedProduct((prev) => prev ? { ...prev, ...body } : prev);
       setIsEditing(false);
       showToast("Product updated successfully!");
-    } catch { showToast("Failed to update product.", true); }
+    } catch (err) {
+      console.error("Save failed:", err);
+      showToast("Failed to update product.", true);
+    }
     finally {
       setSaving(false);
       isEditingRef.current = false;
@@ -420,8 +433,8 @@ export default function ProductManagementPage() {
       const pcs = Number(addForm.piecesPerCase) || 24;
       const stockUnitMap: Record<number, CaseUnit> = { 24: "case_24", 12: "case_12", 6: "case_6", 1: "pcs" };
       const stockUnit = stockUnitMap[pcs] || "case_24";
-      const { piecesPerCase: _, ...payload } = addForm;
-      const res = await api.createProduct({ ...payload, price, stockQuantity, stockUnit });
+      const { piecesPerCase: _ppc, ...payload } = addForm;
+      const res = await api.createProduct({ ...payload, price, stockQuantity, stockUnit, piecesPerCase: pcs });
       if (res.message && !res.id) {
         // Re-open modal with data intact if API returned an error
         setShowAddModal(true);
