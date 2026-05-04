@@ -201,7 +201,7 @@ export default function ContactPage() {
             icon: "📞",
             bg: "#e8f5e9",
             label: "Phone Number",
-            value: "+63 912 345 6789",
+            value: "+63 929 141 0133",
             desc: "Call for immediate help",
           },
           {
@@ -383,11 +383,8 @@ export default function ContactPage() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {[
-              "Barangay San Jose",
-              "Barangay Sta. Cruz",
-              "Barangay Poblacion",
-              "Barangay Maligaya",
-              "Barangay Bagong Silang",
+              "Barangay 175",
+              "Barangay 176",
             ].map((b) => (
               <div
                 key={b}
