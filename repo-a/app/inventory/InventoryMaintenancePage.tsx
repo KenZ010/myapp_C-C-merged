@@ -32,6 +32,13 @@ function getCaseBreakdown(qty: number, unit?: string): string | null {
   return `${qty} × ${u.bottlesPerCase} = ${qty * u.bottlesPerCase} btl`;
 }
 
+function formatRemaining(stock: number, unit: string): string {
+  const u = getUnit(unit);
+  if (u.bottlesPerCase) return `${u.bottlesPerCase} pieces per case`;
+  if (unit === "btl") return `${stock} bottles remaining`;
+  return `${stock} pieces remaining`;
+}
+
 function UnitPill({ unit }: { unit?: string }) {
   const u = getUnit(unit);
   return (
@@ -526,11 +533,11 @@ export default function InventoryMaintenancePage() {
                                 </span>
                               )}
                             </div>
-                            {stockInfo != null && (
-                              <p className="text-xs text-gray-400 mt-0.5">
-                                {stockInfo.stock} {getUnitShort(stockInfo.stockUnit)} remaining
-                              </p>
-                            )}
+                              {stockInfo != null && (
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                  {formatRemaining(stockInfo.stock, stockInfo.stockUnit)}
+                                </p>
+                              )}
                           </td>
                           <td className="p-3">
                             <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs">
@@ -702,7 +709,7 @@ export default function InventoryMaintenancePage() {
                               </div>
                               {si && (
                                 <p className="text-xs text-gray-400 mt-0.5">
-                                  {si.stock} {getUnitShort(si.stockUnit)} remaining
+                                  {formatRemaining(si.stock, si.stockUnit)}
                                 </p>
                               )}
                             </td>

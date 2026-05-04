@@ -207,6 +207,7 @@ const defaultForm = () => ({
   productName: "", size: "500ml", price: "",
   category: "SOFTDRINKS", stockQuantity: "",
   stockUnit: "case_24" as CaseUnit, supplierId: "", status: "ACTIVE",
+  piecesPerCase: "24",
 });
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
@@ -237,10 +238,14 @@ export default function ProductManagementPage() {
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showSizeDropdown,     setShowSizeDropdown]     = useState(false);
   const [showSupplierDropdown, setShowSupplierDropdown] = useState(false);
+  const [showPcsDropdown,      setShowPcsDropdown]      = useState(false);
+  const [showEditPcsDropdown,  setShowEditPcsDropdown]  = useState(false);
   const [selectedSupplier,     setSelectedSupplier]     = useState("All");
   const categoryRef = useRef<HTMLDivElement>(null);
   const sizeRef     = useRef<HTMLDivElement>(null);
   const supplierRef = useRef<HTMLDivElement>(null);
+  const pcsRef      = useRef<HTMLDivElement>(null);
+  const editPcsRef  = useRef<HTMLDivElement>(null);
 
   const isAddingRef  = useRef(false);
   const isEditingRef = useRef(false);
@@ -269,6 +274,8 @@ export default function ProductManagementPage() {
       if (categoryRef.current && !categoryRef.current.contains(e.target as Node)) setShowCategoryDropdown(false);
       if (sizeRef.current && !sizeRef.current.contains(e.target as Node)) setShowSizeDropdown(false);
       if (supplierRef.current && !supplierRef.current.contains(e.target as Node)) setShowSupplierDropdown(false);
+      if (pcsRef.current && !pcsRef.current.contains(e.target as Node)) setShowPcsDropdown(false);
+      if (editPcsRef.current && !editPcsRef.current.contains(e.target as Node)) setShowEditPcsDropdown(false);
     };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
@@ -329,15 +336,22 @@ export default function ProductManagementPage() {
 
   const handleCardClick = (product: Product) => {
     setSelectedProduct(product);
+    const unit = getUnit(product.stockUnit);
     setEditForm({
       productName:   product.productName,
       size:          product.size || "500ml",
       price:         String(product.price),
       category:      product.category,
       stockQuantity: String(product.stockQuantity),
+<<<<<<< HEAD
       stockUnit:     product.stockUnit ?? "case_24",
       supplierId:    product.supplierId,
       status:        product.status,
+=======
+      stockUnit: product.stockUnit ?? "case_24",
+      supplierId: product.supplierId, status: product.status,
+      piecesPerCase: unit.bottlesPerCase != null ? String(unit.bottlesPerCase) : "1",
+>>>>>>> ecd7e65673bf9aabf943d5ab6f5f4bb0fa71aadb
     });
     setIsEditing(false);
     setShowProductModal(true);
@@ -355,14 +369,25 @@ export default function ProductManagementPage() {
     try {
       const price         = editForm.price === "" ? 0 : Number(editForm.price);
       const stockQuantity = editForm.stockQuantity === "" ? 0 : Number(editForm.stockQuantity);
-      const res = await api.updateProduct(selectedProduct!.id, { ...editForm, price, stockQuantity });
+      const pcs = Number(editForm.piecesPerCase) || 24;
+      const stockUnitMap: Record<number, CaseUnit> = { 24: "case_24", 12: "case_12", 6: "case_6", 1: "pcs" };
+      const stockUnit = stockUnitMap[pcs] || "case_24";
+      const { piecesPerCase: _, ...payload } = editForm;
+      const res = await api.updateProduct(selectedProduct!.id, { ...payload, price, stockQuantity, stockUnit });
       if (res.message && !res.id) { showToast(res.message, true); return; }
       await fetchProducts();
-      setSelectedProduct((prev) => prev ? { ...prev, ...editForm, price, stockQuantity } : prev);
+      setSelectedProduct((prev) => prev ? { ...prev, ...editForm, price, stockQuantity, stockUnit } : prev);
       setIsEditing(false);
       showToast("Product updated successfully!");
     } catch { showToast("Failed to update product.", true); }
+<<<<<<< HEAD
     finally { setSaving(false); isEditingRef.current = false; }
+=======
+    finally {
+      setSaving(false);
+      isEditingRef.current = false;
+    }
+>>>>>>> ecd7e65673bf9aabf943d5ab6f5f4bb0fa71aadb
   };
 
   const confirmDelete = async () => {
@@ -393,7 +418,11 @@ export default function ProductManagementPage() {
     try {
       const price         = addForm.price === "" ? 0 : Number(addForm.price);
       const stockQuantity = addForm.stockQuantity === "" ? 0 : Number(addForm.stockQuantity);
-      const res = await api.createProduct({ ...addForm, price, stockQuantity });
+      const pcs = Number(addForm.piecesPerCase) || 24;
+      const stockUnitMap: Record<number, CaseUnit> = { 24: "case_24", 12: "case_12", 6: "case_6", 1: "pcs" };
+      const stockUnit = stockUnitMap[pcs] || "case_24";
+      const { piecesPerCase: _, ...payload } = addForm;
+      const res = await api.createProduct({ ...payload, price, stockQuantity, stockUnit });
       if (res.message && !res.id) {
         setShowAddModal(true);
         showToast(res.message, true);
@@ -665,6 +694,10 @@ export default function ProductManagementPage() {
                           </p>
                         )}
 
+<<<<<<< HEAD
+=======
+                        {/* ✅ Fixed stock badge — no more undefined/NaN */}
+>>>>>>> ecd7e65673bf9aabf943d5ab6f5f4bb0fa71aadb
                         <div className="mt-1.5">
                           <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border w-fit ${badgeColor}`}>
                             {qty} <span className="font-normal opacity-80">{u.short}</span>
@@ -745,6 +778,7 @@ export default function ProductManagementPage() {
                         onChange={(e) => setEditForm({ ...editForm, price: e.target.value.replace(/[^0-9]/g, "") })}
                         className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
                     </div>
+<<<<<<< HEAD
                     <div>
                       <p className="text-xs text-gray-400">Stock Quantity</p>
                       <input type="number" inputMode="numeric" value={editForm.stockQuantity}
@@ -752,6 +786,42 @@ export default function ProductManagementPage() {
                         onChange={(e) => setEditForm({ ...editForm, stockQuantity: e.target.value.replace(/[^0-9]/g, "") })}
                         placeholder="0"
                         className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+=======
+                    <div ref={editPcsRef}>
+                      <p className="text-xs text-gray-400">Piece per Case</p>
+                      <div className="relative mt-1">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={editForm.piecesPerCase}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9]/g, "");
+                            setEditForm({ ...editForm, piecesPerCase: val });
+                            setShowEditPcsDropdown(true);
+                          }}
+                          onFocus={() => setShowEditPcsDropdown(true)}
+                          placeholder="Type number or pick below"
+                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 pr-8 text-sm outline-none focus:border-indigo-400 text-gray-900 placeholder:text-gray-400"
+                        />
+                        <button type="button" onClick={() => setShowEditPcsDropdown(!showEditPcsDropdown)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                          <ChevronDown className="w-4 h-4" />
+                        </button>
+                        {showEditPcsDropdown && (
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] max-h-40 overflow-y-auto">
+                            {["24", "12", "6", "1"]
+                              .filter((pcs) => !editForm.piecesPerCase || pcs.startsWith(editForm.piecesPerCase))
+                              .map((pcs) => (
+                                <button key={pcs} type="button"
+                                  onClick={() => { setEditForm({ ...editForm, piecesPerCase: pcs }); setShowEditPcsDropdown(false); }}
+                                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${editForm.piecesPerCase === pcs ? "text-indigo-600 font-medium bg-indigo-50" : "text-gray-600"}`}>
+                                  {pcs} pcs per case
+                                </button>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+>>>>>>> ecd7e65673bf9aabf943d5ab6f5f4bb0fa71aadb
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Category</p>
@@ -797,7 +867,12 @@ export default function ProductManagementPage() {
                       <p className="text-xs text-gray-400">Stock</p>
                       <div className="mt-1">
                         <CaseBadge quantity={selectedProduct.stockQuantity} unit={selectedProduct.stockUnit} />
-                        <p className="text-xs text-gray-400 mt-0.5">{getUnit(selectedProduct.stockUnit).label}</p>
+                        {(() => {
+                          const unit = getUnit(selectedProduct.stockUnit);
+                          return unit.bottlesPerCase != null
+                            ? <p className="text-xs text-gray-400 mt-0.5">{unit.bottlesPerCase} pieces per case</p>
+                            : <p className="text-xs text-gray-400 mt-0.5">{unit.label}</p>;
+                        })()}
                       </div>
                     </div>
                     <div>
@@ -895,6 +970,7 @@ export default function ProductManagementPage() {
                   {suppliers.map((s) => <option key={s.id} value={s.id}>{s.supplierName}</option>)}
                 </select>
               </div>
+<<<<<<< HEAD
               <div>
                 <label className="text-xs font-medium text-gray-600">Stock Quantity</label>
                 <input type="number" inputMode="numeric" min="0" value={addForm.stockQuantity}
@@ -910,6 +986,42 @@ export default function ProductManagementPage() {
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
                   {CASE_UNITS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
                 </select>
+=======
+              <div ref={pcsRef}>
+                <label className="text-xs font-medium text-gray-600">Piece per Case</label>
+                <div className="relative mt-1">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={addForm.piecesPerCase}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, "");
+                      setAddForm({ ...addForm, piecesPerCase: val });
+                      setShowPcsDropdown(true);
+                    }}
+                    onFocus={() => setShowPcsDropdown(true)}
+                    placeholder="Type number or pick below"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-8 text-sm outline-none focus:border-indigo-400 text-gray-900 placeholder:text-gray-400"
+                  />
+                  <button type="button" onClick={() => setShowPcsDropdown(!showPcsDropdown)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                  {showPcsDropdown && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] max-h-40 overflow-y-auto">
+                      {["24", "12", "6", "1"]
+                        .filter((pcs) => !addForm.piecesPerCase || pcs.startsWith(addForm.piecesPerCase))
+                        .map((pcs) => (
+                          <button key={pcs} type="button"
+                            onClick={() => { setAddForm({ ...addForm, piecesPerCase: pcs }); setShowPcsDropdown(false); }}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${addForm.piecesPerCase === pcs ? "text-indigo-600 font-medium bg-indigo-50" : "text-gray-600"}`}>
+                            {pcs} pcs per case
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+>>>>>>> ecd7e65673bf9aabf943d5ab6f5f4bb0fa71aadb
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600">Status</label>

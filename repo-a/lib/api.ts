@@ -379,7 +379,7 @@ export const api = {
     if (params?.type)       query.set('type',       params.type);
     if (params?.product)    query.set('product',    params.product);
     if (params?.lossReason) query.set('lossReason', params.lossReason);
-    const res = await fetch(`${API_URL}/inventory-logs?${query.toString()}`, { // FIX: was /inventory/logs
+    const res = await fetch(`${API_URL}/inventory/logs?${query.toString()}`, {
       headers: authHeaders(),
     });
     if (!res.ok) throw new Error('Failed to fetch inventory logs');
