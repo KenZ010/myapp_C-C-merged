@@ -334,6 +334,7 @@ export default function ProductManagementPage() {
   const softDrinksCount  = products.filter((p) => p.category === "SOFTDRINKS").length;
   const energyDrinkCount = products.filter((p) => p.category === "ENERGY_DRINK").length;
 
+  // ── RESOLVED: use incoming change that includes piecesPerCase ──
   const handleCardClick = (product: Product) => {
     setSelectedProduct(product);
     const unit = getUnit(product.stockUnit);
@@ -343,15 +344,10 @@ export default function ProductManagementPage() {
       price:         String(product.price),
       category:      product.category,
       stockQuantity: String(product.stockQuantity),
-<<<<<<< HEAD
       stockUnit:     product.stockUnit ?? "case_24",
       supplierId:    product.supplierId,
       status:        product.status,
-=======
-      stockUnit: product.stockUnit ?? "case_24",
-      supplierId: product.supplierId, status: product.status,
       piecesPerCase: unit.bottlesPerCase != null ? String(unit.bottlesPerCase) : "1",
->>>>>>> ecd7e65673bf9aabf943d5ab6f5f4bb0fa71aadb
     });
     setIsEditing(false);
     setShowProductModal(true);
@@ -380,14 +376,10 @@ export default function ProductManagementPage() {
       setIsEditing(false);
       showToast("Product updated successfully!");
     } catch { showToast("Failed to update product.", true); }
-<<<<<<< HEAD
-    finally { setSaving(false); isEditingRef.current = false; }
-=======
     finally {
       setSaving(false);
       isEditingRef.current = false;
     }
->>>>>>> ecd7e65673bf9aabf943d5ab6f5f4bb0fa71aadb
   };
 
   const confirmDelete = async () => {
@@ -694,10 +686,6 @@ export default function ProductManagementPage() {
                           </p>
                         )}
 
-<<<<<<< HEAD
-=======
-                        {/* ✅ Fixed stock badge — no more undefined/NaN */}
->>>>>>> ecd7e65673bf9aabf943d5ab6f5f4bb0fa71aadb
                         <div className="mt-1.5">
                           <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border w-fit ${badgeColor}`}>
                             {qty} <span className="font-normal opacity-80">{u.short}</span>
@@ -778,15 +766,7 @@ export default function ProductManagementPage() {
                         onChange={(e) => setEditForm({ ...editForm, price: e.target.value.replace(/[^0-9]/g, "") })}
                         className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
                     </div>
-<<<<<<< HEAD
-                    <div>
-                      <p className="text-xs text-gray-400">Stock Quantity</p>
-                      <input type="number" inputMode="numeric" value={editForm.stockQuantity}
-                        onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
-                        onChange={(e) => setEditForm({ ...editForm, stockQuantity: e.target.value.replace(/[^0-9]/g, "") })}
-                        placeholder="0"
-                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
-=======
+                    {/* ── RESOLVED: use incoming "Piece per Case" dropdown ── */}
                     <div ref={editPcsRef}>
                       <p className="text-xs text-gray-400">Piece per Case</p>
                       <div className="relative mt-1">
@@ -821,7 +801,6 @@ export default function ProductManagementPage() {
                           </div>
                         )}
                       </div>
->>>>>>> ecd7e65673bf9aabf943d5ab6f5f4bb0fa71aadb
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Category</p>
@@ -970,23 +949,7 @@ export default function ProductManagementPage() {
                   {suppliers.map((s) => <option key={s.id} value={s.id}>{s.supplierName}</option>)}
                 </select>
               </div>
-<<<<<<< HEAD
-              <div>
-                <label className="text-xs font-medium text-gray-600">Stock Quantity</label>
-                <input type="number" inputMode="numeric" min="0" value={addForm.stockQuantity}
-                  onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
-                  onChange={(e) => setAddForm({ ...addForm, stockQuantity: e.target.value.replace(/[^0-9]/g, "") })}
-                  placeholder="0"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600">Stock Unit</label>
-                <select value={addForm.stockUnit}
-                  onChange={(e) => setAddForm({ ...addForm, stockUnit: e.target.value as CaseUnit })}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
-                  {CASE_UNITS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
-                </select>
-=======
+              {/* ── RESOLVED: use incoming "Piece per Case" dropdown ── */}
               <div ref={pcsRef}>
                 <label className="text-xs font-medium text-gray-600">Piece per Case</label>
                 <div className="relative mt-1">
@@ -1021,7 +984,6 @@ export default function ProductManagementPage() {
                     </div>
                   )}
                 </div>
->>>>>>> ecd7e65673bf9aabf943d5ab6f5f4bb0fa71aadb
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600">Status</label>
