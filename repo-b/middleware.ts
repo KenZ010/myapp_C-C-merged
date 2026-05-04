@@ -5,7 +5,20 @@ import type { NextRequest } from 'next/server';
 const ROLE_ROUTES: Record<string, string[]> = {
   CASHIER:       ['/cashier'],
   STOCK_MANAGER: ['/inventory'],
-  CUSTOMER:      ['/home', '/shop', '/orders', '/profile'],
+  CUSTOMER:      [
+    '/home',
+    '/products',
+    '/orders',
+    '/faqs',
+    '/about',
+    '/contact',
+    '/transactions',
+    '/return-order',
+    '/settings',
+    '/cart',
+    '/checkout',
+    '/order-placed',
+  ],
 };
 
 // Roles restricted to a single active session at a time
@@ -79,9 +92,6 @@ export function middleware(request: NextRequest) {
   }
 
   // ── Single-session enforcement ────────────────────────────────────────────
-  // active_token is set on login equal to the JWT.
-  // When the same user logs in from another tab, active_token gets overwritten,
-  // making this tab's token stale — kicking it back to login on next navigation.
   if (SINGLE_SESSION_ROLES.has(role!)) {
     const activeToken = request.cookies.get('active_token')?.value;
     if (activeToken && activeToken !== token) {

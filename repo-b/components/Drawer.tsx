@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 
 interface DrawerProps {
@@ -27,18 +26,28 @@ export default function Drawer({ isOpen, onClose, customerName = "Customer Name"
   const pathname = usePathname();
   const router   = useRouter();
 
+  const handleNavigate = (href: string) => {
+    onClose();
+    router.push(href);
+  };
+
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     onClose();
-    router.push("/logout"); // middleware intercepts, clears HttpOnly cookies, redirects to /
+    router.push("/logout");
   };
 
   return (
     <>
       {/* Overlay */}
       {isOpen && (
-        <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 40 }} />
+        <>
+          {/* Dim layer — pointerEvents none so it never blocks drawer clicks */}
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 40, pointerEvents: "none" }} />
+          {/* Close zone — only covers area outside the drawer */}
+          <div onClick={onClose} style={{ position: "fixed", top: 0, left: "280px", right: 0, bottom: 0, zIndex: 41 }} />
+        </>
       )}
 
       {/* Drawer Panel */}
@@ -65,11 +74,12 @@ export default function Drawer({ isOpen, onClose, customerName = "Customer Name"
         {/* Scrollable Menu */}
         <div style={{ flex: 1, overflowY: "auto", padding: "12px 12px 0" }}>
           <p style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.5px", color: "#bbb", fontWeight: 500, padding: "8px 8px 6px" }}>Navigation</p>
+
           {menuItems.map((item) => {
             const isActive = pathname === item.href;
             return (
-              <Link key={item.label} href={item.href} onClick={onClose}
-                style={{ display: "flex", alignItems: "center", gap: "14px", padding: "11px 12px", borderRadius: "12px", textDecoration: "none", background: isActive ? "#f0faf2" : "transparent", marginBottom: "2px" }}>
+              <div key={item.label} onClick={() => handleNavigate(item.href)}
+                style={{ display: "flex", alignItems: "center", gap: "14px", padding: "11px 12px", borderRadius: "12px", cursor: "pointer", background: isActive ? "#f0faf2" : "transparent", marginBottom: "2px" }}>
                 <div style={{ width: "40px", height: "40px", borderRadius: "12px", background: item.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", flexShrink: 0 }}>
                   {item.icon}
                 </div>
@@ -77,21 +87,22 @@ export default function Drawer({ isOpen, onClose, customerName = "Customer Name"
                   {item.label}
                 </span>
                 {isActive && <div style={{ marginLeft: "auto", width: "6px", height: "6px", borderRadius: "50%", background: "#2d7a3a" }} />}
-              </Link>
+              </div>
             );
           })}
 
           <div style={{ height: "1px", background: "#f0f0f0", margin: "12px 0" }} />
 
           <p style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.5px", color: "#bbb", fontWeight: 500, padding: "0 8px 6px" }}>Account</p>
+
           {bottomItems.map((item) => (
-            <Link key={item.label} href={item.href} onClick={onClose}
-              style={{ display: "flex", alignItems: "center", gap: "14px", padding: "11px 12px", borderRadius: "12px", textDecoration: "none", marginBottom: "2px" }}>
+            <div key={item.label} onClick={() => handleNavigate(item.href)}
+              style={{ display: "flex", alignItems: "center", gap: "14px", padding: "11px 12px", borderRadius: "12px", cursor: "pointer", marginBottom: "2px" }}>
               <div style={{ width: "40px", height: "40px", borderRadius: "12px", background: item.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", flexShrink: 0 }}>
                 {item.icon}
               </div>
               <span style={{ fontSize: "14px", fontWeight: 500, color: "#1a1a1a" }}>{item.label}</span>
-            </Link>
+            </div>
           ))}
 
           <div style={{ height: "1px", background: "#f0f0f0", margin: "12px 0" }} />
