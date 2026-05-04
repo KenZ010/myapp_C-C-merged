@@ -42,7 +42,12 @@ export default function Drawer({ isOpen, onClose, customerName = "Customer Name"
     <>
       {/* Overlay */}
       {isOpen && (
-        <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 40 }} />
+        <>
+          {/* Dim layer — pointerEvents none so it never blocks drawer clicks */}
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 40, pointerEvents: "none" }} />
+          {/* Close zone — only covers area outside the drawer */}
+          <div onClick={onClose} style={{ position: "fixed", top: 0, left: "280px", right: 0, bottom: 0, zIndex: 41 }} />
+        </>
       )}
 
       {/* Drawer Panel */}
