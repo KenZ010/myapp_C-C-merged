@@ -26,15 +26,15 @@ const getUnit = (u?: string): typeof CASE_UNITS[number] =>
 
 const navItems = [
   { label: "Dashboard",             icon: LayoutDashboard, path: "/dashboard"      },
-  { label: "Inventory Maintenance", icon: ShoppingCart, path: "/inventory"      },
-  { label: "Supplier Maintenance",  icon: Users, path: "/supplier"       },
-  { label: "Sales Reports",         icon: LineChart, path: "/sales"          },
-  { label: "Transaction Logs",      icon: FileText, path: "/transaction"    },
-  { label: "Product Management",    icon: Package, path: "/product"        },
-  { label: "Account Management",    icon: User, path: "/account"        },
-  { label: "Purchase Order",        icon: ClipboardList, path: "/purchase-order" },
-  { label: "Return", icon: RotateCcw, path: "/return" },
-  { label: "Promo Management",      icon: Gift, path: "/promo"          },
+  { label: "Inventory Maintenance", icon: ShoppingCart,    path: "/inventory"      },
+  { label: "Supplier Maintenance",  icon: Users,           path: "/supplier"       },
+  { label: "Sales Reports",         icon: LineChart,       path: "/sales"          },
+  { label: "Transaction Logs",      icon: FileText,        path: "/transaction"    },
+  { label: "Product Management",    icon: Package,         path: "/product"        },
+  { label: "Account Management",    icon: User,            path: "/account"        },
+  { label: "Purchase Order",        icon: ClipboardList,   path: "/purchase-order" },
+  { label: "Return",                icon: RotateCcw,       path: "/return"         },
+  { label: "Promo Management",      icon: Gift,            path: "/promo"          },
 ];
 
 // ── Fused qty + case-unit dropdown ───────────────────────────────────────────
@@ -56,8 +56,8 @@ function CaseUnitInput({
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  const qty       = Number(quantity) || 0;
-  const totalBtl  = sel.bottlesPerCase ? qty * sel.bottlesPerCase : null;
+  const qty      = Number(quantity) || 0;
+  const totalBtl = sel.bottlesPerCase ? qty * sel.bottlesPerCase : null;
 
   return (
     <div ref={ref}>
@@ -157,12 +157,12 @@ const getCategoryColor = (cat: string) => ({
 
 const getCategoryIcon = (cat: string) => {
   const icons: Record<string, { icon: typeof Coffee; color: string }> = {
-    SOFTDRINKS:   { icon: Coffee, color: "text-blue-500" },
-    ENERGY_DRINK: { icon: Zap, color: "text-yellow-500" },
-    BEER:         { icon: Beer, color: "text-amber-600" },
-    JUICE:        { icon: Droplets, color: "text-orange-500" },
-    WATER:        { icon: Droplets, color: "text-cyan-500" },
-    OTHER:        { icon: ShoppingBasket, color: "text-gray-500" },
+    SOFTDRINKS:   { icon: Coffee,        color: "text-blue-500"   },
+    ENERGY_DRINK: { icon: Zap,           color: "text-yellow-500" },
+    BEER:         { icon: Beer,          color: "text-amber-600"  },
+    JUICE:        { icon: Droplets,      color: "text-orange-500" },
+    WATER:        { icon: Droplets,      color: "text-cyan-500"   },
+    OTHER:        { icon: ShoppingBasket,color: "text-gray-500"   },
   };
   return icons[cat?.toUpperCase()] || { icon: Coffee, color: "text-gray-500" };
 };
@@ -194,7 +194,6 @@ function AlertModal({ open, type = "alert", title, message, danger, onConfirm, o
   );
 }
 
-// ── Spinner icon ──────────────────────────────────────────────────────────────
 function Spinner() {
   return (
     <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
@@ -243,7 +242,6 @@ export default function ProductManagementPage() {
   const sizeRef     = useRef<HTMLDivElement>(null);
   const supplierRef = useRef<HTMLDivElement>(null);
 
-  // ── FIX: Refs to prevent double-submission ────────────────────────────────
   const isAddingRef  = useRef(false);
   const isEditingRef = useRef(false);
 
@@ -288,6 +286,7 @@ export default function ProductManagementPage() {
     status:        p.status ?? "ACTIVE",
     supplierId:    p.supplierId ?? "",
     image:         p.image ?? null,
+    supplier:      p.supplier ?? undefined,
   });
 
   const fetchProducts = async () => {
@@ -302,9 +301,7 @@ export default function ProductManagementPage() {
   useEffect(() => {
     fetchProducts();
     api.getSuppliers()
-      .then((data) => {
-        setSuppliers(Array.isArray(data) ? data : []);
-      })
+      .then((data) => { setSuppliers(Array.isArray(data) ? data : []); })
       .catch(console.error);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -333,30 +330,30 @@ export default function ProductManagementPage() {
   const handleCardClick = (product: Product) => {
     setSelectedProduct(product);
     setEditForm({
-      productName: product.productName, size: product.size || "500ml",
-      price: String(product.price), category: product.category,
+      productName:   product.productName,
+      size:          product.size || "500ml",
+      price:         String(product.price),
+      category:      product.category,
       stockQuantity: String(product.stockQuantity),
-      stockUnit: product.stockUnit ?? "case_24",
-      supplierId: product.supplierId, status: product.status,
+      stockUnit:     product.stockUnit ?? "case_24",
+      supplierId:    product.supplierId,
+      status:        product.status,
     });
     setIsEditing(false);
     setShowProductModal(true);
   };
 
-  // ── FIX: handleSaveEdit with ref guard + modal closes first ───────────────
   const handleSaveEdit = async () => {
-    if (isEditingRef.current) return; // block synchronously
+    if (isEditingRef.current) return;
     isEditingRef.current = true;
-
     if (!editForm.productName) {
       showAlert("Product name is required.", "Missing Field");
       isEditingRef.current = false;
       return;
     }
-
     setSaving(true);
     try {
-      const price = editForm.price === "" ? 0 : Number(editForm.price);
+      const price         = editForm.price === "" ? 0 : Number(editForm.price);
       const stockQuantity = editForm.stockQuantity === "" ? 0 : Number(editForm.stockQuantity);
       const res = await api.updateProduct(selectedProduct!.id, { ...editForm, price, stockQuantity });
       if (res.message && !res.id) { showToast(res.message, true); return; }
@@ -365,10 +362,7 @@ export default function ProductManagementPage() {
       setIsEditing(false);
       showToast("Product updated successfully!");
     } catch { showToast("Failed to update product.", true); }
-    finally {
-      setSaving(false);
-      isEditingRef.current = false; // reset ref
-    }
+    finally { setSaving(false); isEditingRef.current = false; }
   };
 
   const confirmDelete = async () => {
@@ -381,11 +375,9 @@ export default function ProductManagementPage() {
     } catch { showToast("Failed to delete product.", true); }
   };
 
-  // ── FIX: handleAddProduct with ref guard + modal closes immediately ────────
   const handleAddProduct = async () => {
-    if (isAddingRef.current) return; // block synchronously
+    if (isAddingRef.current) return;
     isAddingRef.current = true;
-
     if (!addForm.productName) {
       showAlert("Product name is required.", "Missing Field");
       isAddingRef.current = false;
@@ -396,17 +388,13 @@ export default function ProductManagementPage() {
       isAddingRef.current = false;
       return;
     }
-
-    // Close modal immediately so user can't resubmit
     setShowAddModal(false);
     setSaving(true);
-
     try {
-      const price = addForm.price === "" ? 0 : Number(addForm.price);
+      const price         = addForm.price === "" ? 0 : Number(addForm.price);
       const stockQuantity = addForm.stockQuantity === "" ? 0 : Number(addForm.stockQuantity);
       const res = await api.createProduct({ ...addForm, price, stockQuantity });
       if (res.message && !res.id) {
-        // Re-open modal with data intact if API returned an error
         setShowAddModal(true);
         showToast(res.message, true);
         return;
@@ -415,12 +403,11 @@ export default function ProductManagementPage() {
       setAddForm(defaultForm());
       showToast("Product added successfully!");
     } catch {
-      // Re-open modal with data intact on network error
       setShowAddModal(true);
       showToast("Failed to add product.", true);
     } finally {
       setSaving(false);
-      isAddingRef.current = false; // reset ref
+      isAddingRef.current = false;
     }
   };
 
@@ -520,10 +507,10 @@ export default function ProductManagementPage() {
           {/* ── Stat cards ── */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             {[
-              { icon: Package, label: "Total Products",  value: totalProducts,    color: "bg-indigo-100", iconColor: "text-indigo-600" },
-              { icon: FolderOpen, label: "Categories",       value: totalCategories,  color: "bg-blue-100", iconColor: "text-blue-600" },
-              { icon: Coffee, label: "Soft Drinks",      value: softDrinksCount,  color: "bg-green-100", iconColor: "text-green-600" },
-              { icon: Zap, label: "Energy Drinks",    value: energyDrinkCount, color: "bg-yellow-100", iconColor: "text-yellow-600" },
+              { icon: Package,    label: "Total Products",  value: totalProducts,    color: "bg-indigo-100", iconColor: "text-indigo-600" },
+              { icon: FolderOpen, label: "Categories",      value: totalCategories,  color: "bg-blue-100",   iconColor: "text-blue-600"   },
+              { icon: Coffee,     label: "Soft Drinks",     value: softDrinksCount,  color: "bg-green-100",  iconColor: "text-green-600"  },
+              { icon: Zap,        label: "Energy Drinks",   value: energyDrinkCount, color: "bg-yellow-100", iconColor: "text-yellow-600" },
             ].map((c) => (
               <div key={c.label} className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-full ${c.color} flex items-center justify-center`}>
@@ -552,7 +539,10 @@ export default function ProductManagementPage() {
                 <button onClick={() => { setShowCategoryDropdown(!showCategoryDropdown); setShowSizeDropdown(false); }}
                   className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors
                     ${selectedCategory !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                  <FolderOpen className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{selectedCategory}</span><span className="sm:hidden">Cat</span> <ChevronDown className="w-3 h-3" />
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{selectedCategory}</span>
+                  <span className="sm:hidden">Cat</span>
+                  <ChevronDown className="w-3 h-3" />
                 </button>
                 {showCategoryDropdown && (
                   <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44">
@@ -570,7 +560,10 @@ export default function ProductManagementPage() {
                 <button onClick={() => { setShowSizeDropdown(!showSizeDropdown); setShowCategoryDropdown(false); setShowSupplierDropdown(false); }}
                   className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors
                     ${selectedSize !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                  <Package className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{selectedSize}</span><span className="sm:hidden">Size</span> <ChevronDown className="w-3 h-3" />
+                  <Package className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{selectedSize}</span>
+                  <span className="sm:hidden">Size</span>
+                  <ChevronDown className="w-3 h-3" />
                 </button>
                 {showSizeDropdown && (
                   <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-32">
@@ -589,11 +582,14 @@ export default function ProductManagementPage() {
                 <button onClick={() => { setShowSupplierDropdown(!showSupplierDropdown); setShowCategoryDropdown(false); setShowSizeDropdown(false); }}
                   className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors
                     ${selectedSupplier !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                  <Users className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{suppliers.find(s => s.id === selectedSupplier)?.supplierName || "All Suppliers"}</span><span className="sm:hidden">Supplier</span> <ChevronDown className="w-3 h-3" />
+                  <Users className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{suppliers.find(s => s.id === selectedSupplier)?.supplierName || "All Suppliers"}</span>
+                  <span className="sm:hidden">Supplier</span>
+                  <ChevronDown className="w-3 h-3" />
                 </button>
                 {showSupplierDropdown && (
                   <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-48 max-h-48 overflow-y-auto">
-                    <button key="All" onClick={() => { setSelectedSupplier("All"); setShowSupplierDropdown(false); setCurrentPage(1); }}
+                    <button onClick={() => { setSelectedSupplier("All"); setShowSupplierDropdown(false); setCurrentPage(1); }}
                       className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedSupplier === "All" ? "text-indigo-600 font-medium" : "text-gray-600"}`}>
                       All Suppliers
                     </button>
@@ -661,8 +657,6 @@ export default function ProductManagementPage() {
                           )}
                         </p>
                         <p className="text-xs text-gray-500 font-medium">₱{product.price}</p>
-<<<<<<< HEAD
-=======
 
                         {/* Supplier name */}
                         {product.supplier && (
@@ -671,15 +665,15 @@ export default function ProductManagementPage() {
                           </p>
                         )}
 
-                        {/* ✅ Fixed stock badge — no more undefined/NaN */}
->>>>>>> 1cd88f0474b6461baf33f87f057612f017854621
                         <div className="mt-1.5">
                           <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border w-fit ${badgeColor}`}>
                             {qty} <span className="font-normal opacity-80">{u.short}</span>
                           </span>
-                          <p className="text-xs text-gray-400 mt-0.5">
-                            {qty} × {u.bottlesPerCase} = {totalBtl} btl
-                          </p>
+                          {totalBtl !== null && (
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {qty} × {u.bottlesPerCase} = {totalBtl} btl
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -748,16 +742,12 @@ export default function ProductManagementPage() {
                       <p className="text-xs text-gray-400">Price (₱)</p>
                       <input type="number" inputMode="numeric" min="0" value={editForm.price}
                         onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/[^0-9]/g, "");
-                          setEditForm({ ...editForm, price: val });
-                        }}
+                        onChange={(e) => setEditForm({ ...editForm, price: e.target.value.replace(/[^0-9]/g, "") })}
                         className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Stock Quantity</p>
-                      <input type="number" inputMode="numeric"
-                        value={editForm.stockQuantity}
+                      <input type="number" inputMode="numeric" value={editForm.stockQuantity}
                         onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
                         onChange={(e) => setEditForm({ ...editForm, stockQuantity: e.target.value.replace(/[^0-9]/g, "") })}
                         placeholder="0"
@@ -813,8 +803,8 @@ export default function ProductManagementPage() {
                     <div>
                       <p className="text-xs text-gray-400">Status</p>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium mt-0.5 inline-block
-                        ${selectedProduct.status === "ACTIVE"        ? "bg-green-100 text-green-600"
-                        : selectedProduct.status === "OUT_OF_STOCK"  ? "bg-red-100 text-red-600"
+                        ${selectedProduct.status === "ACTIVE"       ? "bg-green-100 text-green-600"
+                        : selectedProduct.status === "OUT_OF_STOCK" ? "bg-red-100 text-red-600"
                         : "bg-gray-100 text-gray-500"}`}>
                         {selectedProduct.status}
                       </span>
@@ -831,13 +821,10 @@ export default function ProductManagementPage() {
                     className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
                     Cancel
                   </button>
-                  {/* ── FIX: spinner + cursor-not-allowed when saving ── */}
                   <button onClick={handleSaveEdit} disabled={saving}
                     className={`px-4 py-2 rounded-lg text-sm text-white font-medium transition-colors
                       ${saving ? "bg-indigo-400 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"}`}>
-                    {saving ? (
-                      <span className="flex items-center gap-2"><Spinner /> Saving...</span>
-                    ) : "Save Changes"}
+                    {saving ? <span className="flex items-center gap-2"><Spinner /> Saving...</span> : "Save Changes"}
                   </button>
                 </>
               ) : (
@@ -895,10 +882,7 @@ export default function ProductManagementPage() {
                 <label className="text-xs font-medium text-gray-600">Price (₱)</label>
                 <input type="number" inputMode="numeric" min="0" value={addForm.price}
                   onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/[^0-9]/g, "");
-                    setAddForm({ ...addForm, price: val });
-                  }}
+                  onChange={(e) => setAddForm({ ...addForm, price: e.target.value.replace(/[^0-9]/g, "") })}
                   placeholder="0"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
@@ -915,10 +899,7 @@ export default function ProductManagementPage() {
                 <label className="text-xs font-medium text-gray-600">Stock Quantity</label>
                 <input type="number" inputMode="numeric" min="0" value={addForm.stockQuantity}
                   onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/[^0-9]/g, "");
-                    setAddForm({ ...addForm, stockQuantity: val });
-                  }}
+                  onChange={(e) => setAddForm({ ...addForm, stockQuantity: e.target.value.replace(/[^0-9]/g, "") })}
                   placeholder="0"
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
@@ -946,13 +927,10 @@ export default function ProductManagementPage() {
                 className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">
                 Cancel
               </button>
-              {/* ── FIX: spinner + cursor-not-allowed when saving ── */}
               <button onClick={handleAddProduct} disabled={saving}
                 className={`flex-1 rounded-lg py-2 text-sm text-white font-medium transition-colors
                   ${saving ? "bg-indigo-400 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"}`}>
-                {saving ? (
-                  <span className="flex items-center justify-center gap-2"><Spinner /> Adding...</span>
-                ) : "Add Product"}
+                {saving ? <span className="flex items-center justify-center gap-2"><Spinner /> Adding...</span> : "Add Product"}
               </button>
             </div>
           </div>
