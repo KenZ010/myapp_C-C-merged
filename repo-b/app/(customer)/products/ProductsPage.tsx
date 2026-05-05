@@ -159,6 +159,7 @@ function ProductCard({ product, onAddToCart, addingId, addedId }: ProductCardPro
               <>
                 <p className="text-lg font-bold text-green-700 leading-none">
                   ₱{product.finalPrice!.toLocaleString()}
+                   <span className="text-xs font-normal text-green-600 ml-1">per case</span>
                 </p>
                 <p className="text-xs text-gray-300 line-through mt-0.5">
                   ₱{product.price.toLocaleString()}
@@ -166,6 +167,7 @@ function ProductCard({ product, onAddToCart, addingId, addedId }: ProductCardPro
               </>
             ) : (
               <p className="text-xl font-bold text-green-700 leading-none">
+                 <span className="text-xs font-normal text-green-600 ml-1">per case</span>
                 ₱{product.price.toLocaleString()}
               </p>
             )}
