@@ -354,33 +354,37 @@ export default function ProductManagementPage() {
   };
 
   const handleSaveEdit = async () => {
-    if (isEditingRef.current) return;
-    isEditingRef.current = true;
-    if (!editForm.productName) {
-      showAlert("Product name is required.", "Missing Field");
-      isEditingRef.current = false;
-      return;
-    }
-    setSaving(true);
-    try {
-      const price         = editForm.price === "" ? 0 : Number(editForm.price);
-      const stockQuantity = editForm.stockQuantity === "" ? 0 : Number(editForm.stockQuantity);
-      const pcs = Number(editForm.piecesPerCase) || 24;
-      const stockUnitMap: Record<number, CaseUnit> = { 24: "case_24", 12: "case_12", 6: "case_6", 1: "pcs" };
-      const stockUnit = stockUnitMap[pcs] || "case_24";
-      const { piecesPerCase: _, ...payload } = editForm;
-      const res = await api.updateProduct(selectedProduct!.id, { ...payload, price, stockQuantity, stockUnit });
-      if (res.message && !res.id) { showToast(res.message, true); return; }
-      await fetchProducts();
-      setSelectedProduct((prev) => prev ? { ...prev, ...editForm, price, stockQuantity, stockUnit } : prev);
-      setIsEditing(false);
-      showToast("Product updated successfully!");
-    } catch { showToast("Failed to update product.", true); }
-    finally {
-      setSaving(false);
-      isEditingRef.current = false;
-    }
-  };
+  if (isEditingRef.current) return;
+  isEditingRef.current = true;
+  if (!editForm.productName) {
+    showAlert("Product name is required.", "Missing Field");
+    isEditingRef.current = false;
+    return;
+  }
+  setSaving(true);
+  try {
+    const price         = editForm.price === "" ? 0 : Number(editForm.price);
+    const stockQuantity = editForm.stockQuantity === "" ? 0 : Number(editForm.stockQuantity);
+    const pcs           = Number(editForm.piecesPerCase) || 24;
+
+    const res = await api.updateProduct(selectedProduct!.id, {
+      ...editForm,
+      price,
+      stockQuantity,
+      piecesPerCase: pcs,   // ← explicitly include it
+    });
+
+    if (res.message && !res.id) { showToast(res.message, true); return; }
+    await fetchProducts();
+    setSelectedProduct((prev) => prev ? { ...prev, ...editForm, price, stockQuantity, piecesPerCase: pcs } : prev);
+    setIsEditing(false);
+    showToast("Product updated successfully!");
+  } catch { showToast("Failed to update product.", true); }
+  finally {
+    setSaving(false);
+    isEditingRef.current = false;
+  }
+};
 
   const confirmDelete = async () => {
     try {
