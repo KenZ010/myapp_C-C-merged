@@ -6,10 +6,9 @@ import Link from "next/link";
 const navLinks = [
   { href: "/inventory/monitoring", label: "Inventory Monitoring", icon: "🏠" },
   { href: "/inventory/adjustment", label: "Inventory Adjustment", icon: "🛒" },
-  { href: "/inventory/purchase-order", label: "Purchase Order", icon: "📋" },
+  { href: "/inventory/restocking", label: "Restocking", icon: "🚚" },
   { href: "/inventory/return", label: "Return", icon: "🔄" },
   { href: "/inventory/loss-report", label: "Loss Report", icon: "📄" },
-  { href: "/inventory/restocking", label: "Restocking", icon: "🚚" },
 ];
 
 const pageTitles: Record<string, { title: string; sub: string }> = {
@@ -21,16 +20,15 @@ const pageTitles: Record<string, { title: string; sub: string }> = {
     title: "Inventory Adjustment",
     sub: "Manage and update stock levels",
   },
-  "/inventory/purchase-order": {
-    title: "Purchase Order",
-    sub: "Create and manage PO from suppliers",
+  "/inventory/restocking": {
+    title: "Restocking",
+    sub: " Manage restocking orders",
   },
   "/inventory/return": { title: "Return", sub: "Manage product returns" },
   "/inventory/loss-report": {
     title: "Loss Report",
     sub: "Track product losses",
   },
-  "/inventory/restocking": { title: "Restocking", sub: "Restock inventory" },
 };
 
 export default function InventoryLayout({
