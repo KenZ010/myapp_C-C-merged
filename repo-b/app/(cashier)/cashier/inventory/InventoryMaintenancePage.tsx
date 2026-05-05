@@ -265,8 +265,8 @@ export default function InventoryMaintenancePage() {
               fontSize: "13px",
               cursor: "pointer",
               fontWeight: brand === b ? 600 : 400,
-              border: brand === b ? "1.5px solid #1a3c2e" : "1.5px solid #ccc",
-              background: brand === b ? "#1a3c2e" : "#fff",
+              border: brand === b ? "1.5px solid #3c3eb1fb" : "1.5px solid #ccc",
+              background: brand === b ? "#3c3eb1fb" : "#fff",
               color: brand === b ? "#fff" : "#1a1a1a",
             }}
           >
