@@ -430,7 +430,7 @@ export default function InventoryMaintenancePage() {
                       style={{
                         fontSize: "16px",
                         fontWeight: 700,
-                        color: "#1a3c2e",
+                        color: "#3c3eb1fb",
                       }}
                     >
                       ₱{p.price}
