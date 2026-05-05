@@ -253,10 +253,10 @@ export default function CashierTransactionsPage() {
   const topSelling = Object.values(productMap).sort((a, b) => b.qty - a.qty).slice(0, 8).map((p, i) => ({ ...p, rank: i + 1 }));
 
   const statCards = [
-    { label: "Total Sales",     value: `₱${totalSales.toLocaleString()}`,  icon: Icon.trendUp,   accent: "#4f46e5", light: "#eef2ff" },
-    { label: "Transactions",    value: String(txCount),                     icon: Icon.receipt,   accent: "#0891b2", light: "#ecfeff" },
+    { label: "Total Sales",     value: `₱${totalSales.toLocaleString()}`,  icon: Icon.trendUp,    accent: "#4f46e5", light: "#eef2ff" },
+    { label: "Transactions",    value: String(txCount),                     icon: Icon.receipt,    accent: "#0891b2", light: "#ecfeff" },
     { label: "Cash Sales",      value: `₱${cashSales.toLocaleString()}`,    icon: Icon.creditCard, accent: "#059669", light: "#ecfdf5" },
-    { label: "Online Sales",    value: `₱${onlineSales.toLocaleString()}`,  icon: Icon.barChart,  accent: "#d97706", light: "#fffbeb" },
+    { label: "Online Sales",    value: `₱${onlineSales.toLocaleString()}`,  icon: Icon.barChart,   accent: "#d97706", light: "#fffbeb" },
   ];
 
   const thStyle: React.CSSProperties = {
@@ -276,9 +276,11 @@ export default function CashierTransactionsPage() {
         .tx-row:hover { background: #fafbff !important; }
         .btn-outline:hover { background: #f8fafc !important; }
         .export-opt:hover { background: #f8fafc !important; }
+        .tx-table-wrap { overflow-x: auto; width: 100%; }
       `}</style>
 
-      <div style={{ padding: "28px 32px", maxWidth: "1300px" }}>
+      {/* ── FIX: width: 100%, removed maxWidth so it fills the sidebar layout ── */}
+      <div style={{ padding: "28px 32px", width: "100%", boxSizing: "border-box" }}>
 
         {/* ── Page Header ── */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "28px", flexWrap: "wrap", gap: "16px" }}>
@@ -331,9 +333,9 @@ export default function CashierTransactionsPage() {
         {/* TRANSACTIONS TAB                          */}
         {/* ══════════════════════════════════════════ */}
         {activeTab === "Transactions" && (
-          <div>
+          <div style={{ width: "100%" }}>
             {/* Search */}
-            <div style={{ position: "relative", marginBottom: "20px", maxWidth: "380px" }}>
+            <div style={{ position: "relative", marginBottom: "20px", maxWidth: "420px", width: "100%" }}>
               <span style={{ position: "absolute", left: "13px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }}>{Icon.search}</span>
               <input
                 type="text"
@@ -344,9 +346,9 @@ export default function CashierTransactionsPage() {
               />
             </div>
 
-            {/* Table */}
-            <div style={{ background: "#fff", borderRadius: "12px", border: "1px solid #eaecf4", overflow: "hidden" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            {/* Table — scrollable on small screens */}
+            <div className="tx-table-wrap" style={{ background: "#fff", borderRadius: "12px", border: "1px solid #eaecf4", overflow: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "700px" }}>
                 <thead>
                   <tr>
                     {["Order ID", "Customer", "Cashier", "Date", "Items", "Payment", "Total", ""].map((h) => (
@@ -474,7 +476,7 @@ export default function CashierTransactionsPage() {
             </div>
 
             {/* Stat Cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: "14px", marginBottom: "24px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: "14px", marginBottom: "24px" }}>
               {loading
                 ? Array.from({ length: 4 }).map((_, i) => <SkeletonStatCard key={i} />)
                 : statCards.map((s) => (
@@ -491,7 +493,7 @@ export default function CashierTransactionsPage() {
               }
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: "20px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: "20px" }}>
               {/* Top Selling Table */}
               <div style={{ background: "#fff", borderRadius: "12px", border: "1px solid #eaecf4", overflow: "hidden" }}>
                 <div style={{ padding: "18px 20px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -553,11 +555,11 @@ export default function CashierTransactionsPage() {
                 </div>
                 <div style={{ padding: "8px 20px" }}>
                   {[
-                    { label: "Avg Order Value",    value: `₱${avgOrder.toLocaleString()}` },
-                    { label: "Total Transactions", value: String(txCount) },
-                    { label: "Cash Transactions",  value: String(periodFiltered.filter((t) => t.payment === "CASH").length) },
-                    { label: "Online Transactions",value: String(periodFiltered.filter((t) => t.payment !== "CASH").length) },
-                    { label: "Top Product",        value: topSelling[0]?.name ?? "—" },
+                    { label: "Avg Order Value",     value: `₱${avgOrder.toLocaleString()}` },
+                    { label: "Total Transactions",  value: String(txCount) },
+                    { label: "Cash Transactions",   value: String(periodFiltered.filter((t) => t.payment === "CASH").length) },
+                    { label: "Online Transactions", value: String(periodFiltered.filter((t) => t.payment !== "CASH").length) },
+                    { label: "Top Product",         value: topSelling[0]?.name ?? "—" },
                   ].map((s, i, arr) => (
                     <div key={s.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 0", borderBottom: i < arr.length - 1 ? "1px solid #f1f5f9" : "none" }}>
                       <span style={{ fontSize: "13px", color: "#64748b" }}>{s.label}</span>
@@ -577,7 +579,7 @@ export default function CashierTransactionsPage() {
       {selectedTx && (
         <>
           <div onClick={() => setSelectedTx(null)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", zIndex: 40, backdropFilter: "blur(2px)" }} />
-          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 50, width: "420px", background: "#fff", borderRadius: "16px", overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" }}>
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 50, width: "min(420px, 94vw)", background: "#fff", borderRadius: "16px", overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" }}>
 
             {/* Modal Header */}
             <div style={{ background: "#1e1b4b", padding: "22px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>

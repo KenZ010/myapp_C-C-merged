@@ -156,7 +156,7 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
             </svg>
           </div>
           <div>
-            <p style={{ fontSize: "13px", fontWeight: 700, color: "#3730a3", lineHeight: 1.2 }}>Rjay Salina</p>
+            <p style={{ fontSize: "13px", fontWeight: 700, color: "#3730a3", lineHeight: 1.2 }}>Ray</p>
             <p style={{ fontSize: "11px", color: "#818cf8", fontWeight: 500 }}>Cashier</p>
           </div>
         </div>
