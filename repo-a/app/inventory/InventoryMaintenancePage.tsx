@@ -16,15 +16,15 @@ type CaseUnit = "case_24" | "case_12" | "case_6" | "btl" | "pcs";
 const CASE_UNITS: {
   value: CaseUnit; label: string; abbr: string; short: string; bottlesPerCase: number | null;
 }[] = [
-  { value: "case_24", label: "Case (24 pcs)", abbr: "case/24", short: "24-cs", bottlesPerCase: 24 },
-  { value: "case_12", label: "Case (12 pcs)", abbr: "case/12", short: "12-cs", bottlesPerCase: 12 },
-  { value: "case_6",  label: "Case (6 pcs)",  abbr: "case/6",  short: "6-cs",  bottlesPerCase: 6  },
+  { value: "case_24", label: "Case (24 pcs)", abbr: "case/24", short: "case/24", bottlesPerCase: 24 },
+  { value: "case_12", label: "Case (12 pcs)", abbr: "case/12", short: "case/12", bottlesPerCase: 12 },
+  { value: "case_6",  label: "Case (6 pcs)",  abbr: "case/6",  short: "case/6",  bottlesPerCase: 6  },
   { value: "btl",     label: "Bottles",        abbr: "btl",     short: "btl",   bottlesPerCase: null },
   { value: "pcs",     label: "Pieces",         abbr: "pcs",     short: "pcs",   bottlesPerCase: null },
 ];
 
 const getUnit      = (u?: string) => CASE_UNITS.find((x) => x.value === u) ?? CASE_UNITS[0];
-const getUnitShort = (u?: string) => getUnit(u).short;
+const getUnitShort = (u?: string) => getUnit(u).abbr;
 
 function getCaseBreakdown(qty: number, unit?: string): string | null {
   const u = getUnit(unit);
@@ -39,11 +39,13 @@ function formatRemaining(stock: number, unit: string): string {
   return `${stock} pieces`;
 }
 
-function UnitPill({ unit }: { unit?: string }) {
+function UnitPill({ unit, qty }: { unit?: string; qty?: number }) {
   const u = getUnit(unit);
+  const breakdown = qty != null ? getCaseBreakdown(qty, unit) : null;
   return (
-    <span className="inline-flex items-center text-xs text-indigo-600 font-medium bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full whitespace-nowrap">
-      {u.label}
+    <span className="inline-flex items-center gap-1 text-xs text-indigo-600 font-medium bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full whitespace-nowrap">
+      {u.abbr}{qty != null && <span className="text-indigo-400 font-normal"> × {qty}</span>}
+      {breakdown && <span className="text-indigo-500 font-normal ml-0.5">→ {breakdown}</span>}
     </span>
   );
 }
@@ -70,6 +72,7 @@ function CaseBadge({ quantity, unit }: { quantity: number; unit?: string }) {
 type InventoryItem = {
   id: string; barcode: string; productName: string; category: string;
   size?: string | null; expiryDate: string; stock: number; stockUnit?: string; status: string;
+  supplierId?: string; supplierName?: string;
 };
 
 type LogType = "STOCK_IN" | "STOCK_OUT" | "ADJUSTMENT" | "RETURN_IN" | "RETURN_OUT";
@@ -262,6 +265,8 @@ export default function InventoryMaintenancePage() {
 
   const [items,          setItems]          = useState<InventoryItem[]>([]);
   const [itemsLoading,   setItemsLoading]   = useState(true);
+  const [suppliers,      setSuppliers]      = useState<{ id: string; supplierName: string }[]>([]);
+  const [supplierFilter, setSupplierFilter] = useState<string>("All");
   const [logs,           setLogs]           = useState<InventoryLog[]>([]);
   const [logsTotal,      setLogsTotal]      = useState(0);
   const [logsPage,       setLogsPage]       = useState(1);
@@ -278,15 +283,24 @@ export default function InventoryMaintenancePage() {
     const fetchData = async () => {
       try {
         setItemsLoading(true);
-        const data = await api.getProducts();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        setItems(data.map((p: any) => ({
+        const [productsData, suppliersData] = await Promise.all([
+          api.getProducts(),
+          api.getSuppliers()
+        ]);
+        const supplierMap = (suppliersData || []).reduce((acc: Record<string, string>, s: any) => {
+          acc[s.id] = s.supplierName;
+          return acc;
+        }, {});
+        setSuppliers((suppliersData || []).map((s: any) => ({ id: s.id, supplierName: s.supplierName })));
+        setItems((productsData || []).map((p: any) => ({
           id: p.id, barcode: p.barcode ?? "—", productName: p.productName,
           category: p.category, size: p.size ?? null,
           expiryDate: p.expiryDate ? new Date(p.expiryDate).toISOString().split("T")[0] : "—",
           stock: Number(p.stockQuantity ?? p.stock ?? 0),
           stockUnit: p.stockUnit || "case_24",
           status: p.status,
+          supplierId: p.supplierId || p.supplier?.id || "",
+          supplierName: supplierMap[p.supplierId || p.supplier?.id || ""] || p.supplier?.supplierName || "—",
         })));
       } catch (err) { console.error("Failed to fetch products", err); }
       finally { setItemsLoading(false); }
@@ -348,9 +362,16 @@ export default function InventoryMaintenancePage() {
 
   const productStockData = useMemo(() =>
     [...items]
+      .filter(item => supplierFilter === "All" || item.supplierId === supplierFilter)
       .sort((a, b) => a.productName.localeCompare(b.productName))
-      .map((p) => ({ name: p.productName, size: p.size, stock: p.stock, stockUnit: p.stockUnit }))
-  , [items]);
+      .map((p) => ({ 
+        name: p.productName, 
+        size: p.size, 
+        stock: p.stock, 
+        stockUnit: p.stockUnit,
+        supplierName: p.supplierName || "—"
+      }))
+  , [items, supplierFilter]);
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [txLoading,    setTxLoading]    = useState(true);
@@ -471,6 +492,52 @@ export default function InventoryMaintenancePage() {
         )}
 
         <div className="flex-1 p-3 md:p-4 bg-green-50">
+
+          {/* ── Low Stock Alert ── */}
+          {items.filter(i => i.stock <= 10 && i.stock > 0).length > 0 && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 mb-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-yellow-600">⚠️</span>
+                <h3 className="font-bold text-yellow-800 text-sm">Low Stock Alert</h3>
+                <span className="bg-yellow-200 text-yellow-800 text-xs font-bold px-2 py-0.5 rounded-full">
+                  {items.filter(i => i.stock <= 10 && i.stock > 0).length} items
+                </span>
+              </div>
+              <div className="space-y-2 max-h-32 overflow-y-auto">
+                {items.filter(i => i.stock <= 10 && i.stock > 0).slice(0, 5).map(item => (
+                  <div key={item.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 text-xs">
+                    <span className="font-medium text-gray-800">{item.productName}</span>
+                    <span className="text-yellow-700 font-bold">{item.stock} {getUnit(item.stockUnit).abbr}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Supplier Filter ── */}
+          {suppliers.length > 0 && (
+            <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-xs font-medium text-gray-600">Filter by Supplier:</span>
+                <select 
+                  value={supplierFilter} 
+                  onChange={(e) => setSupplierFilter(e.target.value)}
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                >
+                  <option value="All">All Suppliers</option>
+                  {suppliers.map(s => (
+                    <option key={s.id} value={s.id}>{s.supplierName}</option>
+                  ))}
+                </select>
+                {supplierFilter !== "All" && (
+                  <button 
+                    onClick={() => setSupplierFilter("All")}
+                    className="text-xs text-red-500 hover:text-red-700"
+                  >Clear</button>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* ── Inventory Movement Log ── */}
           <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm mb-4">
@@ -632,6 +699,7 @@ export default function InventoryMaintenancePage() {
                               {item.size}
                             </span>
                           )}
+                          <p style={{ fontSize: "10px", color: "#888", marginTop: "2px" }}>{item.supplierName}</p>
                         </div>
                         <div style={{ flex: 1, height: "24px", background: "#f0f0f0", borderRadius: "6px", overflow: "hidden" }}>
                           <div style={{

@@ -27,6 +27,7 @@ type SupplierItem = {
   contactNo: string;
   address: string | null;
   agentName: string | null;
+  socials: string | null;
   lastOrdered: number | null;
   status: string;
   products?: ProductItem[];
@@ -50,6 +51,7 @@ const emptyForm = {
   contactNo: "",
   address: "",
   agentName: "",
+  socials: "",
   lastOrdered: "" as string | number,
   status: "ACTIVE",
 };
@@ -330,6 +332,7 @@ export default function SupplierMaintenancePage() {
     setForm({
       supplierName: item.supplierName, contactNo: item.contactNo,
       address: item.address || "", agentName: item.agentName || "",
+      socials: item.socials || "",
       lastOrdered: item.lastOrdered ?? "",
       status: item.status,
     });
@@ -344,6 +347,7 @@ export default function SupplierMaintenancePage() {
     setForm({
       supplierName: item.supplierName, contactNo: item.contactNo,
       address: item.address || "", agentName: item.agentName || "",
+      socials: item.socials || "",
       lastOrdered: item.lastOrdered ?? "",
       status: item.status,
     });
@@ -357,7 +361,7 @@ export default function SupplierMaintenancePage() {
   const handleSave = async () => {
     if (!form.supplierName) { showAlert("Supplier Name is required.", "Missing Field"); return; }
     try {
-      const saveData = { ...form, lastOrdered: form.lastOrdered === "" ? 0 : Number(form.lastOrdered) };
+      const saveData = { ...form, lastOrdered: form.lastOrdered === "" ? 0 : Number(form.lastOrdered), socials: form.socials || null };
       if (editingId !== null) {
         await api.updateSupplier(editingId, saveData);
         await Promise.all(editProducts.map(p => api.updateProduct(p.id, { price: p.price })));
@@ -643,6 +647,12 @@ export default function SupplierMaintenancePage() {
                 <p className="text-xs text-gray-400 mb-1">Address</p>
                 <p className="text-sm font-medium text-gray-800">{viewItem.address || "—"}</p>
               </div>
+              {viewItem.socials && (
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400 mb-1">Socials</p>
+                  <p className="text-sm font-medium text-gray-800">{viewItem.socials}</p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-50 rounded-xl p-3">
                   <p className="text-xs text-gray-400 mb-1">Last Ordered</p>
@@ -659,27 +669,28 @@ export default function SupplierMaintenancePage() {
                           <p className="text-sm font-medium text-gray-800 truncate">{product.productName}{product.size ? ` ${product.size}` : ""}</p>
                           <p className="text-xs text-gray-400">{product.category}</p>
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-xs text-gray-400">₱</span>
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            min="0"
-                            value={product.price}
-                            onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
-                            onChange={e => {
-                              const val = e.target.value.replace(/[^0-9]/g, "");
-                              setViewProducts(prev => prev.map(p => p.id === product.id ? { ...p, price: val === "" ? 0 : Number(val) } : p));
-                            }}
-                            className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-sm text-right outline-none focus:border-indigo-400 text-gray-900"
-                          />
-                          <button
-                            onClick={() => handleUpdatePrice(product.id, product.price)}
-                            disabled={savingPrice === product.id}
-                            className="bg-indigo-600 text-white rounded-lg px-2.5 py-1 text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 shrink-0">
-                            {savingPrice === product.id ? "..." : "Save"}
-                          </button>
-                        </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                           <span className="text-xs text-gray-400">₱</span>
+                           <input
+                             type="number"
+                             inputMode="numeric"
+                             min="0"
+                             value={product.price}
+                             onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
+                             onChange={e => {
+                               const val = e.target.value.replace(/[^0-9]/g, "");
+                               setViewProducts(prev => prev.map(p => p.id === product.id ? { ...p, price: val === "" ? 0 : Number(val) } : p));
+                             }}
+                             className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-xs text-right outline-none focus:border-indigo-400 text-gray-900"
+                           />
+                           <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">Wholesale</span>
+                           <button
+                             onClick={() => handleUpdatePrice(product.id, product.price)}
+                             disabled={savingPrice === product.id}
+                             className="bg-indigo-600 text-white rounded-lg px-2.5 py-1 text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 shrink-0">
+                             {savingPrice === product.id ? "..." : "Save"}
+                           </button>
+                         </div>
                       </div>
                     ))}
                   </div>
@@ -710,6 +721,11 @@ export default function SupplierMaintenancePage() {
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
               <div>
+                <label className="text-xs font-medium text-gray-600">Agent Name</label>
+                <input value={form.agentName} onChange={e => setForm({ ...form, agentName: e.target.value })}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+              </div>
+              <div>
                 <label className="text-xs font-medium text-gray-600">Contact No.</label>
                 <PhoneInput value={form.contactNo} onChange={val => setForm({ ...form, contactNo: val })} />
               </div>
@@ -719,8 +735,9 @@ export default function SupplierMaintenancePage() {
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-600">Agent Name</label>
-                <input value={form.agentName} onChange={e => setForm({ ...form, agentName: e.target.value })}
+                <label className="text-xs font-medium text-gray-600">Socials <span className="text-gray-400 font-normal">(optional)</span></label>
+                <input value={form.socials} onChange={e => setForm({ ...form, socials: e.target.value })}
+                  placeholder="Facebook, Instagram, etc."
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
 
@@ -761,21 +778,22 @@ export default function SupplierMaintenancePage() {
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-medium text-gray-800 truncate">{product.productName}{product.size ? ` ${product.size}` : ""}</p>
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-xs text-gray-400">₱</span>
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            min="0"
-                            value={product.price}
-                            onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
-                            onChange={e => {
-                              const val = e.target.value.replace(/[^0-9]/g, "");
-                              setEditProducts(prev => prev.map(p => p.id === product.id ? { ...p, price: val === "" ? 0 : Number(val) } : p));
-                            }}
-                            className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-xs text-right outline-none focus:border-indigo-400 text-gray-900"
-                          />
-                        </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                           <span className="text-xs text-gray-400">₱</span>
+                           <input
+                             type="number"
+                             inputMode="numeric"
+                             min="0"
+                             value={product.price}
+                             onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
+                             onChange={e => {
+                               const val = e.target.value.replace(/[^0-9]/g, "");
+                               setEditProducts(prev => prev.map(p => p.id === product.id ? { ...p, price: val === "" ? 0 : Number(val) } : p));
+                             }}
+                             className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-xs text-right outline-none focus:border-indigo-400 text-gray-900"
+                           />
+                           <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">Wholesale</span>
+                         </div>
                       </div>
                     ))}
                   </div>
