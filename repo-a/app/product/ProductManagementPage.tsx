@@ -109,12 +109,13 @@ function CaseUnitInput({
 }
 
 // ── Stock badge ───────────────────────────────────────────────────────────────
-function CaseBadge({ quantity, unit, compact = false }: {
-  quantity: number; unit?: string; compact?: boolean;
+function CaseBadge({ quantity, piecesPerCase, compact = false }: {
+  quantity: number; piecesPerCase?: number | null; compact?: boolean;
 }) {
-  const u        = getUnit(unit);
+  const pcs      = piecesPerCase ?? 1;
   const qty      = Number(quantity) || 0;
-  const totalBtl = u.bottlesPerCase ? qty * u.bottlesPerCase : null;
+  const totalBtl = pcs > 1 ? qty * pcs : null;
+  const unit     = getUnit(pcs === 1 ? "pcs" : pcs === 24 ? "case_24" : pcs === 12 ? "case_12" : pcs === 6 ? "case_6" : "pcs");
 
   const color = qty === 0
     ? "bg-red-100 text-red-700 border-red-200"
@@ -125,10 +126,10 @@ function CaseBadge({ quantity, unit, compact = false }: {
   return (
     <div className="flex flex-col gap-0.5">
       <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border w-fit ${color}`}>
-        {qty} <span className="font-normal opacity-80">{u.short}</span>
+        {qty} <span className="font-normal opacity-80">{unit.short}</span>
       </span>
       <span className={`text-xs font-medium ${compact ? "text-gray-400" : "text-indigo-500"}`}>
-        {totalBtl !== null ? `${qty} × ${u.bottlesPerCase} = ${totalBtl} btl` : null}
+        {totalBtl !== null ? `${qty} × ${pcs} = ${totalBtl} btl` : null}
       </span>
     </div>
   );
@@ -138,7 +139,8 @@ function CaseBadge({ quantity, unit, compact = false }: {
 type Product = {
   id: string; productName: string; size: string | null;
   price: number; category: string; stockQuantity: number;
-  stockUnit: CaseUnit; status: string; supplierId: string; image: string | null;
+  piecesPerCase?: number | null;
+  status: string; supplierId: string; image: string | null;
   supplier?: { id: string; supplierName: string };
 };
 
@@ -206,7 +208,7 @@ function Spinner() {
 const defaultForm = () => ({
   productName: "", size: "500ml", price: "",
   category: "SOFTDRINKS", stockQuantity: "",
-  stockUnit: "case_24" as CaseUnit, supplierId: "", status: "ACTIVE",
+  supplierId: "", status: "ACTIVE",
   piecesPerCase: "24",
 });
 
@@ -289,7 +291,7 @@ export default function ProductManagementPage() {
     price:         Number(p.price ?? 0),
     category:      p.category ?? "OTHER",
     stockQuantity: Number(p.stockQuantity ?? p.stock ?? 0),
-    stockUnit:     (CASE_UNITS.find((u) => u.value === p.stockUnit)?.value) ?? "case_24",
+    piecesPerCase: p.piecesPerCase ?? null,
     status:        p.status ?? "ACTIVE",
     supplierId:    p.supplierId ?? "",
     image:         p.image ?? null,
@@ -337,24 +339,21 @@ export default function ProductManagementPage() {
   // ── RESOLVED: use incoming change that includes piecesPerCase ──
   const handleCardClick = (product: Product) => {
     setSelectedProduct(product);
-    const unit = getUnit(product.stockUnit);
     setEditForm({
       productName:   product.productName,
       size:          product.size || "500ml",
       price:         String(product.price),
       category:      product.category,
       stockQuantity: String(product.stockQuantity),
-      stockUnit:     product.stockUnit ?? "case_24",
       supplierId:    product.supplierId,
       status:        product.status,
-      piecesPerCase: unit.bottlesPerCase != null ? String(unit.bottlesPerCase) : "1",
+      piecesPerCase: product.piecesPerCase != null ? String(product.piecesPerCase) : "24",
     });
     setIsEditing(false);
     setShowProductModal(true);
   };
 
   const handleSaveEdit = async () => {
-<<<<<<< HEAD
     if (isEditingRef.current) return;
     isEditingRef.current = true;
     if (!editForm.productName) {
@@ -367,20 +366,16 @@ export default function ProductManagementPage() {
       const price         = editForm.price === "" ? 0 : Number(editForm.price);
       const stockQuantity = editForm.stockQuantity === "" ? 0 : Number(editForm.stockQuantity);
       const pcs = Number(editForm.piecesPerCase);
-      const stockUnitMap: Record<number, CaseUnit> = { 24: "case_24", 12: "case_12", 6: "case_6", 1: "pcs" };
-      const stockUnit = stockUnitMap[pcs];
-      if (!stockUnit) {
-        showToast("Piece per case must be 24, 12, 6, or 1.", true);
+      if (isNaN(pcs) || pcs < 1) {
+        showToast("Please enter a valid piece per case (minimum 1).", true);
         setIsEditing(true);
         setSaving(false);
         isEditingRef.current = false;
         return;
       }
       const { piecesPerCase: _ppc, supplierId, ...payload } = editForm;
-      const body = { ...payload, price, stockQuantity, stockUnit, piecesPerCase: pcs };
-      console.log("Saving product:", body);
+      const body = { ...payload, price, stockQuantity, piecesPerCase: pcs };
       const res = await api.updateProduct(selectedProduct!.id, body);
-      console.log("Save response:", res);
       if (res.message && !res.id) { showToast(res.message, true); return; }
       await fetchProducts();
       setSelectedProduct((prev) => prev ? { ...prev, ...body } : prev);
@@ -395,39 +390,6 @@ export default function ProductManagementPage() {
       isEditingRef.current = false;
     }
   };
-=======
-  if (isEditingRef.current) return;
-  isEditingRef.current = true;
-  if (!editForm.productName) {
-    showAlert("Product name is required.", "Missing Field");
-    isEditingRef.current = false;
-    return;
-  }
-  setSaving(true);
-  try {
-    const price         = editForm.price === "" ? 0 : Number(editForm.price);
-    const stockQuantity = editForm.stockQuantity === "" ? 0 : Number(editForm.stockQuantity);
-    const pcs           = Number(editForm.piecesPerCase) || 24;
-
-    const res = await api.updateProduct(selectedProduct!.id, {
-      ...editForm,
-      price,
-      stockQuantity,
-      piecesPerCase: pcs,   // ← explicitly include it
-    });
-
-    if (res.message && !res.id) { showToast(res.message, true); return; }
-    await fetchProducts();
-    setSelectedProduct((prev) => prev ? { ...prev, ...editForm, price, stockQuantity, piecesPerCase: pcs } : prev);
-    setIsEditing(false);
-    showToast("Product updated successfully!");
-  } catch { showToast("Failed to update product.", true); }
-  finally {
-    setSaving(false);
-    isEditingRef.current = false;
-  }
-};
->>>>>>> 7c181a6cb8930f0e442717d1516b06309169c4e2
 
   const confirmDelete = async () => {
     try {
@@ -457,11 +419,16 @@ export default function ProductManagementPage() {
     try {
       const price         = addForm.price === "" ? 0 : Number(addForm.price);
       const stockQuantity = addForm.stockQuantity === "" ? 0 : Number(addForm.stockQuantity);
-      const pcs = Number(addForm.piecesPerCase) || 24;
-      const stockUnitMap: Record<number, CaseUnit> = { 24: "case_24", 12: "case_12", 6: "case_6", 1: "pcs" };
-      const stockUnit = stockUnitMap[pcs] || "case_24";
+      const pcs = Number(addForm.piecesPerCase);
+      if (isNaN(pcs) || pcs < 1) {
+        showToast("Please enter a valid piece per case (minimum 1).", true);
+        setShowAddModal(true);
+        setSaving(false);
+        isAddingRef.current = false;
+        return;
+      }
       const { piecesPerCase: _ppc, ...payload } = addForm;
-      const res = await api.createProduct({ ...payload, price, stockQuantity, stockUnit, piecesPerCase: pcs });
+      const res = await api.createProduct({ ...payload, price, stockQuantity, piecesPerCase: pcs });
       if (res.message && !res.id) {
         setShowAddModal(true);
         showToast(res.message, true);
@@ -696,9 +663,10 @@ export default function ProductManagementPage() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-4">
                 {paginated.map((product) => {
-                  const u        = getUnit(product.stockUnit);
+                  const pcs      = product.piecesPerCase ?? 1;
                   const qty      = Number(product.stockQuantity) || 0;
-                  const totalBtl = u.bottlesPerCase ? qty * u.bottlesPerCase : null;
+                  const totalBtl = pcs > 1 ? qty * pcs : null;
+                  const unit     = getUnit(pcs === 1 ? "pcs" : pcs === 24 ? "case_24" : pcs === 12 ? "case_12" : pcs === 6 ? "case_6" : "pcs");
                   const badgeColor = qty === 0
                     ? "bg-red-100 text-red-700 border-red-200"
                     : qty <= 10
@@ -735,11 +703,11 @@ export default function ProductManagementPage() {
 
                         <div className="mt-1.5">
                           <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border w-fit ${badgeColor}`}>
-                            {qty} <span className="font-normal opacity-80">{u.short}</span>
+                            {qty} <span className="font-normal opacity-80">{unit.short}</span>
                           </span>
                           {totalBtl !== null && (
                             <p className="text-xs text-gray-400 mt-0.5">
-                              {qty} × {u.bottlesPerCase} = {totalBtl} btl
+                              {qty} × {pcs} = {totalBtl} btl
                             </p>
                           )}
                         </div>
@@ -813,7 +781,7 @@ export default function ProductManagementPage() {
                         onChange={(e) => setEditForm({ ...editForm, price: e.target.value.replace(/[^0-9]/g, "") })}
                         className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
                     </div>
-                    {/* ── RESOLVED: use incoming "Piece per Case" dropdown ── */}
+                    {/* ── Piece per Case input with dropdown ── */}
                     <div ref={editPcsRef}>
                       <p className="text-xs text-gray-400">Piece per Case</p>
                       <div className="relative mt-1">
@@ -821,13 +789,8 @@ export default function ProductManagementPage() {
                           type="text"
                           inputMode="numeric"
                           value={editForm.piecesPerCase}
-                          onChange={(e) => {
-                            const val = e.target.value.replace(/[^0-9]/g, "");
-                            setEditForm({ ...editForm, piecesPerCase: val });
-                            setShowEditPcsDropdown(true);
-                          }}
-                          onFocus={() => setShowEditPcsDropdown(true)}
-                          placeholder="Type number or pick below"
+                          onChange={(e) => setEditForm({ ...editForm, piecesPerCase: e.target.value })}
+                          placeholder="Type number (e.g. 24, 12, 6, 1)"
                           className="w-full border border-gray-200 rounded-lg px-3 py-1.5 pr-8 text-sm outline-none focus:border-indigo-400 text-gray-900 placeholder:text-gray-400"
                         />
                         <button type="button" onClick={() => setShowEditPcsDropdown(!showEditPcsDropdown)}
@@ -836,15 +799,13 @@ export default function ProductManagementPage() {
                         </button>
                         {showEditPcsDropdown && (
                           <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] max-h-40 overflow-y-auto">
-                            {["24", "12", "6", "1"]
-                              .filter((pcs) => !editForm.piecesPerCase || pcs.startsWith(editForm.piecesPerCase))
-                              .map((pcs) => (
-                                <button key={pcs} type="button"
-                                  onClick={() => { setEditForm({ ...editForm, piecesPerCase: pcs }); setShowEditPcsDropdown(false); }}
-                                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${editForm.piecesPerCase === pcs ? "text-indigo-600 font-medium bg-indigo-50" : "text-gray-600"}`}>
-                                  {pcs} pcs per case
-                                </button>
-                              ))}
+                            {["24", "12", "6", "1"].map((pcs) => (
+                              <button key={pcs} type="button"
+                                onClick={() => { setEditForm({ ...editForm, piecesPerCase: pcs }); setShowEditPcsDropdown(false); }}
+                                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${editForm.piecesPerCase === pcs ? "text-indigo-600 font-medium bg-indigo-50" : "text-gray-600"}`}>
+                                {pcs} pcs per case
+                              </button>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -892,13 +853,10 @@ export default function ProductManagementPage() {
                     <div>
                       <p className="text-xs text-gray-400">Stock</p>
                       <div className="mt-1">
-                        <CaseBadge quantity={selectedProduct.stockQuantity} unit={selectedProduct.stockUnit} />
-                        {(() => {
-                          const unit = getUnit(selectedProduct.stockUnit);
-                          return unit.bottlesPerCase != null
-                            ? <p className="text-xs text-gray-400 mt-0.5">{unit.bottlesPerCase} pieces per case</p>
-                            : <p className="text-xs text-gray-400 mt-0.5">{unit.label}</p>;
-                        })()}
+                        <CaseBadge quantity={selectedProduct.stockQuantity} piecesPerCase={selectedProduct.piecesPerCase} />
+                        {selectedProduct.piecesPerCase != null && selectedProduct.piecesPerCase > 1 && (
+                          <p className="text-xs text-gray-400 mt-0.5">{selectedProduct.piecesPerCase} pieces per case</p>
+                        )}
                       </div>
                     </div>
                     <div>
@@ -996,7 +954,7 @@ export default function ProductManagementPage() {
                   {suppliers.map((s) => <option key={s.id} value={s.id}>{s.supplierName}</option>)}
                 </select>
               </div>
-              {/* ── RESOLVED: use incoming "Piece per Case" dropdown ── */}
+              {/* ── Piece per Case input with dropdown ── */}
               <div ref={pcsRef}>
                 <label className="text-xs font-medium text-gray-600">Piece per Case</label>
                 <div className="relative mt-1">
@@ -1004,13 +962,8 @@ export default function ProductManagementPage() {
                     type="text"
                     inputMode="numeric"
                     value={addForm.piecesPerCase}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9]/g, "");
-                      setAddForm({ ...addForm, piecesPerCase: val });
-                      setShowPcsDropdown(true);
-                    }}
-                    onFocus={() => setShowPcsDropdown(true)}
-                    placeholder="Type number or pick below"
+                    onChange={(e) => setAddForm({ ...addForm, piecesPerCase: e.target.value })}
+                    placeholder="Type number (e.g. 24, 12, 6, 1)"
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-8 text-sm outline-none focus:border-indigo-400 text-gray-900 placeholder:text-gray-400"
                   />
                   <button type="button" onClick={() => setShowPcsDropdown(!showPcsDropdown)}
@@ -1019,15 +972,13 @@ export default function ProductManagementPage() {
                   </button>
                   {showPcsDropdown && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] max-h-40 overflow-y-auto">
-                      {["24", "12", "6", "1"]
-                        .filter((pcs) => !addForm.piecesPerCase || pcs.startsWith(addForm.piecesPerCase))
-                        .map((pcs) => (
-                          <button key={pcs} type="button"
-                            onClick={() => { setAddForm({ ...addForm, piecesPerCase: pcs }); setShowPcsDropdown(false); }}
-                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${addForm.piecesPerCase === pcs ? "text-indigo-600 font-medium bg-indigo-50" : "text-gray-600"}`}>
-                            {pcs} pcs per case
-                          </button>
-                        ))}
+                      {["24", "12", "6", "1"].map((pcs) => (
+                        <button key={pcs} type="button"
+                          onClick={() => { setAddForm({ ...addForm, piecesPerCase: pcs }); setShowPcsDropdown(false); }}
+                          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${addForm.piecesPerCase === pcs ? "text-indigo-600 font-medium bg-indigo-50" : "text-gray-600"}`}>
+                          {pcs} pcs per case
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>
