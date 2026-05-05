@@ -147,7 +147,7 @@ export default function InventoryMaintenancePage() {
       {/* ── Header Banner ── */}
       <div
         style={{
-          background: "linear-gradient(135deg, #6366f1, #6366f10d)",
+          background: "linear-gradient(135deg, #6366f1, #3c3eb1fb)",
           borderRadius: "16px",
           padding: "24px 32px",
           marginBottom: "24px",
