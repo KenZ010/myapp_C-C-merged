@@ -678,7 +678,7 @@ export default function InventoryMaintenancePage() {
                   padding: "12px",
                   borderRadius: "20px",
                   border: "none",
-                  background: "#1a3c2e",
+                  background: "#3c3eb1fb",
                   color: "#fff",
                   fontSize: "14px",
                   fontWeight: 600,
