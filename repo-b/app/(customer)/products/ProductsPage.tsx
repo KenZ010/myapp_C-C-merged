@@ -1,576 +1,353 @@
 "use client";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+type CategoryType =
+  | "SOFTDRINKS"
+  | "ENERGY_DRINK"
+  | "BEER"
+  | "JUICE"
+  | "WATER"
+  | "OTHER";
+
+type ProductStatus = "ACTIVE" | "INACTIVE" | "OUT_OF_STOCK";
+
+/** Mirrors the Prisma Product model exactly, plus computed API fields */
 type Product = {
-  id: string;
-  productName: string;
-  price: number;
-  finalPrice?: number;
-  category?: string;
-  size?: string;
-  stock?: number;
-  status?: string;
-  image?: string;
+  id:            string;
+  productName:   string;
+  category:      CategoryType;
+  size:          string | null;
+  barcode:       string | null;
+  price:         number;        // Float in Prisma
+  stock:         number;        // Int – computed by backend via getStock()
+  reservedStock: number;        // Int
+  piecesPerCase: number;        // Int
+  expiryDate:    string | null; // DateTime serialised as ISO string
+  image:         string | null; // Cloudinary URL
+  status:        ProductStatus;
+  supplierId:    string;
+  createdAt:     string;
+  updatedAt:     string;
+  // Computed fields returned by the API
+  finalPrice:    number | null;
+  activePromo:   unknown | null;
 };
 
-const EMOJI_MAP: Record<string, string> = {
-  SOFTDRINKS: "🥤",
+// ── Constants ─────────────────────────────────────────────────────────────────
+const EMOJI_MAP: Record<CategoryType, string> = {
+  SOFTDRINKS:   "🥤",
   ENERGY_DRINK: "⚡",
-  BEER: "🍺",
-  JUICE: "🍹",
-  WATER: "💧",
-  OTHER: "🛒",
+  BEER:         "🍺",
+  JUICE:        "🍹",
+  WATER:        "💧",
+  OTHER:        "🛒",
 };
 
-const BG_MAP: Record<string, string> = {
-  SOFTDRINKS: "#b71c1c",
-  ENERGY_DRINK: "#1a237e",
-  BEER: "#f57f17",
-  JUICE: "#2e7d32",
-  WATER: "#0288d1",
-  OTHER: "#424242",
+const BG_MAP: Record<CategoryType, string> = {
+  SOFTDRINKS:   "bg-red-900",
+  ENERGY_DRINK: "bg-indigo-950",
+  BEER:         "bg-amber-600",
+  JUICE:        "bg-green-800",
+  WATER:        "bg-sky-600",
+  OTHER:        "bg-zinc-700",
 };
 
-const getEmoji = (category?: string) =>
-  EMOJI_MAP[category?.toUpperCase() || ""] || "🥤";
-const getBg = (category?: string) =>
-  BG_MAP[category?.toUpperCase() || ""] || "#424242";
+const getEmoji = (category: CategoryType): string => EMOJI_MAP[category] ?? "🥤";
+const getBg    = (category: CategoryType): string => BG_MAP[category]    ?? "bg-zinc-700";
 
-// ── Skeleton card ────────────────────────────────────────────────────────────
-function SkeletonCard() {
+const getCustomerId = (): string => {
+  if (typeof window === "undefined") return "";
+  try { return JSON.parse(localStorage.getItem("user") ?? "{}")?.id ?? ""; }
+  catch { return ""; }
+};
+
+// ── Skeleton ──────────────────────────────────────────────────────────────────
+function SkeletonPill({ width }: { width: number }) {
   return (
     <div
-      style={{
-        background: "#fff",
-        borderRadius: "16px",
-        border: "0.5px solid #e8e8e8",
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          height: "170px",
-          background:
-            "linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)",
-          backgroundSize: "200% 100%",
-          animation: "shimmer 1.4s infinite",
-        }}
-      />
-      <div
-        style={{
-          padding: "14px 16px 16px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "10px",
-        }}
-      >
-        <div
-          style={{
-            height: "14px",
-            borderRadius: "6px",
-            background:
-              "linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)",
-            backgroundSize: "200% 100%",
-            animation: "shimmer 1.4s infinite",
-            width: "70%",
-          }}
-        />
-        <div
-          style={{
-            height: "11px",
-            borderRadius: "6px",
-            background:
-              "linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)",
-            backgroundSize: "200% 100%",
-            animation: "shimmer 1.4s infinite",
-            width: "45%",
-          }}
-        />
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginTop: "4px",
-          }}
-        >
-          <div
-            style={{
-              height: "22px",
-              borderRadius: "6px",
-              background:
-                "linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)",
-              backgroundSize: "200% 100%",
-              animation: "shimmer 1.4s infinite",
-              width: "40%",
-            }}
-          />
-          <div
-            style={{
-              height: "34px",
-              borderRadius: "20px",
-              background:
-                "linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)",
-              backgroundSize: "200% 100%",
-              animation: "shimmer 1.4s infinite",
-              width: "36%",
-            }}
-          />
+      className="h-9 rounded-full animate-pulse bg-gray-200"
+      style={{ width }}
+    />
+  );
+}
+
+function SkeletonCard() {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+      <div className="w-full h-40 animate-pulse bg-gray-200" />
+      <div className="p-4 flex flex-col gap-2.5">
+        <div className="h-3.5 rounded-md bg-gray-200 animate-pulse w-2/3" />
+        <div className="h-3   rounded-md bg-gray-200 animate-pulse w-5/12" />
+        <div className="flex items-center justify-between mt-1">
+          <div className="h-5 rounded-md bg-gray-200 animate-pulse w-2/5" />
+          <div className="h-9 rounded-full bg-gray-200 animate-pulse w-1/3" />
         </div>
       </div>
     </div>
   );
 }
 
-export default function ProductsPage() {
-  const [activeCategory, setActiveCategory] = useState("All");
-  const [search, setSearch] = useState("");
-  const [added, setAdded] = useState<string | null>(null);
-  const [adding, setAdding] = useState<string | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+// ── Product Card ──────────────────────────────────────────────────────────────
+type ProductCardProps = {
+  product:     Product;
+  onAddToCart: (product: Product) => void;
+  addingId:    string | null;
+  addedId:     string | null;
+};
 
-  const getCustomerId = () => {
-    if (typeof window === "undefined") return "";
-    return JSON.parse(localStorage.getItem("user") || "{}")?.id || "";
-  };
+function ProductCard({ product, onAddToCart, addingId, addedId }: ProductCardProps) {
+  const outOfStock = product.stock <= 0;
+  const lowStock   = !outOfStock && product.stock <= 10;
+  const hasPromo   = product.finalPrice != null && product.finalPrice < product.price;
+  const isAdding   = addingId === product.id;
+  const isAdded    = addedId  === product.id;
+
+  return (
+    <div
+      className={[
+        "bg-white rounded-2xl border border-gray-100 overflow-hidden",
+        "transition-all duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/8",
+        outOfStock ? "opacity-60" : "",
+      ].join(" ")}
+    >
+      {/* Image / colour banner */}
+      <div className={`relative w-full h-40 flex items-center justify-center ${getBg(product.category)}`}>
+        {product.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={product.image}
+            alt={product.productName}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <span className="text-6xl select-none">{getEmoji(product.category)}</span>
+        )}
+
+        {outOfStock && (
+          <span className="absolute top-2.5 left-2.5 bg-red-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full">
+            Out of Stock
+          </span>
+        )}
+        {lowStock && (
+          <span className="absolute top-2.5 left-2.5 bg-amber-100 text-amber-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full">
+            Low Stock
+          </span>
+        )}
+        {hasPromo && !outOfStock && (
+          <span className="absolute top-2.5 right-2.5 bg-red-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full">
+            PROMO
+          </span>
+        )}
+      </div>
+
+      {/* Body */}
+      <div className="p-4">
+        <p className="text-sm font-semibold text-gray-900 mb-0.5 truncate">
+          {product.productName}
+          {product.size && (
+            <span className="text-gray-400 font-normal ml-1">{product.size}</span>
+          )}
+        </p>
+        <p className="text-[11.5px] text-gray-400 mb-3">{product.category}</p>
+
+        <div className="flex items-end justify-between gap-2">
+          {/* Price */}
+          <div>
+            {hasPromo ? (
+              <>
+                <p className="text-lg font-bold text-green-700 leading-none">
+                  ₱{product.finalPrice!.toLocaleString()}
+                </p>
+                <p className="text-xs text-gray-300 line-through mt-0.5">
+                  ₱{product.price.toLocaleString()}
+                </p>
+              </>
+            ) : (
+              <p className="text-xl font-bold text-green-700 leading-none">
+                ₱{product.price.toLocaleString()}
+              </p>
+            )}
+            <p className="text-[10px] text-gray-300 mt-1">
+              {outOfStock ? "unavailable" : `${product.stock} in stock`}
+            </p>
+          </div>
+
+          {/* CTA */}
+          <button
+            onClick={() => onAddToCart(product)}
+            disabled={outOfStock || isAdding}
+            className={[
+              "px-4 py-2 rounded-full text-xs font-semibold text-white whitespace-nowrap",
+              "transition-all duration-200 active:scale-95",
+              outOfStock
+                ? "bg-gray-300 cursor-not-allowed"
+                : isAdded
+                  ? "bg-green-600"
+                  : isAdding
+                    ? "bg-violet-400 cursor-not-allowed"
+                    : "bg-violet-600 hover:bg-violet-700",
+            ].join(" ")}
+          >
+            {isAdding ? "Adding…" : isAdded ? "✓ Added!" : outOfStock ? "Out of Stock" : "+ Add to Cart"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+export default function ProductsPage() {
+  const [products,       setProducts]       = useState<Product[]>([]);
+  const [loading,        setLoading]        = useState<boolean>(true);
+  const [activeCategory, setActiveCategory] = useState<CategoryType | "All">("All");
+  const [search,         setSearch]         = useState<string>("");
+  const [addingId,       setAddingId]       = useState<string | null>(null);
+  const [addedId,        setAddedId]        = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchProducts = async () => {
+    (async () => {
       try {
-        const data = await api.getProducts();
-        const active = Array.isArray(data)
-          ? data.filter((p: Product) => p.status === "ACTIVE")
-          : [];
-        setProducts(active);
+        const data: Product[] = await api.getProducts();
+        setProducts(
+          Array.isArray(data) ? data.filter((p) => p.status === "ACTIVE") : []
+        );
       } catch (err) {
         console.error("Failed to fetch products:", err);
       } finally {
         setLoading(false);
       }
-    };
-    fetchProducts();
+    })();
   }, []);
 
-  const categories = useMemo(() => {
-    const cats = Array.from(
-      new Set(products.map((p) => p.category || "OTHER")),
-    );
-    return ["All", ...cats];
-  }, [products]);
-
-  const filtered = useMemo(
-    () =>
-      products.filter((p) => {
-        const matchCat =
-          activeCategory === "All" ||
-          (p.category || "OTHER") === activeCategory;
-        const matchSearch = p.productName
-          .toLowerCase()
-          .includes(search.toLowerCase());
-        return matchCat && matchSearch;
-      }),
-    [activeCategory, search, products],
+  const categories = useMemo<Array<CategoryType | "All">>(
+    () => ["All", ...Array.from(new Set(products.map((p) => p.category)))],
+    [products]
   );
 
-  const handleAddToCart = async (p: Product) => {
-    if ((p.stock ?? 0) <= 0) return;
+  const filtered = useMemo<Product[]>(
+    () =>
+      products.filter((p) => {
+        const matchCat = activeCategory === "All" || p.category === activeCategory;
+        const matchQ   = p.productName.toLowerCase().includes(search.toLowerCase());
+        return matchCat && matchQ;
+      }),
+    [products, activeCategory, search]
+  );
 
+  const handleAddToCart = useCallback(async (product: Product): Promise<void> => {
+    if (product.stock <= 0) return;
     const customerId = getCustomerId();
-    if (!customerId) {
-      alert("Please log in to add items to cart.");
-      return;
-    }
+    if (!customerId) { alert("Please log in to add items to cart."); return; }
 
+    setAddingId(product.id);
     try {
-      setAdding(p.id);
-      const result = await api.addCartItem(customerId, p.id, 1);
-
-      if (result?.message?.toLowerCase().includes("insufficient")) {
-        alert(result.message);
+      const result = await api.addCartItem(customerId, product.id, 1);
+      if ((result?.message as string | undefined)?.toLowerCase().includes("insufficient")) {
+        alert(result.message as string);
         return;
       }
-
-      setAdded(p.id);
-      setTimeout(() => setAdded(null), 1000);
-    } catch (err) {
-      console.error("Failed to add to cart:", err);
+      setAddedId(product.id);
+      setTimeout(() => setAddedId(null), 1000);
+    } catch {
       alert("Failed to add item to cart. Please try again.");
     } finally {
-      setAdding(null);
+      setAddingId(null);
     }
-  };
+  }, []);
 
   return (
-    <>
-      {/* Shimmer keyframe */}
-      <style>{`
-        @keyframes shimmer {
-          0%   { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
-      `}</style>
-
-      <div style={{ padding: "24px 28px" }}>
-        {/* ── Filter Bar ── */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            marginBottom: "20px",
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ position: "relative" }}>
-            <span
-              style={{
-                position: "absolute",
-                left: "12px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                fontSize: "13px",
-              }}
-            >
-              🔍
-            </span>
-            <input
-              type="text"
-              placeholder="Search products..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{
-                padding: "9px 16px 9px 34px",
-                borderRadius: "20px",
-                border: "0.5px solid #ddd",
-                fontSize: "13px",
-                outline: "none",
-                background: "#fff",
-                width: "220px",
-                color: "#000",
-              }}
-            />
-          </div>
-
-          <div
-            style={{ width: "1px", height: "28px", background: "#e0e0e0" }}
-          />
-
-          {/* Show skeleton pills while loading, real categories after */}
-          {loading ? (
-            <>
-              {[80, 100, 70, 90].map((w, i) => (
-                <div
-                  key={i}
-                  style={{
-                    height: "34px",
-                    width: `${w}px`,
-                    borderRadius: "20px",
-                    background:
-                      "linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)",
-                    backgroundSize: "200% 100%",
-                    animation: "shimmer 1.4s infinite",
-                  }}
-                />
-              ))}
-            </>
-          ) : (
-            categories.map((c) => (
-              <button
-                key={c}
-                onClick={() => setActiveCategory(c)}
-                style={{
-                  padding: "8px 18px",
-                  borderRadius: "20px",
-                  fontSize: "13px",
-                  cursor: "pointer",
-                  fontWeight: activeCategory === c ? 600 : 400,
-                  border:
-                    activeCategory === c
-                      ? "1.5px solid #2d7a3a"
-                      : "1px solid #ddd",
-                  background: activeCategory === c ? "#2d7a3a" : "#fff",
-                  color: activeCategory === c ? "#fff" : "#555",
-                  transition: "all 0.2s",
-                }}
-              >
-                {c}
-              </button>
-            ))
-          )}
-
-          <span
-            style={{
-              marginLeft: "auto",
-              fontSize: "12px",
-              color: "#aaa",
-              whiteSpace: "nowrap",
-            }}
+    <div className="p-7">
+      {/* ── Filter bar ── */}
+      <div className="flex flex-wrap items-center gap-2.5 mb-6">
+        {/* Search */}
+        <div className="relative">
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
           >
-            {loading
-              ? ""
-              : `${filtered.length} product${filtered.length !== 1 ? "s" : ""}`}
-          </span>
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search products..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 pr-4 py-2 rounded-full border border-gray-200 text-sm bg-white text-gray-900 w-56 outline-none focus:border-green-500 transition-colors placeholder:text-gray-400"
+          />
         </div>
 
-        {/* ── Skeleton Grid ── */}
-        {loading && (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
-              gap: "18px",
-            }}
-          >
-            {Array.from({ length: 8 }).map((_, i) => (
-              <SkeletonCard key={i} />
+        <div className="w-px h-7 bg-gray-200" />
+
+        {/* Category pills */}
+        {loading ? (
+          <>
+            {[80, 104, 72, 88].map((w, i) => (
+              <SkeletonPill key={i} width={w} />
             ))}
-          </div>
-        )}
-
-        {/* ── Empty ── */}
-        {!loading && filtered.length === 0 && (
-          <div style={{ textAlign: "center", padding: "60px 20px" }}>
-            <div style={{ fontSize: "48px", marginBottom: "16px" }}>🔍</div>
-            <p
-              style={{
-                fontSize: "16px",
-                fontWeight: 600,
-                color: "#1a1a1a",
-                marginBottom: "8px",
-              }}
+          </>
+        ) : (
+          categories.map((c) => (
+            <button
+              key={c}
+              onClick={() => setActiveCategory(c)}
+              className={[
+                "px-5 py-2 rounded-full text-[13px] font-medium transition-all duration-150",
+                activeCategory === c
+                  ? "bg-green-700 text-white font-semibold"
+                  : "border border-gray-200 bg-white text-gray-500 hover:bg-gray-50",
+              ].join(" ")}
             >
-              No products found
-            </p>
-            <p style={{ fontSize: "13px", color: "#aaa" }}>
-              Try a different search or category
-            </p>
-          </div>
+              {c}
+            </button>
+          ))
         )}
 
-        {/* ── Products Grid ── */}
-        {!loading && filtered.length > 0 && (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-              gap: "18px",
-            }}
-          >
-            {filtered.map((p) => {
-              const outOfStock = (p.stock ?? 0) <= 0;
-              const isAdded = added === p.id;
-              const isAdding = adding === p.id;
-              const emoji = getEmoji(p.category);
-              const bg = getBg(p.category);
-              const hasPromo = p.finalPrice != null && p.finalPrice < p.price;
-
-              return (
-                <div
-                  key={p.id}
-                  style={{
-                    background: "#fff",
-                    borderRadius: "16px",
-                    border: "0.5px solid #e8e8e8",
-                    overflow: "hidden",
-                    transition: "transform 0.2s, box-shadow 0.2s",
-                    opacity: outOfStock ? 0.6 : 1,
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLDivElement).style.transform =
-                      "translateY(-3px)";
-                    (e.currentTarget as HTMLDivElement).style.boxShadow =
-                      "0 8px 24px rgba(0,0,0,0.1)";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLDivElement).style.transform =
-                      "translateY(0)";
-                    (e.currentTarget as HTMLDivElement).style.boxShadow =
-                      "none";
-                  }}
-                >
-                  {/* Image */}
-                  <div
-                    style={{
-                      width: "100%",
-                      height: "170px",
-                      background: bg,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      position: "relative",
-                    }}
-                  >
-                    <span style={{ fontSize: "64px" }}>{emoji}</span>
-
-                    {outOfStock && (
-                      <span
-                        style={{
-                          position: "absolute",
-                          top: "10px",
-                          left: "10px",
-                          padding: "3px 10px",
-                          borderRadius: "20px",
-                          fontSize: "10px",
-                          fontWeight: 600,
-                          background: "#e53935",
-                          color: "#fff",
-                        }}
-                      >
-                        Out of Stock
-                      </span>
-                    )}
-                    {!outOfStock && (p.stock ?? 0) <= 10 && (
-                      <span
-                        style={{
-                          position: "absolute",
-                          top: "10px",
-                          left: "10px",
-                          padding: "3px 10px",
-                          borderRadius: "20px",
-                          fontSize: "10px",
-                          fontWeight: 600,
-                          background: "#f5c842",
-                          color: "#7a4f00",
-                        }}
-                      >
-                        Low Stock
-                      </span>
-                    )}
-                    {hasPromo && !outOfStock && (
-                      <span
-                        style={{
-                          position: "absolute",
-                          top: "10px",
-                          right: "10px",
-                          padding: "3px 10px",
-                          borderRadius: "20px",
-                          fontSize: "10px",
-                          fontWeight: 700,
-                          background: "#e53935",
-                          color: "#fff",
-                        }}
-                      >
-                        PROMO
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Body */}
-                  <div style={{ padding: "14px 16px 16px" }}>
-                    <p
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: 600,
-                        color: "#1a1a1a",
-                        marginBottom: "2px",
-                      }}
-                    >
-                      {p.productName}
-                    </p>
-                    <p
-                      style={{
-                        fontSize: "11.5px",
-                        color: "#aaa",
-                        marginBottom: "12px",
-                      }}
-                    >
-                      {p.size ? `Size: ${p.size}` : p.category || "—"}
-                    </p>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <div>
-                        {hasPromo ? (
-                          <>
-                            <p
-                              style={{
-                                fontSize: "18px",
-                                fontWeight: 700,
-                                color: "#2d7a3a",
-                                margin: 0,
-                              }}
-                            >
-                              ₱{p.finalPrice!.toLocaleString()}
-                            </p>
-                            <p
-                              style={{
-                                fontSize: "12px",
-                                color: "#bbb",
-                                textDecoration: "line-through",
-                                margin: 0,
-                              }}
-                            >
-                              ₱{p.price.toLocaleString()}
-                            </p>
-                          </>
-                        ) : (
-                          <p
-                            style={{
-                              fontSize: "20px",
-                              fontWeight: 700,
-                              color: "#2d7a3a",
-                              margin: 0,
-                            }}
-                          >
-                            ₱{p.price.toLocaleString()}
-                          </p>
-                        )}
-                        <p
-                          style={{
-                            fontSize: "10px",
-                            color: "#bbb",
-                            marginTop: "2px",
-                          }}
-                        >
-                          {outOfStock ? "unavailable" : `${p.stock} in stock`}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleAddToCart(p)}
-                        disabled={outOfStock || isAdding}
-                        style={{
-                          background: outOfStock
-                            ? "#ccc"
-                            : isAdded
-                              ? "#2d7a3a"
-                              : isAdding
-                                ? "#9c6fe4"
-                                : "#7c3aed",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: "20px",
-                          padding: "9px 16px",
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          cursor:
-                            outOfStock || isAdding ? "not-allowed" : "pointer",
-                          transition: "background 0.3s",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {isAdding
-                          ? "Adding..."
-                          : isAdded
-                            ? "✓ Added!"
-                            : outOfStock
-                              ? "Out of Stock"
-                              : "+ Add to Cart"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        {!loading && (
+          <span className="ml-auto text-xs text-gray-400 whitespace-nowrap">
+            {filtered.length} product{filtered.length !== 1 ? "s" : ""}
+          </span>
         )}
       </div>
-    </>
+
+      {/* ── Skeleton grid ── */}
+      {loading && (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      )}
+
+      {/* ── Empty state ── */}
+      {!loading && filtered.length === 0 && (
+        <div className="text-center py-20">
+          <p className="text-5xl mb-4">🔍</p>
+          <p className="text-base font-semibold text-gray-800 mb-2">No products found</p>
+          <p className="text-sm text-gray-400">Try a different search or category</p>
+        </div>
+      )}
+
+      {/* ── Product grid ── */}
+      {!loading && filtered.length > 0 && (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+          {filtered.map((p) => (
+            <ProductCard
+              key={p.id}
+              product={p}
+              onAddToCart={handleAddToCart}
+              addingId={addingId}
+              addedId={addedId}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
