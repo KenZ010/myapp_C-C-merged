@@ -1,120 +1,84 @@
 "use client";
 import Link from "next/link";
-import { useCart } from "@/context/CartContext";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 
-export default function OrderPlacedPage() {
-  const [isMobile, setIsMobile] = useState(false);
-  const { items, clearCart } = useCart();
+interface PendingOrderItem {
+  productId: string;
+  quantity: number;
+  price: number;
+}
 
-  const [orderNo, setOrderNo] = useState<string | null>(null);
+interface PendingOrder {
+  customerId: string;
+  paymentMethod: "cod" | "gcash";
+  items: PendingOrderItem[];
+}
+
+export default function OrderPlacedPage() {
+  const [orderNo,  setOrderNo]  = useState<string | null>(null);
   const [subtotal, setSubtotal] = useState(0);
   const [delivery, setDelivery] = useState(0);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [total,    setTotal]    = useState(0);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState<string | null>(null);
 
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 600);
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  useEffect(() => {
-    // Snapshot items immediately so clearCart doesn't wipe them mid-flight
-    const snapshot = [...items];
-    if (snapshot.length === 0) {
+    const raw = localStorage.getItem("pendingOrder");
+    if (!raw) {
+      setError("No order data found. Please go back to your cart.");
       setLoading(false);
       return;
     }
 
-    const sub = snapshot.reduce((sum, i) => sum + i.price * i.qty, 0);
+    let pending: PendingOrder;
+    try {
+      pending = JSON.parse(raw) as PendingOrder;
+    } catch {
+      setError("Invalid order data. Please try again.");
+      setLoading(false);
+      return;
+    }
+
+    const sub = pending.items.reduce((sum, i) => sum + i.price * i.quantity, 0);
     const del = sub >= 1000 ? 0 : 50;
     setSubtotal(sub);
     setDelivery(del);
     setTotal(sub + del);
 
-    // ── Read customer ID from the shared "user" key set at login ──
-    const customerId =
-      typeof window !== "undefined"
-        ? (JSON.parse(localStorage.getItem("user") || "{}")?.id ?? "")
-        : "";
-
     api
-      .placeOrder({
-        customerId,
-        paymentMethod: "cod",
-        items: snapshot.map((i) => ({
-          productId: String(i.id),
-          quantity: i.qty,
-          price: i.price,
-        })),
-      })
+      .placeOrder(pending)
       .then((data) => {
         setOrderNo(data.saleId ?? data.orderId ?? `ORD-${Date.now()}`);
-        clearCart();
+        localStorage.removeItem("pendingOrder");
+        localStorage.removeItem("cart");
       })
       .catch((err: Error) => {
         setError(err.message || "Failed to place order.");
       })
       .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Loading ──
   if (loading) {
     return (
-      <div
-        style={{
-          minHeight: "calc(100vh - 56px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "linear-gradient(160deg, #f0faf2 0%, #e8f5e9 100%)",
-        }}
-      >
-        <p style={{ fontSize: "16px", color: "#2d7a3a", fontWeight: 600 }}>
+      <div className="min-h-[calc(100vh-56px)] flex items-center justify-center bg-gradient-to-br from-[#f0faf2] to-[#e8f5e9]">
+        <p className="text-sm font-semibold text-green-700 animate-pulse">
           Placing your order…
         </p>
       </div>
     );
   }
 
+  // ── Error ──
   if (error) {
     return (
-      <div
-        style={{
-          minHeight: "calc(100vh - 56px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexDirection: "column",
-          gap: "16px",
-          padding: isMobile ? "16px" : "28px",
-          background: "linear-gradient(160deg, #fff5f5 0%, #fce4e4 100%)",
-        }}
-      >
-        <p style={{ fontSize: "18px", fontWeight: 700, color: "#c62828" }}>
-          ⚠️ Order Failed
-        </p>
-        <p style={{ fontSize: "14px", color: "#666", textAlign: "center" }}>
-          {error}
-        </p>
+      <div className="min-h-[calc(100vh-56px)] flex flex-col items-center justify-center gap-4 px-6 bg-gradient-to-br from-red-50 to-red-100">
+        <p className="text-lg font-bold text-red-700">⚠️ Order Failed</p>
+        <p className="text-sm text-gray-500 text-center">{error}</p>
         <Link
           href="/cart"
-          style={{
-            background: "#c62828",
-            color: "#fff",
-            padding: "12px 28px",
-            borderRadius: "30px",
-            textDecoration: "none",
-            fontWeight: 700,
-            fontSize: "14px",
-          }}
+          className="bg-red-700 text-white px-7 py-3 rounded-full text-sm font-bold hover:bg-red-800 transition-colors"
         >
           ← Back to Cart
         </Link>
@@ -122,260 +86,92 @@ export default function OrderPlacedPage() {
     );
   }
 
+  // ── Success ──
   return (
-    <div
-      style={{
-        minHeight: "calc(100vh - 56px)",
-        background: "linear-gradient(160deg, #f0faf2 0%, #e8f5e9 100%)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "28px",
-      }}
-    >
-      <div style={{ maxWidth: "560px", width: "100%", textAlign: "center" }}>
-        {/* Check Icon */}
-        <div
-          style={{
-            width: isMobile ? "80px" : "110px",
-            height: isMobile ? "80px" : "110px",
-            borderRadius: "50%",
-            background: "linear-gradient(135deg, #2d7a3a, #56ab6e)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            margin: "0 auto 28px",
-            boxShadow: "0 12px 32px rgba(45,122,58,0.3)",
-          }}
-        >
-          <svg
-            width={isMobile ? "36" : "52"}
-            height={isMobile ? "36" : "52"}
-            viewBox="0 0 52 52"
-            fill="none"
-          >
-            <circle
-              cx="26"
-              cy="26"
-              r="24"
-              stroke="rgba(255,255,255,0.3)"
-              strokeWidth="2"
-              fill="none"
-            />
-            <path
-              d="M14 26l9 9 15-18"
-              stroke="#fff"
-              strokeWidth="3.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
+    <div className="min-h-[calc(100vh-56px)] flex items-center justify-center bg-gradient-to-br from-[#f0faf2] to-[#e8f5e9] p-7">
+      <div className="w-full max-w-[560px] text-center">
+
+        {/* Check icon */}
+        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-green-700 to-green-500 flex items-center justify-center mx-auto mb-7 shadow-lg shadow-green-700/30">
+          <svg width="48" height="48" viewBox="0 0 52 52" fill="none">
+            <circle cx="26" cy="26" r="24" stroke="rgba(255,255,255,0.3)" strokeWidth="2" fill="none" />
+            <path d="M14 26l9 9 15-18" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
           </svg>
         </div>
 
-        <h1
-          style={{
-            fontSize: isMobile ? "22px" : "28px",
-            fontWeight: 800,
-            color: "#1a1a1a",
-            marginBottom: "12px",
-          }}
-        >
-          Order Placed! 🎉
-        </h1>
-        <p
-          style={{
-            fontSize: "14px",
-            color: "#666",
-            lineHeight: 1.7,
-            marginBottom: "8px",
-          }}
-        >
+        {/* Title */}
+        <h1 className="text-2xl font-extrabold text-gray-900 mb-3">Order Placed! 🎉</h1>
+        <p className="text-sm text-gray-400 leading-relaxed mb-1">
           Your order has been placed successfully!
         </p>
-        <p
-          style={{
-            fontSize: "14px",
-            color: "#666",
-            lineHeight: 1.7,
-            marginBottom: "28px",
-          }}
-        >
+        <p className="text-sm text-gray-400 leading-relaxed mb-7">
           We will process it and deliver it to your address soon.
         </p>
 
-        {/* Order Number */}
-        <div
-          style={{
-            background: "#e8f5e9",
-            borderRadius: "12px",
-            padding: "10px 20px",
-            display: "inline-block",
-            marginBottom: "24px",
-            border: "1px solid #a5d6a7",
-          }}
-        >
-          <p style={{ fontSize: "13px", color: "#2d7a3a", fontWeight: 600 }}>
-            Order Number: <span style={{ fontWeight: 800 }}>{orderNo}</span>
+        {/* Order number badge */}
+        <div className="inline-block bg-green-50 border border-green-200 rounded-xl px-5 py-2.5 mb-6">
+          <p className="text-[13px] font-semibold text-green-700">
+            Order Number:{" "}
+            <span className="font-extrabold">{orderNo ?? "—"}</span>
           </p>
         </div>
 
-        {/* Order Summary Card */}
-        <div
-          style={{
-            background: "#fff",
-            borderRadius: "20px",
-            border: "0.5px solid #e8e8e8",
-            padding: isMobile ? "16px" : "24px",
-            marginBottom: "24px",
-            textAlign: "left",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
-          }}
-        >
-          <p
-            style={{
-              fontSize: "15px",
-              fontWeight: 700,
-              color: "#1a1a1a",
-              marginBottom: "16px",
-              textAlign: "center",
-            }}
-          >
+        {/* Order summary card */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6 text-left">
+          <p className="text-sm font-bold text-gray-900 text-center mb-4">
             Order Summary
           </p>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "10px",
-              marginBottom: "14px",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontSize: "14px", color: "#888" }}>Subtotal:</span>
-              <span style={{ fontSize: "14px", color: "#1a1a1a" }}>
+
+          <div className="flex flex-col gap-2.5 mb-3">
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-400">Subtotal:</span>
+              <span className="text-sm text-gray-900">
                 ₱{subtotal.toLocaleString()}.00
               </span>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontSize: "14px", color: "#888" }}>
-                Delivery Fee:
-              </span>
-              <span
-                style={{
-                  fontSize: "14px",
-                  color: delivery === 0 ? "#2e7d32" : "#1a1a1a",
-                }}
-              >
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-400">Delivery Fee:</span>
+              <span className={`text-sm font-medium ${delivery === 0 ? "text-green-700" : "text-gray-900"}`}>
                 {delivery === 0 ? "FREE" : `₱${delivery}.00`}
               </span>
             </div>
           </div>
-          <div
-            style={{ height: "1px", background: "#f0f0f0", margin: "12px 0" }}
-          />
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <span
-              style={{ fontSize: "16px", fontWeight: 700, color: "#1a1a1a" }}
-            >
-              Total:
-            </span>
-            <span
-              style={{
-                fontSize: isMobile ? "20px" : "26px",
-                fontWeight: 800,
-                color: "#2d7a3a",
-              }}
-            >
+
+          <div className="h-px bg-gray-100 my-3" />
+
+          <div className="flex justify-between items-center">
+            <span className="text-base font-bold text-gray-900">Total:</span>
+            <span className="text-2xl font-extrabold text-green-700">
               ₱{total.toLocaleString()}.00
             </span>
           </div>
         </div>
 
-        {/* Estimated Delivery */}
-        <div
-          style={{
-            background: "#fff8e1",
-            borderRadius: "12px",
-            padding: isMobile ? "10px 14px" : "12px 20px",
-            marginBottom: "28px",
-            border: "1px solid #ffe082",
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            justifyContent: "center",
-          }}
-        >
-          <span style={{ fontSize: "18px" }}>🚚</span>
-          <p style={{ fontSize: "13px", color: "#f57f17", fontWeight: 600 }}>
+        {/* Estimated delivery */}
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-3 mb-7 flex items-center justify-center gap-2.5">
+          <span className="text-lg">🚚</span>
+          <p className="text-[13px] font-semibold text-amber-700">
             Estimated delivery: 1–2 hours
           </p>
         </div>
 
         {/* Buttons */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: isMobile ? "column" : "row",
-            gap: "12px",
-          }}
-        >
+        <div className="flex flex-col sm:flex-row gap-3">
           <Link
             href="/products"
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "8px",
-              background: "#2d7a3a",
-              color: "#fff",
-              textDecoration: "none",
-              padding: isMobile ? "13px" : "14px",
-              borderRadius: "30px",
-              fontSize: isMobile ? "13px" : "14px",
-              fontWeight: 700,
-              boxShadow: "0 6px 20px rgba(45,122,58,0.3)",
-            }}
+            className="flex-1 flex items-center justify-center gap-2 bg-green-700 hover:bg-green-800 text-white text-sm font-bold py-3.5 rounded-full transition-colors shadow-lg shadow-green-700/30 active:scale-95"
           >
             🛍️ Products
           </Link>
           <Link
             href="/orders"
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "8px",
-              background: "#2d7a3a",
-              color: "#fff",
-              textDecoration: "none",
-              padding: "14px",
-              borderRadius: "30px",
-              fontSize: isMobile ? "13px" : "14px",
-              fontWeight: 700,
-              boxShadow: "0 6px 20px rgba(45,122,58,0.3)",
-            }}
+            className="flex-1 flex items-center justify-center gap-2 bg-green-700 hover:bg-green-800 text-white text-sm font-bold py-3.5 rounded-full transition-colors shadow-lg shadow-green-700/30 active:scale-95"
           >
             📦 My Orders
           </Link>
         </div>
 
-        <p
-          style={{
-            fontSize: "12px",
-            color: "#aaa",
-            marginTop: "20px",
-            lineHeight: 1.6,
-          }}
-        >
+        <p className="text-xs text-gray-300 mt-5 leading-relaxed">
           You can track your order status in the My Orders section
         </p>
       </div>
