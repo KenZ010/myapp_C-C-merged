@@ -172,7 +172,7 @@ export default function PendingPage() {
       <div style={{ padding: "28px" }}>
 
         {/* Banner */}
-        <div style={{ background: "linear-gradient(135deg, #1a3c2e, #2d7a3a, #1565c0)", borderRadius: "16px", padding: "24px 32px", marginBottom: "24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "16px" }}>
+        <div style={{ background: "linear-gradient(135deg, #6366f1, #3c3eb1fb)", borderRadius: "16px", padding: "24px 32px", marginBottom: "24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "16px" }}>
           <div>
             <h1 style={{ fontSize: "26px", fontWeight: 800, color: "#fff", marginBottom: "6px" }}>Active Orders</h1>
             <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.65)" }}>Monitor and update the status of incoming customer orders</p>
@@ -197,7 +197,7 @@ export default function PendingPage() {
         <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
           {filterTabs.map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
-              style={{ padding: "8px 18px", borderRadius: "20px", fontSize: "13px", fontWeight: activeTab === tab ? 600 : 400, cursor: "pointer", border: activeTab === tab ? "none" : "1px solid #e0e0e0", background: activeTab === tab ? "#1a3c2e" : "#fff", color: activeTab === tab ? "#fff" : "#555", display: "flex", alignItems: "center", gap: "6px" }}>
+              style={{ padding: "8px 18px", borderRadius: "20px", fontSize: "13px", fontWeight: activeTab === tab ? 600 : 400, cursor: "pointer", border: activeTab === tab ? "none" : "1px solid #e0e0e0", background: activeTab === tab ? "#3c3eb1fb" : "#fff", color: activeTab === tab ? "#fff" : "#555", display: "flex", alignItems: "center", gap: "6px" }}>
               {tab}
               <span style={{ background: activeTab === tab ? "rgba(255,255,255,0.2)" : "#f0f0f0", color: activeTab === tab ? "#fff" : "#888", padding: "1px 7px", borderRadius: "10px", fontSize: "11px", fontWeight: 700 }}>
                 {loading ? "…" : tabCount(tab)}
@@ -283,14 +283,14 @@ export default function PendingPage() {
                         <span style={{ fontSize: "14px", marginTop: "1px" }}>💰</span>
                         <div>
                           <p style={{ fontSize: "10px", color: "#aaa", margin: 0 }}>Total Amount</p>
-                          <p style={{ fontSize: "18px", fontWeight: 800, color: "#1a3c2e", margin: 0 }}>₱{order.total.toLocaleString()}.00</p>
+                          <p style={{ fontSize: "18px", fontWeight: 800, color: "#3c3eb1fb", margin: 0 }}>₱{order.total.toLocaleString()}.00</p>
                         </div>
                       </div>
                     </div>
 
                     {/* View Items Toggle */}
                     <button onClick={() => setExpandedId(isExpanded ? null : order.id)}
-                      style={{ background: "none", border: "none", color: "#1a3c2e", fontSize: "13px", fontWeight: 600, cursor: "pointer", padding: "0", marginBottom: "10px" }}>
+                      style={{ background: "none", border: "none", color: "#3c3eb1fb", fontSize: "13px", fontWeight: 600, cursor: "pointer", padding: "0", marginBottom: "10px" }}>
                       {isExpanded ? "Hide Items ▲" : "View Items ▼"}
                     </button>
 
