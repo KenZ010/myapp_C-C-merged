@@ -354,6 +354,7 @@ export default function ProductManagementPage() {
   };
 
   const handleSaveEdit = async () => {
+<<<<<<< HEAD
     if (isEditingRef.current) return;
     isEditingRef.current = true;
     if (!editForm.productName) {
@@ -394,6 +395,39 @@ export default function ProductManagementPage() {
       isEditingRef.current = false;
     }
   };
+=======
+  if (isEditingRef.current) return;
+  isEditingRef.current = true;
+  if (!editForm.productName) {
+    showAlert("Product name is required.", "Missing Field");
+    isEditingRef.current = false;
+    return;
+  }
+  setSaving(true);
+  try {
+    const price         = editForm.price === "" ? 0 : Number(editForm.price);
+    const stockQuantity = editForm.stockQuantity === "" ? 0 : Number(editForm.stockQuantity);
+    const pcs           = Number(editForm.piecesPerCase) || 24;
+
+    const res = await api.updateProduct(selectedProduct!.id, {
+      ...editForm,
+      price,
+      stockQuantity,
+      piecesPerCase: pcs,   // ← explicitly include it
+    });
+
+    if (res.message && !res.id) { showToast(res.message, true); return; }
+    await fetchProducts();
+    setSelectedProduct((prev) => prev ? { ...prev, ...editForm, price, stockQuantity, piecesPerCase: pcs } : prev);
+    setIsEditing(false);
+    showToast("Product updated successfully!");
+  } catch { showToast("Failed to update product.", true); }
+  finally {
+    setSaving(false);
+    isEditingRef.current = false;
+  }
+};
+>>>>>>> 7c181a6cb8930f0e442717d1516b06309169c4e2
 
   const confirmDelete = async () => {
     try {
