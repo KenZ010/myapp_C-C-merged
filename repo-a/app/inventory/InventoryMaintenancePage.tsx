@@ -29,21 +29,21 @@ const getUnitShort = (u?: string) => getUnit(u).short;
 function getCaseBreakdown(qty: number, unit?: string): string | null {
   const u = getUnit(unit);
   if (!u.bottlesPerCase) return null;
-  return `${qty} × ${u.bottlesPerCase} = ${qty * u.bottlesPerCase} btl`;
+  return `${qty} × ${u.bottlesPerCase} = ${qty * u.bottlesPerCase} bottles`;
 }
 
 function formatRemaining(stock: number, unit: string): string {
   const u = getUnit(unit);
-  if (u.bottlesPerCase) return `${u.bottlesPerCase} pieces per case`;
-  if (unit === "btl") return `${stock} bottles remaining`;
-  return `${stock} pieces remaining`;
+  if (u.bottlesPerCase) return `${stock} cases (${stock * u.bottlesPerCase} bottles)`;
+  if (unit === "btl") return `${stock} bottles`;
+  return `${stock} pieces`;
 }
 
 function UnitPill({ unit }: { unit?: string }) {
   const u = getUnit(unit);
   return (
     <span className="inline-flex items-center text-xs text-indigo-600 font-medium bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full whitespace-nowrap">
-      {u.short}
+      {u.label}
     </span>
   );
 }
@@ -59,7 +59,7 @@ function CaseBadge({ quantity, unit }: { quantity: number; unit?: string }) {
   return (
     <div className="flex flex-col gap-0.5">
       <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border w-fit ${color}`}>
-        {quantity} <span className="font-normal opacity-80">{u.short}</span>
+        {quantity} <span className="font-normal opacity-80">{u.abbr}</span>
       </span>
       {breakdown && <span className="text-xs text-indigo-500 font-medium">{breakdown}</span>}
     </div>
@@ -195,24 +195,24 @@ function LogDetailModal({ log, onClose }: { log: InventoryLog; onClose: () => vo
           >✕</button>
         </div>
 
-        <div className="flex items-center gap-3 bg-gray-50 rounded-xl p-3 mb-4">
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-800 truncate">{log.product.productName}</p>
-            <span
-              className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-semibold"
-              style={{ background: style.bg, color: style.color }}
-            >{style.label}</span>
-          </div>
-          <div className="text-right shrink-0">
-            <p className="text-2xl font-extrabold"
-              style={{ color: isIn ? "#2e7d32" : isOut ? "#c62828" : "#1565c0" }}>
-              {sign}{qty}
-            </p>
-            <p className="text-xs text-indigo-500 font-medium">
-              {totalBtl !== null ? `${qty} × ${unit.bottlesPerCase} = ${totalBtl} btl` : unit.short}
-            </p>
-          </div>
-        </div>
+            <div className="flex items-center gap-3 bg-gray-50 rounded-xl p-3 mb-4">
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-gray-800 truncate">{log.product.productName}</p>
+                <span
+                  className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-semibold"
+                  style={{ background: style.bg, color: style.color }}
+                >{style.label}</span>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-2xl font-extrabold"
+                  style={{ color: isIn ? "#2e7d32" : isOut ? "#c62828" : "#1565c0" }}>
+                  {sign}{qty} <span className="text-lg font-normal">{unit.abbr}</span>
+                </p>
+                <p className="text-xs text-indigo-500 font-medium">
+                  {totalBtl !== null ? `${qty} cases = ${totalBtl} bottles` : `${qty} ${unit.abbr}`}
+                </p>
+              </div>
+            </div>
 
         <div className="flex flex-col gap-3">
           <div className="bg-gray-50 rounded-xl p-3">
@@ -505,7 +505,7 @@ export default function InventoryMaintenancePage() {
                 <table className="w-full text-sm min-w-max">
                   <thead>
                     <tr className="bg-indigo-900 text-white text-xs">
-                      {["Date & Time","Product","Category","Transaction","Qty","Unit","Total Bottles","Details"].map((h) => (
+                      {["Date & Time","Product","Category","Transaction","Qty Moved","Unit Type","Total Bottles","Details"].map((h) => (
                         <th key={h} className="p-3 text-left whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
@@ -535,7 +535,7 @@ export default function InventoryMaintenancePage() {
                             </div>
                               {stockInfo != null && (
                                 <p className="text-xs text-gray-400 mt-0.5">
-                                  {formatRemaining(stockInfo.stock, stockInfo.stockUnit)}
+                                  Current stock: {formatRemaining(stockInfo.stock, stockInfo.stockUnit)}
                                 </p>
                               )}
                           </td>
@@ -552,19 +552,19 @@ export default function InventoryMaintenancePage() {
                           </td>
                           <td className="p-3 font-bold text-sm"
                             style={{ color: isIn ? "#2e7d32" : isOut ? "#c62828" : "#1565c0" }}>
-                            {sign}{qty}
+                            {sign}{qty} <span className="font-normal text-xs opacity-70">{unitInfo.abbr}</span>
                           </td>
-                          <td className="p-3"><UnitPill unit={log.product.stockUnit} /></td>
+                          <td className="p-3 text-xs text-gray-600">{unitInfo.label}</td>
                           <td className="p-3 text-xs text-indigo-500 font-medium whitespace-nowrap">
-                            {totalBtl !== null ? `${qty} × ${unitInfo.bottlesPerCase} = ${totalBtl} btl` : "—"}
+                            {totalBtl !== null ? `${qty} cases = ${totalBtl} bottles` : `${qty} ${unitInfo.abbr}`}
                           </td>
                           <td className="p-3">
                             <button
-                              onClick={() => setSelectedLog(log)}
-                              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100 transition-colors whitespace-nowrap"
-                            >
-                              View Details
-                            </button>
+                                onClick={() => setSelectedLog(log)}
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100 transition-colors whitespace-nowrap"
+                              >
+                                View Details
+                              </button>
                           </td>
                         </tr>
                       );
@@ -642,15 +642,15 @@ export default function InventoryMaintenancePage() {
                             transition: "width 0.5s",
                           }} />
                         </div>
-                        <span style={{ fontSize: "12px", fontWeight: 700, color: "#1a3c2e", width: "60px", textAlign: "right", whiteSpace: "nowrap" }}>
-                          {item.stock} {getUnitShort(item.stockUnit)}
+                        <span style={{ fontSize: "12px", fontWeight: 700, color: "#1a3c2e", width: "80px", textAlign: "right", whiteSpace: "nowrap" }}>
+                          {item.stock} {getUnit(item.stockUnit).abbr}
                         </span>
                       </div>
                     ))}
-                    <p style={{ fontSize: "11px", color: "#aaa", marginTop: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <span style={{ display: "inline-block", width: "12px", height: "12px", background: "#2d7a3a", borderRadius: "3px" }} />
-                      Units in Stock
-                    </p>
+                      <p style={{ fontSize: "11px", color: "#aaa", marginTop: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ display: "inline-block", width: "12px", height: "12px", background: "#2d7a3a", borderRadius: "3px" }} />
+                        Stock (in units)
+                      </p>
                   </div>
                 );
               })()}
@@ -709,7 +709,7 @@ export default function InventoryMaintenancePage() {
                               </div>
                               {si && (
                                 <p className="text-xs text-gray-400 mt-0.5">
-                                  {formatRemaining(si.stock, si.stockUnit)}
+                                  Stock: {formatRemaining(si.stock, si.stockUnit)}
                                 </p>
                               )}
                             </td>
