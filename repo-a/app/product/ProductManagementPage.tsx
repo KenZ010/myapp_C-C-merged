@@ -327,7 +327,7 @@ export default function ProductManagementPage() {
       (p.productName ?? "").toLowerCase().includes(search.toLowerCase())
       && (selectedCategory === "All" || p.category === selectedCategory)
       && (selectedSize === "All" || p.size === selectedSize)
-      && (selectedSupplier === "All" || p.supplierId === selectedSupplier)
+      && (selectedSupplier === "All" || p.supplierId === selectedSupplier || p.supplier?.id === selectedSupplier)
     )
     .sort((a, b) => {
       if (a.stockQuantity > 0 && b.stockQuantity === 0) return -1;
