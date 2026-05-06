@@ -572,20 +572,18 @@ export default function ProductManagementPage() {
             ))}
           </div>
 
-           <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm">
-             {/* TEST: This should be visible with bright colors */}
-             <div style={{backgroundColor: 'yellow', color: 'red', padding: '10px', fontWeight: 'bold', fontSize: '20px', border: '3px solid blue'}}>
-               TEST TEXT - If you can't see this, there's a serious rendering issue!
-             </div>
-
-             {/* ── Filters ── */}
-             <div className="flex items-center gap-2 mb-4 flex-wrap">
-              <div className="flex items-center gap-2 border-2 border-blue-500 rounded-lg px-3 py-2 w-36 md:w-48" style={{backgroundColor: 'white', padding: '8px'}}>
-                <Search className="w-3.5 h-3.5" style={{color: 'red', fontSize: '16px'}} />
-                <input type="text" placeholder="Search" value={search}
-                  onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-                  style={{color: 'red', backgroundColor: 'yellow', width: '100%', outline: '2px solid blue', fontSize: '16px', fontWeight: 'bold'}} />
+             <div style={{backgroundColor: 'white', padding: '20px', borderRadius: '10px', margin: '10px'}}>
+              <div style={{backgroundColor: 'yellow', color: 'red', padding: '10px', fontWeight: 'bold', fontSize: '30px', border: '5px solid blue', marginBottom: '20px'}}>
+                TEST: Can you see this bright red text on yellow?
               </div>
+
+              <div style={{display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap'}}>
+               <div style={{display: 'flex', alignItems: 'center', gap: '5px', border: '2px solid black', padding: '8px', backgroundColor: 'white'}}>
+                 <span style={{color: 'red', fontSize: '20px'}}>🔍</span>
+                 <input type="text" placeholder="Search products here" value={search}
+                   onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+                   style={{color: 'black', backgroundColor: 'lightyellow', width: '200px', fontSize: '18px', fontWeight: 'bold', padding: '5px', border: '1px solid black'}} />
+               </div>
 
               <div className="relative" ref={categoryRef}>
                 <button onClick={() => { setShowCategoryDropdown(!showCategoryDropdown); setShowSizeDropdown(false); }}
