@@ -569,11 +569,11 @@ export default function ProductManagementPage() {
 
             {/* ── Filters ── */}
             <div className="flex items-center gap-2 mb-4 flex-wrap">
-              <div className="flex items-center gap-2 border border-gray-300 rounded-lg px-3 py-2 w-36 md:w-48 bg-white" style={{backgroundColor: 'white'}}>
-                <Search className="w-3.5 h-3.5" style={{color: '#4B5563'}} />
+              <div className="flex items-center gap-2 border-2 border-blue-500 rounded-lg px-3 py-2 w-36 md:w-48" style={{backgroundColor: 'white', padding: '8px'}}>
+                <Search className="w-3.5 h-3.5" style={{color: 'red', fontSize: '16px'}} />
                 <input type="text" placeholder="Search" value={search}
                   onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-                  style={{color: 'black', backgroundColor: 'transparent', width: '100%', outline: 'none', fontSize: '14px'}} />
+                  style={{color: 'red', backgroundColor: 'yellow', width: '100%', outline: '2px solid blue', fontSize: '16px', fontWeight: 'bold'}} />
               </div>
 
               <div className="relative" ref={categoryRef}>
@@ -587,10 +587,10 @@ export default function ProductManagementPage() {
                   <ChevronDown className="w-3 h-3" style={{color: '#4B5563'}} />
                 </button>
                 {showCategoryDropdown && (
-                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44">
+                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44" style={{backgroundColor: 'white'}}>
                     {categories.map((cat) => (
                       <button key={cat} onClick={() => { setSelectedCategory(cat); setShowCategoryDropdown(false); setCurrentPage(1); }}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedCategory === cat ? "text-indigo-700 font-medium" : "text-gray-900"}`}>
+                        style={{width: '100%', textAlign: 'left', padding: '8px 16px', fontSize: '14px', backgroundColor: selectedCategory === cat ? '#EEF2FF' : 'white', color: selectedCategory === cat ? '#4338CA' : '#111827', fontWeight: selectedCategory === cat ? '500' : 'normal', border: 'none', cursor: 'pointer', display: 'block'}}>
                         {cat}
                       </button>
                     ))}
@@ -609,10 +609,10 @@ export default function ProductManagementPage() {
                   <ChevronDown className="w-3 h-3" style={{color: '#4B5563'}} />
                 </button>
                 {showSizeDropdown && (
-                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-32">
+                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-32" style={{backgroundColor: 'white'}}>
                     {sizes.map((size) => (
                       <button key={size} onClick={() => { setSelectedSize(size); setShowSizeDropdown(false); setCurrentPage(1); }}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedSize === size ? "text-indigo-700 font-medium" : "text-gray-900"}`}>
+                        style={{width: '100%', textAlign: 'left', padding: '8px 16px', fontSize: '14px', backgroundColor: selectedSize === size ? '#EEF2FF' : 'white', color: selectedSize === size ? '#4338CA' : '#111827', fontWeight: selectedSize === size ? '500' : 'normal', border: 'none', cursor: 'pointer', display: 'block'}}>
                         {size}
                       </button>
                     ))}
@@ -632,14 +632,14 @@ export default function ProductManagementPage() {
                   <ChevronDown className="w-3 h-3" style={{color: '#4B5563'}} />
                 </button>
                 {showSupplierDropdown && (
-                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-48 max-h-48 overflow-y-auto">
+                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-48 max-h-48 overflow-y-auto" style={{backgroundColor: 'white'}}>
                     <button onClick={() => { setSelectedSupplier("All"); setShowSupplierDropdown(false); setCurrentPage(1); }}
-                       className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedSupplier === "All" ? "text-indigo-700 font-medium" : "text-gray-900"}`}>
+                       style={{width: '100%', textAlign: 'left', padding: '8px 16px', fontSize: '14px', backgroundColor: selectedSupplier === "All" ? '#EEF2FF' : 'white', color: selectedSupplier === "All" ? '#4338CA' : '#111827', fontWeight: selectedSupplier === "All" ? '500' : 'normal', border: 'none', cursor: 'pointer', display: 'block'}}>
                       All Suppliers
                     </button>
                     {suppliers.map((supplier) => (
                       <button key={supplier.id} onClick={() => { setSelectedSupplier(supplier.id); setShowSupplierDropdown(false); setCurrentPage(1); }}
-                         className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedSupplier === supplier.id ? "text-indigo-700 font-medium" : "text-gray-900"}`}>
+                         style={{width: '100%', textAlign: 'left', padding: '8px 16px', fontSize: '14px', backgroundColor: selectedSupplier === supplier.id ? '#EEF2FF' : 'white', color: selectedSupplier === supplier.id ? '#4338CA' : '#111827', fontWeight: selectedSupplier === supplier.id ? '500' : 'normal', border: 'none', cursor: 'pointer', display: 'block'}}>
                         {supplier.supplierName}
                       </button>
                     ))}
