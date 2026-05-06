@@ -53,7 +53,7 @@ function SkeletonRow() {
 function ReturnFormModal({ order, onClose, onSuccess }: any) {
   const [selectedLines, setSelectedLines] = useState<any>({});
   const [quantities, setQuantities] = useState<any>({});
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState<ReturnReason | "">("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -114,7 +114,7 @@ function ReturnFormModal({ order, onClose, onSuccess }: any) {
             </p>
             <select
               value={reason}
-              onChange={(e) => setReason(e.target.value)}
+              onChange={(e) => setReason(e.target.value as ReturnReason)}
               className="w-full px-[14px] py-[11px] rounded-[10px] border-[1.5px] border-[#f0e0e8] bg-[#fff8fa] text-[13px]"
             >
               <option value="">Select a reason...</option>
