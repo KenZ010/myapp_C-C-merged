@@ -322,12 +322,18 @@ export default function ProductManagementPage() {
     router.push("/");
   };
 
-  const filtered = products.filter((p) =>
-    (p.productName ?? "").toLowerCase().includes(search.toLowerCase())
-    && (selectedCategory === "All" || p.category === selectedCategory)
-    && (selectedSize === "All" || p.size === selectedSize)
-    && (selectedSupplier === "All" || p.supplierId === selectedSupplier)
-  );
+  const filtered = products
+    .filter((p) =>
+      (p.productName ?? "").toLowerCase().includes(search.toLowerCase())
+      && (selectedCategory === "All" || p.category === selectedCategory)
+      && (selectedSize === "All" || p.size === selectedSize)
+      && (selectedSupplier === "All" || p.supplierId === selectedSupplier)
+    )
+    .sort((a, b) => {
+      if (a.stockQuantity > 0 && b.stockQuantity === 0) return -1;
+      if (a.stockQuantity === 0 && b.stockQuantity > 0) return 1;
+      return b.stockQuantity - a.stockQuantity;
+    });
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated  = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
