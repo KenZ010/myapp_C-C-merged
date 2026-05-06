@@ -579,7 +579,7 @@ export default function ProductManagementPage() {
               <div className="relative" ref={categoryRef}>
                 <button onClick={() => { setShowCategoryDropdown(!showCategoryDropdown); setShowSizeDropdown(false); }}
                   className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors
-                    ${selectedCategory !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                    ${selectedCategory !== "All" ? "border-indigo-400 text-indigo-700 bg-indigo-50" : "border-gray-200 text-gray-800 hover:bg-gray-50"}`}>
                   <FolderOpen className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">{selectedCategory}</span>
                   <span className="sm:hidden">Cat</span>
@@ -589,7 +589,7 @@ export default function ProductManagementPage() {
                   <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44">
                     {categories.map((cat) => (
                       <button key={cat} onClick={() => { setSelectedCategory(cat); setShowCategoryDropdown(false); setCurrentPage(1); }}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedCategory === cat ? "text-indigo-600 font-medium" : "text-gray-600"}`}>
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedCategory === cat ? "text-indigo-700 font-medium" : "text-gray-900"}`}>
                         {cat}
                       </button>
                     ))}
@@ -600,7 +600,7 @@ export default function ProductManagementPage() {
               <div className="relative" ref={sizeRef}>
                 <button onClick={() => { setShowSizeDropdown(!showSizeDropdown); setShowCategoryDropdown(false); setShowSupplierDropdown(false); }}
                   className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors
-                    ${selectedSize !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                    ${selectedSize !== "All" ? "border-indigo-400 text-indigo-700 bg-indigo-50" : "border-gray-200 text-gray-800 hover:bg-gray-50"}`}>
                   <Package className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">{selectedSize}</span>
                   <span className="sm:hidden">Size</span>
@@ -610,7 +610,7 @@ export default function ProductManagementPage() {
                   <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-32">
                     {sizes.map((size) => (
                       <button key={size} onClick={() => { setSelectedSize(size); setShowSizeDropdown(false); setCurrentPage(1); }}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedSize === size ? "text-indigo-600 font-medium" : "text-gray-600"}`}>
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedSize === size ? "text-indigo-700 font-medium" : "text-gray-900"}`}>
                         {size}
                       </button>
                     ))}
@@ -622,7 +622,7 @@ export default function ProductManagementPage() {
               <div className="relative" ref={supplierRef}>
                 <button onClick={() => { setShowSupplierDropdown(!showSupplierDropdown); setShowCategoryDropdown(false); setShowSizeDropdown(false); }}
                   className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors
-                    ${selectedSupplier !== "All" ? "border-indigo-400 text-indigo-600 bg-indigo-50" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                    ${selectedSupplier !== "All" ? "border-indigo-400 text-indigo-700 bg-indigo-50" : "border-gray-200 text-gray-800 hover:bg-gray-50"}`}>
                   <Users className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">{suppliers.find(s => s.id === selectedSupplier)?.supplierName || "All Suppliers"}</span>
                   <span className="sm:hidden">Supplier</span>
@@ -631,12 +631,12 @@ export default function ProductManagementPage() {
                 {showSupplierDropdown && (
                   <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-48 max-h-48 overflow-y-auto">
                     <button onClick={() => { setSelectedSupplier("All"); setShowSupplierDropdown(false); setCurrentPage(1); }}
-                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedSupplier === "All" ? "text-indigo-600 font-medium" : "text-gray-600"}`}>
+                       className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedSupplier === "All" ? "text-indigo-700 font-medium" : "text-gray-900"}`}>
                       All Suppliers
                     </button>
                     {suppliers.map((supplier) => (
                       <button key={supplier.id} onClick={() => { setSelectedSupplier(supplier.id); setShowSupplierDropdown(false); setCurrentPage(1); }}
-                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedSupplier === supplier.id ? "text-indigo-600 font-medium" : "text-gray-600"}`}>
+                         className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedSupplier === supplier.id ? "text-indigo-700 font-medium" : "text-gray-900"}`}>
                         {supplier.supplierName}
                       </button>
                     ))}
