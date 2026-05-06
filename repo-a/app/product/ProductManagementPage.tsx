@@ -466,7 +466,7 @@ export default function ProductManagementPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50 font-sans">
+    <div className="flex min-h-screen" style={{backgroundColor: '#F9FAFB', color: '#111827'}}>
       <AlertModal {...alertModal} />
 
       {/* ── Sidebar ── */}
