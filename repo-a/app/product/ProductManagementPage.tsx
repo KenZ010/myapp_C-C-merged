@@ -193,6 +193,7 @@ function AlertModal({ open, type = "alert", title, message, danger, onConfirm, o
         </div>
       </div>
     </div>
+    </>
   );
 }
 
@@ -466,7 +467,13 @@ export default function ProductManagementPage() {
   };
 
   return (
-    <div className="flex min-h-screen" style={{backgroundColor: '#F9FAFB', color: '#111827'}}>
+    <>
+    <style dangerouslySetInnerHTML={{__html: `
+      .filter-area * { color: black !important; }
+      .filter-area button, .filter-area input { color: black !important; background-color: white !important; }
+      .filter-area [class*="text-"] { color: black !important; }
+    `}} />
+    <div className="flex min-h-screen filter-area" style={{backgroundColor: '#F9FAFB', color: '#111827'}}>
       <AlertModal {...alertModal} />
 
       {/* ── Sidebar ── */}
