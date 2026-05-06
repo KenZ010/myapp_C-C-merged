@@ -193,7 +193,6 @@ function AlertModal({ open, type = "alert", title, message, danger, onConfirm, o
         </div>
       </div>
     </div>
-    </>
   );
 }
 
@@ -467,13 +466,7 @@ export default function ProductManagementPage() {
   };
 
   return (
-    <>
-    <style dangerouslySetInnerHTML={{__html: `
-      .filter-area * { color: black !important; }
-      .filter-area button, .filter-area input { color: black !important; background-color: white !important; }
-      .filter-area [class*="text-"] { color: black !important; }
-    `}} />
-    <div className="flex min-h-screen filter-area" style={{backgroundColor: '#F9FAFB', color: '#111827'}}>
+    <div className="flex min-h-screen bg-gray-50 font-sans">
       <AlertModal {...alertModal} />
 
       {/* ── Sidebar ── */}
@@ -572,34 +565,31 @@ export default function ProductManagementPage() {
             ))}
           </div>
 
-             <div style={{backgroundColor: 'white', padding: '20px', borderRadius: '10px', margin: '10px'}}>
-              <div style={{backgroundColor: 'yellow', color: 'red', padding: '10px', fontWeight: 'bold', fontSize: '30px', border: '5px solid blue', marginBottom: '20px'}}>
-                TEST: Can you see this bright red text on yellow?
-              </div>
+          <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm">
 
-              <div style={{display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap'}}>
-               <div style={{display: 'flex', alignItems: 'center', gap: '5px', border: '2px solid black', padding: '8px', backgroundColor: 'white'}}>
-                 <span style={{color: 'red', fontSize: '20px'}}>🔍</span>
-                 <input type="text" placeholder="Search products here" value={search}
-                   onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-                   style={{color: 'black', backgroundColor: 'lightyellow', width: '200px', fontSize: '18px', fontWeight: 'bold', padding: '5px', border: '1px solid black'}} />
-               </div>
+            {/* ── Filters ── */}
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              <div className="flex items-center gap-2 border border-gray-300 rounded-lg px-3 py-2 w-36 md:w-48 bg-white">
+                <Search className="w-3.5 h-3.5 text-gray-500" />
+                <input type="text" placeholder="Search" value={search}
+                  onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+                  className="outline-none text-sm text-gray-900 w-full bg-transparent placeholder:text-gray-400" />
+              </div>
 
               <div className="relative" ref={categoryRef}>
                 <button onClick={() => { setShowCategoryDropdown(!showCategoryDropdown); setShowSizeDropdown(false); }}
-                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors
-                    ${selectedCategory !== "All" ? "border-indigo-400 bg-indigo-50" : "border-gray-200 hover:bg-gray-50"}`}
-                  style={{backgroundColor: selectedCategory !== "All" ? '#EEF2FF' : 'white', color: '#1F2937', minWidth: 'fit-content'}}>
-                  <FolderOpen className="w-3.5 h-3.5" style={{color: '#4B5563'}} />
-                  <span className="hidden sm:inline" style={{color: selectedCategory !== "All" ? '#4338CA' : '#1F2937'}}>{selectedCategory}</span>
-                  <span className="sm:hidden" style={{color: selectedCategory !== "All" ? '#4338CA' : '#1F2937'}}>Cat</span>
-                  <ChevronDown className="w-3 h-3" style={{color: '#4B5563'}} />
+                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors bg-white
+                    ${selectedCategory !== "All" ? "border-indigo-400 text-indigo-700 bg-indigo-50" : "border-gray-300 text-gray-900 hover:bg-gray-50"}`}>
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{selectedCategory}</span>
+                  <span className="sm:hidden">Cat</span>
+                  <ChevronDown className="w-3 h-3" />
                 </button>
                 {showCategoryDropdown && (
-                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44" style={{backgroundColor: 'white'}}>
+                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-44">
                     {categories.map((cat) => (
                       <button key={cat} onClick={() => { setSelectedCategory(cat); setShowCategoryDropdown(false); setCurrentPage(1); }}
-                        style={{width: '100%', textAlign: 'left', padding: '8px 16px', fontSize: '14px', backgroundColor: selectedCategory === cat ? '#EEF2FF' : 'white', color: selectedCategory === cat ? '#4338CA' : '#111827', fontWeight: selectedCategory === cat ? '500' : 'normal', border: 'none', cursor: 'pointer', display: 'block'}}>
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedCategory === cat ? "text-indigo-700 font-medium" : "text-gray-900"}`}>
                         {cat}
                       </button>
                     ))}
@@ -609,19 +599,18 @@ export default function ProductManagementPage() {
 
               <div className="relative" ref={sizeRef}>
                 <button onClick={() => { setShowSizeDropdown(!showSizeDropdown); setShowCategoryDropdown(false); setShowSupplierDropdown(false); }}
-                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors
-                    ${selectedSize !== "All" ? "border-indigo-400 bg-indigo-50" : "border-gray-200 hover:bg-gray-50"}`}
-                  style={{backgroundColor: selectedSize !== "All" ? '#EEF2FF' : 'white', color: '#1F2937'}}>
-                  <Package className="w-3.5 h-3.5" style={{color: '#4B5563'}} />
-                  <span className="hidden sm:inline" style={{color: selectedSize !== "All" ? '#4338CA' : '#1F2937'}}>{selectedSize}</span>
-                  <span className="sm:hidden" style={{color: selectedSize !== "All" ? '#4338CA' : '#1F2937'}}>Size</span>
-                  <ChevronDown className="w-3 h-3" style={{color: '#4B5563'}} />
+                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors bg-white
+                    ${selectedSize !== "All" ? "border-indigo-400 text-indigo-700 bg-indigo-50" : "border-gray-300 text-gray-900 hover:bg-gray-50"}`}>
+                  <Package className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{selectedSize}</span>
+                  <span className="sm:hidden">Size</span>
+                  <ChevronDown className="w-3 h-3" />
                 </button>
                 {showSizeDropdown && (
-                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-32" style={{backgroundColor: 'white'}}>
+                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-32">
                     {sizes.map((size) => (
                       <button key={size} onClick={() => { setSelectedSize(size); setShowSizeDropdown(false); setCurrentPage(1); }}
-                        style={{width: '100%', textAlign: 'left', padding: '8px 16px', fontSize: '14px', backgroundColor: selectedSize === size ? '#EEF2FF' : 'white', color: selectedSize === size ? '#4338CA' : '#111827', fontWeight: selectedSize === size ? '500' : 'normal', border: 'none', cursor: 'pointer', display: 'block'}}>
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedSize === size ? "text-indigo-700 font-medium" : "text-gray-900"}`}>
                         {size}
                       </button>
                     ))}
@@ -632,23 +621,22 @@ export default function ProductManagementPage() {
               {/* Supplier Filter */}
               <div className="relative" ref={supplierRef}>
                 <button onClick={() => { setShowSupplierDropdown(!showSupplierDropdown); setShowCategoryDropdown(false); setShowSizeDropdown(false); }}
-                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors
-                    ${selectedSupplier !== "All" ? "border-indigo-400 bg-indigo-50" : "border-gray-200 hover:bg-gray-50"}`}
-                  style={{backgroundColor: selectedSupplier !== "All" ? '#EEF2FF' : 'white', color: '#1F2937'}}>
-                  <Users className="w-3.5 h-3.5" style={{color: '#4B5563'}} />
-                  <span className="hidden sm:inline" style={{color: selectedSupplier !== "All" ? '#4338CA' : '#1F2937'}}>{suppliers.find(s => s.id === selectedSupplier)?.supplierName || "All Suppliers"}</span>
-                  <span className="sm:hidden" style={{color: selectedSupplier !== "All" ? '#4338CA' : '#1F2937'}}>Supplier</span>
-                  <ChevronDown className="w-3 h-3" style={{color: '#4B5563'}} />
+                  className={`flex items-center gap-1 border rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm transition-colors bg-white
+                    ${selectedSupplier !== "All" ? "border-indigo-400 text-indigo-700 bg-indigo-50" : "border-gray-300 text-gray-900 hover:bg-gray-50"}`}>
+                  <Users className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{suppliers.find(s => s.id === selectedSupplier)?.supplierName || "All Suppliers"}</span>
+                  <span className="sm:hidden">Supplier</span>
+                  <ChevronDown className="w-3 h-3" />
                 </button>
                 {showSupplierDropdown && (
-                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-48 max-h-48 overflow-y-auto" style={{backgroundColor: 'white'}}>
+                  <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-48 max-h-48 overflow-y-auto">
                     <button onClick={() => { setSelectedSupplier("All"); setShowSupplierDropdown(false); setCurrentPage(1); }}
-                       style={{width: '100%', textAlign: 'left', padding: '8px 16px', fontSize: '14px', backgroundColor: selectedSupplier === "All" ? '#EEF2FF' : 'white', color: selectedSupplier === "All" ? '#4338CA' : '#111827', fontWeight: selectedSupplier === "All" ? '500' : 'normal', border: 'none', cursor: 'pointer', display: 'block'}}>
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedSupplier === "All" ? "text-indigo-700 font-medium" : "text-gray-900"}`}>
                       All Suppliers
                     </button>
                     {suppliers.map((supplier) => (
                       <button key={supplier.id} onClick={() => { setSelectedSupplier(supplier.id); setShowSupplierDropdown(false); setCurrentPage(1); }}
-                         style={{width: '100%', textAlign: 'left', padding: '8px 16px', fontSize: '14px', backgroundColor: selectedSupplier === supplier.id ? '#EEF2FF' : 'white', color: selectedSupplier === supplier.id ? '#4338CA' : '#111827', fontWeight: selectedSupplier === supplier.id ? '500' : 'normal', border: 'none', cursor: 'pointer', display: 'block'}}>
+                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${selectedSupplier === supplier.id ? "text-indigo-700 font-medium" : "text-gray-900"}`}>
                         {supplier.supplierName}
                       </button>
                     ))}
