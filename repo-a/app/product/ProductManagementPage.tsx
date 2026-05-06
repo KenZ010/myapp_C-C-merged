@@ -565,10 +565,14 @@ export default function ProductManagementPage() {
             ))}
           </div>
 
-          <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm">
+           <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm">
+             {/* TEST: This should be visible with bright colors */}
+             <div style={{backgroundColor: 'yellow', color: 'red', padding: '10px', fontWeight: 'bold', fontSize: '20px', border: '3px solid blue'}}>
+               TEST TEXT - If you can't see this, there's a serious rendering issue!
+             </div>
 
-            {/* ── Filters ── */}
-            <div className="flex items-center gap-2 mb-4 flex-wrap">
+             {/* ── Filters ── */}
+             <div className="flex items-center gap-2 mb-4 flex-wrap">
               <div className="flex items-center gap-2 border-2 border-blue-500 rounded-lg px-3 py-2 w-36 md:w-48" style={{backgroundColor: 'white', padding: '8px'}}>
                 <Search className="w-3.5 h-3.5" style={{color: 'red', fontSize: '16px'}} />
                 <input type="text" placeholder="Search" value={search}
