@@ -267,7 +267,7 @@ export default function ReturnPage() {
         page,
         limit: LIMIT,
       };
-      if (statusFil !== "ALL") params.status = statusFil;
+      if (statusFil !== "ALL") params.status = statusFil.toUpperCase();
       const result = await getReturnRequests(params);
       setRecords(result.data ?? []);
       setTotal(result.total ?? 0);
@@ -285,7 +285,7 @@ export default function ReturnPage() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return records.filter((r) => {
-      const matchReason = reasonFil === "ALL" || r.reason === reasonFil;
+      const matchReason = reasonFil === "ALL" || r.reason.toUpperCase() === reasonFil.toUpperCase();
       const matchSearch =
         !q ||
         r.id.toLowerCase().includes(q) ||
