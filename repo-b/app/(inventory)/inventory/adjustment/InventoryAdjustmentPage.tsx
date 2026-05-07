@@ -209,7 +209,7 @@ export default function InventoryAdjustmentPage() {
                   >
                     {/* Code */}
                     <td style={{ padding: "13px 16px" }}>
-                      <span style={{ background: "#1a3c2e", color: "#fff", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontFamily: "monospace", fontWeight: 700, letterSpacing: "0.5px" }}>
+                      <span style={{ background: "#6366f1", color: "#fff", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontFamily: "monospace", fontWeight: 700, letterSpacing: "0.5px" }}>
                         {p.code}
                       </span>
                     </td>
@@ -293,7 +293,7 @@ export default function InventoryAdjustmentPage() {
           }}>
 
             {/* Header */}
-            <div style={{ background: "linear-gradient(135deg, #1a3c2e 0%, #2e7d32 100%)", borderRadius: "24px 24px 0 0", padding: "24px 28px" }}>
+            <div style={{ background: "linear-gradient(135deg, #6366f1, #3c3eb1fb 100%)", borderRadius: "24px 24px 0 0", padding: "24px 28px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
