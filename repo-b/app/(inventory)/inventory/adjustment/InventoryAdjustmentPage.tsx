@@ -259,7 +259,7 @@ export default function InventoryAdjustmentPage() {
                     <td style={{ padding: "13px 16px" }}>
                       <button
                         onClick={() => openDetail(p)}
-                        style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 16px", borderRadius: "20px", border: "none", background: "#1a3c2e", color: "#fff", fontSize: "12px", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxShadow: "0 2px 8px rgba(26,60,46,0.2)" }}
+                        style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 16px", borderRadius: "20px", border: "none", background: "#6366f1", color: "#fff", fontSize: "12px", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxShadow: "0 2px 8px rgba(26,60,46,0.2)" }}
                       >
                         📋 View & Adjust
                       </button>
