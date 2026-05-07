@@ -620,6 +620,7 @@ export default function LossReportPage() {
                   <p className="text-[13px] text-slate-600 m-0 leading-relaxed">{viewItem.reason}</p>
                 </div>
               )}
+              
 
               <button
                 onClick={() => setViewItem(null)}
