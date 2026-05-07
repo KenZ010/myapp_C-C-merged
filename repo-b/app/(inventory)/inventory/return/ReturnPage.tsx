@@ -72,10 +72,8 @@ const authHeaders = () => ({
 });
 
 /**
- * Normalises the backend response regardless of shape:
- *   - { data: [...], total, page, totalPages }   ← paginated
- *   - [...]                                       ← plain array
- *   - { returns: [...] }                          ← other common wrapper
+ * Normalises the backend response regardless of shape.
+ * Your backend returns: { limit, page, requests: [...], total, totalPages }
  */
 function normaliseResponse(raw: unknown): {
   data: ReturnRequest[];
@@ -83,7 +81,6 @@ function normaliseResponse(raw: unknown): {
   totalPages: number;
   page: number;
 } {
-  // Log the raw shape so you can see exactly what the backend returns
   console.log("[ReturnPage] raw API response:", raw);
 
   if (Array.isArray(raw)) {
@@ -92,7 +89,16 @@ function normaliseResponse(raw: unknown): {
   if (raw && typeof raw === "object") {
     const obj = raw as Record<string, unknown>;
 
-    // Standard paginated shape
+    // ✅ Your backend's actual shape: { requests: [...], total, totalPages, page }
+    if (Array.isArray(obj.requests)) {
+      return {
+        data:       obj.requests as ReturnRequest[],
+        total:      Number(obj.total      ?? obj.requests.length),
+        totalPages: Number(obj.totalPages ?? 1),
+        page:       Number(obj.page       ?? 1),
+      };
+    }
+    // Other common wrapper shapes — kept as fallbacks
     if (Array.isArray(obj.data)) {
       return {
         data:       obj.data as ReturnRequest[],
@@ -101,23 +107,19 @@ function normaliseResponse(raw: unknown): {
         page:       Number(obj.page       ?? 1),
       };
     }
-    // { returns: [...] }
     if (Array.isArray(obj.returns)) {
       const arr = obj.returns as ReturnRequest[];
-      return { data: arr, total: arr.length, totalPages: 1, page: 1 };
+      return { data: arr, total: Number(obj.total ?? arr.length), totalPages: Number(obj.totalPages ?? 1), page: Number(obj.page ?? 1) };
     }
-    // { returnRequests: [...] }
     if (Array.isArray(obj.returnRequests)) {
       const arr = obj.returnRequests as ReturnRequest[];
-      return { data: arr, total: arr.length, totalPages: 1, page: 1 };
+      return { data: arr, total: Number(obj.total ?? arr.length), totalPages: Number(obj.totalPages ?? 1), page: Number(obj.page ?? 1) };
     }
-    // { items: [...] }
     if (Array.isArray(obj.items)) {
       const arr = obj.items as ReturnRequest[];
-      return { data: arr, total: arr.length, totalPages: 1, page: 1 };
+      return { data: arr, total: Number(obj.total ?? arr.length), totalPages: Number(obj.totalPages ?? 1), page: Number(obj.page ?? 1) };
     }
   }
-  // Unknown shape — log it and return empty so the error is visible
   console.error("[ReturnPage] Unexpected response shape — could not extract data:", raw);
   return { data: [], total: 0, totalPages: 1, page: 1 };
 }
