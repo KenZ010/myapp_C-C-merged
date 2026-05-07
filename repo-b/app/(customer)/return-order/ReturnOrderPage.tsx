@@ -322,9 +322,16 @@ export default function ReturnOrderPage() {
       const data = await api.getCustomerOrders(customerId);
       if (data?.message) { setError(data.message); return; }
       const raw: Record<string, unknown>[] = Array.isArray(data) ? data : [];
+      const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+      const now = Date.now();
+
       const returnable = raw
         .filter((o) => RETURNABLE_STATUSES.includes(String(o.status ?? "").toUpperCase()))
-        .map(normalizeOrder);
+        .map(normalizeOrder)
+        .filter((o) => {
+          if (!o.rawDate) return false;
+          return now - new Date(o.rawDate).getTime() <= THREE_DAYS_MS;
+        });
       setOrders(returnable);
     } catch (err) {
       setError((err as Error).message || "Failed to load orders.");
