@@ -183,7 +183,7 @@ export default function InventoryAdjustmentPage() {
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "980px" }}>
             <thead>
-              <tr style={{ background: "#1a3c2e" }}>
+              <tr style={{ background: "#6366f1" }}>
                 {["Code", "Product Name / Size", "Category", "Supplier", "Date Acquired", "Total Case", "Remaining Case", "Last Check By", "Stock Status", "Action"].map((h) => (
                   <th key={h} style={{ padding: "13px 16px", textAlign: "left", fontSize: "11px", color: "rgba(255,255,255,0.85)", fontWeight: 700, whiteSpace: "nowrap", letterSpacing: "0.4px", textTransform: "uppercase" }}>
                     {h}
