@@ -42,16 +42,16 @@ const RETURNABLE_STATUSES = ["COMPLETED", "PARTIALLY_RETURNED"];
 function normalizeOrder(o: Record<string, unknown>): Order {
   const rawLines = (o.orderLines ?? o.items ?? []) as Record<string, unknown>[];
   const orderLines: OrderLine[] = rawLines.map((l) => {
-    const product = l.product as Record<string, unknown> | null;
-    return {
-      id:            String(l.id ?? ""),
-      productName:   product ? String(product.productName ?? "Item") : String(l.name ?? "Item"),
-      quantity:      Number(l.quantity ?? 1),
-      piecesPerCase: product ? Number(product.piecesPerCase ?? 1) : 1,
-      returnedQty:   Number(l.returnedQty ?? 0),
-      price:         Number(l.price ?? 0),
-    };
-  });
+  const product = (l.product ?? null) as Record<string, unknown> | null;
+  return {
+    id:            String(l.id ?? ""),
+    productName:   String(product?.productName ?? l.name ?? "Item"),
+    quantity:      Number(l.quantity ?? 1),
+    piecesPerCase: Number(product?.productPiecesPerCase ?? product?.piecesPerCase ?? l.piecesPerCase ?? 1),
+    returnedQty:   Number(l.returnedQty ?? 0),
+    price:         Number(l.price ?? 0),
+  };
+});
   const payment  = o.payment as Record<string, unknown> | null;
   const rawDate  = String(o.createdAt ?? o.date ?? "");
   return {
