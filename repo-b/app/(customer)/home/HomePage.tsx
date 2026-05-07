@@ -1,37 +1,36 @@
 "use client";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
+import { api } from "@/lib/api";
+
+// ─── Data ─────────────────────────────────────────────────────────────────────
 
 const quickCards = [
   {
     href: "/products",
     icon: "🥤",
-    bg: "#e6f9f1",
-    color: "#2d7a3a",
+    iconBg: "bg-emerald-50",
     label: "Products",
     desc: "Browse our soft drink selection",
   },
   {
     href: "/orders",
     icon: "📦",
-    bg: "#e8f5e9",
-    color: "#1a3c2e",
+    iconBg: "bg-green-50",
     label: "My Orders",
     desc: "Track your orders",
   },
   {
     href: "/contact",
     icon: "📞",
-    bg: "#fff0e6",
-    color: "#e65100",
+    iconBg: "bg-orange-50",
     label: "Contacts",
     desc: "Get in touch with us",
   },
   {
     href: "/transactions",
     icon: "🕐",
-    bg: "#e3f2fd",
-    color: "#1565c0",
+    iconBg: "bg-blue-50",
     label: "History",
     desc: "Your completed transactions",
   },
@@ -43,70 +42,142 @@ const promos = [
     title: "Buy 3, Get 1 Free!",
     desc: "On selected soft drinks — today only",
     emoji: "🎉",
-    bg: "linear-gradient(135deg, #2d7a3a, #56ab6e)",
+    gradientFrom: "from-emerald-700",
+    gradientTo: "to-emerald-500",
   },
   {
     label: "New Arrival",
     title: "Fanta Grape is here!",
     desc: "Try our newest flavor now",
     emoji: "🍇",
-    bg: "linear-gradient(135deg, #4a148c, #7b1fa2)",
+    gradientFrom: "from-purple-900",
+    gradientTo: "to-purple-700",
   },
   {
     label: "Free Delivery",
     title: "Free delivery on ₱1,000+",
     desc: "Order more, save more",
     emoji: "🚚",
-    bg: "linear-gradient(135deg, #1565c0, #1e88e5)",
-  },
-];
-
-const recentActivity = [
-  {
-    label: "Cola Regular x2",
-    status: "Out For Delivery",
-    color: "#e65100",
-    bg: "#fff3e0",
-    time: "Today, 10:30 AM",
-  },
-  {
-    label: "Orange Soda x1",
-    status: "Received",
-    color: "#2e7d32",
-    bg: "#e8f5e9",
-    time: "Yesterday",
-  },
-  {
-    label: "Mango Juice x3",
-    status: "Processing",
-    color: "#1565c0",
-    bg: "#e3f2fd",
-    time: "Mar 12",
+    gradientFrom: "from-blue-800",
+    gradientTo: "to-blue-500",
   },
 ];
 
 const INTERVAL_MS = 3500;
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getStatusClasses(status: string): { text: string; bg: string } {
+  const s = (status ?? "").toLowerCase();
+  if (s === "out_for_delivery" || s === "out for delivery")
+    return { text: "text-orange-700", bg: "bg-orange-50" };
+  if (s === "delivered" || s === "received" || s === "completed")
+    return { text: "text-green-700", bg: "bg-green-50" };
+  if (s === "processing" || s === "pending")
+    return { text: "text-blue-700", bg: "bg-blue-50" };
+  if (s === "cancelled")
+    return { text: "text-red-700", bg: "bg-red-50" };
+  return { text: "text-gray-600", bg: "bg-gray-100" };
+}
+
+function formatStatus(status: string) {
+  return (status ?? "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatDate(dateStr: string) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffDays = Math.floor(
+    (now.setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / 86400000
+  );
+  if (diffDays === 0)
+    return "Today, " + d.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
+  if (diffDays === 1) return "Yesterday";
+  return d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
+}
+
+function orderLabel(order: Record<string, unknown>) {
+  const items = (order.items ?? order.orderLines ?? order.orderItems ?? []) as Record<string, unknown>[];
+  if (!items.length) return "Order #" + ((order._id ?? order.id ?? "") as string).slice(-6);
+  const first = items[0];
+  const productName =
+    (first.productName as string) ??
+    ((first.product as Record<string, unknown>)?.name as string) ??
+    "Item";
+  const qty = (first.quantity ?? first.qty ?? 1) as number;
+  const extra = items.length > 1 ? ` +${items.length - 1} more` : "";
+  return `${productName} x${qty}${extra}`;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function HomePage() {
   const [promoIndex, setPromoIndex] = useState(0);
   const [animating, setAnimating] = useState(false);
   const [direction, setDirection] = useState<"left" | "right">("left");
-  const [isTablet, setIsTablet] = useState(false);
-  const [isPhone, setIsPhone] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Responsive
+  const [customerName, setCustomerName] = useState<string>("there");
+  const [recentOrders, setRecentOrders] = useState<Record<string, unknown>[]>([]);
+  const [orderStats, setOrderStats] = useState({ total: 0, pending: 0, completed: 0 });
+  const [loadingOrders, setLoadingOrders] = useState(true);
+
+  // Load customer + orders
   useEffect(() => {
-    const check = () => {
-      setIsTablet(window.innerWidth < 1100);
-      setIsPhone(window.innerWidth < 600);
-    };
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
+    async function loadData() {
+      try {
+        const userRaw = typeof window !== "undefined" ? localStorage.getItem("user") : null;
+        const user = userRaw ? JSON.parse(userRaw) : null;
+        const customerId: string | undefined = user?._id ?? user?.id ?? user?.customerId;
+
+        if (user?.name) setCustomerName(user.name.toUpperCase());
+
+        if (!customerId) return;
+
+        if (!user?.name) {
+          const fresh = await api.getCustomer(customerId);
+          if (fresh?.name) setCustomerName(fresh.name.toUpperCase());
+        }
+
+        const orders: Record<string, unknown>[] = await api.getCustomerOrders(customerId);
+
+        const sorted = [...orders].sort((a, b) => {
+          const da = new Date((a.createdAt ?? a.date ?? "") as string).getTime();
+          const db = new Date((b.createdAt ?? b.date ?? "") as string).getTime();
+          return db - da;
+        });
+
+        setRecentOrders(sorted.slice(0, 3));
+
+        const total = orders.length;
+        const completed = orders.filter((o) => {
+          const s = ((o.status ?? "") as string).toLowerCase();
+          return s === "completed" || s === "delivered" || s === "received";
+        }).length;
+        const pending = orders.filter((o) => {
+          const s = ((o.status ?? "") as string).toLowerCase();
+          return (
+            s === "pending" ||
+            s === "processing" ||
+            s === "out_for_delivery" ||
+            s === "out for delivery"
+          );
+        }).length;
+
+        setOrderStats({ total, pending, completed });
+      } catch (err) {
+        console.error("Failed to load homepage data:", err);
+      } finally {
+        setLoadingOrders(false);
+      }
+    }
+    loadData();
   }, []);
 
-  // Auto-advance
+  // Promo carousel
   const goTo = (next: number, dir: "left" | "right") => {
     if (animating) return;
     setDirection(dir);
@@ -138,39 +209,52 @@ export default function HomePage() {
   }, []);
 
   const handleDotClick = (i: number) => {
-    const dir = i > promoIndex ? "left" : "right";
-    goTo(i, dir);
-    startTimer(); // reset timer on manual click
+    goTo(i, i > promoIndex ? "left" : "right");
+    startTimer();
   };
 
   const promo = promos[promoIndex];
 
-  const slideStyle: React.CSSProperties = {
-    transition: animating ? "none" : "opacity 0.35s ease, transform 0.35s ease",
-    opacity: animating ? 0 : 1,
-    transform: animating
-      ? `translateX(${direction === "left" ? "18px" : "-18px"})`
-      : "translateX(0)",
-  };
+  const slideClass = animating
+    ? direction === "left"
+      ? "opacity-0 translate-x-4"
+      : "opacity-0 -translate-x-4"
+    : "opacity-100 translate-x-0";
+
+  const stats = [
+    {
+      label: "Total Orders",
+      value: orderStats.total,
+      icon: "📦",
+      textColor: "text-emerald-900",
+      bg: "bg-green-50",
+    },
+    {
+      label: "Pending",
+      value: orderStats.pending,
+      icon: "⏳",
+      textColor: "text-yellow-700",
+      bg: "bg-yellow-50",
+    },
+    {
+      label: "Completed",
+      value: orderStats.completed,
+      icon: "✅",
+      textColor: "text-green-700",
+      bg: "bg-green-50",
+    },
+  ];
 
   return (
-    <div style={{ padding: "24px", maxWidth: "1200px", margin: "0 auto" }}>
+    <div className="px-6 py-6 max-w-6xl mx-auto">
+
       {/* Greeting */}
-      <div
-        style={{
-          marginBottom: "20px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          flexWrap: "wrap",
-          gap: "10px",
-        }}
-      >
+      <div className="flex flex-wrap justify-between items-start gap-2 mb-5">
         <div>
-          <h1 style={{ fontSize: "22px", fontWeight: 700, color: "#1a1a1a" }}>
-            Good day, KENDY 👋
+          <h1 className="text-[22px] font-bold text-gray-900">
+            Good day, {customerName} 👋
           </h1>
-          <p style={{ fontSize: "13px", color: "#888", marginTop: "4px" }}>
+          <p className="text-[13px] text-gray-400 mt-1">
             Welcome back to Julieta Soft Drink Store
           </p>
         </div>
@@ -178,186 +262,68 @@ export default function HomePage() {
 
       {/* Promo Banner Carousel */}
       <div
-        style={{
-          background: promo.bg,
-          borderRadius: "20px",
-          padding: "28px 32px",
-          minHeight: "140px",
-          marginBottom: "14px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "12px",
-          transition: "background 0.5s ease",
-          position: "relative",
-          overflow: "hidden",
-        }}
+        className={`relative rounded-2xl px-8 py-7 min-h-[140px] flex items-center justify-between gap-3 overflow-hidden mb-3 bg-gradient-to-br ${promo.gradientFrom} ${promo.gradientTo} transition-all duration-500`}
       >
         {/* Left arrow */}
         <button
-          onClick={() => {
-            const prev = (promoIndex - 1 + promos.length) % promos.length;
-            handleDotClick(prev);
-          }}
-          style={{
-            position: "absolute",
-            left: "12px",
-            top: "50%",
-            transform: "translateY(-50%)",
-            background: "rgba(255,255,255,0.2)",
-            border: "none",
-            borderRadius: "50%",
-            width: "30px",
-            height: "30px",
-            cursor: "pointer",
-            color: "#fff",
-            fontSize: "14px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 2,
-          }}
+          onClick={() => handleDotClick((promoIndex - 1 + promos.length) % promos.length)}
+          className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white/20 border-0 text-white text-base flex items-center justify-center cursor-pointer hover:bg-white/30 transition-colors"
         >
           ‹
         </button>
 
-        {/* Content */}
-        <div style={{ ...slideStyle, paddingLeft: "28px", flex: 1 }}>
-          <span
-            style={{
-              fontSize: "10px",
-              color: "rgba(255,255,255,0.65)",
-              textTransform: "uppercase",
-              letterSpacing: "1px",
-              fontWeight: 600,
-            }}
-          >
+        {/* Slide content */}
+        <div className={`pl-7 flex-1 transition-all duration-[350ms] ease-in-out ${slideClass}`}>
+          <span className="text-[10px] text-white/60 uppercase tracking-widest font-semibold">
             {promo.label}
           </span>
-          <h2
-            style={{
-              fontSize: "20px",
-              fontWeight: 700,
-              color: "#f5c842",
-              margin: "6px 0 4px",
-            }}
-          >
+          <h2 className="text-xl font-bold text-yellow-300 mt-1.5 mb-1">
             {promo.title}
           </h2>
-          <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.75)" }}>
-            {promo.desc}
-          </p>
+          <p className="text-[13px] text-white/75">{promo.desc}</p>
           <Link
             href="/products"
-            style={{
-              display: "inline-block",
-              marginTop: "14px",
-              background: "rgba(255,255,255,0.2)",
-              color: "#fff",
-              textDecoration: "none",
-              padding: "8px 18px",
-              borderRadius: "20px",
-              fontSize: "12px",
-              fontWeight: 600,
-            }}
+            className="inline-block mt-3.5 bg-white/20 text-white no-underline px-4 py-2 rounded-full text-xs font-semibold hover:bg-white/30 transition-colors"
           >
             Shop Now →
           </Link>
         </div>
 
-        <span
-          style={{
-            ...slideStyle,
-            fontSize: "52px",
-            flexShrink: 0,
-            paddingRight: "28px",
-          }}
-        >
+        <span className={`text-5xl flex-shrink-0 pr-7 transition-all duration-[350ms] ease-in-out ${slideClass}`}>
           {promo.emoji}
         </span>
 
         {/* Right arrow */}
         <button
-          onClick={() => {
-            const next = (promoIndex + 1) % promos.length;
-            handleDotClick(next);
-          }}
-          style={{
-            position: "absolute",
-            right: "12px",
-            top: "50%",
-            transform: "translateY(-50%)",
-            background: "rgba(255,255,255,0.2)",
-            border: "none",
-            borderRadius: "50%",
-            width: "30px",
-            height: "30px",
-            cursor: "pointer",
-            color: "#fff",
-            fontSize: "14px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 2,
-          }}
+          onClick={() => handleDotClick((promoIndex + 1) % promos.length)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white/20 border-0 text-white text-base flex items-center justify-center cursor-pointer hover:bg-white/30 transition-colors"
         >
           ›
         </button>
       </div>
 
-      {/* Promo Dots + timer bar */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: "8px",
-          marginBottom: "24px",
-        }}
-      >
-        <div style={{ display: "flex", gap: "6px" }}>
+      {/* Dots + progress bar */}
+      <div className="flex flex-col items-center gap-2 mb-6">
+        <div className="flex gap-1.5">
           {promos.map((_, i) => (
             <button
               key={i}
               onClick={() => handleDotClick(i)}
-              style={{
-                width: i === promoIndex ? "20px" : "8px",
-                height: "8px",
-                borderRadius: "20px",
-                border: "none",
-                background: i === promoIndex ? "#2d7a3a" : "#e0e0e0",
-                cursor: "pointer",
-                transition: "all 0.3s",
-                padding: 0,
-              }}
+              className={`h-2 rounded-full border-0 cursor-pointer p-0 transition-all duration-300 ${
+                i === promoIndex ? "w-5 bg-emerald-700" : "w-2 bg-gray-200"
+              }`}
             />
           ))}
         </div>
-        {/* Auto-advance progress bar */}
-        <div
-          style={{
-            width: "80px",
-            height: "3px",
-            borderRadius: "10px",
-            background: "#e0e0e0",
-            overflow: "hidden",
-          }}
-        >
+        <div className="w-20 h-0.5 rounded-full bg-gray-200 overflow-hidden">
           <div
-            key={promoIndex} // re-triggers animation on slide change
-            style={{
-              height: "100%",
-              width: "100%",
-              borderRadius: "10px",
-              background: "#2d7a3a",
-              transformOrigin: "left",
-              animation: `promoProgress ${INTERVAL_MS}ms linear forwards`,
-            }}
+            key={promoIndex}
+            className="h-full w-full rounded-full bg-emerald-700 origin-left"
+            style={{ animation: `promoProgress ${INTERVAL_MS}ms linear forwards` }}
           />
         </div>
       </div>
 
-      {/* CSS keyframe injected inline */}
       <style>{`
         @keyframes promoProgress {
           from { transform: scaleX(0); }
@@ -366,268 +332,122 @@ export default function HomePage() {
       `}</style>
 
       {/* Stats Row */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: "12px",
-          marginBottom: "24px",
-        }}
-      >
-        {[
-          {
-            label: "Total Orders",
-            value: "12",
-            icon: "📦",
-            color: "#1a3c2e",
-            bg: "#e8f5e9",
-          },
-          {
-            label: "Pending",
-            value: "2",
-            icon: "⏳",
-            color: "#f57f17",
-            bg: "#fff9c4",
-          },
-          {
-            label: "Completed",
-            value: "8",
-            icon: "✅",
-            color: "#2e7d32",
-            bg: "#e8f5e9",
-          },
-        ].map((s) => (
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+        {stats.map((s) => (
           <div
             key={s.label}
-            style={{
-              background: "#fff",
-              borderRadius: "14px",
-              border: "0.5px solid #e8e8e8",
-              padding: "16px",
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-            }}
+            className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3"
           >
-            <div
-              style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "10px",
-                background: s.bg,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "18px",
-                flexShrink: 0,
-              }}
-            >
+            <div className={`w-10 h-10 rounded-xl ${s.bg} flex items-center justify-center text-lg flex-shrink-0`}>
               {s.icon}
             </div>
             <div>
-              <p style={{ fontSize: "20px", fontWeight: 800, color: s.color }}>
-                {s.value}
+              <p className={`text-xl font-extrabold ${s.textColor}`}>
+                {loadingOrders ? "—" : s.value}
               </p>
-              <p style={{ fontSize: "11px", color: "#aaa" }}>{s.label}</p>
+              <p className="text-[11px] text-gray-400">{s.label}</p>
             </div>
           </div>
         ))}
       </div>
 
       {/* Quick Access */}
-      <p
-        style={{
-          fontSize: "12px",
-          textTransform: "uppercase",
-          letterSpacing: "0.5px",
-          color: "#aaa",
-          fontWeight: 600,
-          marginBottom: "12px",
-        }}
-      >
+      <p className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold mb-3">
         Quick Access
       </p>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: isPhone
-            ? "1fr"
-            : isTablet
-              ? "1fr 1fr"
-              : "repeat(4, 1fr)",
-          gap: "12px",
-          marginBottom: "24px",
-        }}
-      >
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {quickCards.map((card) => (
           <Link
             key={card.href}
             href={card.href}
-            style={{
-              background: "#fff",
-              borderRadius: "14px",
-              border: "0.5px solid #e8e8e8",
-              padding: "16px",
-              textDecoration: "none",
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-            }}
+            className="bg-white rounded-2xl border border-gray-100 p-4 no-underline flex items-center gap-3 hover:shadow-sm transition-shadow"
           >
-            <div
-              style={{
-                width: "42px",
-                height: "42px",
-                borderRadius: "12px",
-                background: card.bg,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "20px",
-                flexShrink: 0,
-              }}
-            >
+            <div className={`w-11 h-11 rounded-xl ${card.iconBg} flex items-center justify-center text-xl flex-shrink-0`}>
               {card.icon}
             </div>
-            <div style={{ overflow: "hidden" }}>
-              <p
-                style={{
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  color: "#1a1a1a",
-                  marginBottom: "2px",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
+            <div className="overflow-hidden">
+              <p className="text-[13px] font-semibold text-gray-900 mb-0.5 truncate">
                 {card.label}
               </p>
-              <p
-                style={{
-                  fontSize: "11px",
-                  color: "#aaa",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {card.desc}
-              </p>
+              <p className="text-[11px] text-gray-400 truncate">{card.desc}</p>
             </div>
           </Link>
         ))}
       </div>
 
       {/* Recent Orders */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "12px",
-        }}
-      >
-        <p
-          style={{
-            fontSize: "12px",
-            textTransform: "uppercase",
-            letterSpacing: "0.5px",
-            color: "#aaa",
-            fontWeight: 600,
-          }}
-        >
+      <div className="flex justify-between items-center mb-3">
+        <p className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">
           Recent Orders
         </p>
         <Link
           href="/orders"
-          style={{
-            fontSize: "12px",
-            color: "#2d7a3a",
-            textDecoration: "none",
-            fontWeight: 600,
-          }}
+          className="text-[12px] text-emerald-700 no-underline font-semibold hover:underline"
         >
           View All →
         </Link>
       </div>
-      <div
-        style={{
-          background: "#fff",
-          borderRadius: "16px",
-          border: "0.5px solid #e8e8e8",
-          overflow: "hidden",
-          marginBottom: "24px",
-        }}
-      >
-        {recentActivity.map((item, i) => (
-          <div
-            key={i}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "14px 18px",
-              borderBottom:
-                i < recentActivity.length - 1 ? "0.5px solid #f5f5f5" : "none",
-              gap: "10px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <div
-                style={{
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "10px",
-                  background: item.bg,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "16px",
-                  flexShrink: 0,
-                }}
-              >
-                🥤
-              </div>
-              <div>
-                <p
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: 500,
-                    color: "#1a1a1a",
-                  }}
-                >
-                  {item.label}
-                </p>
-                <p style={{ fontSize: "11px", color: "#aaa" }}>{item.time}</p>
-              </div>
-            </div>
-            <span
-              style={{
-                padding: "4px 10px",
-                borderRadius: "20px",
-                fontSize: "11px",
-                fontWeight: 600,
-                background: item.bg,
-                color: item.color,
-                whiteSpace: "nowrap",
-              }}
+
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mb-6">
+        {loadingOrders ? (
+          [0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className={`flex items-center justify-between px-[18px] py-[14px] gap-2.5 ${
+                i < 2 ? "border-b border-gray-50" : ""
+              }`}
             >
-              {item.status}
-            </span>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-gray-100 flex-shrink-0 animate-pulse" />
+                <div>
+                  <div className="w-28 h-3 rounded-full bg-gray-100 mb-1.5 animate-pulse" />
+                  <div className="w-16 h-2.5 rounded-full bg-gray-50 animate-pulse" />
+                </div>
+              </div>
+              <div className="w-16 h-6 rounded-full bg-gray-100 animate-pulse" />
+            </div>
+          ))
+        ) : recentOrders.length === 0 ? (
+          <div className="py-8 text-center text-[13px] text-gray-400">
+            No orders yet.{" "}
+            <Link href="/products" className="text-emerald-700 font-semibold hover:underline">
+              Start shopping →
+            </Link>
           </div>
-        ))}
+        ) : (
+          recentOrders.map((order, i) => {
+            const status = (order.status ?? "pending") as string;
+            const { text, bg } = getStatusClasses(status);
+            const label = orderLabel(order);
+            const time = formatDate((order.createdAt ?? order.date ?? "") as string);
+
+            return (
+              <div
+                key={(order._id ?? order.id ?? i) as string}
+                className={`flex items-center justify-between px-[18px] py-[14px] gap-2.5 ${
+                  i < recentOrders.length - 1 ? "border-b border-gray-50" : ""
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center text-base flex-shrink-0`}>
+                    🥤
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-medium text-gray-900">{label}</p>
+                    <p className="text-[11px] text-gray-400">{time}</p>
+                  </div>
+                </div>
+                <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap ${bg} ${text}`}>
+                  {formatStatus(status)}
+                </span>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Footer */}
-      <p
-        style={{
-          textAlign: "center",
-          fontSize: "11px",
-          color: "#ccc",
-          fontWeight: 500,
-        }}
-      >
+      <p className="text-center text-[11px] text-gray-300 font-medium">
         TECHNOLOGIA @2026
       </p>
     </div>
