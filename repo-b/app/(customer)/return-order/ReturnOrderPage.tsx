@@ -42,16 +42,16 @@ const RETURNABLE_STATUSES = ["COMPLETED", "PARTIALLY_RETURNED"];
 function normalizeOrder(o: Record<string, unknown>): Order {
   const rawLines = (o.orderLines ?? o.items ?? []) as Record<string, unknown>[];
   const orderLines: OrderLine[] = rawLines.map((l) => {
-    const product = l.product as Record<string, unknown> | null;
-    return {
-      id:            String(l.id ?? ""),
-      productName:   product ? String(product.productName ?? "Item") : String(l.name ?? "Item"),
-      quantity:      Number(l.quantity ?? 1),
-      piecesPerCase: product ? Number(product.piecesPerCase ?? 1) : 1,
-      returnedQty:   Number(l.returnedQty ?? 0),
-      price:         Number(l.price ?? 0),
-    };
-  });
+  const product = (l.product ?? null) as Record<string, unknown> | null;
+  return {
+    id:            String(l.id ?? ""),
+    productName:   String(product?.productName ?? l.name ?? "Item"),
+    quantity:      Number(l.quantity ?? 1),
+    piecesPerCase: Number(product?.productPiecesPerCase ?? product?.piecesPerCase ?? l.piecesPerCase ?? 1),
+    returnedQty:   Number(l.returnedQty ?? 0),
+    price:         Number(l.price ?? 0),
+  };
+});
   const payment  = o.payment as Record<string, unknown> | null;
   const rawDate  = String(o.createdAt ?? o.date ?? "");
   return {
@@ -322,9 +322,16 @@ export default function ReturnOrderPage() {
       const data = await api.getCustomerOrders(customerId);
       if (data?.message) { setError(data.message); return; }
       const raw: Record<string, unknown>[] = Array.isArray(data) ? data : [];
+      const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+      const now = Date.now();
+
       const returnable = raw
         .filter((o) => RETURNABLE_STATUSES.includes(String(o.status ?? "").toUpperCase()))
-        .map(normalizeOrder);
+        .map(normalizeOrder)
+        .filter((o) => {
+          if (!o.rawDate) return false;
+          return now - new Date(o.rawDate).getTime() <= THREE_DAYS_MS;
+        });
       setOrders(returnable);
     } catch (err) {
       setError((err as Error).message || "Failed to load orders.");
