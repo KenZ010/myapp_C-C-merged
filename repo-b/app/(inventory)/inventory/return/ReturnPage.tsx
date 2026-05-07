@@ -44,11 +44,17 @@ type ReturnRequest = {
     email?: string;
     image?: string;
   };
-  saleRecord: {
+  // backend may return this as "saleRecord" OR "sale"
+  saleRecord?: {
     id: string;
     totalAmount: number;
     saleDate: string;
-  };
+  } | null;
+  sale?: {
+    id: string;
+    totalAmount: number;
+    saleDate: string;
+  } | null;
   reviewer?: { id: string; name: string } | null;
   items: ReturnRequestItem[];
 };
@@ -297,7 +303,7 @@ export default function ReturnPage() {
     }
   };
 
-  const itemValue    = (item: ReturnRequestItem) => item.returnQty * item.orderLine.price;
+  const itemValue    = (item: ReturnRequestItem) => item.returnQty * (item.orderLine?.price ?? 0);
   const requestTotal = (r: ReturnRequest) => r.items.reduce((s, i) => s + itemValue(i), 0);
 
   return (
@@ -477,7 +483,7 @@ export default function ReturnPage() {
                         {/* Customer */}
                         <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle">
                           <div className="flex items-center gap-2">
-                            {r.customer.image ? (
+                            {r.customer?.image ? (
                               <img src={r.customer.image} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
                             ) : (
                               <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
@@ -485,8 +491,8 @@ export default function ReturnPage() {
                               </div>
                             )}
                             <div>
-                              <p className="text-[13px] font-semibold text-slate-900 m-0">{r.customer.name}</p>
-                              {r.customer.phone && (
+                              <p className="text-[13px] font-semibold text-slate-900 m-0">{r.customer?.name ?? "—"}</p>
+                              {r.customer?.phone && (
                                 <p className="text-[11px] text-slate-400 m-0 flex items-center gap-1">
                                   {Icons.phone} {r.customer.phone}
                                 </p>
@@ -635,7 +641,7 @@ export default function ReturnPage() {
               <div>
                 <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Customer</p>
                 <div className="bg-slate-50 rounded-xl px-4 py-3.5 border border-slate-100 flex items-center gap-3">
-                  {viewItem.customer.image ? (
+                  {viewItem.customer?.image ? (
                     <img src={viewItem.customer.image} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
                   ) : (
                     <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-400 flex-shrink-0">
@@ -643,12 +649,12 @@ export default function ReturnPage() {
                     </div>
                   )}
                   <div>
-                    <p className="text-[14px] font-bold text-slate-900 m-0">{viewItem.customer.name}</p>
+                    <p className="text-[14px] font-bold text-slate-900 m-0">{viewItem.customer?.name ?? "—"}</p>
                     <div className="flex gap-3 mt-0.5">
-                      {viewItem.customer.phone && (
+                      {viewItem.customer?.phone && (
                         <span className="text-[12px] text-slate-500 flex items-center gap-1">{Icons.phone} {viewItem.customer.phone}</span>
                       )}
-                      {viewItem.customer.email && (
+                      {viewItem.customer?.email && (
                         <span className="text-[12px] text-slate-500">{viewItem.customer.email}</span>
                       )}
                     </div>
@@ -662,9 +668,17 @@ export default function ReturnPage() {
                 <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Sale Reference</p>
                 <div className="bg-slate-50 rounded-xl overflow-hidden border border-slate-100">
                   {[
-                    ["Sale ID",   viewItem.saleId],
-                    ["Sale Date", fmtDate(viewItem.saleRecord.saleDate)],
-                    ["Sale Total",fmt(viewItem.saleRecord.totalAmount)],
+                    ["Sale ID",    viewItem.saleId ?? "—"],
+                    ["Sale Date",  viewItem.saleRecord?.saleDate
+                                    ? fmtDate(viewItem.saleRecord.saleDate)
+                                    : (viewItem as Record<string, unknown>).sale
+                                      ? fmtDate(((viewItem as Record<string, unknown>).sale as Record<string, unknown>).saleDate as string)
+                                      : "—"],
+                    ["Sale Total", viewItem.saleRecord?.totalAmount != null
+                                    ? fmt(viewItem.saleRecord.totalAmount)
+                                    : (viewItem as Record<string, unknown>).sale
+                                      ? fmt(((viewItem as Record<string, unknown>).sale as Record<string, unknown>).totalAmount as number)
+                                      : "—"],
                   ].map(([l, v], i, arr) => (
                     <div key={l} className={`flex justify-between items-center px-3.5 py-2.5 ${i < arr.length - 1 ? "border-b border-slate-100" : ""}`}>
                       <span className="text-[12px] text-slate-400">{l}</span>
@@ -678,27 +692,31 @@ export default function ReturnPage() {
               <div>
                 <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Items Being Returned</p>
                 <div className="flex flex-col gap-2">
-                  {viewItem.items.map((item) => (
+                  {viewItem.items.map((item) => {
+                    const product = item.orderLine?.product;
+                    const price   = item.orderLine?.price ?? 0;
+                    return (
                     <div key={item.id} className="bg-slate-50 rounded-xl px-3.5 py-3 border border-slate-100 flex items-center gap-3">
-                      {item.orderLine.product.image ? (
-                        <img src={item.orderLine.product.image} alt="" className="w-11 h-11 rounded-lg object-cover flex-shrink-0" />
+                      {product?.image ? (
+                        <img src={product.image} alt="" className="w-11 h-11 rounded-lg object-cover flex-shrink-0" />
                       ) : (
                         <div className="w-11 h-11 rounded-lg bg-slate-200 flex items-center justify-center text-slate-400 flex-shrink-0">
                           {Icons.box}
                         </div>
                       )}
                       <div className="flex-1">
-                        <p className="text-[13px] font-bold text-slate-900 m-0">{item.orderLine.product.productName}</p>
+                        <p className="text-[13px] font-bold text-slate-900 m-0">{product?.productName ?? "—"}</p>
                         <p className="text-[11.5px] text-slate-400 m-0 mt-0.5">
-                          {item.orderLine.product.size} · {item.orderLine.product.category}
+                          {[product?.size, product?.category].filter(Boolean).join(" · ") || "—"}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[13px] font-extrabold text-red-600 m-0">{fmt(itemValue(item))}</p>
-                        <p className="text-[11px] text-slate-400 m-0 mt-0.5">{item.returnQty} × {fmt(item.orderLine.price)}</p>
+                        <p className="text-[13px] font-extrabold text-red-600 m-0">{fmt(item.returnQty * price)}</p>
+                        <p className="text-[11px] text-slate-400 m-0 mt-0.5">{item.returnQty} × {fmt(price)}</p>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
