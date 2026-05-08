@@ -173,10 +173,13 @@ function LogDetailModal({ log, onClose }: { log: InventoryLog; onClose: () => vo
   const style    = LOG_TYPE_STYLE[log.type];
   const isIn     = log.type === "STOCK_IN"  || log.type === "RETURN_IN";
   const isOut    = log.type === "STOCK_OUT" || log.type === "RETURN_OUT";
-  const sign     = isIn ? "+" : isOut ? "-" : "±";
-  const qty      = Math.abs(log.quantity);
-  const unit     = getUnit(log.product.stockUnit);
-  const totalBtl = unit.bottlesPerCase ? qty * unit.bottlesPerCase : null;
+  // FIX 3: correct sign for ADJUSTMENT based on actual quantity sign
+  const sign         = isIn ? "+" : isOut ? "-" : log.quantity < 0 ? "-" : "+";
+  const qty          = Math.abs(log.quantity);
+  const unit         = getUnit(log.product.stockUnit);
+  // FIX 3: returns and adjustments are in bottles — don't multiply by bottlesPerCase
+  const isBottleUnit = log.type === "RETURN_IN" || log.type === "RETURN_OUT" || log.type === "ADJUSTMENT";
+  const totalBtl     = isBottleUnit ? null : unit.bottlesPerCase ? qty * unit.bottlesPerCase : null;
 
   return (
     <div
@@ -211,8 +214,13 @@ function LogDetailModal({ log, onClose }: { log: InventoryLog; onClose: () => vo
                   style={{ color: isIn ? "#2e7d32" : isOut ? "#c62828" : "#1565c0" }}>
                   {sign}{qty} <span className="text-lg font-normal">{unit.abbr}</span>
                 </p>
+                {/* FIX 4: show "X bottles" for returns/adjustments, "X cases = Y bottles" for stock moves */}
                 <p className="text-xs text-indigo-500 font-medium">
-                  {totalBtl !== null ? `${qty} cases = ${totalBtl} bottles` : `${qty} ${unit.abbr}`}
+                  {isBottleUnit
+                    ? `${qty} bottles`
+                    : totalBtl !== null
+                    ? `${qty} cases = ${totalBtl} bottles`
+                    : `${qty} ${unit.abbr}`}
                 </p>
               </div>
             </div>
@@ -579,15 +587,22 @@ export default function InventoryMaintenancePage() {
                   </thead>
                   <tbody>
                     {logs.map((log) => {
-                      const style     = LOG_TYPE_STYLE[log.type];
-                      const isIn      = log.type === "STOCK_IN"  || log.type === "RETURN_IN";
-                      const isOut     = log.type === "STOCK_OUT" || log.type === "RETURN_OUT";
-                      const sign      = isIn ? "+" : isOut ? "-" : "±";
-                      const qty       = Math.abs(log.quantity);
-                      const unitInfo  = getUnit(log.product.stockUnit);
-                      const totalBtl  = unitInfo.bottlesPerCase ? qty * unitInfo.bottlesPerCase : null;
-                      const stockInfo = stockMap[log.product.productName];
-                      const size      = log.product.size || stockInfo?.size || null;
+                      const style        = LOG_TYPE_STYLE[log.type];
+                      const isIn         = log.type === "STOCK_IN"  || log.type === "RETURN_IN";
+                      const isOut        = log.type === "STOCK_OUT" || log.type === "RETURN_OUT";
+                      // FIX 1: correct sign for ADJUSTMENT based on actual quantity sign
+                      const sign         = isIn ? "+" : isOut ? "-" : log.quantity < 0 ? "-" : "+";
+                      const qty          = Math.abs(log.quantity);
+                      const unitInfo     = getUnit(log.product.stockUnit);
+                      // FIX 1: returns and adjustments are in bottles — don't multiply by bottlesPerCase
+                      const isBottleUnit = log.type === "RETURN_IN" || log.type === "RETURN_OUT" || log.type === "ADJUSTMENT";
+                      const totalBtl     = isBottleUnit
+                        ? null
+                        : unitInfo.bottlesPerCase
+                        ? qty * unitInfo.bottlesPerCase
+                        : null;
+                      const stockInfo    = stockMap[log.product.productName];
+                      const size         = log.product.size || stockInfo?.size || null;
                       return (
                         <tr key={log.id} className="border-b border-gray-100 hover:bg-gray-50">
                           <td className="p-3 text-gray-500 whitespace-nowrap text-xs">{fmtDate(log.createdAt)}</td>
@@ -622,8 +637,13 @@ export default function InventoryMaintenancePage() {
                             {sign}{qty} <span className="font-normal text-xs opacity-70">{unitInfo.abbr}</span>
                           </td>
                           <td className="p-3 text-xs text-gray-600">{unitInfo.label}</td>
+                          {/* FIX 2: show "X bottles" for returns/adjustments, "X cases = Y bottles" for stock moves */}
                           <td className="p-3 text-xs text-indigo-500 font-medium whitespace-nowrap">
-                            {totalBtl !== null ? `${qty} cases = ${totalBtl} bottles` : `${qty} ${unitInfo.abbr}`}
+                            {isBottleUnit
+                              ? `${qty} bottles`
+                              : totalBtl !== null
+                              ? `${qty} cases = ${totalBtl} bottles`
+                              : `${qty} ${unitInfo.abbr}`}
                           </td>
                           <td className="p-3">
                             <button
