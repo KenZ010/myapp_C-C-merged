@@ -36,6 +36,11 @@ const navLinks = [
     ),
   },
   {
+  href: "/cashier/returns",
+  label: "Returns",
+  icon: <svg>…</svg>, // use the return/refresh icon
+  },
+  {
     href: "/cashier/transactions",
     label: "Transaction History",
     icon: (
@@ -54,6 +59,7 @@ const pageTitles: Record<string, { title: string; sub: string }> = {
   "/cashier/inventory":    { title: "Inventory",           sub: "View products & stock levels" },
   "/cashier/ordering":     { title: "Ordering",            sub: "Create order for customer" },
   "/cashier/pending":      { title: "Pending",             sub: "Orders waiting for action" },
+  "/cashier/returns":      { title: "Returns", sub: "File and track return requests" },
   "/cashier/transactions": { title: "Transaction History", sub: "Sales reports & records" },
   "/cashier/payment":      { title: "Payment",             sub: "Complete the customer order" },
 };
