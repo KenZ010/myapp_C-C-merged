@@ -137,8 +137,13 @@ export default function LoginPage() {
               className="w-36 h-36 rounded-full bg-orange-400 flex items-center justify-center shadow-2xl"
               style={{ boxShadow: "0 0 40px rgba(251,146,60,0.4)" }}
             >
-              <div className="w-28 h-28 rounded-full bg-white flex items-center justify-center overflow-hidden">
-              <Image src="/images/Remove Logo.png" alt="Julieta Logo" width={100} height={100} className="object-contain" />
+              <div className="w-32 h-32 rounded-full bg-white flex items-center justify-center overflow-hidden">
+              <Image src="/images/Remove Logo.png" 
+              alt="Julieta Logo" 
+              width={120} 
+              height={120} 
+              className="object-contain" 
+              />
               </div>
             </div>
             <p className="text-white text-xl font-bold tracking-widest drop-shadow-lg">SOFTDRINKS STORE</p>
