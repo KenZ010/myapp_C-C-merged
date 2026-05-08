@@ -386,4 +386,15 @@ getReturnRequestById: async (returnRequestId: string) => {
       if (!res.ok) throw new Error('Failed to fetch inventory logs');
       return res.json();
     },
+
+    adjustStock: async (data: { productId: string; quantity: number; reason: string }) => {
+  const res = await fetch(`${API_URL}/products/${data.productId}/adjust-stock`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ quantity: data.quantity, reason: data.reason }),
+  });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.message || 'Failed to adjust stock');
+  return result;
+},
   };
