@@ -7,22 +7,21 @@ type ProductStatus = "ACTIVE" | "INACTIVE" | "OUT_OF_STOCK";
 type CategoryType  = "SOFTDRINKS" | "ENERGY_DRINK" | "BEER" | "JUICE" | "WATER" | "OTHER";
 
 type Product = {
-  id:           string;
-  productName:  string;
-  category:     CategoryType;
-  size:         string | null;
-  barcode:      string | null;
-  price:        number;          // price per piece
-  stock:        number;          // in pieces (or cases depending on stockUnit)
-  stockUnit:    string;          // e.g. "case_24"
+  id:            string;
+  productName:   string;
+  category:      CategoryType;
+  size:          string | null;
+  barcode:       string | null;
+  price:         number;   // price per piece
+  stock:         number;   // in CASES
   piecesPerCase: number;
   reservedStock: number;
-  expiryDate:   string | null;
-  image:        string | null;
-  status:       ProductStatus;
-  supplierId:   string;
-  supplierName: string;
-  createdAt:    string;
+  expiryDate:    string | null;
+  image:         string | null;
+  status:        ProductStatus;
+  supplierId:    string;
+  supplierName:  string;
+  createdAt:     string;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -32,12 +31,9 @@ function getPiecesPerCase(p: Product): number {
   return p.piecesPerCase || PIECES_PER_CASE_DEFAULT;
 }
 
-function stockInCases(p: Product): number {
-  return Math.floor(p.stock / getPiecesPerCase(p));
-}
-
-function stockRemainingPieces(p: Product): number {
-  return p.stock % getPiecesPerCase(p);
+// stock IS already in cases
+function totalPieces(p: Product): number {
+  return p.stock * getPiecesPerCase(p);
 }
 
 function deriveStockStatus(stock: number): "In Stock" | "Low Stock" | "Out of Stock" {
@@ -79,19 +75,19 @@ const productStatusStyle: Record<ProductStatus, { bg: string; color: string }> =
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function InventoryAdjustmentPage() {
-  const [products,    setProducts]    = useState<Product[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [error,       setError]       = useState<string | null>(null);
-  const [search,      setSearch]      = useState("");
-  const [catFilter,   setCatFilter]   = useState<"All" | CategoryType>("All");
-  const [statFilter,  setStatFilter]  = useState<"All" | ProductStatus>("All");
-  const [detailProd,  setDetailProd]  = useState<Product | null>(null);
+  const [products,   setProducts]   = useState<Product[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState<string | null>(null);
+  const [search,     setSearch]     = useState("");
+  const [catFilter,  setCatFilter]  = useState<"All" | CategoryType>("All");
+  const [statFilter, setStatFilter] = useState<"All" | ProductStatus>("All");
+  const [detailProd, setDetailProd] = useState<Product | null>(null);
 
   // Adjust state
-  const [adjQty,    setAdjQty]    = useState(0);           // in CASES
-  const [adjUnit,   setAdjUnit]   = useState<"cases" | "pieces">("cases");
-  const [adjReason, setAdjReason] = useState("Received");
-  const [adjNote,   setAdjNote]   = useState("");
+  const [adjQty,     setAdjQty]     = useState(0); // in selected unit (cases or pieces)
+  const [adjUnit,    setAdjUnit]    = useState<"cases" | "pieces">("cases");
+  const [adjReason,  setAdjReason]  = useState("Received");
+  const [adjNote,    setAdjNote]    = useState("");
   const [adjLoading, setAdjLoading] = useState(false);
   const [adjError,   setAdjError]   = useState<string | null>(null);
   const [adjSuccess, setAdjSuccess] = useState(false);
@@ -110,22 +106,21 @@ export default function InventoryAdjustmentPage() {
         return acc;
       }, {});
       setProducts((productsData || []).map((p: any): Product => ({
-        id:           String(p.id),
-        productName:  String(p.productName),
-        category:     (p.category ?? "OTHER") as CategoryType,
-        size:         p.size ?? null,
-        barcode:      p.barcode ?? null,
-        price:        Number(p.price ?? 0),
-        stock:        Number(p.stock ?? 0),
-        stockUnit:    p.stockUnit ?? "case_24",
+        id:            String(p.id),
+        productName:   String(p.productName),
+        category:      (p.category ?? "OTHER") as CategoryType,
+        size:          p.size ?? null,
+        barcode:       p.barcode ?? null,
+        price:         Number(p.price ?? 0),
+        stock:         Number(p.stock ?? 0),          // in CASES
         piecesPerCase: Number(p.piecesPerCase ?? PIECES_PER_CASE_DEFAULT),
         reservedStock: Number(p.reservedStock ?? 0),
-        expiryDate:   p.expiryDate ?? null,
-        image:        p.image ?? null,
-        status:       (p.status ?? "ACTIVE") as ProductStatus,
-        supplierId:   String(p.supplierId ?? ""),
-        supplierName: supplierMap[p.supplierId] || p.supplier?.supplierName || "—",
-        createdAt:    String(p.createdAt ?? ""),
+        expiryDate:    p.expiryDate ?? null,
+        image:         p.image ?? null,
+        status:        (p.status ?? "ACTIVE") as ProductStatus,
+        supplierId:    String(p.supplierId ?? ""),
+        supplierName:  supplierMap[p.supplierId] || p.supplier?.supplierName || "—",
+        createdAt:     String(p.createdAt ?? ""),
       })));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load products");
@@ -150,10 +145,10 @@ export default function InventoryAdjustmentPage() {
 
   // ── Summary counts ───────────────────────────────────────────────────────────
   const counts = useMemo(() => ({
-    total:   products.length,
-    active:  products.filter(p => p.status === "ACTIVE").length,
-    low:     products.filter(p => deriveStockStatus(p.stock) === "Low Stock").length,
-    out:     products.filter(p => p.stock === 0).length,
+    total:  products.length,
+    active: products.filter(p => p.status === "ACTIVE").length,
+    low:    products.filter(p => deriveStockStatus(p.stock) === "Low Stock").length,
+    out:    products.filter(p => p.stock === 0).length,
   }), [products]);
 
   // ── Open detail ──────────────────────────────────────────────────────────────
@@ -167,6 +162,24 @@ export default function InventoryAdjustmentPage() {
     setAdjSuccess(false);
   };
 
+  // ── Preview new stock (in cases) ─────────────────────────────────────────────
+  // adjQty in cases → delta in cases; adjQty in pieces → convert to cases
+  const caseDelta = detailProd
+    ? adjUnit === "cases"
+      ? adjQty
+      : adjQty / getPiecesPerCase(detailProd)
+    : 0;
+
+  const previewCases  = detailProd ? Math.max(0, detailProd.stock + caseDelta) : 0;
+  const previewPieces = detailProd ? Math.round(previewCases * getPiecesPerCase(detailProd)) : 0;
+
+  // Pieces shown for the submit button label
+  const adjPiecesAbs = detailProd
+    ? adjUnit === "cases"
+      ? Math.abs(adjQty) * getPiecesPerCase(detailProd)
+      : Math.abs(adjQty)
+    : 0;
+
   // ── Apply adjustment via API ─────────────────────────────────────────────────
   const applyAdjustment = async () => {
     if (!detailProd || adjQty === 0) return;
@@ -174,20 +187,22 @@ export default function InventoryAdjustmentPage() {
     setAdjError(null);
     setAdjSuccess(false);
     try {
-      // Convert to pieces for the API
-      const piecesPerCase = getPiecesPerCase(detailProd);
-      const pieceDelta = adjUnit === "cases"
-        ? adjQty * piecesPerCase
-        : adjQty;
+      const employeeId = localStorage.getItem("employeeId") ?? "";
+
+      // Always send quantity in CASES to the backend
+      const quantityInCases = adjUnit === "cases"
+        ? adjQty
+        : adjQty / getPiecesPerCase(detailProd);
 
       await api.adjustStock({
-        productId: detailProd.id,
-        quantity:  pieceDelta,   // positive = add, negative = deduct
-        reason:    `${adjReason}${adjNote ? `: ${adjNote}` : ""}`,
+        productId:  detailProd.id,
+        quantity:   quantityInCases,   // positive = add, negative = deduct (in cases)
+        reason:     `${adjReason}${adjNote ? `: ${adjNote}` : ""}`,
+        employeeId,
       });
 
-      // Update local state
-      const newStock = Math.max(0, detailProd.stock + pieceDelta);
+      // Update local state — stock is in cases
+      const newStock = Math.max(0, detailProd.stock + quantityInCases);
       const updated  = { ...detailProd, stock: newStock };
       setProducts(prev => prev.map(p => p.id === updated.id ? updated : p));
       setDetailProd(updated);
@@ -200,12 +215,6 @@ export default function InventoryAdjustmentPage() {
       setAdjLoading(false);
     }
   };
-
-  // ── Preview new stock ────────────────────────────────────────────────────────
-  const previewStock = detailProd
-    ? Math.max(0, detailProd.stock + (adjUnit === "cases" ? adjQty * getPiecesPerCase(detailProd) : adjQty))
-    : 0;
-  const previewCases = detailProd ? Math.floor(previewStock / getPiecesPerCase(detailProd)) : 0;
 
   // ── Loading / Error states ───────────────────────────────────────────────────
   if (loading) return (
@@ -310,9 +319,9 @@ export default function InventoryAdjustmentPage() {
               ) : filtered.map((p, idx) => {
                 const stockStatus = deriveStockStatus(p.stock);
                 const st          = statusStyle[stockStatus];
-                const cases       = stockInCases(p);
-                const pieces      = stockRemainingPieces(p);
-                const pct         = p.stock > 0 ? Math.min(100, Math.round((cases / Math.max(cases, 10)) * 100)) : 0;
+                // p.stock = cases; totalPieces = cases × piecesPerCase
+                const pcs = totalPieces(p);
+                const pct = p.stock > 0 ? Math.min(100, Math.round((p.stock / Math.max(p.stock, 10)) * 100)) : 0;
                 return (
                   <tr key={p.id} style={{ borderBottom: "0.5px solid #f0f0f0", background: idx % 2 === 0 ? "#fff" : "#fafafa", transition: "background 0.15s" }}
                     onMouseEnter={(e) => (e.currentTarget.style.background = "#f0faf2")}
@@ -354,19 +363,18 @@ export default function InventoryAdjustmentPage() {
                     <td style={{ padding: "13px 16px", fontSize: "13px", fontWeight: 700, color: "#1a3c2e" }}>
                       {fmtPrice(p.price)}
                     </td>
-                    {/* Stock cases */}
+                    {/* Stock cases — p.stock IS cases */}
                     <td style={{ padding: "13px 16px" }}>
                       <div>
-                        <p style={{ fontSize: "15px", fontWeight: 800, color: st.color }}>{cases}</p>
+                        <p style={{ fontSize: "15px", fontWeight: 800, color: st.color }}>{p.stock}</p>
                         <div style={{ width: "60px", height: "4px", borderRadius: "10px", background: "#f0f0f0", marginTop: "4px", overflow: "hidden" }}>
                           <div style={{ height: "100%", width: `${pct}%`, background: st.dot, borderRadius: "10px" }} />
                         </div>
                       </div>
                     </td>
-                    {/* Stock pieces */}
+                    {/* Stock pieces = cases × piecesPerCase */}
                     <td style={{ padding: "13px 16px", fontSize: "13px", color: "#555" }}>
-                      {p.stock} pcs
-                      {pieces > 0 && <span style={{ fontSize: "11px", color: "#aaa" }}> (+{pieces} loose)</span>}
+                      {pcs} pcs
                     </td>
                     {/* Reserved */}
                     <td style={{ padding: "13px 16px", fontSize: "13px", color: p.reservedStock > 0 ? "#e65100" : "#aaa", fontWeight: p.reservedStock > 0 ? 700 : 400 }}>
@@ -442,9 +450,10 @@ export default function InventoryAdjustmentPage() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "8px" }}>
                   <div>
                     <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>Current Stock</p>
-                    <p style={{ fontSize: "36px", fontWeight: 900, color: "#fff", lineHeight: 1 }}>{stockInCases(detailProd)}</p>
+                    {/* stock IS cases */}
+                    <p style={{ fontSize: "36px", fontWeight: 900, color: "#fff", lineHeight: 1 }}>{detailProd.stock}</p>
                     <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.45)", marginTop: "2px" }}>
-                      cases · {detailProd.stock} total pcs · {detailProd.piecesPerCase} pcs/case
+                      cases · {totalPieces(detailProd)} total pcs · {detailProd.piecesPerCase} pcs/case
                     </p>
                   </div>
                   <div style={{ textAlign: "right" }}>
@@ -469,14 +478,14 @@ export default function InventoryAdjustmentPage() {
               <p style={{ fontSize: "12px", fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px" }}>Product Details</p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "24px" }}>
                 {[
-                  ["Category",      categoryLabels[detailProd.category]],
-                  ["Supplier",      detailProd.supplierName],
-                  ["Price / piece", fmtPrice(detailProd.price)],
-                  ["Price / case",  fmtPrice(detailProd.price * detailProd.piecesPerCase)],
-                  ["Expiry Date",   fmtDate(detailProd.expiryDate)],
+                  ["Category",       categoryLabels[detailProd.category]],
+                  ["Supplier",       detailProd.supplierName],
+                  ["Price / piece",  fmtPrice(detailProd.price)],
+                  ["Price / case",   fmtPrice(detailProd.price * detailProd.piecesPerCase)],
+                  ["Expiry Date",    fmtDate(detailProd.expiryDate)],
                   ["Reserved Stock", `${detailProd.reservedStock} pcs`],
-                  ["Pieces / Case", String(detailProd.piecesPerCase)],
-                  ["Product ID",    detailProd.id.slice(0, 12) + "…"],
+                  ["Pieces / Case",  String(detailProd.piecesPerCase)],
+                  ["Total Pieces",   `${totalPieces(detailProd)} pcs`],
                 ].map(([label, value]) => (
                   <div key={label} style={{ background: "#f9f9f9", borderRadius: "12px", padding: "12px 14px" }}>
                     <p style={{ fontSize: "10px", color: "#bbb", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px", fontWeight: 700 }}>{label}</p>
@@ -533,13 +542,13 @@ export default function InventoryAdjustmentPage() {
                     <button onClick={() => setAdjQty(v => v + 1)}
                       style={{ width: "36px", height: "36px", borderRadius: "50%", border: "none", background: "#1a3c2e", fontSize: "18px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff", flexShrink: 0 }}>+</button>
                     <div style={{ fontSize: "13px", color: "#888" }}>
-                      → New stock: <strong style={{ color: "#1a3c2e", fontSize: "15px" }}>{previewCases}</strong> cases
-                      <span style={{ fontSize: "11px", color: "#aaa" }}> ({previewStock} pcs)</span>
+                      → New stock: <strong style={{ color: "#1a3c2e", fontSize: "15px" }}>{Math.round(previewCases)}</strong> cases
+                      <span style={{ fontSize: "11px", color: "#aaa" }}> ({previewPieces} pcs)</span>
                     </div>
                   </div>
                   {adjUnit === "cases" && adjQty !== 0 && (
                     <p style={{ fontSize: "11px", color: "#6366f1", marginTop: "6px" }}>
-                      = {Math.abs(adjQty)} cases × {detailProd.piecesPerCase} pcs = <strong>{Math.abs(adjQty * detailProd.piecesPerCase)} pieces</strong>
+                      = {Math.abs(adjQty)} cases × {detailProd.piecesPerCase} pcs = <strong>{Math.abs(adjQty) * detailProd.piecesPerCase} pieces</strong>
                     </p>
                   )}
                 </div>
@@ -572,9 +581,9 @@ export default function InventoryAdjustmentPage() {
                   style={{ width: "100%", padding: "13px", borderRadius: "14px", border: "none", background: adjQty === 0 || adjLoading ? "#e0e0e0" : "#1a3c2e", color: adjQty === 0 || adjLoading ? "#bbb" : "#fff", fontSize: "14px", fontWeight: 700, cursor: adjQty === 0 || adjLoading ? "not-allowed" : "pointer", transition: "all 0.2s" }}
                 >
                   {adjLoading ? "Saving…" : adjQty > 0
-                    ? `✅ Add ${adjQty} ${adjUnit} (${adjQty * (adjUnit === "cases" ? detailProd.piecesPerCase : 1)} pcs)`
+                    ? `✅ Add ${adjQty} ${adjUnit} (${adjPiecesAbs} pcs)`
                     : adjQty < 0
-                    ? `➖ Deduct ${Math.abs(adjQty)} ${adjUnit} (${Math.abs(adjQty) * (adjUnit === "cases" ? detailProd.piecesPerCase : 1)} pcs)`
+                    ? `➖ Deduct ${Math.abs(adjQty)} ${adjUnit} (${adjPiecesAbs} pcs)`
                     : "Enter an adjustment"}
                 </button>
               </div>

@@ -387,14 +387,14 @@ getReturnRequestById: async (returnRequestId: string) => {
       return res.json();
     },
 
-    adjustStock: async (data: { productId: string; quantity: number; reason: string }) => {
+  adjustStock: async (data: { productId: string; quantity: number; reason: string; employeeId: string }) => {
   const res = await fetch(`${API_URL}/products/${data.productId}/adjust-stock`, {
     method: 'PATCH',
     headers: authHeaders(),
-    body: JSON.stringify({ quantity: data.quantity, reason: data.reason }),
+    body: JSON.stringify({ quantity: data.quantity, reason: data.reason, employeeId: data.employeeId }),
   });
   const result = await res.json();
   if (!res.ok) throw new Error(result.message || 'Failed to adjust stock');
   return result;
 },
-  };
+};
