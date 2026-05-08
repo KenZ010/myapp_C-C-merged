@@ -133,15 +133,17 @@ export default function InventoryAdjustmentPage() {
 
   // ── Filters ─────────────────────────────────────────────────────────────────
   const filtered = useMemo(() =>
-    products.filter((p) => {
+  products
+    .filter((p) => {
       const q = search.toLowerCase();
       const matchSearch = !q || p.productName.toLowerCase().includes(q) || (p.barcode ?? "").toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
       const matchCat    = catFilter  === "All" || p.category === catFilter;
       const matchStat   = statFilter === "All" || p.status   === statFilter;
       return matchSearch && matchCat && matchStat;
-    }),
-    [products, search, catFilter, statFilter]
-  );
+    })
+    .sort((a, b) => b.stock - a.stock),   // ← highest stock first
+  [products, search, catFilter, statFilter]
+);
 
   // ── Summary counts ───────────────────────────────────────────────────────────
   const counts = useMemo(() => ({
