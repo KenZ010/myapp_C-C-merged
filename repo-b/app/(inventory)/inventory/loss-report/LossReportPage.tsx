@@ -116,6 +116,7 @@ const Icons = {
   sun:      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>,
   week:     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/></svg>,
   month:    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+  year:     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="7" y1="14" x2="7" y2="14"/><line x1="12" y1="14" x2="12" y2="14"/><line x1="17" y1="14" x2="17" y2="14"/></svg>,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -130,7 +131,7 @@ export default function LossReportPage() {
 
   const [search,    setSearch]    = useState("");
   const [reasonFil, setReasonFil] = useState<"ALL" | LossReason>("ALL");
-  const [activeTab, setActiveTab] = useState<"daily" | "weekly" | "monthly">("daily");
+  const [activeTab, setActiveTab] = useState<"daily" | "weekly" | "monthly" | "yearly">("daily");
   const [viewItem,  setViewItem]  = useState<LossRecord | null>(null);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
@@ -184,7 +185,8 @@ export default function LossReportPage() {
     const f = (x: Date) => x.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
     const weeklyDate  = `${f(ws)} – ${f(we)}`;
     const monthlyDate = today.toLocaleDateString("en-PH", { month: "long", year: "numeric" });
-    return { dailyDate, weeklyDate, monthlyDate };
+    const yearlyDate = String(today.getFullYear());
+    return { dailyDate, weeklyDate, monthlyDate, yearlyDate };
   }, []);
 
   // ── Filter base ───────────────────────────────────────────────────────────
@@ -215,6 +217,10 @@ export default function LossReportPage() {
         return d >= ws && d <= we;
       });
     }
+    if (activeTab === "yearly") {
+        const year = String(today.getFullYear());
+        return baseFiltered.filter((r) => r.createdAt.startsWith(year));
+      }
     const month = today.toISOString().slice(0, 7);
     return baseFiltered.filter((r) => r.createdAt.startsWith(month));
   }, [baseFiltered, activeTab, todayStr]);
@@ -229,25 +235,29 @@ export default function LossReportPage() {
   const periodQty     = periodData.reduce((s, r) => s + r.quantity, 0);
 
   // ── Group period data ─────────────────────────────────────────────────────
-  const groupedData = useMemo(() => {
-    let keyFn:   (r: LossRecord) => string;
-    let labelFn: (k: string, rows: LossRecord[]) => string;
+ const groupedData = useMemo(() => {
+  let keyFn:   (r: LossRecord) => string;
+  let labelFn: (k: string, rows: LossRecord[]) => string;
 
-    if (activeTab === "daily") {
-      keyFn   = (r) => r.createdAt.slice(0, 10);
-      labelFn = (k) => new Date(k).toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-    } else if (activeTab === "weekly") {
-      keyFn   = (r) => getWeekKey(r.createdAt);
-      labelFn = (_k, rows) => getWeekRange(rows[0].createdAt);
-    } else {
-      keyFn   = (r) => r.createdAt.slice(0, 7);
-      labelFn = (_k, rows) => new Date(rows[0].createdAt).toLocaleDateString("en-PH", { month: "long", year: "numeric" });
-    }
+  if (activeTab === "daily") {
+    keyFn   = (r) => r.createdAt.slice(0, 10);
+    labelFn = (k) => new Date(k).toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  } else if (activeTab === "weekly") {
+    keyFn   = (r) => getWeekKey(r.createdAt);
+    labelFn = (_k, rows) => getWeekRange(rows[0].createdAt);
+  } else if (activeTab === "monthly") {
+    keyFn   = (r) => r.createdAt.slice(0, 7);        // group by "YYYY-MM"
+    labelFn = (_k, rows) => new Date(rows[0].createdAt).toLocaleDateString("en-PH", { month: "long", year: "numeric" });
+  } else {
+    // yearly — group each month of the selected year
+    keyFn   = (r) => r.createdAt.slice(0, 7);        // still group by "YYYY-MM"
+    labelFn = (_k, rows) => new Date(rows[0].createdAt).toLocaleDateString("en-PH", { month: "long", year: "numeric" });
+  }
 
-    const map    = groupBy(periodData, keyFn);
-    const sorted = [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
-    return sorted.map(([k, rows]) => ({ key: k, label: labelFn(k, rows), rows }));
-  }, [periodData, activeTab]);
+  const map    = groupBy(periodData, keyFn);
+  const sorted = [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  return sorted.map(([k, rows]) => ({ key: k, label: labelFn(k, rows), rows }));
+}, [periodData, activeTab]);
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
   if (loading) {
@@ -338,6 +348,7 @@ export default function LossReportPage() {
               { key: "daily",   label: "Daily",   date: tabDates.dailyDate,   icon: Icons.sun   },
               { key: "weekly",  label: "Weekly",  date: tabDates.weeklyDate,  icon: Icons.week  },
               { key: "monthly", label: "Monthly", date: tabDates.monthlyDate, icon: Icons.month },
+              { key: "yearly",  label: "Yearly",  date: tabDates.yearlyDate,  icon: Icons.year  }, // ← ADD HERE
             ] as const).map((tab) => (
               <button
                 key={tab.key}
