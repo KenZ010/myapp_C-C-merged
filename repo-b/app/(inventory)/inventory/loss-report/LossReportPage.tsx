@@ -84,22 +84,21 @@ function groupBy<T>(arr: T[], keyFn: (i: T) => string): Map<string, T[]> {
 
 /** Pull productName / size / category / image out of the raw API shape */
 function normalizeLossRecord(raw: Record<string, unknown>): LossRecord {
-  const product = raw.product as Record<string, unknown> | null;
+  const product  = raw.product  as Record<string, unknown> | null;
+  const employee = raw.employee as Record<string, unknown> | null;
   return {
     id:           String(raw.id ?? ""),
-    productId:    String(raw.productId ?? product?.id ?? ""),
-    productName:  String(product?.productName ?? raw.productName ?? "Unknown Product"),
-    category:     String(product?.category ?? raw.category ?? ""),
-    size:         product?.size ? String(product.size) : undefined,
-    image:        product?.image ? String(product.image) : undefined,
-    quantity:     Number(raw.quantity ?? 0),
+    productId:    String(raw.productId ?? ""),
+    productName:  String(product?.productName ?? "Unknown Product"),
+    category:     String(product?.category ?? ""),
+    size:         undefined,   // not included in backend select
+    image:        undefined,   // not included in backend select
+    quantity:     Number(raw.quantity ?? 0),   // already Math.abs'd by backend
     lossReason:   String(raw.lossReason ?? "OTHER") as LossReason,
     reason:       raw.reason ? String(raw.reason) : undefined,
-    createdAt:    String(raw.createdAt ?? raw.date ?? ""),
+    createdAt:    String(raw.createdAt ?? ""),
     employeeId:   String(raw.employeeId ?? ""),
-    employeeName: (raw.employee as Record<string, unknown> | null)?.name
-                    ? String((raw.employee as Record<string, unknown>).name)
-                    : undefined,
+    employeeName: employee?.name ? String(employee.name) : undefined,
   };
 }
 
@@ -136,37 +135,43 @@ export default function LossReportPage() {
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [rawReports, rawSummary] = await Promise.all([
-        api.getLossReports({ limit: 200 }),
-        api.getLossReportSummary(),
-      ]);
+  setLoading(true);
+  setError(null);
+  try {
+    const [rawReports, rawSummary] = await Promise.allSettled([
+      api.getLossReports({ limit: 50 }),      // ← backend max is 50
+      api.getLossReportSummary(),
+    ]).then(([r1, r2]) => [
+      r1.status === "fulfilled" ? r1.value : null,
+      r2.status === "fulfilled" ? r2.value : null,
+    ]);
 
-      console.log("[LossReport] raw reports:", rawReports);
-      console.log("[LossReport] raw summary:", rawSummary);
+    // Backend returns { logs: [...], total, page, ... }
+    const arr: Record<string, unknown>[] = Array.isArray(rawReports?.logs)
+      ? rawReports.logs
+      : [];
 
-      // Normalise reports — handle { data: [...] }, plain array, or { lossReports: [...] }
-      let arr: Record<string, unknown>[] = [];
-      if (Array.isArray(rawReports))            arr = rawReports;
-      else if (Array.isArray(rawReports?.data)) arr = rawReports.data;
-      else if (Array.isArray(rawReports?.lossReports)) arr = rawReports.lossReports;
-      else if (Array.isArray(rawReports?.reports))     arr = rawReports.reports;
+    setRecords(arr.map(normalizeLossRecord));
 
-      setRecords(arr.map(normalizeLossRecord));
+    // Backend returns { summary: [{ lossReason, totalIncidents, totalPiecesLost }] }
+    const rawSum: Array<{ lossReason: LossReason; totalIncidents: number; totalPiecesLost: number }> =
+      Array.isArray(rawSummary?.summary) ? rawSummary.summary : [];
 
-      // Normalise summary
-      let sumArr: SummaryItem[] = [];
-      if (Array.isArray(rawSummary))           sumArr = rawSummary;
-      else if (Array.isArray(rawSummary?.data)) sumArr = rawSummary.data;
-      setSummary(sumArr);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load loss reports");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    // Re-shape to match what the UI expects: { lossReason, _count: { id }, _sum: { quantity } }
+    const normalizedSummary: SummaryItem[] = rawSum.map((s) => ({
+      lossReason: s.lossReason,
+      _count:     { id: s.totalIncidents },
+      _sum:       { quantity: s.totalPiecesLost },
+    }));
+
+    setSummary(normalizedSummary);
+
+  } catch (e) {
+    setError(e instanceof Error ? e.message : "Failed to load loss reports");
+  } finally {
+    setLoading(false);
+  }
+}, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
