@@ -139,9 +139,6 @@ export default function LoginPage() {
             >
               <div className="w-28 h-28 rounded-full bg-white flex items-center justify-center overflow-hidden">
               <Image src="/images/Remove Logo.png" alt="Julieta Logo" width={100} height={100} className="object-contain" />
-                <span className="text-2xl font-bold" style={{ color: "#2a9d8f", fontFamily: "Georgia, serif" }}>
-                  Julieta
-                </span>
               </div>
             </div>
             <p className="text-white text-xl font-bold tracking-widest drop-shadow-lg">SOFTDRINKS STORE</p>
