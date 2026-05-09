@@ -556,7 +556,7 @@ export default function LoginPage() {
                   Simply ensure /public/images/Remove Logo.png exists.
                 */}
                 <Image
-                  src="/images/Remove Logo.png"
+                  src="/images/Softdrinks Logo.png"
                   alt="Julieta Softdrinks Logo"
                   width={143}
                   height={143}
