@@ -524,7 +524,6 @@ export default function LoginPage() {
 
         {/* ══════════ LEFT PANEL ══════════ */}
         <div className="lr-left">
-          <span className="lr-corner-tag">🥤 Est. 2024</span>
           <div className="lr-can-shape" />
           <div className="lr-wave" />
 
