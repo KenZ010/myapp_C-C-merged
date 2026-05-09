@@ -1,5 +1,5 @@
 "use client";
-
+import Image from "next/image";
 import React from "react";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -373,7 +373,7 @@ export default function InventoryMaintenancePage() {
 
   const productStockData = useMemo(() =>
     [...items]
-      .filter(item => supplierFilter === "All" || item.supplierId === supplierFilter)
+      .filter(item => supplierFilter === "All" || String(item.supplierId) === String(supplierFilter))
       .sort((a, b) => a.productName.localeCompare(b.productName))
       .map((p) => ({ 
         name: p.productName, 
@@ -428,10 +428,11 @@ export default function InventoryMaintenancePage() {
 
       {/* ── Sidebar ── */}
       <aside className="hidden md:flex w-52 bg-white flex-col py-6 px-4 border-r border-gray-100 shrink-0">
-        <div className="text-center mb-10">
-          <p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide">
-            JULIETA SOFTDRINKS<br />STORE
-          </p>
+        <div className="text-center mb-6">
+          <div className="w-24 h-24 rounded-full overflow-hidden mx-auto border-0 relative">
+            <Image src="/logo-new.png" alt="Logo" fill className="object-cover" sizes="96px" />
+          </div>
+          <p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide mt-3">JULIETA SOFTDRINKS<br />STORE</p>
         </div>
         <nav className="flex flex-col gap-1">
           {navItems.map((item) => {
@@ -880,7 +881,7 @@ export default function InventoryMaintenancePage() {
                   <tbody>
                     {items
                       .filter(i =>
-                        supplierFilter === "All" || i.supplierId === supplierFilter
+                        supplierFilter === "All" || String(i.supplierId) === String(supplierFilter)
                       )
                       .filter(i =>
                         stockSearch === "" ||
