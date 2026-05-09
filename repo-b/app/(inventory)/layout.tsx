@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useSocket } from "@/app/providers";
+import { useState, useEffect } from "react";
 
 // ── SVG Icons ──────────────────────────────────────────────────────────
 const IconMonitoring = ({ active }: { active: boolean }) => (
@@ -78,6 +78,12 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const router = useRouter();
   const socket = useSocket();
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+  const stored = localStorage.getItem("user");
+  if (stored) setCurrentUser(JSON.parse(stored));
+  }, []);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -159,8 +165,12 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
             </svg>
           </div>
           <div>
-            <p style={{ fontSize: "12.5px", fontWeight: 700, color: "#1a237e" }}>James Renoblas</p>
-            <p style={{ fontSize: "10.5px", color: "#5c6bc0", fontWeight: 500 }}>Inventory Manager</p>
+            <p style={{ fontSize: "12.5px", fontWeight: 700, color: "#1a237e" }}>
+            {currentUser?.name || currentUser?.username || "Manager"}
+            </p>
+            <p style={{ fontSize: "10.5px", color: "#5c6bc0", fontWeight: 500 }}>
+            {currentUser?.role || "Inventory Manager"}
+            </p>
           </div>
         </div>
 
