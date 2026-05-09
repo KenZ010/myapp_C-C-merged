@@ -1,5 +1,7 @@
-  const API_URL = 'https://backend-production-740c.up.railway.app/api';
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL!;
+  const API_URL = `${BACKEND_URL}/api`;
 
+  export { BACKEND_URL };
   // ─── Cookie helpers ───────────────────────────────────────────────────────────
   function setCookie(name: string, value: string) {
     const isProduction = window.location.protocol === 'https:';
