@@ -618,7 +618,6 @@ export default function LoginPage() {
           <div className="lr-blob-br" />
 
           <div className="lr-card">
-            <div className="lr-card-badge">🥤</div>
             <h2 className="lr-card-title">Welcome Back!</h2>
             <p className="lr-card-sub">Sign in to continue to your account</p>
 
