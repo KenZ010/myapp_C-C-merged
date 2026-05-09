@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { 
   LayoutDashboard, ShoppingCart, Users, LineChart, 
-  FileText, Package, User, ClipboardList, RotateCcw, Gift,
+  FileText, Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift,
   Coffee, Zap, Beer, Droplets, ShoppingBasket, Calendar, Search, Globe
 } from "lucide-react";
 
@@ -18,7 +18,7 @@ const navItems = [
   { label: "Product Management",    icon: Package, path: "/product" },
   { label: "Account Management",    icon: User, path: "/account" },
   { label: "Purchase Order",        icon: ClipboardList, path: "/purchase-order" },
-  { label: "Return",               icon: RotateCcw, path: "/return" },
+  { label: "Loss Report",               icon: AlertTriangle, path: "/loss-report" },
   { label: "Promo Management",      icon: Gift, path: "/promo" },
 ];
 
@@ -108,7 +108,7 @@ export default function TransactionLogsPage() {
       "Supplier Maintenance": "/supplier", "Sales Reports": "/sales",
       "Transaction Logs": "/transaction", "Product Management": "/product",
       "Account Management": "/account", "Purchase Order": "/purchase-order",
-      "Return": "/return", "Promo Management": "/promo",
+      "Loss Report": "/loss-report", "Promo Management": "/promo",
     };
     if (routes[label]) router.push(routes[label]);
     setShowMobileMenu(false);

@@ -6,8 +6,9 @@ import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 import { 
   LayoutDashboard, ShoppingCart, Users, LineChart, 
-  FileText, Package, User, ClipboardList, RotateCcw, Gift,
-  Coffee, Zap, Beer, Droplets, ShoppingBasket, ClipboardListIcon, Inbox
+  FileText, Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift,
+  Coffee, Zap, Beer, Droplets, ShoppingBasket, ClipboardListIcon, Inbox,
+  Search, Box
 } from "lucide-react";
 
 // ─── CASE UNIT SYSTEM ────────────────────────────────────────────────────────
@@ -159,7 +160,7 @@ const navItems = [
   { label: "Product Management",    icon: Package, path: "/product"        },
   { label: "Account Management",    icon: User, path: "/account"        },
   { label: "Purchase Order",        icon: ClipboardList, path: "/purchase-order" },
-  { label: "Return", icon: RotateCcw, path: "/return" },
+  { label: "Loss Report", icon: AlertTriangle, path: "/loss-report" },
   { label: "Promo Management",      icon: Gift, path: "/promo" },
 ];
 
@@ -284,6 +285,8 @@ export default function InventoryMaintenancePage() {
   const [showUserMenu,   setShowUserMenu]   = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [selectedLog,    setSelectedLog]    = useState<InventoryLog | null>(null);
+  const [activeTab,      setActiveTab]      = useState<"logs" | "stocks">("logs");
+  const [stockSearch,    setStockSearch]    = useState("");
 
   const logsCache = useRef<Record<string, InventoryLog[]>>({});
 
@@ -499,6 +502,23 @@ export default function InventoryMaintenancePage() {
           </div>
         )}
 
+        {/* ── Tab Bar ── */}
+        <div className="bg-white border-b border-gray-100 px-4 md:px-6">
+          <div className="flex">
+            {([
+              { key: "logs",   label: "Movement Log",   icon: ClipboardListIcon },
+              { key: "stocks", label: "Remaining Stocks", icon: Box },
+            ] as { key: "logs" | "stocks"; label: string; icon: typeof ClipboardListIcon }[]).map((tab) => (
+              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-1 md:gap-2 px-3 md:px-6 py-3 text-xs md:text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab.key ? "border-indigo-600 text-indigo-700 bg-indigo-50" : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                }`}>
+                <tab.icon className="w-4 h-4" /><span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="flex-1 p-3 md:p-4 bg-green-50">
 
           {/* ── Low Stock Alert ── */}
@@ -547,6 +567,8 @@ export default function InventoryMaintenancePage() {
             </div>
           )}
 
+          {activeTab === "logs" && (
+          <>
           {/* ── Inventory Movement Log ── */}
           <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm mb-4">
             <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
@@ -813,6 +835,104 @@ export default function InventoryMaintenancePage() {
             </div>
 
           </div>
+          </>
+          )}
+
+          {activeTab === "stocks" && (
+          <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm">
+            <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+              <div>
+                <h2 className="font-bold text-gray-800 text-base flex items-center gap-2">
+                  <Box className="w-4 h-4 text-indigo-600" />
+                  Remaining Stocks
+                </h2>
+                <p className="text-xs text-gray-400 mt-0.5">{items.length} products</p>
+              </div>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search products..."
+                  value={stockSearch}
+                  onChange={(e) => setStockSearch(e.target.value)}
+                  className="pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-indigo-400 w-48 md:w-56"
+                />
+              </div>
+            </div>
+
+            {itemsLoading ? (
+              <div className="text-center py-10 text-gray-400 text-sm">Loading products...</div>
+            ) : items.length === 0 ? (
+              <div className="text-center py-10">
+                <Inbox className="w-10 h-10 text-gray-300 mb-2" />
+                <p className="text-sm text-gray-400">No products found.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-max">
+                  <thead>
+                    <tr className="bg-indigo-900 text-white text-xs">
+                      {["Product", "Category", "Size", "Supplier", "Stock", "Unit", "Breakdown", "Status"].map((h) => (
+                        <th key={h} className="p-3 text-left whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items
+                      .filter(i =>
+                        supplierFilter === "All" || i.supplierId === supplierFilter
+                      )
+                      .filter(i =>
+                        stockSearch === "" ||
+                        i.productName.toLowerCase().includes(stockSearch.toLowerCase())
+                      )
+                      .sort((a, b) => b.stock - a.stock)
+                      .map((item) => {
+                        const status = item.stock === 0
+                          ? { label: "Out of Stock", color: "text-red-600 bg-red-50 border-red-200" }
+                          : item.stock <= 10
+                          ? { label: "Low Stock", color: "text-yellow-600 bg-yellow-50 border-yellow-200" }
+                          : { label: "In Stock", color: "text-green-600 bg-green-50 border-green-200" };
+                        return (
+                          <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="p-3">
+                              <span className="font-medium text-gray-800">{item.productName}</span>
+                            </td>
+                            <td className="p-3">
+                              <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs">
+                                {item.category}
+                              </span>
+                            </td>
+                            <td className="p-3 text-xs text-gray-500">{item.size || "—"}</td>
+                            <td className="p-3 text-xs text-gray-600">{item.supplierName || "—"}</td>
+                            <td className="p-3">
+                              <span className={`text-sm font-bold ${
+                                item.stock === 0 ? "text-red-600" : item.stock <= 10 ? "text-yellow-600" : "text-green-700"
+                              }`}>
+                                {item.stock}
+                              </span>
+                            </td>
+                            <td className="p-3">
+                              <UnitPill unit={item.stockUnit} />
+                            </td>
+                            <td className="p-3 text-xs text-indigo-500 font-medium">
+                              {getCaseBreakdown(item.stock, item.stockUnit) ?? `${item.stock} ${getUnit(item.stockUnit).abbr}`}
+                            </td>
+                            <td className="p-3">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${status.color}`}>
+                                {status.label}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          )}
+
         </div>
       </main>
     </div>

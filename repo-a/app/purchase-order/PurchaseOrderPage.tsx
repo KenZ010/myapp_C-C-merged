@@ -6,7 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 import { 
   LayoutDashboard, ShoppingCart, Users, LineChart, 
-  FileText, Package, User, ClipboardList, RotateCcw, Gift,
+  FileText, Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift,
   Building2, Box, Clock, CheckCircle, Calendar, Inbox, Search
 } from "lucide-react";
 
@@ -274,7 +274,7 @@ type LineItem = {
 
 type DeliveryForm = { supplierId: string; lineItems: LineItem[]; notes: string };
 type Supplier    = { id: string; supplierName: string };
-type Product     = { id: string; productName: string; price: number; supplierId?: string; supplier?: string; status?: string; stockUnit?: string; stockQuantity?: number; size?: string | null };
+type Product     = { id: string; productName: string; price: number; supplierId?: string; supplier?: { id: string; supplierName: string } | string; status?: string; stockUnit?: string; stockQuantity?: number; size?: string | null };
 type ReceiveQty  = { deliveryItemId: string; receivedQty: number };
 
 const STATUS_CONFIG: Record<string, { bg: string; text: string }> = {
@@ -293,7 +293,7 @@ const navItems = [
   { label: "Product Management",    icon: Package, path: "/product"        },
   { label: "Account Management",    icon: User, path: "/account"        },
   { label: "Purchase Order",        icon: ClipboardList, path: "/purchase-order" },
-  { label: "Return",               icon: RotateCcw, path: "/return"         },
+  { label: "Loss Report",               icon: AlertTriangle, path: "/loss-report"         },
   { label: "Promo Management",      icon: Gift, path: "/promo"          },
 ];
 
@@ -457,7 +457,7 @@ export default function PurchaseOrderPage() {
       setSuppliers((Array.isArray(s) ? s : []).filter((sup: { status?: string }) => sup.status !== "INACTIVE"));
       const normalized = (Array.isArray(p) ? p : []).map((prod: Product) => ({
         ...prod,
-        supplierId: prod.supplierId || prod.supplier || "",
+        supplierId: prod.supplierId || (typeof prod.supplier === 'object' ? prod.supplier?.id : prod.supplier) || "",
         stockQuantity: prod.stockQuantity ?? 0,
         stockUnit: (prod.stockUnit as CaseUnit) || "case_24",
       }));
