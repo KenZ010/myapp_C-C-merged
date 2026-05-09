@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useSocket } from "@/app/providers";
 
 // ── SVG Icons ──────────────────────────────────────────────────────────
 const IconMonitoring = ({ active }: { active: boolean }) => (
@@ -76,7 +77,10 @@ const pageTitles: Record<string, { title: string; sub: string }> = {
 export default function InventoryLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const socket = useSocket();
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const page = pageTitles[pathname] ?? { title: "Inventory Manager", sub: "" };
 
   const handleLogout = () => {
@@ -87,6 +91,7 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
     document.cookie = `active_token=; ${expired}`;
     router.push("/");
   };
+
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "#f5f6fa" }}>

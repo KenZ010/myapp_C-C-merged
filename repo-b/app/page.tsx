@@ -258,7 +258,6 @@ export default function LoginPage() {
           border-radius: 50%;
           background: #fff;
           display: flex; align-items: center; justify-content: center;
-          overflow: hidden;
         }
 
         .lr-brand-name {
@@ -557,8 +556,8 @@ export default function LoginPage() {
                 <Image
                   src="/images/Remove Logo.png"
                   alt="Julieta Softdrinks Logo"
-                  width={136}
-                  height={136}
+                  width={143}
+                  height={143}
                   className="object-contain"
                   onError={(e) => {
                     // Fallback: hide broken img and show SVG can
