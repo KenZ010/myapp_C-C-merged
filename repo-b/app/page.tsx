@@ -107,14 +107,14 @@ export default function LoginPage() {
           0%, 100% {
             box-shadow:
               0 0 0 5px  rgba(251,146,60,0.28),
-              0 0 45px   rgba(251,146,60,0.45),
-              0 24px 50px rgba(0,0,0,0.38);
+              0 0 40px   rgba(251,146,60,0.45),
+              0 20px 48px rgba(0,0,0,0.38);
           }
           50% {
             box-shadow:
               0 0 0 10px rgba(251,146,60,0.15),
-              0 0 65px   rgba(251,146,60,0.65),
-              0 24px 50px rgba(0,0,0,0.38);
+              0 0 60px   rgba(251,146,60,0.65),
+              0 20px 48px rgba(0,0,0,0.38);
           }
         }
 
@@ -248,16 +248,18 @@ export default function LoginPage() {
         .lr-logo-outer {
           width: 156px; height: 156px;
           border-radius: 50%;
-          background: conic-gradient(from 0deg, #f97316 0%, #fb923c 25%, #fde68a 50%, #fb923c 75%, #f97316 100%);
+          background: #ffffff;
+          border: 3px solid rgba(255,255,255,0.60);
           display: flex; align-items: center; justify-content: center;
           animation: logoPulse 3.5s ease-in-out infinite;
         }
 
         .lr-logo-inner {
-          width: 143px; height: 143px;
+          width: 148px; height: 148px;
           border-radius: 50%;
-          background: #fff;
+          background: transparent;
           display: flex; align-items: center; justify-content: center;
+          overflow: hidden;
         }
 
         .lr-brand-name {
