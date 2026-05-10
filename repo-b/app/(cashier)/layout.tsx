@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useSocket, useSocketActions } from "@/app/providers";
 
 const navLinks = [
   {
@@ -69,15 +70,29 @@ const pageTitles: Record<string, { title: string; sub: string }> = {
   "/cashier/payment":      { title: "Payment",             sub: "Complete the customer order" },
 };
 
-// ── Layout ────────────────────────────────────────────────────────────────────
 export default function CashierLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router   = useRouter();
 
+  // ✅ Pull socket from the shared Providers context
+  const socket            = useSocket();
+  const { connectSocket } = useSocketActions();
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mounted,     setMounted]     = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("user");
+    if (stored) setCurrentUser(JSON.parse(stored));
+  }, []);
+
+  // Re-connect when cashier layout mounts (e.g. after login redirect)
+  useEffect(() => {
+    connectSocket();
+  }, []);
 
   const page = pageTitles[pathname] ?? { title: "Cashier Panel", sub: "" };
 
@@ -90,12 +105,11 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
     router.push("/");
   };
 
-  if (!mounted) return null; // ← added
+  if (!mounted) return null;
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "#f4f6fb" }}>
 
-      {/* ── Mobile Overlay ── */}
       {sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
@@ -104,20 +118,11 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
         />
       )}
 
-      {/* ── Sidebar ── */}
       <aside
         style={{
-          width: "240px",
-          background: "#fff",
-          display: "flex",
-          flexDirection: "column",
-          flexShrink: 0,
-          borderRight: "1px solid #eaecf4",
-          position: "fixed",
-          top: 0,
-          left: 0,
-          height: "100%",
-          zIndex: 50,
+          width: "240px", background: "#fff", display: "flex", flexDirection: "column",
+          flexShrink: 0, borderRight: "1px solid #eaecf4",
+          position: "fixed", top: 0, left: 0, height: "100%", zIndex: 50,
           transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)",
           transition: "transform 0.25s cubic-bezier(0.4,0,0.2,1)",
           boxShadow: "4px 0 24px rgba(99,102,241,0.06)",
@@ -147,8 +152,12 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
             </svg>
           </div>
           <div>
-            <p style={{ fontSize: "13px", fontWeight: 700, color: "#3730a3", lineHeight: 1.2 }}>Ray</p>
-            <p style={{ fontSize: "11px", color: "#818cf8", fontWeight: 500 }}>Cashier</p>
+            <p style={{ fontSize: "13px", fontWeight: 700, color: "#3730a3", lineHeight: 1.2 }}>
+              {currentUser?.name || currentUser?.username || "Cashier"}
+            </p>
+            <p style={{ fontSize: "11px", color: "#818cf8", fontWeight: 500 }}>
+              {currentUser?.role || "Cashier"}
+            </p>
           </div>
         </div>
 
@@ -228,14 +237,21 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
             </div>
           </div>
 
-          {/* Status badge */}
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "#f0fdf4", borderRadius: "20px", padding: "5px 12px", border: "1px solid #bbf7d0" }}>
-            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#22c55e" }} />
-            <span style={{ fontSize: "12px", color: "#16a34a", fontWeight: 600 }}>Online</span>
+          {/* ✅ Live socket status badge (replaces static "Online") */}
+          <div style={{
+            display: "flex", alignItems: "center", gap: "6px",
+            background: socket ? "#f0fdf4" : "#fef2f2",
+            borderRadius: "20px", padding: "5px 12px",
+            border: `1px solid ${socket ? "#bbf7d0" : "#fecaca"}`,
+            transition: "all 0.3s",
+          }}>
+            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: socket ? "#22c55e" : "#ef4444", transition: "background 0.3s" }} />
+            <span style={{ fontSize: "12px", color: socket ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
+              {socket ? "Online" : "Connecting..."}
+            </span>
           </div>
         </header>
 
-        {/* Content */}
         <div style={{ flex: 1, overflowY: "auto" }}>{children}</div>
       </main>
     </div>

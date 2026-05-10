@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Drawer from "@/components/Drawer";
 import { CartProvider, useCart } from "@/context/CartContext";
+import { useSocketActions } from "@/app/providers"; // ← adjust path if needed
 
 const pageTitles: Record<string, { title: string; sub: string }> = {
   "/home":          { title: "Dashboard",           sub: "Welcome back" },
@@ -27,10 +28,19 @@ const hideSearchCart = [
 
 function DashboardInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { connectSocket } = useSocketActions(); // ✅
+
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mounted,    setMounted]    = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
+
+  // ✅ Connect socket on mount so the customer joins their room
+  // The Providers already listens for order:completed / order:status
+  // and fires the toast — this just ensures the socket is connected
+  useEffect(() => {
+    connectSocket();
+  }, []);
 
   const page = pageTitles[pathname] ?? { title: "Julieta Store", sub: "" };
   const { totalCount } = useCart();

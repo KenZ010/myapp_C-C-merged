@@ -2,6 +2,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { useSocket, useSocketActions } from "@/app/providers";
 
 // ── SVG Icons ──────────────────────────────────────────────────────────
 const IconMonitoring = ({ active }: { active: boolean }) => (
@@ -75,16 +76,24 @@ const pageTitles: Record<string, { title: string; sub: string }> = {
 // ── Layout ─────────────────────────────────────────────────────────────
 export default function InventoryLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const socket = useSocket();
+  const router   = useRouter();
+
+  // ✅ Pull socket from the shared Providers context
+  const socket             = useSocket();
+  const { connectSocket }  = useSocketActions();
+
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-  const stored = localStorage.getItem("user");
-  if (stored) setCurrentUser(JSON.parse(stored));
+    const stored = localStorage.getItem("user");
+    if (stored) setCurrentUser(JSON.parse(stored));
   }, []);
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Re-connect when this layout mounts (e.g. after login redirect)
+  useEffect(() => {
+    connectSocket();
+  }, []);
 
   const page = pageTitles[pathname] ?? { title: "Inventory Manager", sub: "" };
 
@@ -97,11 +106,9 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
     router.push("/");
   };
 
-
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "#f5f6fa" }}>
 
-      {/* Mobile Overlay */}
       {sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
@@ -110,54 +117,33 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
         />
       )}
 
-      {/* ── Sidebar ── */}
       <aside
         style={{
-          width: "230px",
-          background: "#ffffff",
-          display: "flex",
-          flexDirection: "column",
-          flexShrink: 0,
-          borderRight: "1px solid #ebebf0",
+          width: "230px", background: "#ffffff", display: "flex", flexDirection: "column",
+          flexShrink: 0, borderRight: "1px solid #ebebf0",
           boxShadow: "2px 0 12px rgba(92,107,192,0.06)",
-          position: "fixed",
-          top: 0, left: 0, height: "100%",
-          zIndex: 50,
+          position: "fixed", top: 0, left: 0, height: "100%", zIndex: 50,
           transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)",
           transition: "transform 0.25s cubic-bezier(0.4,0,0.2,1)",
         }}
         className="lg:relative lg:translate-x-0 lg:transform-none"
       >
-
         {/* Logo */}
         <div style={{ padding: "22px 20px 18px", borderBottom: "1px solid #ebebf0", display: "flex", alignItems: "center", gap: "12px" }}>
-          <div style={{
-            width: "40px", height: "40px", borderRadius: "12px",
-            background: "linear-gradient(135deg, #5c6bc0, #7986cb)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0, boxShadow: "0 2px 8px rgba(92,107,192,0.35)",
-          }}>
+          <div style={{ width: "40px", height: "40px", borderRadius: "12px", background: "linear-gradient(135deg, #5c6bc0, #7986cb)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 2px 8px rgba(92,107,192,0.35)" }}>
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
               <path d="M3 10L10 3L17 10V18H13V13H7V18H3V10Z" fill="#fff"/>
             </svg>
           </div>
           <div>
-            <p style={{ fontSize: "13.5px", fontWeight: 800, color: "#1a237e", letterSpacing: "0.2px", lineHeight: 1.2 }}>
-              Julieta Store
-            </p>
-            <p style={{ fontSize: "11px", color: "#9fa8da", fontWeight: 500 }}>
-              Inventory Panel
-            </p>
+            <p style={{ fontSize: "13.5px", fontWeight: 800, color: "#1a237e", letterSpacing: "0.2px", lineHeight: 1.2 }}>Julieta Store</p>
+            <p style={{ fontSize: "11px", color: "#9fa8da", fontWeight: 500 }}>Inventory Panel</p>
           </div>
         </div>
 
         {/* User Info */}
         <div style={{ padding: "14px 16px", margin: "14px 14px 0", background: "#f3f4fb", borderRadius: "12px", display: "flex", alignItems: "center", gap: "10px" }}>
-          <div style={{
-            width: "36px", height: "36px", borderRadius: "50%",
-            background: "linear-gradient(135deg, #5c6bc0, #7986cb)",
-            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-          }}>
+          <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "linear-gradient(135deg, #5c6bc0, #7986cb)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               <circle cx="9" cy="6" r="4" fill="#fff" opacity="0.9"/>
               <path d="M2 17c0-3.866 3.134-7 7-7s7 3.134 7 7" fill="#fff" opacity="0.9"/>
@@ -165,10 +151,10 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
           </div>
           <div>
             <p style={{ fontSize: "12.5px", fontWeight: 700, color: "#1a237e" }}>
-            {currentUser?.name || currentUser?.username || "Manager"}
+              {currentUser?.name || currentUser?.username || "Manager"}
             </p>
             <p style={{ fontSize: "10.5px", color: "#5c6bc0", fontWeight: 500 }}>
-            {currentUser?.role || "Inventory Manager"}
+              {currentUser?.role || "Inventory Manager"}
             </p>
           </div>
         </div>
@@ -188,14 +174,9 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
                 href={href}
                 onClick={() => setSidebarOpen(false)}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  padding: "10px 16px",
-                  margin: "2px 10px",
-                  borderRadius: "10px",
-                  fontSize: "13px",
-                  textDecoration: "none",
+                  display: "flex", alignItems: "center", gap: "12px",
+                  padding: "10px 16px", margin: "2px 10px", borderRadius: "10px",
+                  fontSize: "13px", textDecoration: "none",
                   color: isActive ? "#3949ab" : "#757575",
                   fontWeight: isActive ? 700 : 400,
                   background: isActive ? "#ede7f6" : "transparent",
@@ -214,12 +195,7 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
         <div style={{ padding: "12px 14px 20px", borderTop: "1px solid #ebebf0" }}>
           <button
             onClick={handleLogout}
-            style={{
-              width: "100%", display: "flex", alignItems: "center", gap: "12px",
-              padding: "10px 14px", borderRadius: "10px", border: "none",
-              background: "#fff5f5", color: "#e53935",
-              fontSize: "13px", fontWeight: 600, cursor: "pointer",
-            }}
+            style={{ width: "100%", display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", borderRadius: "10px", border: "none", background: "#fff5f5", color: "#e53935", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
           >
             <IconLogout />
             Log out
@@ -229,48 +205,32 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
 
       {/* ── Main ── */}
       <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-
-        {/* Topbar */}
-        <header style={{
-          background: "#3949ab",
-          padding: "0 20px", height: "56px",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          flexShrink: 0, boxShadow: "0 2px 8px rgba(57,73,171,0.3)",
-        }}>
+        <header style={{ background: "#3949ab", padding: "0 20px", height: "56px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, boxShadow: "0 2px 8px rgba(57,73,171,0.3)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-            {/* Hamburger */}
             <button
               onClick={() => setSidebarOpen(true)}
               className="lg:hidden"
-              style={{
-                background: "rgba(255,255,255,0.12)", border: "none", cursor: "pointer",
-                display: "flex", flexDirection: "column", gap: "4px",
-                padding: "8px", borderRadius: "8px", flexShrink: 0,
-              }}
+              style={{ background: "rgba(255,255,255,0.12)", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", gap: "4px", padding: "8px", borderRadius: "8px", flexShrink: 0 }}
             >
               <div style={{ width: "20px", height: "2px", background: "#fff", borderRadius: "2px" }} />
               <div style={{ width: "20px", height: "2px", background: "#fff", borderRadius: "2px" }} />
               <div style={{ width: "20px", height: "2px", background: "#fff", borderRadius: "2px" }} />
             </button>
-
             <div>
-              <p style={{ color: "#fff", fontSize: "15px", fontWeight: 700, letterSpacing: "0.2px" }}>
-                {page.title}
-              </p>
-              {page.sub && (
-                <p style={{ color: "rgba(255,255,255,0.55)", fontSize: "11px" }}>
-                  {page.sub}
-                </p>
-              )}
+              <p style={{ color: "#fff", fontSize: "15px", fontWeight: 700, letterSpacing: "0.2px" }}>{page.title}</p>
+              {page.sub && <p style={{ color: "rgba(255,255,255,0.55)", fontSize: "11px" }}>{page.sub}</p>}
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#69f0ae" }} />
+          {/* ✅ Live socket status dot */}
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: socket ? "#69f0ae" : "#ef5350", transition: "background 0.3s" }} />
+            <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)" }}>
+              {socket ? "Live" : "Connecting..."}
+            </span>
           </div>
         </header>
 
-        {/* Content */}
         <div style={{ flex: 1, overflowY: "auto" }}>{children}</div>
       </main>
     </div>
