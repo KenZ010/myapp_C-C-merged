@@ -551,7 +551,7 @@ export default function LoginPage() {
             <div className="lr-logo-outer">
               <div className="lr-logo-inner">
                 <Image
-                  src="/images/Remove Logo.png"
+                  src="/images/Softdrinks.png"
                   alt="Julieta Softdrinks Logo"
                   width={143}
                   height={143}
