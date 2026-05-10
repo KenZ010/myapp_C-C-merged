@@ -1199,32 +1199,27 @@ export default function PurchaseOrderPage() {
                         <p className="text-sm font-medium text-gray-800">{receivingDelivery.supplier?.supplierName}</p>
                       </div>
                       <div className="bg-gray-50 rounded-xl p-3">
-                        <p className="text-xs text-gray-400 mb-2">Items — enter received quantities</p>
+                        <p className="text-xs text-gray-400 mb-2">Items to receive</p>
                         <div className="space-y-3">
                           {receivingDelivery.items.map((item, i) => {
-                            const rq        = receiveQtys.find((r) => r.deliveryItemId === item.id);
                             const remaining = item.orderedQty - item.receivedQty;
                             const unitInfo  = getUnit(item.unit || item.product?.stockUnit);
-                            const receivedBtl = rq?.receivedQty && unitInfo.bottlesPerCase
-                              ? rq.receivedQty * unitInfo.bottlesPerCase : null;
+                            const receivedBtl = unitInfo.bottlesPerCase
+                              ? remaining * unitInfo.bottlesPerCase : null;
                             return (
                               <div key={i} className="py-1.5 border-b border-gray-100 last:border-0">
                                 <p className="text-xs font-medium text-gray-700 mb-1">
                                   {item.product?.productName || item.productId}
                                   {item.product?.size && <span className="text-gray-400 ml-1">{item.product.size}</span>}
                                 </p>
-                                <p className="text-xs text-gray-400 mb-1.5">
+                                <p className="text-xs text-gray-400">
                                   Ordered: <span className="font-medium">{item.orderedQty} {unitInfo.short}</span> ·
-                                  Received: <span className="font-medium">{item.receivedQty} {unitInfo.short}</span> ·
-                                  Remaining: <span className="font-medium text-indigo-600">{remaining} {unitInfo.short}</span>
+                                  Received: <span className="font-medium">{item.receivedQty} {unitInfo.short}</span>
                                 </p>
-                                <div className="flex items-center gap-2">
-                                  <input type="number" min="0" max={remaining} value={rq?.receivedQty ?? 0}
-                                    onChange={(e) => setReceiveQtys((prev) =>
-                                      prev.map((r) => r.deliveryItemId === item.id ? { ...r, receivedQty: Math.min(Number(e.target.value), remaining) } : r)
-                                    )}
-                                    className="w-16 border border-gray-200 rounded-lg px-1.5 py-1 text-sm text-center outline-none focus:border-indigo-400" />
-                                  <span className="text-xs text-gray-500 font-medium">{unitInfo.short}</span>
+                                <div className="mt-1.5 flex items-center gap-2">
+                                  <span className="text-xs font-semibold text-green-700">
+                                    Receiving: {remaining} {unitInfo.short}
+                                  </span>
                                   {receivedBtl !== null && receivedBtl > 0 && (
                                     <span className="text-xs text-indigo-500 font-medium">= {receivedBtl} btl</span>
                                   )}
