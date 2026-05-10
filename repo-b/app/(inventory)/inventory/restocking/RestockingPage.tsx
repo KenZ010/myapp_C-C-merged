@@ -21,13 +21,10 @@ const CASE_UNITS: {
 ];
 
 const getUnit      = (u?: string) => CASE_UNITS.find((x) => x.value === u) ?? CASE_UNITS[0];
-const getUnitShort = (u?: string) => getUnit(u).short;
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 type POStatus = "PENDING" | "PARTIALLY_RECEIVED" | "DELIVERED" | "CANCELLED";
 type POStep = "receiving" | "history";
-
-type Supplier = { id: string; supplierName: string; contact?: string; address?: string };
 
 type DeliveryItem = {
   id: string;
@@ -53,7 +50,12 @@ type Delivery = {
   items: DeliveryItem[];
 };
 
-type ReceiveQty = { deliveryItemId: string; receivedQty: number };
+// ✅ Added expiryDate to receive payload
+type ReceiveQty = {
+  deliveryItemId: string;
+  receivedQty: number;
+  expiryDate: string; // ISO date string e.g. "2026-12-01"
+};
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const statusStyle: Record<POStatus, React.CSSProperties> = {
@@ -77,11 +79,9 @@ export default function PurchaseOrderPage() {
   const [isNarrow, setIsNarrow] = useState(false);
   const [step, setStep] = useState<POStep>("receiving");
 
-  // API state
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [loading,    setLoading]    = useState(true);
 
-  // ── Receipt Number Modal ──
   const [receiptModal, setReceiptModal] = useState<{
     show: boolean;
     delivery: Delivery | null;
@@ -89,7 +89,6 @@ export default function PurchaseOrderPage() {
     error: string;
   }>({ show: false, delivery: null, receiptNumber: "", error: "" });
 
-  // Receiving state
   const [receivingDelivery, setReceivingDelivery] = useState<Delivery | null>(null);
   const [receiveQtys,       setReceiveQtys]       = useState<ReceiveQty[]>([]);
   const [receiving,         setReceiving]         = useState(false);
@@ -97,7 +96,6 @@ export default function PurchaseOrderPage() {
   const [receivingSearch,   setReceivingSearch]   = useState("");
   const [receivePage,       setReceivePage]       = useState(1);
 
-  // History state
   const [searchHistory,  setSearchHistory]  = useState("");
   const [historyStatus,  setHistoryStatus]  = useState<string>("All");
   const [historyPage,    setHistoryPage]    = useState(1);
@@ -105,15 +103,11 @@ export default function PurchaseOrderPage() {
   const [showStatusDrop, setShowStatusDrop] = useState(false);
   const statusDropRef = useRef<HTMLDivElement>(null);
 
-  // Toast
   const [toast, setToast] = useState("");
-
-  // Confirm modal
   const [confirmModal, setConfirmModal] = useState<{ show: boolean; message: string; onConfirm: () => void }>({
     show: false, message: "", onConfirm: () => {},
   });
 
-  // ── Derived ──
   const pendingDeliveries = deliveries.filter(
     (d) => d.status === "PENDING" || d.status === "PARTIALLY_RECEIVED"
   );
@@ -139,7 +133,6 @@ export default function PurchaseOrderPage() {
     (historyPage - 1) * ITEMS_PER_PAGE, historyPage * ITEMS_PER_PAGE
   );
 
-  // ── Effects ──
   useEffect(() => {
     const check = () => setIsNarrow(window.innerWidth < 1100);
     check();
@@ -158,7 +151,6 @@ export default function PurchaseOrderPage() {
 
   useEffect(() => { fetchAll(); }, []);
 
-  // ── API calls ──
   const fetchAll = async () => {
     try {
       setLoading(true);
@@ -168,7 +160,6 @@ export default function PurchaseOrderPage() {
     finally { setLoading(false); }
   };
 
-  // ── Receipt modal ──
   const openReceiptModal = (delivery: Delivery) => {
     setReceiptModal({ show: true, delivery, receiptNumber: "", error: "" });
   };
@@ -188,16 +179,27 @@ export default function PurchaseOrderPage() {
     const enriched = receiptNumber ? { ...delivery, receiptNumber } : delivery;
     setReceivingDelivery(enriched);
     setReceiveError("");
+    // ✅ Initialize with empty expiryDate per item
     setReceiveQtys(
       delivery.items.map((item) => ({
         deliveryItemId: item.id,
         receivedQty: item.orderedQty - item.receivedQty,
+        expiryDate: "",
       }))
     );
   };
 
   const handleReceive = async () => {
     if (!receivingDelivery) return;
+
+    // ✅ Validate that all items being received have an expiry date
+    const itemsToReceive = receiveQtys.filter((r) => r.receivedQty > 0);
+    const missingExpiry = itemsToReceive.filter((r) => !r.expiryDate);
+    if (missingExpiry.length > 0) {
+      setReceiveError("Please enter the expiry date for all items being received.");
+      return;
+    }
+
     const raw = localStorage.getItem("employee") || localStorage.getItem("user") || "{}";
     const employee = JSON.parse(raw);
     const employeeId = employee?.id ?? employee?.employeeId ?? employee?._id ?? employee?.userId ?? null;
@@ -210,12 +212,13 @@ export default function PurchaseOrderPage() {
       );
       return;
     }
+
     try {
       setReceiving(true); setReceiveError("");
       await api.receiveDelivery(
         receivingDelivery.id,
         employeeId,
-        receiveQtys.filter((r) => r.receivedQty > 0),
+        itemsToReceive, // ✅ includes expiryDate
       );
       if (receivingDelivery.receiptNumber) {
         try {
@@ -265,7 +268,6 @@ export default function PurchaseOrderPage() {
     a.click();
   };
 
-  // ── Pagination component ──
   const PaginationBar = ({
     page, totalPages, setPage, total, label,
   }: { page: number; totalPages: number; setPage: (p: number) => void; total: number; label: string }) =>
@@ -275,101 +277,55 @@ export default function PurchaseOrderPage() {
           Showing {(page - 1) * ITEMS_PER_PAGE + 1}–{Math.min(page * ITEMS_PER_PAGE, total)} of {total} {label}
         </p>
         <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
-          <button
-            onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}
-            style={{ padding: "5px 12px", borderRadius: "8px", border: "1px solid #e0e0e0", background: "#fff", fontSize: "12px", cursor: page === 1 ? "not-allowed" : "pointer", color: "#555", opacity: page === 1 ? 0.4 : 1 }}
-          >← Prev</button>
+          <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}
+            style={{ padding: "5px 12px", borderRadius: "8px", border: "1px solid #e0e0e0", background: "#fff", fontSize: "12px", cursor: page === 1 ? "not-allowed" : "pointer", color: "#555", opacity: page === 1 ? 0.4 : 1 }}>← Prev</button>
           {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-            <button
-              key={p} onClick={() => setPage(p)}
-              style={{ padding: "5px 10px", borderRadius: "8px", border: page === p ? "none" : "1px solid #e0e0e0", background: page === p ? "#1a3c2e" : "#fff", color: page === p ? "#fff" : "#555", fontSize: "12px", cursor: "pointer", fontWeight: page === p ? 700 : 400 }}
-            >{p}</button>
+            <button key={p} onClick={() => setPage(p)}
+              style={{ padding: "5px 10px", borderRadius: "8px", border: page === p ? "none" : "1px solid #e0e0e0", background: page === p ? "#1a3c2e" : "#fff", color: page === p ? "#fff" : "#555", fontSize: "12px", cursor: "pointer", fontWeight: page === p ? 700 : 400 }}>{p}</button>
           ))}
-          <button
-            onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages}
-            style={{ padding: "5px 12px", borderRadius: "8px", border: "1px solid #e0e0e0", background: "#fff", fontSize: "12px", cursor: page === totalPages ? "not-allowed" : "pointer", color: "#555", opacity: page === totalPages ? 0.4 : 1 }}
-          >Next →</button>
+          <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages}
+            style={{ padding: "5px 12px", borderRadius: "8px", border: "1px solid #e0e0e0", background: "#fff", fontSize: "12px", cursor: page === totalPages ? "not-allowed" : "pointer", color: "#555", opacity: page === totalPages ? 0.4 : 1 }}>Next →</button>
         </div>
       </div>
     );
 
-  // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div style={{ padding: "28px" }}>
 
       {/* ── Receipt Number Modal ── */}
       {receiptModal.show && (
         <>
-          <div
-            onClick={() => setReceiptModal({ show: false, delivery: null, receiptNumber: "", error: "" })}
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 40 }}
-          />
-          <div style={{
-            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
-            zIndex: 50, background: "#fff", borderRadius: "20px",
-            width: "min(92vw, 400px)", boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
-            overflow: "hidden",
-          }}>
-            <div style={{
-              background: "linear-gradient(135deg, #1a3c2e 0%, #2e7d32 100%)",
-              padding: "22px 24px",
-            }}>
+          <div onClick={() => setReceiptModal({ show: false, delivery: null, receiptNumber: "", error: "" })}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 40 }} />
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 50, background: "#fff", borderRadius: "20px", width: "min(92vw, 400px)", boxShadow: "0 20px 60px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+            <div style={{ background: "linear-gradient(135deg, #1a3c2e 0%, #2e7d32 100%)", padding: "22px 24px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <div style={{ width: "40px", height: "40px", borderRadius: "12px", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", flexShrink: 0 }}>
-                  🧾
-                </div>
+                <div style={{ width: "40px", height: "40px", borderRadius: "12px", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", flexShrink: 0 }}>🧾</div>
                 <div>
                   <p style={{ fontSize: "16px", fontWeight: 800, color: "#fff" }}>Supplier Receipt Number</p>
-                  <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.65)" }}>
-                    {receiptModal.delivery?.supplier?.supplierName || ""}
-                  </p>
+                  <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.65)" }}>{receiptModal.delivery?.supplier?.supplierName || ""}</p>
                 </div>
               </div>
             </div>
-
             <div style={{ padding: "24px" }}>
               <p style={{ fontSize: "13px", color: "#555", marginBottom: "16px", lineHeight: "1.6" }}>
-                Please enter the <strong>receipt or delivery note number</strong> provided by the supplier. This will be recorded in the delivery details.
+                Please enter the <strong>receipt or delivery note number</strong> provided by the supplier.
               </p>
-
-              <label style={{ fontSize: "12px", fontWeight: 700, color: "#555", display: "block", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                Receipt / DR Number *
-              </label>
+              <label style={{ fontSize: "12px", fontWeight: 700, color: "#555", display: "block", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Receipt / DR Number *</label>
               <input
-                type="text"
-                value={receiptModal.receiptNumber}
+                type="text" value={receiptModal.receiptNumber}
                 onChange={(e) => setReceiptModal((m) => ({ ...m, receiptNumber: e.target.value, error: "" }))}
                 onKeyDown={(e) => e.key === "Enter" && handleReceiptConfirm()}
-                placeholder="e.g. DR-2024-00123"
-                autoFocus
-                style={{
-                  width: "100%", padding: "12px 16px", borderRadius: "12px",
-                  border: receiptModal.error ? "1.5px solid #e53935" : "1.5px solid #e0e0e0",
-                  fontSize: "15px", fontWeight: 600, outline: "none", color: "#1a1a1a",
-                  background: "#fff", boxSizing: "border-box",
-                  transition: "border 0.2s",
-                  fontFamily: "monospace",
-                }}
+                placeholder="e.g. DR-2024-00123" autoFocus
+                style={{ width: "100%", padding: "12px 16px", borderRadius: "12px", border: receiptModal.error ? "1.5px solid #e53935" : "1.5px solid #e0e0e0", fontSize: "15px", fontWeight: 600, outline: "none", color: "#1a1a1a", background: "#fff", boxSizing: "border-box", fontFamily: "monospace" }}
               />
-              {receiptModal.error && (
-                <p style={{ fontSize: "12px", color: "#e53935", marginTop: "6px" }}>⚠️ {receiptModal.error}</p>
-              )}
-
+              {receiptModal.error && <p style={{ fontSize: "12px", color: "#e53935", marginTop: "6px" }}>⚠️ {receiptModal.error}</p>}
               <div style={{ height: "1px", background: "#f0f0f0", margin: "20px 0" }} />
-
               <div style={{ display: "flex", gap: "10px" }}>
-                <button
-                  onClick={() => setReceiptModal({ show: false, delivery: null, receiptNumber: "", error: "" })}
-                  style={{ flex: 1, padding: "11px", borderRadius: "14px", border: "1.5px solid #e0e0e0", background: "#fff", color: "#555", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleReceiptConfirm}
-                  style={{ flex: 2, padding: "11px", borderRadius: "14px", border: "none", background: "#1a3c2e", color: "#fff", fontSize: "14px", fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 14px rgba(26,60,46,0.25)" }}
-                >
-                  📦 Proceed to Receive
-                </button>
+                <button onClick={() => setReceiptModal({ show: false, delivery: null, receiptNumber: "", error: "" })}
+                  style={{ flex: 1, padding: "11px", borderRadius: "14px", border: "1.5px solid #e0e0e0", background: "#fff", color: "#555", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                <button onClick={handleReceiptConfirm}
+                  style={{ flex: 2, padding: "11px", borderRadius: "14px", border: "none", background: "#1a3c2e", color: "#fff", fontSize: "14px", fontWeight: 700, cursor: "pointer" }}>📦 Proceed to Receive</button>
               </div>
             </div>
           </div>
@@ -381,22 +337,14 @@ export default function PurchaseOrderPage() {
         <>
           <div onClick={() => setConfirmModal({ show: false, message: "", onConfirm: () => {} })}
             style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 40 }} />
-          <div style={{
-            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
-            zIndex: 50, background: "#fff", borderRadius: "20px", width: "min(92vw, 360px)",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.15)", padding: "28px", textAlign: "center",
-          }}>
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 50, background: "#fff", borderRadius: "20px", width: "min(92vw, 360px)", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", padding: "28px", textAlign: "center" }}>
             <p style={{ fontSize: "28px", marginBottom: "8px" }}>⚠️</p>
             <p style={{ fontSize: "14px", color: "#555", marginBottom: "20px" }}>{confirmModal.message}</p>
             <div style={{ display: "flex", gap: "10px" }}>
               <button onClick={() => setConfirmModal({ show: false, message: "", onConfirm: () => {} })}
-                style={{ flex: 1, padding: "10px", borderRadius: "12px", border: "1.5px solid #e0e0e0", background: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", color: "#555" }}>
-                Cancel
-              </button>
+                style={{ flex: 1, padding: "10px", borderRadius: "12px", border: "1.5px solid #e0e0e0", background: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", color: "#555" }}>Cancel</button>
               <button onClick={confirmModal.onConfirm}
-                style={{ flex: 1, padding: "10px", borderRadius: "12px", border: "none", background: "#e53935", fontSize: "13px", fontWeight: 700, cursor: "pointer", color: "#fff" }}>
-                Confirm
-              </button>
+                style={{ flex: 1, padding: "10px", borderRadius: "12px", border: "none", background: "#e53935", fontSize: "13px", fontWeight: 700, cursor: "pointer", color: "#fff" }}>Confirm</button>
             </div>
           </div>
         </>
@@ -404,43 +352,22 @@ export default function PurchaseOrderPage() {
 
       {/* ── Toast ── */}
       {toast && (
-        <div style={{
-          position: "fixed", bottom: "24px", right: "24px", zIndex: 60,
-          background: "#4caf50", color: "#fff", padding: "12px 20px",
-          borderRadius: "14px", boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-          display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", fontWeight: 600,
-        }}>
+        <div style={{ position: "fixed", bottom: "24px", right: "24px", zIndex: 60, background: "#4caf50", color: "#fff", padding: "12px 20px", borderRadius: "14px", boxShadow: "0 4px 20px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", fontWeight: 600 }}>
           ✅ {toast}
         </div>
       )}
 
       {/* ── Step Tabs ── */}
-      <div style={{
-        display: "flex", marginBottom: "24px", background: "#fff",
-        borderRadius: "14px", border: "0.5px solid #e8e8e8", overflow: "hidden", flexWrap: "wrap",
-      }}>
+      <div style={{ display: "flex", marginBottom: "24px", background: "#fff", borderRadius: "14px", border: "0.5px solid #e8e8e8", overflow: "hidden", flexWrap: "wrap" }}>
         {([
           { key: "receiving", label: "📦 Receiving", badge: pendingDeliveries.length },
           { key: "history",   label: "🕐 PO History" },
         ] as { key: POStep; label: string; badge?: number }[]).map((t, i) => (
-          <button
-            key={t.key} onClick={() => setStep(t.key)}
-            style={{
-              padding: "12px 28px", fontSize: "13px",
-              fontWeight: step === t.key ? 700 : 400, cursor: "pointer", border: "none",
-              borderRight: i < 1 ? "1px solid #e8e8e8" : "none",
-              background: step === t.key ? "#1a3c2e" : "#fff",
-              color: step === t.key ? "#fff" : "#555",
-              display: "flex", alignItems: "center", gap: "6px",
-            }}
-          >
+          <button key={t.key} onClick={() => setStep(t.key)}
+            style={{ padding: "12px 28px", fontSize: "13px", fontWeight: step === t.key ? 700 : 400, cursor: "pointer", border: "none", borderRight: i < 1 ? "1px solid #e8e8e8" : "none", background: step === t.key ? "#1a3c2e" : "#fff", color: step === t.key ? "#fff" : "#555", display: "flex", alignItems: "center", gap: "6px" }}>
             {t.label}
             {t.badge != null && t.badge > 0 && (
-              <span style={{
-                background: step === t.key ? "rgba(255,255,255,0.3)" : "#1a3c2e",
-                color: "#fff", fontSize: "11px", fontWeight: 700,
-                padding: "1px 7px", borderRadius: "20px",
-              }}>{t.badge}</span>
+              <span style={{ background: step === t.key ? "rgba(255,255,255,0.3)" : "#1a3c2e", color: "#fff", fontSize: "11px", fontWeight: 700, padding: "1px 7px", borderRadius: "20px" }}>{t.badge}</span>
             )}
           </button>
         ))}
@@ -450,28 +377,18 @@ export default function PurchaseOrderPage() {
           RECEIVING TAB
       ══════════════════════════════════════════════════════════════════ */}
       {step === "receiving" && (
-        <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "minmax(0,1fr) minmax(300px,360px)", gap: "24px", alignItems: "start" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "minmax(0,1fr) minmax(300px,380px)", gap: "24px", alignItems: "start" }}>
           {/* Left: pending list */}
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-            {/* Search */}
             <div style={{ background: "#fff", borderRadius: "14px", border: "0.5px solid #e8e8e8", padding: "14px 20px", display: "flex", alignItems: "center", gap: "10px" }}>
               <span>🔍</span>
-              <input
-                value={receivingSearch}
-                onChange={(e) => { setReceivingSearch(e.target.value); setReceivePage(1); }}
-                placeholder="Search delivery ID or supplier..."
-                style={{ flex: 1, border: "none", outline: "none", fontSize: "13px", color: "#1a1a1a", background: "transparent" }}
-              />
+              <input value={receivingSearch} onChange={(e) => { setReceivingSearch(e.target.value); setReceivePage(1); }} placeholder="Search delivery ID or supplier..."
+                style={{ flex: 1, border: "none", outline: "none", fontSize: "13px", color: "#1a1a1a", background: "transparent" }} />
             </div>
-
-            <p style={{ fontSize: "14px", color: "#888" }}>
-              Select a Purchase Order to process receiving:
-            </p>
+            <p style={{ fontSize: "14px", color: "#888" }}>Select a Purchase Order to process receiving:</p>
 
             {loading ? (
-              <div style={{ background: "#fff", borderRadius: "16px", border: "0.5px solid #e8e8e8", padding: "48px", textAlign: "center" }}>
-                <p style={{ color: "#aaa" }}>Loading...</p>
-              </div>
+              <div style={{ background: "#fff", borderRadius: "16px", border: "0.5px solid #e8e8e8", padding: "48px", textAlign: "center" }}><p style={{ color: "#aaa" }}>Loading...</p></div>
             ) : paginatedReceiving.length === 0 ? (
               <div style={{ background: "#fff", borderRadius: "16px", border: "0.5px solid #e8e8e8", padding: "48px", textAlign: "center" }}>
                 <div style={{ fontSize: "48px", marginBottom: "12px" }}>📦</div>
@@ -479,42 +396,22 @@ export default function PurchaseOrderPage() {
                 <p style={{ fontSize: "13px", color: "#aaa", marginTop: "6px" }}>All purchase orders have been received or cancelled</p>
               </div>
             ) : paginatedReceiving.map((delivery) => (
-              <div
-                key={delivery.id}
-                style={{
-                  background: "#fff", borderRadius: "16px",
-                  border: receivingDelivery?.id === delivery.id ? "1.5px solid #1a3c2e" : "0.5px solid #e8e8e8",
-                  padding: "20px 24px", display: "flex", justifyContent: "space-between", alignItems: "center",
-                  flexWrap: "wrap", gap: "12px",
-                }}
-              >
+              <div key={delivery.id} style={{ background: "#fff", borderRadius: "16px", border: receivingDelivery?.id === delivery.id ? "1.5px solid #1a3c2e" : "0.5px solid #e8e8e8", padding: "20px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
-                    <p style={{ fontSize: "14px", fontWeight: 800, color: "#1a3c2e", fontFamily: "monospace" }}>
-                      {delivery.id.slice(0, 12)}...
-                    </p>
-                    <span style={{ padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 600, ...statusStyle[delivery.status] }}>
-                      {STATUS_LABEL[delivery.status]}
-                    </span>
+                    <p style={{ fontSize: "14px", fontWeight: 800, color: "#1a3c2e", fontFamily: "monospace" }}>{delivery.id.slice(0, 12)}...</p>
+                    <span style={{ padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 600, ...statusStyle[delivery.status] }}>{STATUS_LABEL[delivery.status]}</span>
                   </div>
                   <p style={{ fontSize: "13px", color: "#1a1a1a" }}>🏢 {delivery.supplier?.supplierName || delivery.supplierId}</p>
-                  <p style={{ fontSize: "13px", color: "#888" }}>
-                    📅 {new Date(delivery.deliveryDate).toLocaleDateString()} • {delivery.items?.length || 0} item{(delivery.items?.length || 0) > 1 ? "s" : ""}
-                  </p>
+                  <p style={{ fontSize: "13px", color: "#888" }}>📅 {new Date(delivery.deliveryDate).toLocaleDateString()} • {delivery.items?.length || 0} item{(delivery.items?.length || 0) > 1 ? "s" : ""}</p>
                 </div>
                 <div style={{ display: "flex", gap: "8px" }}>
-                  <button
-                    onClick={() => openReceiptModal(delivery)}
-                    style={{ padding: "10px 20px", borderRadius: "20px", border: "none", background: "#1a3c2e", color: "#fff", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}
-                  >
+                  <button onClick={() => openReceiptModal(delivery)}
+                    style={{ padding: "10px 20px", borderRadius: "20px", border: "none", background: "#1a3c2e", color: "#fff", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}>
                     📦 {receivingDelivery?.id === delivery.id ? "Selected" : "Receive"}
                   </button>
-                  <button
-                    onClick={() => handleCancel(delivery.id)}
-                    style={{ padding: "10px 16px", borderRadius: "20px", border: "1.5px solid #ffcdd2", background: "#fff", color: "#e53935", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
-                  >
-                    Cancel
-                  </button>
+                  <button onClick={() => handleCancel(delivery.id)}
+                    style={{ padding: "10px 16px", borderRadius: "20px", border: "1.5px solid #ffcdd2", background: "#fff", color: "#e53935", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>Cancel</button>
                 </div>
               </div>
             ))}
@@ -537,18 +434,14 @@ export default function PurchaseOrderPage() {
                     ⚠️ {receiveError}
                   </div>
                 )}
+
                 <div style={{ background: "#f0faf2", borderRadius: "10px", padding: "12px 14px", marginBottom: "12px" }}>
                   <p style={{ fontSize: "13px", fontWeight: 700, color: "#1a3c2e" }}>{receivingDelivery.supplier?.supplierName || receivingDelivery.supplierId}</p>
                   <p style={{ fontSize: "12px", color: "#888" }}>📅 {new Date(receivingDelivery.deliveryDate).toLocaleDateString()}</p>
                 </div>
 
-                {/* Receipt number display */}
                 {receivingDelivery.receiptNumber && (
-                  <div style={{
-                    background: "#fffde7", border: "1.5px solid #fff176", borderRadius: "10px",
-                    padding: "10px 14px", marginBottom: "14px",
-                    display: "flex", alignItems: "center", gap: "10px",
-                  }}>
+                  <div style={{ background: "#fffde7", border: "1.5px solid #fff176", borderRadius: "10px", padding: "10px 14px", marginBottom: "14px", display: "flex", alignItems: "center", gap: "10px" }}>
                     <span style={{ fontSize: "16px" }}>🧾</span>
                     <div>
                       <p style={{ fontSize: "11px", color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>Supplier Receipt No.</p>
@@ -558,10 +451,10 @@ export default function PurchaseOrderPage() {
                 )}
 
                 <p style={{ fontSize: "12px", fontWeight: 700, color: "#555", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                  Enter Received Quantities
+                  Enter Received Quantities & Expiry Dates
                 </p>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "16px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "16px" }}>
                   {receivingDelivery.items.map((item) => {
                     const rq        = receiveQtys.find((r) => r.deliveryItemId === item.id);
                     const remaining = item.orderedQty - item.receivedQty;
@@ -569,11 +462,10 @@ export default function PurchaseOrderPage() {
                     const diff      = (rq?.receivedQty ?? 0) - item.orderedQty;
                     const receivedBtl = rq?.receivedQty && unitInfo.bottlesPerCase
                       ? rq.receivedQty * unitInfo.bottlesPerCase : null;
+                    const willReceive = (rq?.receivedQty ?? 0) > 0;
+
                     return (
-                      <div key={item.id} style={{
-                        background: "#f9f9f9", borderRadius: "12px", padding: "14px",
-                        border: diff < 0 ? "1.5px solid #ffcc80" : "1px solid #f0f0f0",
-                      }}>
+                      <div key={item.id} style={{ background: "#f9f9f9", borderRadius: "12px", padding: "14px", border: diff < 0 ? "1.5px solid #ffcc80" : "1px solid #f0f0f0" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
                           <div>
                             <p style={{ fontSize: "13px", fontWeight: 600, color: "#1a1a1a" }}>
@@ -587,23 +479,20 @@ export default function PurchaseOrderPage() {
                             </p>
                           </div>
                           {diff < 0 && (
-                            <span style={{ background: "#fff3e0", color: "#e65100", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700, flexShrink: 0 }}>
-                              ⚠️ {Math.abs(diff)} short
-                            </span>
+                            <span style={{ background: "#fff3e0", color: "#e65100", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700, flexShrink: 0 }}>⚠️ {Math.abs(diff)} short</span>
                           )}
                           {diff === 0 && (rq?.receivedQty ?? 0) > 0 && (
-                            <span style={{ background: "#e8f5e9", color: "#2e7d32", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700, flexShrink: 0 }}>
-                              ✅ Complete
-                            </span>
+                            <span style={{ background: "#e8f5e9", color: "#2e7d32", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700, flexShrink: 0 }}>✅ Complete</span>
                           )}
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+
+                        {/* Quantity input */}
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
                           <span style={{ fontSize: "12px", color: "#555", flexShrink: 0 }}>Received:</span>
                           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                             <button
                               onClick={() => setReceiveQtys((prev) => prev.map((r) => r.deliveryItemId === item.id ? { ...r, receivedQty: Math.max(0, r.receivedQty - 1) } : r))}
-                              style={{ width: "30px", height: "30px", borderRadius: "50%", border: "1.5px solid #e0e0e0", background: "#fff", fontSize: "16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#1a3c2e" }}
-                            >−</button>
+                              style={{ width: "30px", height: "30px", borderRadius: "50%", border: "1.5px solid #e0e0e0", background: "#fff", fontSize: "16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#1a3c2e" }}>−</button>
                             <input
                               type="number" min="0" max={remaining} value={rq?.receivedQty ?? 0}
                               onChange={(e) => setReceiveQtys((prev) => prev.map((r) => r.deliveryItemId === item.id ? { ...r, receivedQty: Math.min(Number(e.target.value), remaining) } : r))}
@@ -611,20 +500,44 @@ export default function PurchaseOrderPage() {
                             />
                             <button
                               onClick={() => setReceiveQtys((prev) => prev.map((r) => r.deliveryItemId === item.id ? { ...r, receivedQty: Math.min(r.receivedQty + 1, remaining) } : r))}
-                              style={{ width: "30px", height: "30px", borderRadius: "50%", border: "none", background: "#1a3c2e", fontSize: "16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff" }}
-                            >+</button>
+                              style={{ width: "30px", height: "30px", borderRadius: "50%", border: "none", background: "#1a3c2e", fontSize: "16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff" }}>+</button>
                             <span style={{ fontSize: "12px", color: "#888" }}>{unitInfo.short}</span>
                           </div>
                           {receivedBtl !== null && receivedBtl > 0 && (
                             <span style={{ fontSize: "12px", color: "#6366f1", fontWeight: 600 }}>= {receivedBtl} btl</span>
                           )}
                         </div>
+
+                        {/* ✅ Expiry Date input — only shown when receivedQty > 0 */}
+                        {willReceive && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                            <label style={{ fontSize: "11px", fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span>📅</span> Expiry Date <span style={{ color: "#e53935" }}>*</span>
+                            </label>
+                            <input
+                              type="date"
+                              value={rq?.expiryDate ?? ""}
+                              min={new Date().toISOString().split("T")[0]} // can't set past expiry
+                              onChange={(e) => setReceiveQtys((prev) => prev.map((r) => r.deliveryItemId === item.id ? { ...r, expiryDate: e.target.value } : r))}
+                              style={{
+                                padding: "8px 12px", borderRadius: "10px",
+                                border: willReceive && !rq?.expiryDate ? "1.5px solid #ffcc80" : "1.5px solid #e0e0e0",
+                                fontSize: "13px", outline: "none", color: "#1a1a1a",
+                                background: "#fff", width: "100%", boxSizing: "border-box",
+                                cursor: "pointer",
+                              }}
+                            />
+                            {willReceive && !rq?.expiryDate && (
+                              <p style={{ fontSize: "11px", color: "#e65100" }}>⚠️ Required — check the box/label</p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
                 </div>
 
-                {/* Receiving totals */}
+                {/* Totals */}
                 {receivingDelivery.items.map((item) => {
                   const rq = receiveQtys.find((r) => r.deliveryItemId === item.id);
                   return (
@@ -644,24 +557,16 @@ export default function PurchaseOrderPage() {
                   return item && r.receivedQty < item.orderedQty;
                 }) && (
                   <div style={{ background: "#fff3e0", borderRadius: "10px", padding: "10px 14px", marginBottom: "14px", border: "1px solid #ffcc80" }}>
-                    <p style={{ fontSize: "12px", color: "#e65100", fontWeight: 600 }}>
-                      ⚠️ Some items are short. This will be recorded as a discrepancy.
-                    </p>
+                    <p style={{ fontSize: "12px", color: "#e65100", fontWeight: 600 }}>⚠️ Some items are short. This will be recorded as a discrepancy.</p>
                   </div>
                 )}
 
-                <button
-                  onClick={handleReceive} disabled={receiving}
-                  style={{ width: "100%", padding: "13px", borderRadius: "20px", border: "none", background: receiving ? "#aaa" : "#1a3c2e", color: "#fff", fontSize: "14px", fontWeight: 700, cursor: receiving ? "not-allowed" : "pointer", marginBottom: "10px", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}
-                >
+                <button onClick={handleReceive} disabled={receiving}
+                  style={{ width: "100%", padding: "13px", borderRadius: "20px", border: "none", background: receiving ? "#aaa" : "#1a3c2e", color: "#fff", fontSize: "14px", fontWeight: 700, cursor: receiving ? "not-allowed" : "pointer", marginBottom: "10px", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
                   {receiving ? "Processing..." : "✅ Confirm Receiving"}
                 </button>
-                <button
-                  onClick={() => { setReceivingDelivery(null); setReceiveQtys([]); }}
-                  style={{ width: "100%", padding: "11px", borderRadius: "20px", border: "1.5px solid #e0e0e0", background: "#fff", color: "#555", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
-                >
-                  ← Back
-                </button>
+                <button onClick={() => { setReceivingDelivery(null); setReceiveQtys([]); }}
+                  style={{ width: "100%", padding: "11px", borderRadius: "20px", border: "1.5px solid #e0e0e0", background: "#fff", color: "#555", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>← Back</button>
               </>
             )}
           </div>
@@ -673,7 +578,6 @@ export default function PurchaseOrderPage() {
       ══════════════════════════════════════════════════════════════════ */}
       {step === "history" && (
         <div>
-          {/* Status summary cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "14px", marginBottom: "20px" }}>
             {([
               { status: "PENDING",            icon: "📤", count: deliveries.filter((d) => d.status === "PENDING").length },
@@ -682,9 +586,7 @@ export default function PurchaseOrderPage() {
               { status: "CANCELLED",          icon: "✕",  count: deliveries.filter((d) => d.status === "CANCELLED").length },
             ] as { status: POStatus; icon: string; count: number }[]).map((s) => (
               <div key={s.status} style={{ background: "#fff", borderRadius: "12px", border: "0.5px solid #e8e8e8", padding: "14px 18px", display: "flex", gap: "12px", alignItems: "center" }}>
-                <div style={{ width: "36px", height: "36px", borderRadius: "10px", ...statusStyle[s.status], display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }}>
-                  {s.icon}
-                </div>
+                <div style={{ width: "36px", height: "36px", borderRadius: "10px", ...statusStyle[s.status], display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }}>{s.icon}</div>
                 <div>
                   <p style={{ fontSize: "20px", fontWeight: 800, color: (statusStyle[s.status] as { color: string }).color }}>{s.count}</p>
                   <p style={{ fontSize: "11px", color: "#888" }}>{STATUS_LABEL[s.status]}</p>
@@ -693,64 +595,37 @@ export default function PurchaseOrderPage() {
             ))}
           </div>
 
-          {/* Filters */}
           <div style={{ background: "#fff", borderRadius: "14px", border: "0.5px solid #e8e8e8", padding: "14px 20px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
             <div style={{ position: "relative" }}>
               <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "13px" }}>🔍</span>
-              <input
-                value={searchHistory}
-                onChange={(e) => { setSearchHistory(e.target.value); setHistoryPage(1); }}
-                placeholder="Search ID or supplier..."
-                style={{ padding: "8px 14px 8px 32px", borderRadius: "20px", border: "1.5px solid #ddd", fontSize: "13px", outline: "none", width: "220px", color: "#1a1a1a" }}
-              />
+              <input value={searchHistory} onChange={(e) => { setSearchHistory(e.target.value); setHistoryPage(1); }} placeholder="Search ID or supplier..."
+                style={{ padding: "8px 14px 8px 32px", borderRadius: "20px", border: "1.5px solid #ddd", fontSize: "13px", outline: "none", width: "220px", color: "#1a1a1a" }} />
             </div>
-
-            {/* Status dropdown */}
             <div ref={statusDropRef} style={{ position: "relative" }}>
-              <button
-                onClick={() => setShowStatusDrop(!showStatusDrop)}
-                style={{
-                  padding: "8px 14px", borderRadius: "20px",
-                  border: historyStatus !== "All" ? "1.5px solid #1a3c2e" : "1.5px solid #ddd",
-                  background: historyStatus !== "All" ? "#f0faf2" : "#fff",
-                  color: historyStatus !== "All" ? "#1a3c2e" : "#555",
-                  fontSize: "13px", fontWeight: 600, cursor: "pointer",
-                  display: "flex", alignItems: "center", gap: "6px",
-                }}
-              >
+              <button onClick={() => setShowStatusDrop(!showStatusDrop)}
+                style={{ padding: "8px 14px", borderRadius: "20px", border: historyStatus !== "All" ? "1.5px solid #1a3c2e" : "1.5px solid #ddd", background: historyStatus !== "All" ? "#f0faf2" : "#fff", color: historyStatus !== "All" ? "#1a3c2e" : "#555", fontSize: "13px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
                 🔖 {historyStatus === "All" ? "All Status" : STATUS_LABEL[historyStatus as POStatus] || historyStatus} {showStatusDrop ? "▲" : "▼"}
               </button>
               {showStatusDrop && (
                 <div style={{ position: "absolute", top: "42px", left: 0, background: "#fff", borderRadius: "12px", border: "1px solid #e0e0e0", boxShadow: "0 8px 24px rgba(0,0,0,0.1)", zIndex: 20, overflow: "hidden", minWidth: "180px" }}>
                   {(["All", "PENDING", "PARTIALLY_RECEIVED", "DELIVERED", "CANCELLED"] as const).map((opt) => (
                     <button key={opt} onClick={() => { setHistoryStatus(opt); setHistoryPage(1); setShowStatusDrop(false); }}
-                      style={{ width: "100%", padding: "10px 16px", textAlign: "left", fontSize: "13px", fontWeight: historyStatus === opt ? 700 : 400, color: historyStatus === opt ? "#1a3c2e" : "#555", background: historyStatus === opt ? "#f0faf2" : "#fff", border: "none", cursor: "pointer", borderBottom: "0.5px solid #f5f5f5" }}
-                    >
+                      style={{ width: "100%", padding: "10px 16px", textAlign: "left", fontSize: "13px", fontWeight: historyStatus === opt ? 700 : 400, color: historyStatus === opt ? "#1a3c2e" : "#555", background: historyStatus === opt ? "#f0faf2" : "#fff", border: "none", cursor: "pointer", borderBottom: "0.5px solid #f5f5f5" }}>
                       {opt === "All" ? "All Status" : STATUS_LABEL[opt]}
                     </button>
                   ))}
                 </div>
               )}
             </div>
-
             {historyStatus !== "All" && (
               <button onClick={() => { setHistoryStatus("All"); setHistoryPage(1); }}
-                style={{ padding: "6px 12px", borderRadius: "20px", border: "1px solid #ffcdd2", background: "#fff", color: "#e53935", fontSize: "12px", cursor: "pointer" }}>
-                ✕ Clear
-              </button>
+                style={{ padding: "6px 12px", borderRadius: "20px", border: "1px solid #ffcdd2", background: "#fff", color: "#e53935", fontSize: "12px", cursor: "pointer" }}>✕ Clear</button>
             )}
-
             <button onClick={handleExport}
-              style={{ padding: "8px 14px", borderRadius: "20px", border: "1.5px solid #ddd", background: "#fff", color: "#555", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
-              📤 Export
-            </button>
-
-            <span style={{ marginLeft: "auto", fontSize: "12px", color: "#888", fontWeight: 500 }}>
-              {filteredHistory.length} purchase order{filteredHistory.length !== 1 ? "s" : ""}
-            </span>
+              style={{ padding: "8px 14px", borderRadius: "20px", border: "1.5px solid #ddd", background: "#fff", color: "#555", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>📤 Export</button>
+            <span style={{ marginLeft: "auto", fontSize: "12px", color: "#888", fontWeight: 500 }}>{filteredHistory.length} purchase order{filteredHistory.length !== 1 ? "s" : ""}</span>
           </div>
 
-          {/* Table */}
           <div style={{ background: "#fff", borderRadius: "14px", border: "0.5px solid #e8e8e8", overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "700px" }}>
               <thead>
@@ -771,51 +646,33 @@ export default function PurchaseOrderPage() {
                 ) : paginatedHistory.map((delivery, idx) => (
                   <tr key={delivery.id} style={{ borderBottom: "0.5px solid #f0f0f0", background: idx % 2 === 0 ? "#fff" : "#fafafa" }}>
                     <td style={{ padding: "13px 16px" }}>
-                      <span style={{ background: "#37474f", color: "#fff", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontFamily: "monospace" }}>
-                        {delivery.id.slice(0, 8)}...
-                      </span>
+                      <span style={{ background: "#37474f", color: "#fff", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontFamily: "monospace" }}>{delivery.id.slice(0, 8)}...</span>
                     </td>
-                    <td style={{ padding: "13px 16px", fontSize: "13px", color: "#1a1a1a" }}>
-                      {delivery.supplier?.supplierName || delivery.supplierId}
-                    </td>
+                    <td style={{ padding: "13px 16px", fontSize: "13px", color: "#1a1a1a" }}>{delivery.supplier?.supplierName || delivery.supplierId}</td>
                     <td style={{ padding: "13px 16px" }}>
-                      <span style={{ background: "#e8f0fe", color: "#1a237e", padding: "3px 10px", borderRadius: "20px", fontSize: "12px" }}>
-                        📅 {new Date(delivery.deliveryDate).toLocaleDateString()}
-                      </span>
+                      <span style={{ background: "#e8f0fe", color: "#1a237e", padding: "3px 10px", borderRadius: "20px", fontSize: "12px" }}>📅 {new Date(delivery.deliveryDate).toLocaleDateString()}</span>
                     </td>
-                    <td style={{ padding: "13px 16px", fontSize: "13px", color: "#555" }}>
-                      {delivery.items?.length || 0} item{(delivery.items?.length || 0) > 1 ? "s" : ""}
-                    </td>
+                    <td style={{ padding: "13px 16px", fontSize: "13px", color: "#555" }}>{delivery.items?.length || 0} item{(delivery.items?.length || 0) > 1 ? "s" : ""}</td>
                     <td style={{ padding: "13px 16px" }}>
                       {delivery.receiptNumber ? (
-                        <span style={{ background: "#fffde7", color: "#f57f17", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700, fontFamily: "monospace" }}>
-                          🧾 {delivery.receiptNumber}
-                        </span>
+                        <span style={{ background: "#fffde7", color: "#f57f17", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700, fontFamily: "monospace" }}>🧾 {delivery.receiptNumber}</span>
                       ) : (
                         <span style={{ fontSize: "12px", color: "#ccc" }}>—</span>
                       )}
                     </td>
                     <td style={{ padding: "13px 16px" }}>
-                      <span style={{ padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, ...statusStyle[delivery.status] }}>
-                        {STATUS_LABEL[delivery.status]}
-                      </span>
+                      <span style={{ padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, ...statusStyle[delivery.status] }}>{STATUS_LABEL[delivery.status]}</span>
                     </td>
                     <td style={{ padding: "13px 16px" }}>
                       <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                        <button
-                          onClick={() => setViewDelivery(delivery)}
-                          style={{ padding: "6px 14px", borderRadius: "20px", border: "none", background: "#e8f0fe", color: "#1565c0", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
-                        >👁 View</button>
+                        <button onClick={() => setViewDelivery(delivery)}
+                          style={{ padding: "6px 14px", borderRadius: "20px", border: "none", background: "#e8f0fe", color: "#1565c0", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>👁 View</button>
                         {(delivery.status === "PENDING" || delivery.status === "PARTIALLY_RECEIVED") && (
                           <>
-                            <button
-                              onClick={() => { openReceiptModal(delivery); setStep("receiving"); }}
-                              style={{ padding: "6px 14px", borderRadius: "20px", border: "none", background: "#e8f5e9", color: "#1a3c2e", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
-                            >📦 Receive</button>
-                            <button
-                              onClick={() => handleCancel(delivery.id)}
-                              style={{ padding: "6px 14px", borderRadius: "20px", border: "1px solid #ffcdd2", background: "#fff", color: "#e53935", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
-                            >Cancel</button>
+                            <button onClick={() => { openReceiptModal(delivery); setStep("receiving"); }}
+                              style={{ padding: "6px 14px", borderRadius: "20px", border: "none", background: "#e8f5e9", color: "#1a3c2e", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>📦 Receive</button>
+                            <button onClick={() => handleCancel(delivery.id)}
+                              style={{ padding: "6px 14px", borderRadius: "20px", border: "1px solid #ffcdd2", background: "#fff", color: "#e53935", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>Cancel</button>
                           </>
                         )}
                       </div>
@@ -835,25 +692,17 @@ export default function PurchaseOrderPage() {
       {viewDelivery && (
         <>
           <div onClick={() => setViewDelivery(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 40 }} />
-          <div style={{
-            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
-            zIndex: 50, background: "#fff", borderRadius: "20px",
-            width: "min(92vw, 520px)", boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
-            maxHeight: "85vh", overflowY: "auto",
-          }}>
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 50, background: "#fff", borderRadius: "20px", width: "min(92vw, 520px)", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", maxHeight: "85vh", overflowY: "auto" }}>
             <div style={{ background: "#1a3c2e", padding: "20px 24px", borderRadius: "20px 20px 0 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <p style={{ fontSize: "16px", fontWeight: 800, color: "#fff" }}>Delivery Details</p>
                 <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.55)", fontFamily: "monospace" }}>{viewDelivery.id}</p>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <span style={{ padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, ...statusStyle[viewDelivery.status] }}>
-                  {STATUS_LABEL[viewDelivery.status]}
-                </span>
+                <span style={{ padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, ...statusStyle[viewDelivery.status] }}>{STATUS_LABEL[viewDelivery.status]}</span>
                 <button onClick={() => setViewDelivery(null)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: "30px", height: "30px", cursor: "pointer", color: "#fff", fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
               </div>
             </div>
-
             <div style={{ padding: "24px" }}>
               <div style={{ background: "#f9f9f9", borderRadius: "12px", padding: "16px", marginBottom: "18px" }}>
                 {[
@@ -866,13 +715,7 @@ export default function PurchaseOrderPage() {
                 ].map(([label, value]) => (
                   <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", flexWrap: "wrap", rowGap: "4px", borderBottom: "0.5px solid #f0f0f0" }}>
                     <span style={{ fontSize: "12px", color: "#888" }}>{label}</span>
-                    <span style={{
-                      fontSize: "13px", fontWeight: 600, color: "#1a1a1a",
-                      fontFamily: label === "Receipt No." ? "monospace" : "inherit",
-                      background: label === "Receipt No." ? "#fffde7" : "transparent",
-                      padding: label === "Receipt No." ? "2px 10px" : "0",
-                      borderRadius: label === "Receipt No." ? "20px" : "0",
-                    }}>
+                    <span style={{ fontSize: "13px", fontWeight: 600, color: "#1a1a1a", fontFamily: label === "Receipt No." ? "monospace" : "inherit", background: label === "Receipt No." ? "#fffde7" : "transparent", padding: label === "Receipt No." ? "2px 10px" : "0", borderRadius: label === "Receipt No." ? "20px" : "0" }}>
                       {label === "Receipt No." ? `🧾 ${value}` : value}
                     </span>
                   </div>
@@ -881,29 +724,37 @@ export default function PurchaseOrderPage() {
 
               <p style={{ fontSize: "13px", fontWeight: 700, color: "#1a1a1a", marginBottom: "12px" }}>📦 Items Ordered</p>
               <div style={{ borderRadius: "12px", overflowX: "auto", border: "0.5px solid #e8e8e8", marginBottom: "20px" }}>
-                <table style={{ minWidth: "420px", borderCollapse: "collapse", width: "100%" }}>
+                <table style={{ minWidth: "460px", borderCollapse: "collapse", width: "100%" }}>
                   <thead>
                     <tr style={{ background: "#1a3c2e" }}>
-                      {["Product", "Unit", "Cost", "Ordered", "Received", "Status"].map((h) => (
+                      {["Product", "Cost", "Ordered", "Received", "Expiry", "Status"].map((h) => (
                         <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontSize: "11px", color: "#fff", fontWeight: 600 }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {viewDelivery.items?.map((item, i) => {
-                      const unitInfo = getUnit(item.unit || item.product?.stockUnit);
-                      const diff     = item.receivedQty - item.orderedQty;
+                    {viewDelivery.items?.map((item: DeliveryItem & { expiryDate?: string | null }, i) => {
+                      const diff = item.receivedQty - item.orderedQty;
                       return (
                         <tr key={item.id} style={{ borderBottom: "0.5px solid #f0f0f0", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
                           <td style={{ padding: "10px 12px", fontSize: "13px", fontWeight: 500, color: "#1a1a1a" }}>
                             {item.product?.productName || item.productId}
                             {item.product?.size && <span style={{ color: "#aaa" }}> {item.product.size}</span>}
                           </td>
-                          <td style={{ padding: "10px 12px", fontSize: "12px", color: "#888" }}>{unitInfo.short}</td>
                           <td style={{ padding: "10px 12px", fontSize: "12px", color: "#1a1a1a" }}>₱{item.costPrice}</td>
                           <td style={{ padding: "10px 12px", fontSize: "13px", fontWeight: 600, color: "#1a1a1a", textAlign: "center" }}>{item.orderedQty}</td>
                           <td style={{ padding: "10px 12px", fontSize: "13px", fontWeight: 600, textAlign: "center", color: item.receivedQty === 0 ? "#aaa" : item.receivedQty < item.orderedQty ? "#e65100" : "#2e7d32" }}>
                             {item.receivedQty === 0 ? "—" : item.receivedQty}
+                          </td>
+                          {/* ✅ Show expiry date in view modal */}
+                          <td style={{ padding: "10px 12px" }}>
+                            {item.expiryDate ? (
+                              <span style={{ fontSize: "11px", fontWeight: 600, color: "#1a3c2e", background: "#e8f5e9", padding: "2px 8px", borderRadius: "20px" }}>
+                                📅 {new Date(item.expiryDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: "11px", color: "#aaa" }}>—</span>
+                            )}
                           </td>
                           <td style={{ padding: "10px 12px" }}>
                             {item.receivedQty === 0 ? (
@@ -920,11 +771,8 @@ export default function PurchaseOrderPage() {
                   </tbody>
                 </table>
               </div>
-
               <button onClick={() => setViewDelivery(null)}
-                style={{ width: "100%", padding: "11px", borderRadius: "20px", border: "1.5px solid #e0e0e0", background: "#fff", color: "#555", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
-                Close
-              </button>
+                style={{ width: "100%", padding: "11px", borderRadius: "20px", border: "1.5px solid #e0e0e0", background: "#fff", color: "#555", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>Close</button>
             </div>
           </div>
         </>
