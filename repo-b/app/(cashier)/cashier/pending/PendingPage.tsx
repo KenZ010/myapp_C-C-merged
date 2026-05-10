@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { useSocket } from "@/app/providers";
 
@@ -115,12 +115,14 @@ export default function PendingPage() {
   const [activeTab,  setActiveTab]  = useState<FilterTab>("All Orders");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const socket = useSocket();
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
-  const fetchOrders = useCallback(async () => {
+  const fetchOrders = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
       const data = await api.getActiveOrders();
       if (data?.message) { setError(data.message); setOrders([]); return; }
@@ -129,6 +131,7 @@ export default function PendingPage() {
         .map(normalizeOrder)
         .filter((o) => ACTIVE_STATUSES.includes(o.status));
       setOrders(activeOrders);
+      setLastUpdated(new Date());
     } catch (err) {
       setError((err as Error).message || "Failed to load orders.");
     } finally {
@@ -136,13 +139,33 @@ export default function PendingPage() {
     }
   }, []);
 
+  // Initial fetch
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
-  // ── Auto-refresh orders list on new order (toast handled globally) ────────
+  // Poll every 10 seconds as fallback
+  useEffect(() => {
+    pollingRef.current = setInterval(() => fetchOrders(true), 10_000);
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [fetchOrders]);
+
+  // Socket: refetch on new order + when socket (re)connects
   useEffect(() => {
     if (!socket) return;
-    socket.on("order:new", () => fetchOrders());
-    return () => { socket.off("order:new"); };
+
+    // Fetch immediately when socket connects (catches missed events during refresh)
+    fetchOrders(true);
+
+    socket.on("order:new",       () => fetchOrders(true));
+    socket.on("order:completed", () => fetchOrders(true));
+    socket.on("order:status",    () => fetchOrders(true));
+
+    return () => {
+      socket.off("order:new");
+      socket.off("order:completed");
+      socket.off("order:status");
+    };
   }, [socket, fetchOrders]);
 
   const updateStatus = async (id: string, status: OrderStatus) => {
@@ -194,7 +217,7 @@ export default function PendingPage() {
         </div>
 
         {/* Filter Tabs */}
-        <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap", alignItems: "center" }}>
           {filterTabs.map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               style={{ padding: "8px 18px", borderRadius: "20px", fontSize: "13px", fontWeight: activeTab === tab ? 600 : 400, cursor: "pointer", border: activeTab === tab ? "none" : "1px solid #e0e0e0", background: activeTab === tab ? "#3c3eb1fb" : "#fff", color: activeTab === tab ? "#fff" : "#555", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -204,16 +227,23 @@ export default function PendingPage() {
               </span>
             </button>
           ))}
-          <button onClick={fetchOrders} style={{ marginLeft: "auto", padding: "8px 16px", borderRadius: "20px", fontSize: "13px", fontWeight: 600, cursor: "pointer", border: "1px solid #e0e0e0", background: "#fff", color: "#555", display: "flex", alignItems: "center", gap: "6px" }}>
-            🔄 Refresh
-          </button>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "10px" }}>
+            {lastUpdated && (
+              <span style={{ fontSize: "11px", color: "#aaa" }}>
+                Updated {lastUpdated.toLocaleTimeString("en-PH", { timeStyle: "short" })}
+              </span>
+            )}
+            <button onClick={() => fetchOrders()} style={{ padding: "8px 16px", borderRadius: "20px", fontSize: "13px", fontWeight: 600, cursor: "pointer", border: "1px solid #e0e0e0", background: "#fff", color: "#555", display: "flex", alignItems: "center", gap: "6px" }}>
+              🔄 Refresh
+            </button>
+          </div>
         </div>
 
         {/* Error */}
         {error && (
           <div style={{ background: "#ffebee", borderRadius: "12px", padding: "16px 20px", marginBottom: "20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
             <p style={{ fontSize: "13px", fontWeight: 600, color: "#c62828", margin: 0 }}>⚠️ {error}</p>
-            <button onClick={fetchOrders} style={{ background: "#c62828", color: "#fff", border: "none", borderRadius: "20px", padding: "8px 20px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
+            <button onClick={() => fetchOrders()} style={{ background: "#c62828", color: "#fff", border: "none", borderRadius: "20px", padding: "8px 20px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
               Retry
             </button>
           </div>
