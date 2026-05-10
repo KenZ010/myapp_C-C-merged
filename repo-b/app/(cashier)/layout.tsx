@@ -126,6 +126,9 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toasts,      setToasts]      = useState<Toast[]>([]);
+  const [mounted,     setMounted]     = useState(false); // ← added
+
+  useEffect(() => { setMounted(true); }, []); // ← added
 
   const page = pageTitles[pathname] ?? { title: "Cashier Panel", sub: "" };
 
@@ -164,6 +167,8 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
 
     return () => { socket.off("order:new"); };
   }, [socket, dismissToast]);
+
+  if (!mounted) return null; // ← added
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "#f4f6fb" }}>
