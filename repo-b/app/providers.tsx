@@ -17,15 +17,14 @@ export function useSocketActions() {
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const socketRef    = useRef<Socket | null>(null);
-  const pollRef      = useRef<ReturnType<typeof setInterval> | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const pollRef   = useRef<ReturnType<typeof setInterval> | null>(null);
   const [socket,  setSocket]  = useState<Socket | null>(null);
   const [toast,   setToast]   = useState<{ message: string; type: "success" | "info" | "error" } | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    console.log("✅ Providers mounted");
   }, []);
 
   const showToast = (message: string, type: "success" | "info" | "error" = "info") => {
@@ -40,17 +39,29 @@ export function Providers({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const startPolling = () => {
+    // don't start a second interval if one is already running
+    if (pollRef.current) return;
+    pollRef.current = setInterval(() => {
+      if (socketRef.current?.connected) {
+        stopPolling();
+      } else {
+        connectSocket();
+      }
+    }, 1000);
+  };
+
   const connectSocket = () => {
     if (typeof window === "undefined") return;
 
     const user = JSON.parse(localStorage.getItem("user") || "null");
 
-    // No user = stop everything, don't spam logs
     if (!user?.id) {
       stopPolling();
       return;
     }
 
+    // already connected — just rejoin rooms and stop polling
     if (socketRef.current?.connected) {
       socketRef.current.emit("join", { id: user.id, role: user.role });
       console.log("🔄 Rejoined rooms as:", user.id, user.role);
@@ -58,18 +69,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // socket exists but not connected yet — start polling and wait
     if (socketRef.current) {
-      socketRef.current.disconnect();
-      socketRef.current = null;
+      startPolling();
+      return;
     }
 
+    // no socket at all — create one
     console.log("🔌 Creating new socket for:", user.id, user.role);
 
     const newSocket = io(BACKEND_URL, {
-      transports:           ["websocket"],
-      reconnection:         true,
+      transports: ["websocket", "polling"],
+      reconnection: true,
       reconnectionAttempts: Infinity,
-      reconnectionDelay:    500,
+      reconnectionDelay: 500,
       reconnectionDelayMax: 3000,
     });
 
@@ -94,7 +107,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     });
 
     newSocket.on("order:completed", ({ message }: { orderId: string; message: string }) => {
-      console.log("🔔 TOAST TRIGGERED order:completed:", message);
+      console.log("🔔 order:completed:", message);
       showToast(`🎉 ${message}`, "success");
     });
 
@@ -105,23 +118,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
     });
 
     socketRef.current = newSocket;
+
+    // start polling to wait for connection
+    startPolling();
   };
 
   useEffect(() => {
     connectSocket();
-
-    // Only start polling if there's actually a logged-in user
-    const user = JSON.parse(localStorage.getItem("user") || "null");
-    if (user?.id) {
-      pollRef.current = setInterval(() => {
-        if (!socketRef.current?.connected) {
-          console.log("🔁 Retrying socket connection...");
-          connectSocket();
-        } else {
-          stopPolling();
-        }
-      }, 1000);
-    }
 
     const onStorage = (e: StorageEvent) => {
       if (e.key === "user" && e.newValue) {
