@@ -5,10 +5,16 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://backend-prod
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 
+// Separate contexts so existing code using useSocket() doesn't break
 const SocketContext = createContext<Socket | null>(null);
+const SocketActionsContext = createContext<{ connectSocket: () => void }>({ connectSocket: () => {} });
 
 export function useSocket() {
   return useContext(SocketContext);
+}
+
+export function useSocketActions() {
+  return useContext(SocketActionsContext);
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -30,16 +36,28 @@ export function Providers({ children }: { children: React.ReactNode }) {
     const user = JSON.parse(localStorage.getItem("user") || "null");
     if (!user?.id) return;
 
-    const newSocket = io(BACKEND_URL, { transports: ["websocket"] });
+    const newSocket = io(BACKEND_URL, {
+      transports: ["websocket"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 3000,
+    });
 
-    newSocket.on("connect", () => {
-      console.log("✅ Socket connected:", newSocket.id);
+    const rejoin = () => {
       newSocket.emit("join", { id: user.id, role: user.role });
       setSocket(newSocket);
+      console.log("✅ Socket connected/reconnected:", newSocket.id);
+    };
+
+    newSocket.on("connect", rejoin);
+    newSocket.on("reconnect", () => {
+      console.log("🔄 Socket reconnected");
+      rejoin();
     });
 
     newSocket.on("disconnect", () => {
-      console.log("❌ Socket disconnected");
+      console.log("❌ Socket disconnected — will auto-reconnect");
       setSocket(null);
     });
 
@@ -63,9 +81,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     connectSocket();
 
     const onStorage = (e: StorageEvent) => {
-      if (e.key === "user" && e.newValue) {
-        connectSocket();
-      }
+      if (e.key === "user" && e.newValue) connectSocket();
       if (e.key === "user" && !e.newValue) {
         socketRef.current?.disconnect();
         socketRef.current = null;
@@ -74,7 +90,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
     };
 
     window.addEventListener("storage", onStorage);
-
     return () => {
       window.removeEventListener("storage", onStorage);
       socketRef.current?.disconnect();
@@ -90,49 +105,51 @@ export function Providers({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <SocketContext.Provider value={socket}>
-      {children}
+    <SocketActionsContext.Provider value={{ connectSocket }}>
+      <SocketContext.Provider value={socket}>
+        {children}
 
-      {mounted && (
-        <>
-          {toast && (
-            <div style={{
-              position:     "fixed",
-              top:          "24px",
-              right:        "24px",
-              zIndex:       99999,
-              background:   toastColors[toast.type].bg,
-              border:       `1px solid ${toastColors[toast.type].border}`,
-              color:        "#fff",
-              padding:      "14px 20px",
-              borderRadius: "12px",
-              fontSize:     "14px",
-              fontWeight:   600,
-              boxShadow:    "0 8px 32px rgba(0,0,0,0.35)",
-              display:      "flex",
-              alignItems:   "center",
-              gap:          "10px",
-              animation:    "slideIn 0.3s ease",
-              maxWidth:     "360px",
-            }}>
-              <span style={{ flex: 1 }}>{toast.message}</span>
-              <button
-                onClick={() => setToast(null)}
-                style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: "18px", lineHeight: 1, padding: 0 }}
-              >
-                ✕
-              </button>
-            </div>
-          )}
+        {mounted && (
+          <>
+            {toast && (
+              <div style={{
+                position:     "fixed",
+                top:          "24px",
+                right:        "24px",
+                zIndex:       99999,
+                background:   toastColors[toast.type].bg,
+                border:       `1px solid ${toastColors[toast.type].border}`,
+                color:        "#fff",
+                padding:      "14px 20px",
+                borderRadius: "12px",
+                fontSize:     "14px",
+                fontWeight:   600,
+                boxShadow:    "0 8px 32px rgba(0,0,0,0.35)",
+                display:      "flex",
+                alignItems:   "center",
+                gap:          "10px",
+                animation:    "slideIn 0.3s ease",
+                maxWidth:     "360px",
+              }}>
+                <span style={{ flex: 1 }}>{toast.message}</span>
+                <button
+                  onClick={() => setToast(null)}
+                  style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: "18px", lineHeight: 1, padding: 0 }}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
 
-          <style>{`
-            @keyframes slideIn {
-              from { transform: translateX(110%); opacity: 0; }
-              to   { transform: translateX(0);    opacity: 1; }
-            }
-          `}</style>
-        </>
-      )}
-    </SocketContext.Provider>
+            <style>{`
+              @keyframes slideIn {
+                from { transform: translateX(110%); opacity: 0; }
+                to   { transform: translateX(0);    opacity: 1; }
+              }
+            `}</style>
+          </>
+        )}
+      </SocketContext.Provider>
+    </SocketActionsContext.Provider>
   );
 }
