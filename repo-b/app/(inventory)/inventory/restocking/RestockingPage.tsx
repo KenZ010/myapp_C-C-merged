@@ -20,12 +20,13 @@ const CASE_UNITS: {
   { value: "pcs",     label: "Pieces",         short: "pcs",   bottlesPerCase: null, detail: "Single piece"      },
 ];
 
-const getUnit      = (u?: string) => CASE_UNITS.find((x) => x.value === u) ?? CASE_UNITS[0];
+const getUnit = (u?: string) => CASE_UNITS.find((x) => x.value === u) ?? CASE_UNITS[0];
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 type POStatus = "PENDING" | "PARTIALLY_RECEIVED" | "DELIVERED" | "CANCELLED";
 type POStep = "receiving" | "history";
 
+// ✅ Added expiryDate to match DeliveryItem schema
 type DeliveryItem = {
   id: string;
   productId: string;
@@ -33,6 +34,7 @@ type DeliveryItem = {
   receivedQty: number;
   returnedQty: number;
   costPrice: number;
+  expiryDate?: string | null; // ← from schema: DateTime?
   unit?: string;
   product?: { id: string; productName: string; price: number; stockUnit?: string; size?: string | null };
 };
@@ -45,12 +47,11 @@ type Delivery = {
   totalItems: number;
   notes?: string;
   createdAt: string;
-  receiptNumber?: string;
+  receiptNumber?: string; // ← from schema: String?
   supplier?: { id: string; supplierName: string };
   items: DeliveryItem[];
 };
 
-// ✅ Added expiryDate to receive payload
 type ReceiveQty = {
   deliveryItemId: string;
   receivedQty: number;
@@ -179,7 +180,6 @@ export default function PurchaseOrderPage() {
     const enriched = receiptNumber ? { ...delivery, receiptNumber } : delivery;
     setReceivingDelivery(enriched);
     setReceiveError("");
-    // ✅ Initialize with empty expiryDate per item
     setReceiveQtys(
       delivery.items.map((item) => ({
         deliveryItemId: item.id,
@@ -192,7 +192,6 @@ export default function PurchaseOrderPage() {
   const handleReceive = async () => {
     if (!receivingDelivery) return;
 
-    // ✅ Validate that all items being received have an expiry date
     const itemsToReceive = receiveQtys.filter((r) => r.receivedQty > 0);
     const missingExpiry = itemsToReceive.filter((r) => !r.expiryDate);
     if (missingExpiry.length > 0) {
@@ -215,18 +214,18 @@ export default function PurchaseOrderPage() {
 
     try {
       setReceiving(true); setReceiveError("");
+
       await api.receiveDelivery(
         receivingDelivery.id,
         employeeId,
-        itemsToReceive, // ✅ includes expiryDate
+        itemsToReceive,
       );
       if (receivingDelivery.receiptNumber) {
-        try {
-          await api.updateDelivery(receivingDelivery.id, {
-            receiptNumber: receivingDelivery.receiptNumber,
-          });
-        } catch (e) { console.warn("Could not save receipt number:", e); }
+        await api.updateDelivery(receivingDelivery.id, {
+          receiptNumber: receivingDelivery.receiptNumber,
+        });
       }
+
       setReceivingDelivery(null);
       await fetchAll();
       setToast("Items received and stock updated!");
@@ -508,7 +507,7 @@ export default function PurchaseOrderPage() {
                           )}
                         </div>
 
-                        {/* ✅ Expiry Date input — only shown when receivedQty > 0 */}
+                        {/* Expiry Date input — only shown when receivedQty > 0 */}
                         {willReceive && (
                           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                             <label style={{ fontSize: "11px", fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -733,7 +732,8 @@ export default function PurchaseOrderPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {viewDelivery.items?.map((item: DeliveryItem & { expiryDate?: string | null }, i) => {
+                    {/* ✅ No more inline cast needed — expiryDate is now part of DeliveryItem type */}
+                    {viewDelivery.items?.map((item, i) => {
                       const diff = item.receivedQty - item.orderedQty;
                       return (
                         <tr key={item.id} style={{ borderBottom: "0.5px solid #f0f0f0", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
@@ -746,7 +746,6 @@ export default function PurchaseOrderPage() {
                           <td style={{ padding: "10px 12px", fontSize: "13px", fontWeight: 600, textAlign: "center", color: item.receivedQty === 0 ? "#aaa" : item.receivedQty < item.orderedQty ? "#e65100" : "#2e7d32" }}>
                             {item.receivedQty === 0 ? "—" : item.receivedQty}
                           </td>
-                          {/* ✅ Show expiry date in view modal */}
                           <td style={{ padding: "10px 12px" }}>
                             {item.expiryDate ? (
                               <span style={{ fontSize: "11px", fontWeight: 600, color: "#1a3c2e", background: "#e8f5e9", padding: "2px 8px", borderRadius: "20px" }}>

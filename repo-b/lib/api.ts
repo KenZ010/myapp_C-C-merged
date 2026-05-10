@@ -338,7 +338,7 @@ getReturnRequestById: async (returnRequestId: string) => {
     },
     updateDelivery: async (id: string, data: Record<string, unknown>) => {
       const res = await fetch(`${API_URL}/deliveries/${id}`, {
-        method: 'PATCH',                                       // FIX: was PUT, backend uses PATCH
+        method: 'PATCH',
         headers: authHeaders(),
         body: JSON.stringify(data),
       });
@@ -347,7 +347,7 @@ getReturnRequestById: async (returnRequestId: string) => {
     receiveDelivery: async (
       id: string,
       employeeId: string,
-      items: { deliveryItemId: string; receivedQty: number }[]
+      items: { deliveryItemId: string; receivedQty: number; expiryDate: string }[] // ← added expiryDate
     ) => {
       const res = await fetch(`${API_URL}/deliveries/${id}/receive`, {
         method: 'PATCH',
