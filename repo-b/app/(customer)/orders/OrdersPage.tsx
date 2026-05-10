@@ -100,6 +100,14 @@ export default function OrdersPage() {
   const [activeTab,         setActiveTab]         = useState<TabFilter>("All");
   const [cancellingId,      setCancellingId]      = useState<string | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
+  const [toast,             setToast]             = useState<string | null>(null); // ← added
+
+  const socket = useSocket(); // ← moved to top level
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 4000);
+  };
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 900);
@@ -131,23 +139,27 @@ export default function OrdersPage() {
     }
   }, []);
 
-  // ── Real-time socket notification ─────────────────────────────────────────
-    const socket = useSocket();
+  // ── Real-time socket notifications ────────────────────────────────────────
+  useEffect(() => {
+    if (!socket) return;
 
-    useEffect(() => {
-      if (!socket) return;
+    // Order completed (customer marked as received)
+    socket.on("order:completed", ({ message }: { orderId: string; message: string }) => {
+      showToast(`✅ ${message}`);
+      fetchOrders();
+    });
 
-      socket.on("order:completed", ({ orderId, message }: { orderId: string; message: string }) => {
-        // Show a simple banner notification
-        alert(`✅ ${message}`);
-        // Refresh orders list so the completed order disappears from active
-        fetchOrders();
-      });
+    // All other status changes (processing, out for delivery, cancelled)
+    socket.on("order:status", ({ message }: { orderId: string; status: string; message: string }) => {
+      showToast(message);
+      fetchOrders();
+    });
 
-      return () => {
-        socket.off("order:completed");
-      };
-    }, [socket, fetchOrders]);
+    return () => {
+      socket.off("order:completed");
+      socket.off("order:status");
+    };
+  }, [socket, fetchOrders]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
@@ -176,8 +188,8 @@ export default function OrdersPage() {
     }, 1500);
   };
 
-  const filtered  = activeTab === "All" ? orders : orders.filter((o) => o.status === activeTab);
-  const tabCount  = (tab: TabFilter) =>
+  const filtered = activeTab === "All" ? orders : orders.filter((o) => o.status === activeTab);
+  const tabCount = (tab: TabFilter) =>
     tab === "All" ? orders.length : orders.filter((o) => o.status === tab).length;
 
   // ── Loading ───────────────────────────────────────────────────────────────
@@ -212,6 +224,31 @@ export default function OrdersPage() {
 
   return (
     <div className={`min-h-[calc(100vh-56px)] bg-[#f5f5f5] ${isMobile ? "p-4" : "p-7"}`}>
+
+      {/* ── Toast Notification ── */}
+      {toast && (
+        <div style={{
+          position: "fixed", top: "24px", right: "24px", zIndex: 9999,
+          background: "#1a1a2e", color: "#fff", padding: "14px 20px",
+          borderRadius: "12px", fontSize: "14px", fontWeight: 600,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.25)",
+          display: "flex", alignItems: "center", gap: "10px",
+          animation: "slideIn 0.3s ease",
+        }}>
+          {toast}
+          <button onClick={() => setToast(null)}
+            style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: "16px" }}>
+            ✕
+          </button>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes slideIn {
+          from { transform: translateX(100px); opacity: 0; }
+          to   { transform: translateX(0);     opacity: 1; }
+        }
+      `}</style>
 
       {/* ── Cancel Confirmation Modal ────────────────────────────────────── */}
       {showCancelConfirm && (

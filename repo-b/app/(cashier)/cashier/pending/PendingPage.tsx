@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
+import { useSocket } from "@/app/providers";
 
 type OrderStatus =
   | "Pending"
@@ -114,6 +115,14 @@ export default function PendingPage() {
   const [activeTab,  setActiveTab]  = useState<FilterTab>("All Orders");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [toast,      setToast]      = useState<string | null>(null);
+
+  const socket = useSocket();
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 4000);
+  };
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -121,7 +130,6 @@ export default function PendingPage() {
       setError(null);
       const data = await api.getActiveOrders();
 
-      // Surface auth/server errors clearly
       if (data?.message) {
         setError(data.message);
         setOrders([]);
@@ -129,8 +137,6 @@ export default function PendingPage() {
       }
 
       const raw: Record<string, unknown>[] = Array.isArray(data) ? data : [];
-
-      // Filter to only active statuses (exclude COMPLETED, CANCELLED etc.)
       const activeOrders = raw
         .map(normalizeOrder)
         .filter((o) => ACTIVE_STATUSES.includes(o.status));
@@ -145,29 +151,60 @@ export default function PendingPage() {
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
+  // ── Socket listener for new orders ──────────────────────────────────────
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on('order:new', (data: { orderId: string; message: string }) => {
+      showToast(`🛎️ ${data.message}`);
+      fetchOrders();
+    });
+
+    return () => { socket.off('order:new'); };
+  }, [socket, fetchOrders]);
+
   const updateStatus = async (id: string, status: OrderStatus) => {
     setUpdatingId(id);
-    // Optimistic update
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
     try {
       await api.updateOrderStatus(id, backendStatus[status]);
-      // Remove completed/cancelled from active list after short delay
       if (status === "Completed" || status === "Cancelled") {
         setTimeout(() => setOrders((prev) => prev.filter((o) => o.id !== id)), 1500);
       }
     } catch {
-      // keep optimistic state — backend will sync on next refresh
+      // keep optimistic state
     } finally {
       setUpdatingId(null);
     }
   };
 
-  const filtered   = activeTab === "All Orders" ? orders : orders.filter((o) => o.status === activeTab);
-  const tabCount   = (tab: FilterTab) => tab === "All Orders" ? orders.length : orders.filter((o) => o.status === tab).length;
+  const filtered = activeTab === "All Orders" ? orders : orders.filter((o) => o.status === activeTab);
+  const tabCount = (tab: FilterTab) => tab === "All Orders" ? orders.length : orders.filter((o) => o.status === tab).length;
 
   return (
     <>
-      <style>{`@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
+      <style>{`
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+      `}</style>
+
+      {/* ── Toast Notification ── */}
+      {toast && (
+        <div style={{
+          position: "fixed", top: "24px", right: "24px", zIndex: 9999,
+          background: "#1a1a2e", color: "#fff", padding: "14px 20px",
+          borderRadius: "12px", fontSize: "14px", fontWeight: 600,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.25)",
+          display: "flex", alignItems: "center", gap: "10px",
+          animation: "slideIn 0.3s ease"
+        }}>
+          {toast}
+          <button onClick={() => setToast(null)}
+            style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: "16px", lineHeight: 1 }}>
+            ✕
+          </button>
+        </div>
+      )}
 
       <div style={{ padding: "28px" }}>
 
