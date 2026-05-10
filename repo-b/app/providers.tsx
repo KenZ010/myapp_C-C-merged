@@ -30,57 +30,61 @@ export function Providers({ children }: { children: React.ReactNode }) {
   };
 
   const connectSocket = () => {
-    // If already connected, just rejoin rooms (handles page navigation)
-    if (socketRef.current?.connected) {
-      const user = JSON.parse(localStorage.getItem("user") || "null");
-      if (user?.id) {
-        socketRef.current.emit("join", { id: user.id, role: user.role });
-        console.log("🔄 Rejoined rooms as:", user.id, user.role);
-      }
+    const user = JSON.parse(localStorage.getItem("user") || "null");
+    if (!user?.id) {
+      console.log("⚠️ connectSocket called but no user in localStorage");
       return;
     }
 
-    const user = JSON.parse(localStorage.getItem("user") || "null");
-    if (!user?.id) return;
+    // Already connected — just rejoin rooms
+    if (socketRef.current?.connected) {
+      socketRef.current.emit("join", { id: user.id, role: user.role });
+      console.log("🔄 Rejoined rooms as:", user.id, user.role);
+      return;
+    }
+
+    // Disconnect any stale socket
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+
+    console.log("🔌 Creating new socket for:", user.id, user.role);
 
     const newSocket = io(BACKEND_URL, {
-      transports:            ["websocket"],
-      reconnection:          true,
-      reconnectionAttempts:  Infinity,
-      reconnectionDelay:     500,
-      reconnectionDelayMax:  3000,
+      transports:           ["websocket"],
+      reconnection:         true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay:    500,
+      reconnectionDelayMax: 3000,
     });
 
     const rejoin = () => {
       newSocket.emit("join", { id: user.id, role: user.role });
       setSocket(newSocket);
-      console.log("✅ Socket connected/reconnected:", newSocket.id, "as", user.id, user.role);
+      console.log("✅ Socket connected:", newSocket.id, "| user:", user.id, "| role:", user.role);
     };
 
-    newSocket.on("connect",   rejoin);
-    newSocket.on("reconnect", () => {
-      console.log("🔄 Socket reconnected");
-      rejoin();
-    });
+    newSocket.on("connect",    rejoin);
+    newSocket.on("reconnect",  rejoin);
 
     newSocket.on("disconnect", () => {
-      console.log("❌ Socket disconnected — will auto-reconnect");
+      console.log("❌ Socket disconnected");
       setSocket(null);
     });
 
-    // ── Order event listeners ────────────────────────────────────────────
     newSocket.on("order:new", ({ message }: { orderId: string; message: string }) => {
-      console.log("📦 order:new received:", message);
+      console.log("📦 order:new:", message);
       showToast(`🛎️ ${message}`, "info");
     });
 
     newSocket.on("order:completed", ({ message }: { orderId: string; message: string }) => {
-      console.log("✅ order:completed received:", message);
+      console.log("✅ order:completed:", message);
       showToast(`🎉 ${message}`, "success");
     });
 
     newSocket.on("order:status", ({ message, status }: { orderId: string; status: string; message: string }) => {
-      console.log("📬 order:status received:", status, message);
+      console.log("📬 order:status:", status, message);
       const type = status === "CANCELLED" ? "error" : "info";
       showToast(message, type);
     });
