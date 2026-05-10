@@ -388,7 +388,7 @@ export default function LossReportPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search product, ID, employee..."
-              className="pl-8 pr-3 py-2 rounded-lg border border-slate-200 text-[13px] w-[240px] outline-none focus:border-indigo-400 transition-colors"
+              className="pl-8 pr-3 py-2 rounded-lg border border-slate-200 text-[13px] w-[240px] outline-none focus:border-indigo-400 transition-colors text-slate-900"
             />
           </div>
 
