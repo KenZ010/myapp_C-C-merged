@@ -26,7 +26,6 @@ const getUnit = (u?: string) => CASE_UNITS.find((x) => x.value === u) ?? CASE_UN
 type POStatus = "PENDING" | "PARTIALLY_RECEIVED" | "DELIVERED" | "CANCELLED";
 type POStep = "receiving" | "history";
 
-// ✅ Added expiryDate to match DeliveryItem schema
 type DeliveryItem = {
   id: string;
   productId: string;
@@ -34,7 +33,7 @@ type DeliveryItem = {
   receivedQty: number;
   returnedQty: number;
   costPrice: number;
-  expiryDate?: string | null; // ← from schema: DateTime?
+  expiryDate?: string | null;
   unit?: string;
   product?: { id: string; productName: string; price: number; stockUnit?: string; size?: string | null };
 };
@@ -47,15 +46,16 @@ type Delivery = {
   totalItems: number;
   notes?: string;
   createdAt: string;
-  receiptNumber?: string; // ← from schema: String?
+  receiptNumber?: string;
   supplier?: { id: string; supplierName: string };
   items: DeliveryItem[];
 };
 
+// Matches api.receiveDelivery items param exactly
 type ReceiveQty = {
   deliveryItemId: string;
   receivedQty: number;
-  expiryDate: string; // ISO date string e.g. "2026-12-01"
+  expiryDate: string; // must be non-empty before submission
 };
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -177,12 +177,17 @@ export default function PurchaseOrderPage() {
   };
 
   const openReceiving = (delivery: Delivery, receiptNumber?: string) => {
-    const enriched = receiptNumber ? { ...delivery, receiptNumber } : delivery;
+    // Merge receiptNumber into the delivery object so handleReceive can access it
+    const enriched: Delivery = receiptNumber
+      ? { ...delivery, receiptNumber }
+      : delivery;
+
     setReceivingDelivery(enriched);
     setReceiveError("");
     setReceiveQtys(
       delivery.items.map((item) => ({
         deliveryItemId: item.id,
+        // Default to the remaining qty for this item
         receivedQty: item.orderedQty - item.receivedQty,
         expiryDate: "",
       }))
@@ -192,16 +197,33 @@ export default function PurchaseOrderPage() {
   const handleReceive = async () => {
     if (!receivingDelivery) return;
 
+    // Only send items where receivedQty > 0
     const itemsToReceive = receiveQtys.filter((r) => r.receivedQty > 0);
-    const missingExpiry = itemsToReceive.filter((r) => !r.expiryDate);
+
+    if (itemsToReceive.length === 0) {
+      setReceiveError("Please enter at least one received quantity greater than 0.");
+      return;
+    }
+
+    // All items being received must have an expiry date
+    const missingExpiry = itemsToReceive.filter((r) => !r.expiryDate || r.expiryDate.trim() === "");
     if (missingExpiry.length > 0) {
       setReceiveError("Please enter the expiry date for all items being received.");
       return;
     }
 
+    // Resolve employeeId from localStorage — try common key shapes
     const raw = localStorage.getItem("employee") || localStorage.getItem("user") || "{}";
-    const employee = JSON.parse(raw);
-    const employeeId = employee?.id ?? employee?.employeeId ?? employee?._id ?? employee?.userId ?? null;
+    let employee: Record<string, unknown> = {};
+    try { employee = JSON.parse(raw); } catch { /* ignore */ }
+
+    const employeeId =
+      (employee?.id as string) ??
+      (employee?.employeeId as string) ??
+      (employee?._id as string) ??
+      (employee?.userId as string) ??
+      null;
+
     if (!employeeId) {
       const keys = Object.keys(employee);
       setReceiveError(
@@ -213,13 +235,22 @@ export default function PurchaseOrderPage() {
     }
 
     try {
-      setReceiving(true); setReceiveError("");
+      setReceiving(true);
+      setReceiveError("");
 
+      // 1. Receive the items — pass expiryDate per item as the API expects
       await api.receiveDelivery(
         receivingDelivery.id,
         employeeId,
-        itemsToReceive,
+        itemsToReceive.map((r) => ({
+          deliveryItemId: r.deliveryItemId,
+          receivedQty:    r.receivedQty,
+          expiryDate:     r.expiryDate, // ISO date string e.g. "2026-12-01"
+        })),
       );
+
+      // 2. If a receipt number was captured, patch it in the same round-trip
+      //    Uses a separate PATCH since receiveDelivery endpoint doesn't accept receiptNumber
       if (receivingDelivery.receiptNumber) {
         await api.updateDelivery(receivingDelivery.id, {
           receiptNumber: receivingDelivery.receiptNumber,
@@ -227,13 +258,16 @@ export default function PurchaseOrderPage() {
       }
 
       setReceivingDelivery(null);
+      setReceiveQtys([]);
       await fetchAll();
       setToast("Items received and stock updated!");
       setTimeout(() => setToast(""), 3000);
       setStep("history");
     } catch (e: unknown) {
       setReceiveError((e as Error).message || "Failed to receive items.");
-    } finally { setReceiving(false); }
+    } finally {
+      setReceiving(false);
+    }
   };
 
   const showConfirm = (msg: string, fn: () => void) =>
@@ -242,6 +276,7 @@ export default function PurchaseOrderPage() {
   const handleCancel = (id: string) =>
     showConfirm("Are you sure you want to cancel this delivery?", async () => {
       try {
+        // api.updateDelivery expects (id, data) — status is a valid field
         await api.updateDelivery(id, { status: "CANCELLED" });
         await fetchAll();
         setConfirmModal({ show: false, message: "", onConfirm: () => {} });
@@ -456,9 +491,10 @@ export default function PurchaseOrderPage() {
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "16px" }}>
                   {receivingDelivery.items.map((item) => {
                     const rq        = receiveQtys.find((r) => r.deliveryItemId === item.id);
+                    // remaining = how many are still left to receive for this item
                     const remaining = item.orderedQty - item.receivedQty;
                     const unitInfo  = getUnit(item.unit || item.product?.stockUnit);
-                    const diff      = (rq?.receivedQty ?? 0) - item.orderedQty;
+                    const diff      = (rq?.receivedQty ?? 0) - remaining; // vs remaining, not orderedQty
                     const receivedBtl = rq?.receivedQty && unitInfo.bottlesPerCase
                       ? rq.receivedQty * unitInfo.bottlesPerCase : null;
                     const willReceive = (rq?.receivedQty ?? 0) > 0;
@@ -473,7 +509,7 @@ export default function PurchaseOrderPage() {
                             </p>
                             <p style={{ fontSize: "12px", color: "#888" }}>
                               Ordered: <strong>{item.orderedQty}</strong> {unitInfo.short} •
-                              Received: <strong>{item.receivedQty}</strong> •
+                              Already received: <strong>{item.receivedQty}</strong> •
                               Remaining: <strong style={{ color: "#1a3c2e" }}>{remaining}</strong>
                             </p>
                           </div>
@@ -485,20 +521,30 @@ export default function PurchaseOrderPage() {
                           )}
                         </div>
 
-                        {/* Quantity input */}
+                        {/* Quantity input — capped at remaining */}
                         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-                          <span style={{ fontSize: "12px", color: "#555", flexShrink: 0 }}>Received:</span>
+                          <span style={{ fontSize: "12px", color: "#555", flexShrink: 0 }}>Receiving now:</span>
                           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                             <button
-                              onClick={() => setReceiveQtys((prev) => prev.map((r) => r.deliveryItemId === item.id ? { ...r, receivedQty: Math.max(0, r.receivedQty - 1) } : r))}
+                              onClick={() => setReceiveQtys((prev) => prev.map((r) =>
+                                r.deliveryItemId === item.id ? { ...r, receivedQty: Math.max(0, r.receivedQty - 1) } : r
+                              ))}
                               style={{ width: "30px", height: "30px", borderRadius: "50%", border: "1.5px solid #e0e0e0", background: "#fff", fontSize: "16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#1a3c2e" }}>−</button>
                             <input
-                              type="number" min="0" max={remaining} value={rq?.receivedQty ?? 0}
-                              onChange={(e) => setReceiveQtys((prev) => prev.map((r) => r.deliveryItemId === item.id ? { ...r, receivedQty: Math.min(Number(e.target.value), remaining) } : r))}
+                              type="number" min={0} max={remaining}
+                              value={rq?.receivedQty ?? 0}
+                              onChange={(e) => {
+                                const val = Math.min(Math.max(0, Number(e.target.value)), remaining);
+                                setReceiveQtys((prev) => prev.map((r) =>
+                                  r.deliveryItemId === item.id ? { ...r, receivedQty: val } : r
+                                ));
+                              }}
                               style={{ width: "56px", textAlign: "center", padding: "5px", borderRadius: "8px", border: "1.5px solid #1a3c2e", fontSize: "14px", fontWeight: 700, outline: "none" }}
                             />
                             <button
-                              onClick={() => setReceiveQtys((prev) => prev.map((r) => r.deliveryItemId === item.id ? { ...r, receivedQty: Math.min(r.receivedQty + 1, remaining) } : r))}
+                              onClick={() => setReceiveQtys((prev) => prev.map((r) =>
+                                r.deliveryItemId === item.id ? { ...r, receivedQty: Math.min(r.receivedQty + 1, remaining) } : r
+                              ))}
                               style={{ width: "30px", height: "30px", borderRadius: "50%", border: "none", background: "#1a3c2e", fontSize: "16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff" }}>+</button>
                             <span style={{ fontSize: "12px", color: "#888" }}>{unitInfo.short}</span>
                           </div>
@@ -507,7 +553,7 @@ export default function PurchaseOrderPage() {
                           )}
                         </div>
 
-                        {/* Expiry Date input — only shown when receivedQty > 0 */}
+                        {/* Expiry Date — only shown when receiving qty > 0 */}
                         {willReceive && (
                           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                             <label style={{ fontSize: "11px", fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -516,8 +562,10 @@ export default function PurchaseOrderPage() {
                             <input
                               type="date"
                               value={rq?.expiryDate ?? ""}
-                              min={new Date().toISOString().split("T")[0]} // can't set past expiry
-                              onChange={(e) => setReceiveQtys((prev) => prev.map((r) => r.deliveryItemId === item.id ? { ...r, expiryDate: e.target.value } : r))}
+                              min={new Date().toISOString().split("T")[0]}
+                              onChange={(e) => setReceiveQtys((prev) => prev.map((r) =>
+                                r.deliveryItemId === item.id ? { ...r, expiryDate: e.target.value } : r
+                              ))}
                               style={{
                                 padding: "8px 12px", borderRadius: "10px",
                                 border: willReceive && !rq?.expiryDate ? "1.5px solid #ffcc80" : "1.5px solid #e0e0e0",
@@ -536,14 +584,15 @@ export default function PurchaseOrderPage() {
                   })}
                 </div>
 
-                {/* Totals */}
+                {/* Per-item receive summary */}
                 {receivingDelivery.items.map((item) => {
-                  const rq = receiveQtys.find((r) => r.deliveryItemId === item.id);
+                  const rq        = receiveQtys.find((r) => r.deliveryItemId === item.id);
+                  const remaining = item.orderedQty - item.receivedQty;
                   return (
                     <div key={item.id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "0.5px solid #f5f5f5" }}>
                       <span style={{ fontSize: "12px", color: "#888" }}>{item.product?.productName || item.productId}</span>
-                      <span style={{ fontSize: "12px", fontWeight: 700, color: (rq?.receivedQty ?? 0) < item.orderedQty ? "#e65100" : "#2e7d32" }}>
-                        {rq?.receivedQty ?? 0}/{item.orderedQty}
+                      <span style={{ fontSize: "12px", fontWeight: 700, color: (rq?.receivedQty ?? 0) < remaining ? "#e65100" : "#2e7d32" }}>
+                        {rq?.receivedQty ?? 0}/{remaining} remaining
                       </span>
                     </div>
                   );
@@ -553,7 +602,8 @@ export default function PurchaseOrderPage() {
 
                 {receiveQtys.some((r) => {
                   const item = receivingDelivery.items.find((i) => i.id === r.deliveryItemId);
-                  return item && r.receivedQty < item.orderedQty;
+                  const remaining = item ? item.orderedQty - item.receivedQty : 0;
+                  return item && r.receivedQty < remaining;
                 }) && (
                   <div style={{ background: "#fff3e0", borderRadius: "10px", padding: "10px 14px", marginBottom: "14px", border: "1px solid #ffcc80" }}>
                     <p style={{ fontSize: "12px", color: "#e65100", fontWeight: 600 }}>⚠️ Some items are short. This will be recorded as a discrepancy.</p>
@@ -732,7 +782,6 @@ export default function PurchaseOrderPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {/* ✅ No more inline cast needed — expiryDate is now part of DeliveryItem type */}
                     {viewDelivery.items?.map((item, i) => {
                       const diff = item.receivedQty - item.orderedQty;
                       return (
