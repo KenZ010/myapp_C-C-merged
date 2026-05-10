@@ -133,8 +133,14 @@ export default function InventoryMonitoringPage() {
     try {
       const [products, expiring, expired] = await Promise.all([
         fetch("https://backend-production-740c.up.railway.app/api/products").then(r => r.json()),
-        api.getExpiringBatches(30),
-        api.getExpiredBatches(),
+        api.getExpiringBatches(30).catch((e: unknown) => {
+          console.error("expiring batches fetch failed:", e);
+          return [] as StockBatch[];
+        }),
+        api.getExpiredBatches().catch((e: unknown) => {
+          console.error("expired batches fetch failed:", e);
+          return [] as StockBatch[];
+        }),
       ]);
 
       // Build earliest expiry per product from batch data
@@ -168,7 +174,7 @@ export default function InventoryMonitoringPage() {
       setExpiringBatches(expiring);
       setExpiredBatches(expired);
     } catch (e) {
-      console.error(e);
+      console.error("fetchAll failed:", e);
     } finally {
       setLoading(false);
     }
