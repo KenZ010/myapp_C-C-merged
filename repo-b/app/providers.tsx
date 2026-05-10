@@ -16,6 +16,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const socketRef = useRef<Socket | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "info" | "error" } | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
 
   const showToast = (message: string, type: "success" | "info" | "error" = "info") => {
     setToast({ message, type });
@@ -41,19 +44,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
       setSocket(null);
     });
 
-    // ── Global notifications — fire on ANY page ──────────────────────────
-
-    // New order (cashier/admin)
     newSocket.on("order:new", ({ message }: { orderId: string; message: string }) => {
       showToast(`🛎️ ${message}`, "info");
     });
 
-    // Order completed
     newSocket.on("order:completed", ({ message }: { orderId: string; message: string }) => {
       showToast(`🎉 ${message}`, "success");
     });
 
-    // All other status changes (processing, out for delivery, cancelled)
     newSocket.on("order:status", ({ message, status }: { orderId: string; status: string; message: string }) => {
       const type = status === "CANCELLED" ? "error" : "info";
       showToast(message, type);
@@ -77,18 +75,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <SocketContext.Provider value={socket}>
       {children}
 
-      {/* ── DEV: Test toast button — remove when done debugging ── */}
-      <div style={{ position: "fixed", bottom: "20px", left: "20px", zIndex: 99999, display: "flex", gap: "8px" }}>
-        <button onClick={() => showToast("✅ Success toast works!", "success")} style={{ background: "#166534", color: "#fff", border: "none", borderRadius: "8px", padding: "8px 12px", cursor: "pointer", fontSize: "12px", fontWeight: 600 }}>
-          Test Success
-        </button>
-        <button onClick={() => showToast("ℹ️ Info toast works!", "info")} style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: "8px", padding: "8px 12px", cursor: "pointer", fontSize: "12px", fontWeight: 600 }}>
-          Test Info
-        </button>
-        <button onClick={() => showToast("❌ Error toast works!", "error")} style={{ background: "#7f1d1d", color: "#fff", border: "none", borderRadius: "8px", padding: "8px 12px", cursor: "pointer", fontSize: "12px", fontWeight: 600 }}>
-          Test Error
-        </button>
-      </div>
+      {/* ── DEV: Test buttons — remove when done debugging ── */}
+      {mounted && (
+        <div style={{ position: "fixed", bottom: "20px", left: "20px", zIndex: 99999, display: "flex", gap: "8px" }}>
+          <button onClick={() => showToast("✅ Success toast works!", "success")} style={{ background: "#166534", color: "#fff", border: "none", borderRadius: "8px", padding: "8px 12px", cursor: "pointer", fontSize: "12px", fontWeight: 600 }}>
+            Test Success
+          </button>
+          <button onClick={() => showToast("ℹ️ Info toast works!", "info")} style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: "8px", padding: "8px 12px", cursor: "pointer", fontSize: "12px", fontWeight: 600 }}>
+            Test Info
+          </button>
+          <button onClick={() => showToast("❌ Error toast works!", "error")} style={{ background: "#7f1d1d", color: "#fff", border: "none", borderRadius: "8px", padding: "8px 12px", cursor: "pointer", fontSize: "12px", fontWeight: 600 }}>
+            Test Error
+          </button>
+        </div>
+      )}
 
       {/* ── Global Toast — visible on every page ── */}
       {toast && (
