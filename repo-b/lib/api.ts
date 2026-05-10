@@ -328,11 +328,13 @@ export const api = {
   },
   updateDelivery: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/deliveries/${id}`, {
-      method: 'PATCH',
+      method: 'PUT',
       headers: authHeaders(),
       body: JSON.stringify(data),
     });
-    return res.json();
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to update delivery');
+    return json;
   },
   receiveDelivery: async (
     id: string,
