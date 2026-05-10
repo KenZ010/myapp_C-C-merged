@@ -191,7 +191,7 @@ export const api = {
   },
   updateDelivery: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/deliveries/${id}`, {
-      method: 'PATCH',                                        // FIX: was PUT, backend uses PATCH
+      method: 'PUT',
       headers: authHeaders(),
       body: JSON.stringify(data),
     });

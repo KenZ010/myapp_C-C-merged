@@ -272,7 +272,7 @@ type LineItem = {
   unit: CaseUnit;
 };
 
-type DeliveryForm = { supplierId: string; lineItems: LineItem[]; notes: string };
+type DeliveryForm = { supplierId: string; lineItems: LineItem[]; notes: string; deliveryDate: string };
 type Supplier    = { id: string; supplierName: string };
 type Product     = { id: string; productName: string; price: number; supplierId?: string; supplier?: { id: string; supplierName: string } | string; status?: string; stockUnit?: string; stockQuantity?: number; size?: string | null };
 type ReceiveQty  = { deliveryItemId: string; receivedQty: number };
@@ -303,6 +303,7 @@ const makeEmptyForm  = (): DeliveryForm => ({
   supplierId: "",
   lineItems: [emptyLineItem()],
   notes: "",
+  deliveryDate: new Date().toISOString().split("T")[0],
 });
 
 type Tab = "create" | "receiving" | "history";
@@ -486,6 +487,7 @@ export default function PurchaseOrderPage() {
       const res = await api.createDelivery({
         supplierId: form.supplierId,
         employeeId,
+        deliveryDate: form.deliveryDate,
         totalItems: validLineItems.reduce((s, i) => s + Number(i.quantity), 0),
         notes: form.notes || "",
         items: validLineItems.map((i) => ({
