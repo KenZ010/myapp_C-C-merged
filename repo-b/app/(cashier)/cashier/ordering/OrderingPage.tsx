@@ -87,14 +87,20 @@ export default function OrderingPage() {
     return ["All", ...cats];
   }, [products]);
 
-  const filtered = useMemo(
-    () => products.filter((p) => {
+ const filtered = useMemo(
+  () => products
+    .filter((p) => {
       const matchCat    = brand === "All" || (p.category || "Other") === brand;
       const matchSearch = (p.productName || "").toLowerCase().includes(search.toLowerCase());
       return matchCat && matchSearch;
+    })
+    .sort((a, b) => {
+      const aInStock = (a.stock ?? 0) > 0 ? 0 : 1;
+      const bInStock = (b.stock ?? 0) > 0 ? 0 : 1;
+      return aInStock - bInStock;
     }),
-    [brand, search, products],
-  );
+  [brand, search, products],
+);
 
   const getFinalPrice = (product: Product) => {
     const promo = promoMap[product.id];
