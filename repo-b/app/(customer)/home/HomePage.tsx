@@ -6,34 +6,10 @@ import { api } from "@/lib/api";
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 const quickCards = [
-  {
-    href: "/products",
-    icon: "🥤",
-    iconBg: "bg-emerald-50",
-    label: "Products",
-    desc: "Browse our soft drink selection",
-  },
-  {
-    href: "/orders",
-    icon: "📦",
-    iconBg: "bg-green-50",
-    label: "My Orders",
-    desc: "Track your orders",
-  },
-  {
-    href: "/contact",
-    icon: "📞",
-    iconBg: "bg-orange-50",
-    label: "Contacts",
-    desc: "Get in touch with us",
-  },
-  {
-    href: "/transactions",
-    icon: "🕐",
-    iconBg: "bg-blue-50",
-    label: "History",
-    desc: "Your completed transactions",
-  },
+  { href: "/products",     icon: "🥤", iconBg: "bg-emerald-50", label: "Products",  desc: "Browse our soft drink selection" },
+  { href: "/orders",       icon: "📦", iconBg: "bg-green-50",   label: "My Orders", desc: "Track your orders" },
+  { href: "/contact",      icon: "📞", iconBg: "bg-orange-50",  label: "Contacts",  desc: "Get in touch with us" },
+  { href: "/transactions", icon: "🕐", iconBg: "bg-blue-50",    label: "History",   desc: "Your completed transactions" },
 ];
 
 const promos = [
@@ -86,6 +62,7 @@ function formatStatus(status: string) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// ✅ Only call this client-side (inside useEffect / state)
 function formatDate(dateStr: string) {
   if (!dateStr) return "";
   const d = new Date(dateStr);
@@ -116,14 +93,17 @@ function orderLabel(order: Record<string, unknown>) {
 
 export default function HomePage() {
   const [promoIndex, setPromoIndex] = useState(0);
-  const [animating, setAnimating] = useState(false);
-  const [direction, setDirection] = useState<"left" | "right">("left");
+  const [animating,  setAnimating]  = useState(false);
+  const [direction,  setDirection]  = useState<"left" | "right">("left");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [customerName, setCustomerName] = useState<string>("there");
-  const [recentOrders, setRecentOrders] = useState<Record<string, unknown>[]>([]);
-  const [orderStats, setOrderStats] = useState({ total: 0, pending: 0, completed: 0 });
+  const [customerName,  setCustomerName]  = useState<string>("there");
+  const [recentOrders,  setRecentOrders]  = useState<Record<string, unknown>[]>([]);
+  const [orderStats,    setOrderStats]    = useState({ total: 0, pending: 0, completed: 0 });
   const [loadingOrders, setLoadingOrders] = useState(true);
+
+  // ✅ Store formatted dates in state so they're only computed client-side
+  const [formattedDates, setFormattedDates] = useState<string[]>([]);
 
   // Load customer + orders
   useEffect(() => {
@@ -150,21 +130,22 @@ export default function HomePage() {
           return db - da;
         });
 
-        setRecentOrders(sorted.slice(0, 3));
+        const recent = sorted.slice(0, 3);
+        setRecentOrders(recent);
 
-        const total = orders.length;
+        // ✅ Format dates here — client-side only, inside useEffect
+        setFormattedDates(
+          recent.map((o) => formatDate((o.createdAt ?? o.date ?? "") as string))
+        );
+
+        const total     = orders.length;
         const completed = orders.filter((o) => {
           const s = ((o.status ?? "") as string).toLowerCase();
           return s === "completed" || s === "delivered" || s === "received";
         }).length;
-        const pending = orders.filter((o) => {
+        const pending   = orders.filter((o) => {
           const s = ((o.status ?? "") as string).toLowerCase();
-          return (
-            s === "pending" ||
-            s === "processing" ||
-            s === "out_for_delivery" ||
-            s === "out for delivery"
-          );
+          return s === "pending" || s === "processing" || s === "out_for_delivery" || s === "out for delivery";
         }).length;
 
         setOrderStats({ total, pending, completed });
@@ -203,9 +184,7 @@ export default function HomePage() {
 
   useEffect(() => {
     startTimer();
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
 
   const handleDotClick = (i: number) => {
@@ -216,33 +195,13 @@ export default function HomePage() {
   const promo = promos[promoIndex];
 
   const slideClass = animating
-    ? direction === "left"
-      ? "opacity-0 translate-x-4"
-      : "opacity-0 -translate-x-4"
+    ? direction === "left" ? "opacity-0 translate-x-4" : "opacity-0 -translate-x-4"
     : "opacity-100 translate-x-0";
 
   const stats = [
-    {
-      label: "Total Orders",
-      value: orderStats.total,
-      icon: "📦",
-      textColor: "text-emerald-900",
-      bg: "bg-green-50",
-    },
-    {
-      label: "Pending",
-      value: orderStats.pending,
-      icon: "⏳",
-      textColor: "text-yellow-700",
-      bg: "bg-yellow-50",
-    },
-    {
-      label: "Completed",
-      value: orderStats.completed,
-      icon: "✅",
-      textColor: "text-green-700",
-      bg: "bg-green-50",
-    },
+    { label: "Total Orders", value: orderStats.total,     icon: "📦", textColor: "text-emerald-900", bg: "bg-green-50" },
+    { label: "Pending",      value: orderStats.pending,   icon: "⏳", textColor: "text-yellow-700",  bg: "bg-yellow-50" },
+    { label: "Completed",    value: orderStats.completed, icon: "✅", textColor: "text-green-700",   bg: "bg-green-50" },
   ];
 
   return (
@@ -264,22 +223,16 @@ export default function HomePage() {
       <div
         className={`relative rounded-2xl px-8 py-7 min-h-[140px] flex items-center justify-between gap-3 overflow-hidden mb-3 bg-gradient-to-br ${promo.gradientFrom} ${promo.gradientTo} transition-all duration-500`}
       >
-        {/* Left arrow */}
         <button
           onClick={() => handleDotClick((promoIndex - 1 + promos.length) % promos.length)}
           className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white/20 border-0 text-white text-base flex items-center justify-center cursor-pointer hover:bg-white/30 transition-colors"
-        >
-          ‹
-        </button>
+        >‹</button>
 
-        {/* Slide content */}
         <div className={`pl-7 flex-1 transition-all duration-[350ms] ease-in-out ${slideClass}`}>
           <span className="text-[10px] text-white/60 uppercase tracking-widest font-semibold">
             {promo.label}
           </span>
-          <h2 className="text-xl font-bold text-yellow-300 mt-1.5 mb-1">
-            {promo.title}
-          </h2>
+          <h2 className="text-xl font-bold text-yellow-300 mt-1.5 mb-1">{promo.title}</h2>
           <p className="text-[13px] text-white/75">{promo.desc}</p>
           <Link
             href="/products"
@@ -293,13 +246,10 @@ export default function HomePage() {
           {promo.emoji}
         </span>
 
-        {/* Right arrow */}
         <button
           onClick={() => handleDotClick((promoIndex + 1) % promos.length)}
           className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white/20 border-0 text-white text-base flex items-center justify-center cursor-pointer hover:bg-white/30 transition-colors"
-        >
-          ›
-        </button>
+        >›</button>
       </div>
 
       {/* Dots + progress bar */}
@@ -334,10 +284,7 @@ export default function HomePage() {
       {/* Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
         {stats.map((s) => (
-          <div
-            key={s.label}
-            className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3"
-          >
+          <div key={s.label} className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3">
             <div className={`w-10 h-10 rounded-xl ${s.bg} flex items-center justify-center text-lg flex-shrink-0`}>
               {s.icon}
             </div>
@@ -352,9 +299,7 @@ export default function HomePage() {
       </div>
 
       {/* Quick Access */}
-      <p className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold mb-3">
-        Quick Access
-      </p>
+      <p className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold mb-3">Quick Access</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         {quickCards.map((card) => (
           <Link
@@ -366,9 +311,7 @@ export default function HomePage() {
               {card.icon}
             </div>
             <div className="overflow-hidden">
-              <p className="text-[13px] font-semibold text-gray-900 mb-0.5 truncate">
-                {card.label}
-              </p>
+              <p className="text-[13px] font-semibold text-gray-900 mb-0.5 truncate">{card.label}</p>
               <p className="text-[11px] text-gray-400 truncate">{card.desc}</p>
             </div>
           </Link>
@@ -377,13 +320,8 @@ export default function HomePage() {
 
       {/* Recent Orders */}
       <div className="flex justify-between items-center mb-3">
-        <p className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">
-          Recent Orders
-        </p>
-        <Link
-          href="/orders"
-          className="text-[12px] text-emerald-700 no-underline font-semibold hover:underline"
-        >
+        <p className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">Recent Orders</p>
+        <Link href="/orders" className="text-[12px] text-emerald-700 no-underline font-semibold hover:underline">
           View All →
         </Link>
       </div>
@@ -393,9 +331,7 @@ export default function HomePage() {
           [0, 1, 2].map((i) => (
             <div
               key={i}
-              className={`flex items-center justify-between px-[18px] py-[14px] gap-2.5 ${
-                i < 2 ? "border-b border-gray-50" : ""
-              }`}
+              className={`flex items-center justify-between px-[18px] py-[14px] gap-2.5 ${i < 2 ? "border-b border-gray-50" : ""}`}
             >
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-gray-100 flex-shrink-0 animate-pulse" />
@@ -419,7 +355,8 @@ export default function HomePage() {
             const status = (order.status ?? "pending") as string;
             const { text, bg } = getStatusClasses(status);
             const label = orderLabel(order);
-            const time = formatDate((order.createdAt ?? order.date ?? "") as string);
+            // ✅ Use pre-computed client-side date string from state
+            const time = formattedDates[i] ?? "";
 
             return (
               <div
@@ -434,7 +371,8 @@ export default function HomePage() {
                   </div>
                   <div>
                     <p className="text-[13px] font-medium text-gray-900">{label}</p>
-                    <p className="text-[11px] text-gray-400">{time}</p>
+                    {/* ✅ suppressHydrationWarning as extra safety net */}
+                    <p className="text-[11px] text-gray-400" suppressHydrationWarning>{time}</p>
                   </div>
                 </div>
                 <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap ${bg} ${text}`}>
@@ -447,9 +385,7 @@ export default function HomePage() {
       </div>
 
       {/* Footer */}
-      <p className="text-center text-[11px] text-gray-300 font-medium">
-        TECHNOLOGIA @2026
-      </p>
+      <p className="text-center text-[11px] text-gray-300 font-medium">TECHNOLOGIA @2026</p>
     </div>
   );
 }
