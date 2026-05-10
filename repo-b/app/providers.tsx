@@ -17,10 +17,10 @@ export function useSocketActions() {
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const socketRef = useRef<Socket | null>(null);
-  const [socket,  setSocket]  = useState<Socket | null>(null);
-  const [toast,   setToast]   = useState<{ message: string; type: "success" | "info" | "error" } | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const socketRef    = useRef<Socket | null>(null);
+  const [socket,   setSocket]   = useState<Socket | null>(null);
+  const [toast,    setToast]    = useState<{ message: string; type: "success" | "info" | "error" } | null>(null);
+  const [mounted,  setMounted]  = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -82,7 +82,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     });
 
     newSocket.on("order:completed", ({ message }: { orderId: string; message: string }) => {
-      console.log("🔔 TOAST TRIGGERED:", message);
+      console.log("🔔 TOAST TRIGGERED order:completed:", message);
       showToast(`🎉 ${message}`, "success");
     });
 
@@ -96,31 +96,37 @@ export function Providers({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-  connectSocket();
-
-  // ← Add this: retry after 1s in case localStorage wasn't ready on first mount
-  const retryTimer = setTimeout(() => {
+    // Initial connect attempt
     connectSocket();
-  }, 1000);
 
-  const onStorage = (e: StorageEvent) => {
-    if (e.key === "user" && e.newValue)  connectSocket();
-    if (e.key === "user" && !e.newValue) {
+    // ── Poll every second until socket is connected ──────────────────────
+    const pollInterval = setInterval(() => {
+      if (!socketRef.current?.connected) {
+        console.log("🔁 Retrying socket connection...");
+        connectSocket();
+      } else {
+        clearInterval(pollInterval);
+      }
+    }, 1000);
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "user" && e.newValue)  connectSocket();
+      if (e.key === "user" && !e.newValue) {
+        socketRef.current?.disconnect();
+        socketRef.current = null;
+        setSocket(null);
+      }
+    };
+
+    window.addEventListener("storage", onStorage);
+    return () => {
+      clearInterval(pollInterval);
+      window.removeEventListener("storage", onStorage);
       socketRef.current?.disconnect();
       socketRef.current = null;
       setSocket(null);
-    }
-  };
-
-  window.addEventListener("storage", onStorage);
-  return () => {
-    clearTimeout(retryTimer);
-    window.removeEventListener("storage", onStorage);
-    socketRef.current?.disconnect();
-    socketRef.current = null;
-    setSocket(null);
-  };
-}, []);
+    };
+  }, []);
 
   const toastColors = {
     success: { bg: "#166534", border: "#16a34a" },
