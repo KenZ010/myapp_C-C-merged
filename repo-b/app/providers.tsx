@@ -33,7 +33,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   };
 
   const connectSocket = () => {
-    if (typeof window === "undefined") return; // ← SSR guard
+    if (typeof window === "undefined") return;
 
     const user = JSON.parse(localStorage.getItem("user") || "null");
     if (!user?.id) {
@@ -41,14 +41,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Already connected — just rejoin rooms
     if (socketRef.current?.connected) {
       socketRef.current.emit("join", { id: user.id, role: user.role });
       console.log("🔄 Rejoined rooms as:", user.id, user.role);
       return;
     }
 
-    // Disconnect any stale socket
     if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
@@ -98,10 +96,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    // Initial connect attempt
     connectSocket();
 
-    // ── Poll every second until socket is connected ──────────────────────
     const pollInterval = setInterval(() => {
       if (!socketRef.current?.connected) {
         console.log("🔁 Retrying socket connection...");
@@ -141,7 +137,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <SocketContext.Provider value={socket}>
         {children}
 
-        {/* ← always rendered to avoid hydration mismatch */}
         <style>{`
           @keyframes slideIn {
             from { transform: translateX(110%); opacity: 0; }
@@ -149,7 +144,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
           }
         `}</style>
 
-        {/* ← toast only renders after mount */}
         {mounted && toast && (
           <div style={{
             position:     "fixed",
