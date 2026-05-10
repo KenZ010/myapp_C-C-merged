@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ReturnRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
-type ReturnReason = "WRONG_ITEM_SENT" | "DAMAGED" | "EXPIRED" | "OTHER";
+type ReturnReason = "DIRTY_INTERIOR" | "REDUCED_SOFT_DRINK_CONTENT" | "DAMAGED" | "OTHER_ISSUES";
 
 type ReturnRequestItem = {
   id: string;
@@ -178,18 +178,18 @@ const fmtDate = (d: string) =>
   new Date(d).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" });
 
 const REASON_LABELS: Record<ReturnReason, string> = {
-  WRONG_ITEM_SENT: "Wrong Item Sent",
-  DAMAGED:         "Damaged",
-  EXPIRED:         "Expired",
-  OTHER:           "Other",
+  DIRTY_INTERIOR:              "Dirty Interior",
+  REDUCED_SOFT_DRINK_CONTENT: "Reduced Soft Drink Content",
+  DAMAGED:                     "Damaged",
+  OTHER_ISSUES:                "Other Issues",
 };
 
 // ── Tailwind colour helpers ───────────────────────────────────────────────────
 const reasonClasses: Record<ReturnReason, string> = {
-  WRONG_ITEM_SENT: "bg-blue-50 text-blue-700",
-  DAMAGED:         "bg-orange-50 text-orange-700",
-  EXPIRED:         "bg-yellow-50 text-yellow-800",
-  OTHER:           "bg-violet-50 text-violet-700",
+  DIRTY_INTERIOR:              "bg-blue-50 text-blue-700",
+  REDUCED_SOFT_DRINK_CONTENT: "bg-yellow-50 text-yellow-800",
+  DAMAGED:                     "bg-orange-50 text-orange-700",
+  OTHER_ISSUES:                "bg-violet-50 text-violet-700",
 };
 
 const statusClasses: Record<ReturnRequestStatus, { badge: string; dot: string }> = {
@@ -396,7 +396,7 @@ export default function ReturnPage() {
 
           {/* Reason filter */}
           <div className="flex gap-0.5 bg-slate-100 rounded-lg p-0.5">
-            {(["ALL", "WRONG_ITEM_SENT", "DAMAGED", "EXPIRED", "OTHER"] as const).map((r) => (
+            {(["ALL", "DIRTY_INTERIOR", "REDUCED_SOFT_DRINK_CONTENT", "DAMAGED", "OTHER_ISSUES"] as const).map((r) => (
               <button
                 key={r}
                 onClick={() => setReasonFil(r)}
