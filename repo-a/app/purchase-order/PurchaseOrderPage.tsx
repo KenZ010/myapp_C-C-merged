@@ -275,7 +275,7 @@ type LineItem = {
 type DeliveryForm = { supplierId: string; lineItems: LineItem[]; notes: string; deliveryDate: string };
 type Supplier    = { id: string; supplierName: string };
 type Product     = { id: string; productName: string; price: number; supplierId?: string; supplier?: { id: string; supplierName: string } | string; status?: string; stockUnit?: string; stockQuantity?: number; size?: string | null };
-type ReceiveQty  = { deliveryItemId: string; receivedQty: number };
+type ReceiveQty  = { deliveryItemId: string; receivedQty: number; expiryDate: string };
 
 const STATUS_CONFIG: Record<string, { bg: string; text: string }> = {
   PENDING:            { bg: "bg-yellow-100", text: "text-yellow-800" },
@@ -532,7 +532,7 @@ export default function PurchaseOrderPage() {
 
   const openReceiveModal = (delivery: Delivery) => {
     setReceivingDelivery(delivery); setReceiveError("");
-    setReceiveQtys(delivery.items.map((item) => ({ deliveryItemId: item.id, receivedQty: item.orderedQty - item.receivedQty })));
+    setReceiveQtys(delivery.items.map((item) => ({ deliveryItemId: item.id, receivedQty: item.orderedQty - item.receivedQty, expiryDate: "" })));
   };
 
   const handleReceive = async () => {
