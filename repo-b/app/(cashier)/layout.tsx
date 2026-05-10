@@ -37,14 +37,6 @@ const navLinks = [
     ),
   },
   {
-    href: "/cashier/returns",
-    label: "Returns",
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="1 4 1 10 7 10" />
-        <path d="M3.51 15a9 9 0 1 0 .49-4.5" />
-      </svg>
-    ),
   },
   {
     href: "/cashier/transactions",
@@ -74,7 +66,6 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
   const pathname = usePathname();
   const router   = useRouter();
 
-  // ✅ Pull socket from the shared Providers context
   const socket            = useSocket();
   const { connectSocket } = useSocketActions();
 
@@ -89,7 +80,6 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
     if (stored) setCurrentUser(JSON.parse(stored));
   }, []);
 
-  // Re-connect when cashier layout mounts (e.g. after login redirect)
   useEffect(() => {
     connectSocket();
   }, []);
@@ -237,18 +227,44 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
             </div>
           </div>
 
-          {/* ✅ Live socket status badge (replaces static "Online") */}
-          <div style={{
-            display: "flex", alignItems: "center", gap: "6px",
-            background: socket ? "#f0fdf4" : "#fef2f2",
-            borderRadius: "20px", padding: "5px 12px",
-            border: `1px solid ${socket ? "#bbf7d0" : "#fecaca"}`,
-            transition: "all 0.3s",
-          }}>
-            <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: socket ? "#22c55e" : "#ef4444", transition: "background 0.3s" }} />
-            <span style={{ fontSize: "12px", color: socket ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
-              {socket ? "Online" : "Connecting..."}
-            </span>
+          {/* ✅ User info + Live socket status badge */}
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+
+            {/* User Info */}
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "linear-gradient(135deg, #6366f1, #a78bfa)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+              </div>
+              <div className="hidden sm:block">
+                <p style={{ fontSize: "12.5px", fontWeight: 700, color: "#1e1b4b", lineHeight: 1.2 }}>
+                  {currentUser?.name || currentUser?.username || "Cashier"}
+                </p>
+                <p style={{ fontSize: "10.5px", color: "#818cf8", fontWeight: 500 }}>
+                  {currentUser?.role || "Cashier"}
+                </p>
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div style={{ width: "1px", height: "28px", background: "#eaecf4" }} />
+
+            {/* Socket status badge */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: "6px",
+              background: socket ? "#f0fdf4" : "#fef2f2",
+              borderRadius: "20px", padding: "5px 12px",
+              border: `1px solid ${socket ? "#bbf7d0" : "#fecaca"}`,
+              transition: "all 0.3s",
+            }}>
+              <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: socket ? "#22c55e" : "#ef4444", transition: "background 0.3s" }} />
+              <span style={{ fontSize: "12px", color: socket ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
+                {socket ? "Online" : "Connecting..."}
+              </span>
+            </div>
+
           </div>
         </header>
 
