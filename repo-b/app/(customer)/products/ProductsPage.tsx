@@ -230,12 +230,21 @@ export default function ProductsPage() {
   );
 
   const filtered = useMemo<Product[]>(
-    () =>
-      products.filter((p) => {
+    () => {
+    const stockPriority = (p: Product): number => {
+      if (p.stock <= 0)  return 2; // Out of stock → last
+      if (p.stock <= 10) return 1; // Low stock    → middle
+      return 0; 
+    };
+
+      return products
+      .filter((p) => {
         const matchCat = activeCategory === "All" || p.category === activeCategory;
         const matchQ   = p.productName.toLowerCase().includes(search.toLowerCase());
         return matchCat && matchQ;
-      }),
+      })
+      .sort((a, b) => stockPriority(a) - stockPriority(b));
+    },
     [products, activeCategory, search]
   );
 
