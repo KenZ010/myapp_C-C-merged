@@ -17,7 +17,8 @@ export function useSocketActions() {
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const socketRef = useRef<Socket | null>(null);
+  const socketRef    = useRef<Socket | null>(null);
+  const pollRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const [socket,  setSocket]  = useState<Socket | null>(null);
   const [toast,   setToast]   = useState<{ message: string; type: "success" | "info" | "error" } | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -32,18 +33,28 @@ export function Providers({ children }: { children: React.ReactNode }) {
     setTimeout(() => setToast(null), 4000);
   };
 
+  const stopPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
   const connectSocket = () => {
     if (typeof window === "undefined") return;
 
     const user = JSON.parse(localStorage.getItem("user") || "null");
+
+    // No user = stop everything, don't spam logs
     if (!user?.id) {
-      console.log("⚠️ connectSocket called but no user in localStorage");
+      stopPolling();
       return;
     }
 
     if (socketRef.current?.connected) {
       socketRef.current.emit("join", { id: user.id, role: user.role });
       console.log("🔄 Rejoined rooms as:", user.id, user.role);
+      stopPolling();
       return;
     }
 
@@ -65,6 +76,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     const rejoin = () => {
       newSocket.emit("join", { id: user.id, role: user.role });
       setSocket(newSocket);
+      stopPolling();
       console.log("✅ Socket connected:", newSocket.id, "| user:", user.id, "| role:", user.role);
     };
 
@@ -98,18 +110,25 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     connectSocket();
 
-    const pollInterval = setInterval(() => {
-      if (!socketRef.current?.connected) {
-        console.log("🔁 Retrying socket connection...");
-        connectSocket();
-      } else {
-        clearInterval(pollInterval);
-      }
-    }, 1000);
+    // Only start polling if there's actually a logged-in user
+    const user = JSON.parse(localStorage.getItem("user") || "null");
+    if (user?.id) {
+      pollRef.current = setInterval(() => {
+        if (!socketRef.current?.connected) {
+          console.log("🔁 Retrying socket connection...");
+          connectSocket();
+        } else {
+          stopPolling();
+        }
+      }, 1000);
+    }
 
     const onStorage = (e: StorageEvent) => {
-      if (e.key === "user" && e.newValue)  connectSocket();
+      if (e.key === "user" && e.newValue) {
+        connectSocket();
+      }
       if (e.key === "user" && !e.newValue) {
+        stopPolling();
         socketRef.current?.disconnect();
         socketRef.current = null;
         setSocket(null);
@@ -118,7 +137,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
     window.addEventListener("storage", onStorage);
     return () => {
-      clearInterval(pollInterval);
+      stopPolling();
       window.removeEventListener("storage", onStorage);
       socketRef.current?.disconnect();
       socketRef.current = null;
@@ -137,7 +156,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <SocketContext.Provider value={socket}>
         {children}
 
-        {/* Wrapper suppresses hydration mismatch for all client-only UI */}
         <div suppressHydrationWarning>
           {mounted && (
             <>
