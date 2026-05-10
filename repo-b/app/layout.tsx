@@ -16,6 +16,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Julieta Soft Drink Store",
   description: "Order your favorite soft drinks online - Julieta Store",
+  other: {
+    "google": "notranslate", // ← tells Google Translate to leave it alone
+  },
 };
 
 export default function RootLayout({
@@ -24,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" translate="no">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <Providers> {/* ← wrap children */}
           {children}
