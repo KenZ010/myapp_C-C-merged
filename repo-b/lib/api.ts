@@ -359,6 +359,29 @@ getReturnRequestById: async (returnRequestId: string) => {
       return data;
     },
 
+    // ← ADD THESE THREE
+    getExpiringItems: async (days: number = 30) => {
+      const res = await fetch(`${API_URL}/deliveries/expiring-soon?days=${days}`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error('Failed to fetch expiring items');
+      return res.json();
+    },
+    getExpiredItems: async () => {
+      const res = await fetch(`${API_URL}/deliveries/expired`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error('Failed to fetch expired items');
+      return res.json();
+    },
+    getProductExpiryStatus: async () => {
+      const res = await fetch(`${API_URL}/deliveries/expiry-status`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error('Failed to fetch expiry status');
+      return res.json();
+    },
+
     // ── PROMOS ──────────────────────────────────────────────────────────────────
     getActivePromos: async () => {
       const res = await fetch(`${API_URL}/promos/active`);
