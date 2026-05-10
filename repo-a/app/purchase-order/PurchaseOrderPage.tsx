@@ -267,7 +267,7 @@ type Delivery = {
 };
 
 type LineItem = {
-  productId: string; productName: string;
+  productId: string; productName: string; size?: string | null;
   quantity: number | string; unitPrice: number | string;
   unit: CaseUnit;
 };
@@ -515,7 +515,7 @@ export default function PurchaseOrderPage() {
     const items = [...form.lineItems];
     if (field === "productId") {
       const p = supplierProducts.find((p) => p.id === value);
-      items[idx] = { ...items[idx], productId: String(value), productName: p?.productName || "", unitPrice: p?.price || 0, unit: (p?.stockUnit as CaseUnit) || "case_24" };
+      items[idx] = { ...items[idx], productId: String(value), productName: p?.productName || "", size: p?.size || null, unitPrice: p?.price || 0, unit: (p?.stockUnit as CaseUnit) || "case_24" };
     } else {
       items[idx] = { ...items[idx], [field]: value };
     }
@@ -1082,7 +1082,7 @@ export default function PurchaseOrderPage() {
                           <div key={idx} className="py-2 border-b border-gray-50">
                             <div className="flex justify-between items-start">
                               <div>
-                                <p className="font-medium text-gray-800 text-xs">{item.productName}</p>
+                                <p className="font-medium text-gray-800 text-xs">{item.productName}{item.size ? <span className="text-gray-400 font-normal ml-1">{item.size}</span> : ""}</p>
                                 <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                                   <UnitPill unit={item.unit} qty={Number(item.quantity)} />
                                   <span className="text-xs text-gray-400">× ₱{Number(item.unitPrice).toLocaleString()}</span>
