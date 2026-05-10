@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { 
   LayoutDashboard, ShoppingCart, Users, LineChart, 
   FileText, Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift,
-  FolderOpen, Coffee, Zap, ChevronDown, Search, Beer, Droplets, ShoppingBasket
+  FolderOpen, Coffee, Zap, ChevronDown, Search, Beer, Droplets, ShoppingBasket, Bell
 } from "lucide-react";
 
 type CaseUnit = "case_24" | "case_12" | "case_6" | "btl" | "pcs";
@@ -505,7 +505,7 @@ export default function ProductManagementPage() {
           <h1 className="text-xl md:text-2xl font-bold text-gray-800">Product Management</h1>
           <div className="flex items-center gap-2">
             <div className="relative">
-              <span className="text-xl">🔔</span>
+              <Bell className="w-5 h-5 text-gray-500" />
               <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" />
             </div>
             <div className="relative">

@@ -60,6 +60,7 @@ type Product = {
   productName: string;
   size?: string | null;
   category: string;
+  price: number;
 };
 
 const REASON_STYLES: Record<string, { label: string; bg: string; color: string }> = {
@@ -93,9 +94,11 @@ export default function LossReportPage() {
   const [reportsLoading, setReportsLoading] = useState(true);
   const [lossReasonFilter, setLossReasonFilter] = useState("ALL");
   const [reportSearch, setReportSearch] = useState("");
+  const [viewingReport, setViewingReport] = useState<LossReport | null>(null);
 
   // File report form
   const [products, setProducts] = useState<Product[]>([]);
+  const [priceMap, setPriceMap] = useState<Record<string, number>>({});
   const [formProductId, setFormProductId] = useState("");
   const [formQuantity, setFormQuantity] = useState("");
   const [formLossReason, setFormLossReason] = useState<LossReason>("DAMAGED");
@@ -126,7 +129,11 @@ export default function LossReportPage() {
   const fetchProducts = async () => {
     try {
       const data = await api.getProducts();
-      setProducts(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setProducts(list);
+      const map: Record<string, number> = {};
+      list.forEach((p: any) => { if (p.id) map[p.id] = p.price ?? 0; });
+      setPriceMap(map);
     } catch (err) { console.error("Failed to fetch products", err); }
   };
 
@@ -177,6 +184,10 @@ export default function LossReportPage() {
   const filteredReports = reports.filter(r =>
     reportSearch === "" ||
     r.product?.productName?.toLowerCase().includes(reportSearch.toLowerCase())
+  );
+
+  const estimatedValue = filteredReports.reduce((sum, r) =>
+    sum + Math.abs(r.quantity) * (priceMap[r.productId] || 0), 0
   );
 
   return (
@@ -291,6 +302,42 @@ export default function LossReportPage() {
           {/* ── REPORTS TAB ── */}
           {activeTab === "reports" && (
             <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm">
+
+              {/* Summary cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+                <div className="bg-indigo-50 rounded-xl p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center">
+                    <AlertTriangle className="w-5 h-5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-indigo-500 font-medium">Total Records</p>
+                    <p className="text-lg font-bold text-indigo-800">{reportsTotal}</p>
+                  </div>
+                </div>
+                <div className="bg-green-50 rounded-xl p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+                    <Box className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-green-500 font-medium">Total Qty Lost</p>
+                    <p className="text-lg font-bold text-green-800">
+                      {filteredReports.reduce((s, r) => s + Math.abs(r.quantity), 0)}
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-orange-50 rounded-xl p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
+                    <Box className="w-5 h-5 text-orange-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-orange-500 font-medium">Estimated Value</p>
+                    <p className="text-lg font-bold text-orange-800">
+                      ₱{estimatedValue.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                 <div>
                   <h2 className="text-sm font-bold text-gray-700 flex items-center gap-2">
@@ -322,16 +369,16 @@ export default function LossReportPage() {
                 <table className="w-full text-sm min-w-max">
                   <thead>
                     <tr className="bg-indigo-900 text-white text-xs">
-                      {["Date & Time", "Product", "Category", "Size", "Qty Lost", "Loss Reason", "Notes", "Filed By"].map((h) => (
+                      {["Date & Time", "Product", "Category", "Size", "Qty Lost", "Est. Value", "Loss Reason", "Notes", "Filed By", ""].map((h) => (
                         <th key={h} className="p-3 text-left whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {reportsLoading ? (
-                      <tr><td colSpan={8} className="p-6 text-center text-gray-400">Loading...</td></tr>
+                      <tr><td colSpan={10} className="p-6 text-center text-gray-400">Loading...</td></tr>
                     ) : filteredReports.length === 0 ? (
-                      <tr><td colSpan={8} className="p-10 text-center">
+                      <tr><td colSpan={10} className="p-10 text-center">
                         <div className="flex flex-col items-center gap-2">
                           <Box className="w-8 h-8 text-gray-300" />
                           <p className="text-gray-400 text-sm">No loss reports found.</p>
@@ -355,6 +402,11 @@ export default function LossReportPage() {
                             <span className="font-bold text-red-600">-{Math.abs(r.quantity)}</span>
                           </td>
                           <td className="p-3">
+                            <span className="text-gray-700 font-medium">
+                              ₱{(Math.abs(r.quantity) * (priceMap[r.productId] || 0)).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </td>
+                          <td className="p-3">
                             <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
                               style={{ background: style.bg, color: style.color }}>
                               {style.label}
@@ -367,9 +419,16 @@ export default function LossReportPage() {
                             <div className="flex items-center gap-1.5">
                               <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600 shrink-0">
                                 {r.employee?.name?.charAt(0)?.toUpperCase() || "?"}
-                              </div>
-                              <span className="text-xs text-gray-600">{r.employee?.name || "—"}</span>
                             </div>
+                            <span className="text-xs text-gray-600">{r.employee?.name || "—"}</span>
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <button onClick={() => setViewingReport(r)}
+                              className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-semibold rounded-lg transition-colors">
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                              View
+                            </button>
                           </td>
                         </tr>
                       );
@@ -400,6 +459,120 @@ export default function LossReportPage() {
                       className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">
                       Next →
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── View Report Modal ── */}
+              {viewingReport && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4" onClick={() => setViewingReport(null)}>
+                  <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                    {/* Header */}
+                    <div className="bg-gradient-to-r from-orange-500 to-red-500 px-6 py-5 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                          <AlertTriangle className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-bold text-white">Loss Report Details</h3>
+                          <p className="text-xs text-orange-100">Filed on {fmtDate(viewingReport.createdAt)}</p>
+                        </div>
+                      </div>
+                      <button onClick={() => setViewingReport(null)}
+                        className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white text-lg leading-none transition-colors">&times;</button>
+                    </div>
+
+                    {/* Body */}
+                    <div className="p-6 space-y-6">
+                      {/* Status badge & quantity row */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="px-3 py-1 rounded-full text-xs font-semibold"
+                            style={{ background: REASON_STYLES[viewingReport.lossReason]?.bg || "#e8eaf6", color: REASON_STYLES[viewingReport.lossReason]?.color || "#3949ab" }}>
+                            {REASON_STYLES[viewingReport.lossReason]?.label || viewingReport.lossReason}
+                          </span>
+                          <span className="text-xs text-gray-400 capitalize">{viewingReport.type?.toLowerCase()}</span>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-gray-400 font-medium">Qty Lost</p>
+                          <p className="text-2xl font-bold text-red-600">-{Math.abs(viewingReport.quantity)}</p>
+                        </div>
+                      </div>
+
+                      {/* Info grid */}
+                      <div className="bg-gray-50 rounded-xl p-5">
+                        <div className="grid grid-cols-2 gap-x-8 gap-y-5">
+                          <div>
+                            <p className="text-xs text-gray-400 font-medium flex items-center gap-1">Product</p>
+                            <p className="text-gray-800 font-semibold mt-0.5">{viewingReport.product?.productName || viewingReport.productId}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-400 font-medium flex items-center gap-1">Category</p>
+                            <span className="inline-block bg-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-full text-xs font-medium mt-1">
+                              {viewingReport.product?.category || "—"}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-400 font-medium flex items-center gap-1">Size / Unit</p>
+                            <p className="text-gray-700 mt-0.5 font-medium">{viewingReport.product?.size || "—"}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-400 font-medium flex items-center gap-1">Report ID</p>
+                            <p className="text-gray-700 mt-0.5 font-mono text-xs bg-white inline-block px-2 py-1 rounded border border-gray-200">
+                              {viewingReport.id}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Filed by */}
+                      <div className="bg-gray-50 rounded-xl p-5">
+                        <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center text-sm font-bold text-indigo-700 shrink-0">
+                              {viewingReport.employee?.name?.charAt(0)?.toUpperCase() || "?"}
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-400 font-medium">Filed By</p>
+                              <p className="text-gray-800 font-semibold text-sm">{viewingReport.employee?.name || "—"}</p>
+                              <p className="text-xs text-gray-400">{viewingReport.employee?.role || ""}</p>
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-400 font-medium">Date Filed</p>
+                            <p className="text-gray-800 font-semibold mt-0.5">{fmtDate(viewingReport.createdAt)}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Notes */}
+                      {viewingReport.reason && (
+                        <div className="bg-gray-50 rounded-xl p-5">
+                          <p className="text-xs text-gray-400 font-medium mb-2 flex items-center gap-1">
+                            Notes
+                          </p>
+                          <p className="text-gray-700 text-sm leading-relaxed">{viewingReport.reason}</p>
+                        </div>
+                      )}
+
+                      {/* Reference */}
+                      {viewingReport.referenceId && (
+                        <div className="bg-gray-50 rounded-xl p-5">
+                          <p className="text-xs text-gray-400 font-medium mb-1">Reference</p>
+                          <p className="text-gray-700 text-sm">
+                            <span className="font-medium capitalize">{viewingReport.referenceType}:</span> {viewingReport.referenceId}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+                      <button onClick={() => setViewingReport(null)}
+                        className="px-5 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition-colors">
+                        Close
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

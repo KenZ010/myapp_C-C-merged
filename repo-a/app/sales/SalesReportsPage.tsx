@@ -10,7 +10,7 @@ import { api } from "@/lib/api";
 import { 
   LayoutDashboard, ShoppingCart, Users, BarChart3, 
   FileText, Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift,
-  Calendar, Search
+  Calendar, Search, Bell
 } from "lucide-react";
 
 type Period = "Daily" | "Weekly" | "Monthly";
@@ -227,7 +227,7 @@ export default function SalesReportsPage() {
               <p className="text-xs text-gray-400">Administrator Dashboard</p>
             </div>
             <div className="flex items-center gap-2">
-              <div className="relative"><span className="text-xl">🔔</span><div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" /></div>
+              <div className="relative"><Bell className="w-5 h-5 text-gray-500" /><div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" /></div>
               <div className="relative">
                 <button onClick={() => setShowUserMenu(!showUserMenu)}
                   className={`flex items-center gap-2 px-2 py-2 rounded-xl transition-colors ${showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"}`}>

@@ -6,7 +6,7 @@ import { PieChart, Pie, Cell, Tooltip } from "recharts";
 import { api } from "@/lib/api";
 import { 
   LayoutDashboard, ShoppingCart, Users, BarChart3, 
-  FileText, Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift 
+  FileText, Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift, Bell
 } from "lucide-react";
 
 type Employee = {
@@ -232,7 +232,7 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-2 md:gap-3">
             <div className="relative">
-              <span className="text-xl">🔔</span>
+              <Bell className="w-5 h-5 text-gray-500" />
               <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" />
             </div>
             <div className="relative">
