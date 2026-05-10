@@ -78,7 +78,6 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const router   = useRouter();
 
-  // ✅ Pull socket from the shared Providers context
   const socket             = useSocket();
   const { connectSocket }  = useSocketActions();
 
@@ -90,7 +89,6 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
     if (stored) setCurrentUser(JSON.parse(stored));
   }, []);
 
-  // Re-connect when this layout mounts (e.g. after login redirect)
   useEffect(() => {
     connectSocket();
   }, []);
@@ -222,12 +220,38 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
             </div>
           </div>
 
-          {/* ✅ Live socket status dot */}
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: socket ? "#69f0ae" : "#ef5350", transition: "background 0.3s" }} />
-            <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)" }}>
-              {socket ? "Live" : "Connecting..."}
-            </span>
+          {/* ✅ User info + Live socket status dot */}
+          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+
+            {/* User Info */}
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ width: "30px", height: "30px", borderRadius: "50%", background: "rgba(255,255,255,0.15)", border: "1.5px solid rgba(255,255,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
+                  <circle cx="9" cy="6" r="4" fill="#fff" opacity="0.9"/>
+                  <path d="M2 17c0-3.866 3.134-7 7-7s7 3.134 7 7" fill="#fff" opacity="0.9"/>
+                </svg>
+              </div>
+              <div className="hidden sm:block">
+                <p style={{ fontSize: "12.5px", fontWeight: 700, color: "#fff", lineHeight: 1.2 }}>
+                  {currentUser?.name || currentUser?.username || "Manager"}
+                </p>
+                <p style={{ fontSize: "10.5px", color: "rgba(255,255,255,0.55)", fontWeight: 500 }}>
+                  {currentUser?.role || "Inventory Manager"}
+                </p>
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div style={{ width: "1px", height: "28px", background: "rgba(255,255,255,0.2)" }} />
+
+            {/* Socket status */}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: socket ? "#69f0ae" : "#ef5350", transition: "background 0.3s" }} />
+              <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)" }}>
+                {socket ? "Live" : "Connecting..."}
+              </span>
+            </div>
+
           </div>
         </header>
 
