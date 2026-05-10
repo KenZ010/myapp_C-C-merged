@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import Image from "next/image";
+import { useSocketActions } from "@/app/providers"; // ← added
 
 // Bubble definitions: [size, left%, bottom%, duration(s), delay(s), opacity]
 const BUBBLES: [number, number, number, number, number, number][] = [
@@ -33,14 +34,15 @@ const BUBBLES: [number, number, number, number, number, number][] = [
 const FIZZ_HEIGHTS = [8, 12, 6, 14, 9, 11, 7, 13];
 
 export default function LoginPage() {
-  const [username, setUsername]       = useState("");
-  const [password, setPassword]       = useState("");
+  const [username, setUsername]         = useState("");
+  const [password, setPassword]         = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [userFocused, setUserFocused] = useState(false);
-  const [passFocused, setPassFocused] = useState(false);
-  const [error, setError]             = useState("");
-  const [loading, setLoading]         = useState(false);
+  const [userFocused, setUserFocused]   = useState(false);
+  const [passFocused, setPassFocused]   = useState(false);
+  const [error, setError]               = useState("");
+  const [loading, setLoading]           = useState(false);
   const router = useRouter();
+  const { connectSocket } = useSocketActions(); // ← added
 
   const handleLogin = async () => {
     setError("");
@@ -64,6 +66,7 @@ export default function LoginPage() {
         const role  = user?.role;
         localStorage.setItem("token", token);
         localStorage.setItem("user", JSON.stringify(user));
+        connectSocket(); // ← added: connect socket immediately after login
         const isSecure   = window.location.protocol === "https:";
         const cookieBase = `path=/; max-age=${60 * 60 * 24}; SameSite=Lax${isSecure ? "; Secure" : ""}`;
         document.cookie = `token=${token}; ${cookieBase}`;
@@ -528,7 +531,6 @@ export default function LoginPage() {
           <div className="lr-can-shape" />
           <div className="lr-wave" />
 
-          {/* CSS bubbles — no JS DOM injection needed in React */}
           {BUBBLES.map(([size, left, bottom, dur, delay, op], i) => (
             <div
               key={i}
@@ -546,15 +548,8 @@ export default function LoginPage() {
           ))}
 
           <div className="lr-brand">
-            {/* Logo */}
             <div className="lr-logo-outer">
               <div className="lr-logo-inner">
-                {/* 
-                  ── LOGO NOTE ──
-                  Your actual logo image is loaded below via Next.js <Image>.
-                  The SVG fallback is shown only if the image fails to load.
-                  Simply ensure /public/images/Remove Logo.png exists.
-                */}
                 <Image
                   src="/images/Softdrinks Logo.png"
                   alt="Julieta Softdrinks Logo"
@@ -562,13 +557,11 @@ export default function LoginPage() {
                   height={143}
                   className="object-contain"
                   onError={(e) => {
-                    // Fallback: hide broken img and show SVG can
                     (e.currentTarget as HTMLImageElement).style.display = "none";
                     const fallback = e.currentTarget.nextElementSibling as HTMLElement;
                     if (fallback) fallback.style.display = "flex";
                   }}
                 />
-                {/* SVG fallback can — hidden by default, shown if image 404s */}
                 <div style={{ display: "none", flexDirection: "column", alignItems: "center" }}>
                   <svg width="72" height="82" viewBox="0 0 70 80" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <rect x="18" y="18" width="34" height="48" rx="8" fill="#16a34a"/>
@@ -591,13 +584,11 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Brand text */}
             <div style={{ textAlign: "center" }}>
               <div className="lr-brand-name">JULIETA</div>
               <div className="lr-brand-sub">Softdrinks Store</div>
             </div>
 
-            {/* Fizz bar */}
             <div className="lr-fizz-row">
               {FIZZ_HEIGHTS.map((h, i) => (
                 <div
@@ -621,7 +612,6 @@ export default function LoginPage() {
             <h2 className="lr-card-title">Welcome Back!</h2>
             <p className="lr-card-sub">Sign in to continue to your account</p>
 
-            {/* Error */}
             {error && (
               <div className="lr-error">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ flexShrink: 0 }}>
@@ -631,7 +621,6 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Username */}
             <div className="lr-field">
               <label className="lr-label">Username</label>
               <div className={`lr-input-row${userFocused ? " focused" : ""}`}>
@@ -652,7 +641,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Password */}
             <div className="lr-field">
               <label className="lr-label">Password</label>
               <div className={`lr-input-row${passFocused ? " focused" : ""}`}>
@@ -690,7 +678,6 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Submit */}
             <button
               className="lr-submit"
               onClick={handleLogin}
