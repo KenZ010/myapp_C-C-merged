@@ -22,7 +22,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [toast,   setToast]   = useState<{ message: string; type: "success" | "info" | "error" } | null>(null);
   const [mounted, setMounted] = useState(false);
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+    console.log("✅ Providers mounted");
+  }, []);
 
   const showToast = (message: string, type: "success" | "info" | "error" = "info") => {
     setToast({ message, type });
@@ -65,8 +68,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
       console.log("✅ Socket connected:", newSocket.id, "| user:", user.id, "| role:", user.role);
     };
 
-    newSocket.on("connect",    rejoin);
-    newSocket.on("reconnect",  rejoin);
+    newSocket.on("connect",   rejoin);
+    newSocket.on("reconnect", rejoin);
 
     newSocket.on("disconnect", () => {
       console.log("❌ Socket disconnected");
@@ -79,7 +82,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     });
 
     newSocket.on("order:completed", ({ message }: { orderId: string; message: string }) => {
-      console.log("✅ order:completed:", message);
+      console.log("🔔 TOAST TRIGGERED:", message);
       showToast(`🎉 ${message}`, "success");
     });
 
