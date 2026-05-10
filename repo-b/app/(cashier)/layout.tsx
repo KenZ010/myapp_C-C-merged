@@ -1,8 +1,7 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useSocket } from "@/app/providers";
 
 const navLinks = [
   {
@@ -70,65 +69,15 @@ const pageTitles: Record<string, { title: string; sub: string }> = {
   "/cashier/payment":      { title: "Payment",             sub: "Complete the customer order" },
 };
 
-// ── Toast type ────────────────────────────────────────────────────────────────
-interface Toast {
-  id:      number;
-  orderId: string;
-  message: string;
-  visible: boolean;
-}
-
-// ── Toast Component ───────────────────────────────────────────────────────────
-function NewOrderToast({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number) => void }) {
-  return (
-    <div
-      className={[
-        "flex items-start gap-3 bg-white rounded-2xl shadow-xl border border-indigo-100",
-        "px-4 py-3.5 min-w-[300px] max-w-[360px] transition-all duration-500",
-        toast.visible
-          ? "opacity-100 translate-y-0"
-          : "opacity-0 -translate-y-4 pointer-events-none",
-      ].join(" ")}
-    >
-      {/* Icon */}
-      <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-lg flex-shrink-0 mt-0.5">
-        🛒
-      </div>
-
-      {/* Text */}
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-bold text-gray-900 mb-0.5">New Order!</p>
-        <p className="text-xs text-gray-500 truncate">{toast.message}</p>
-        <Link
-          href="/cashier/pending"
-          className="text-[11px] font-semibold text-indigo-600 hover:underline mt-1 inline-block no-underline"
-        >
-          View in Pending Orders →
-        </Link>
-      </div>
-
-      {/* Dismiss */}
-      <button
-        onClick={() => onDismiss(toast.id)}
-        className="text-gray-300 hover:text-gray-500 transition-colors text-base leading-none flex-shrink-0 mt-0.5 bg-transparent border-0 cursor-pointer"
-      >
-        ✕
-      </button>
-    </div>
-  );
-}
-
 // ── Layout ────────────────────────────────────────────────────────────────────
 export default function CashierLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router   = useRouter();
-  const socket   = useSocket();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [toasts,      setToasts]      = useState<Toast[]>([]);
-  const [mounted,     setMounted]     = useState(false); // ← added
+  const [mounted,     setMounted]     = useState(false);
 
-  useEffect(() => { setMounted(true); }, []); // ← added
+  useEffect(() => { setMounted(true); }, []);
 
   const page = pageTitles[pathname] ?? { title: "Cashier Panel", sub: "" };
 
@@ -141,49 +90,10 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
     router.push("/");
   };
 
-  // ── Dismiss toast ─────────────────────────────────────────────────────────
-  const dismissToast = useCallback((id: number) => {
-    setToasts((prev) => prev.map((t) => t.id === id ? { ...t, visible: false } : t));
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 500);
-  }, []);
-
-  // ── Listen for order events ───────────────────────────────────────────────
-  useEffect(() => {
-    if (!socket) return;
-
-    const showToast = (orderId: string, message: string) => {
-      const id = Date.now();
-      setToasts((prev) => [...prev, { id, orderId, message, visible: false }]);
-      setTimeout(() => {
-        setToasts((prev) => prev.map((t) => t.id === id ? { ...t, visible: true } : t));
-      }, 50);
-      setTimeout(() => dismissToast(id), 6000);
-    };
-
-    socket.on("order:new",       ({ orderId, message }) => showToast(orderId, message));
-    socket.on("order:completed", ({ orderId, message }) => showToast(orderId, message));
-    socket.on("order:status",    ({ orderId, message }) => showToast(orderId, message));
-
-    return () => {
-      socket.off("order:new");
-      socket.off("order:completed");
-      socket.off("order:status");
-    };
-  }, [socket, dismissToast]);
-
   if (!mounted) return null; // ← added
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "#f4f6fb" }}>
-
-      {/* ── Toast stack (top-right) ─────────────────────────────────────── */}
-      <div className="fixed top-16 right-4 z-[100] flex flex-col gap-2.5 pointer-events-none">
-        {toasts.map((toast) => (
-          <div key={toast.id} className="pointer-events-auto">
-            <NewOrderToast toast={toast} onDismiss={dismissToast} />
-          </div>
-        ))}
-      </div>
 
       {/* ── Mobile Overlay ── */}
       {sidebarOpen && (
