@@ -5,8 +5,7 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://backend-prod
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 
-// Separate contexts so existing code using useSocket() doesn't break
-const SocketContext = createContext<Socket | null>(null);
+const SocketContext        = createContext<Socket | null>(null);
 const SocketActionsContext = createContext<{ connectSocket: () => void }>({ connectSocket: () => {} });
 
 export function useSocket() {
@@ -19,8 +18,8 @@ export function useSocketActions() {
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const socketRef = useRef<Socket | null>(null);
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "info" | "error" } | null>(null);
+  const [socket,  setSocket]  = useState<Socket | null>(null);
+  const [toast,   setToast]   = useState<{ message: string; type: "success" | "info" | "error" } | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
@@ -31,26 +30,34 @@ export function Providers({ children }: { children: React.ReactNode }) {
   };
 
   const connectSocket = () => {
-    if (socketRef.current?.connected) return;
+    // If already connected, just rejoin rooms (handles page navigation)
+    if (socketRef.current?.connected) {
+      const user = JSON.parse(localStorage.getItem("user") || "null");
+      if (user?.id) {
+        socketRef.current.emit("join", { id: user.id, role: user.role });
+        console.log("🔄 Rejoined rooms as:", user.id, user.role);
+      }
+      return;
+    }
 
     const user = JSON.parse(localStorage.getItem("user") || "null");
     if (!user?.id) return;
 
     const newSocket = io(BACKEND_URL, {
-      transports: ["websocket"],
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 500,
-      reconnectionDelayMax: 3000,
+      transports:            ["websocket"],
+      reconnection:          true,
+      reconnectionAttempts:  Infinity,
+      reconnectionDelay:     500,
+      reconnectionDelayMax:  3000,
     });
 
     const rejoin = () => {
       newSocket.emit("join", { id: user.id, role: user.role });
       setSocket(newSocket);
-      console.log("✅ Socket connected/reconnected:", newSocket.id);
+      console.log("✅ Socket connected/reconnected:", newSocket.id, "as", user.id, user.role);
     };
 
-    newSocket.on("connect", rejoin);
+    newSocket.on("connect",   rejoin);
     newSocket.on("reconnect", () => {
       console.log("🔄 Socket reconnected");
       rejoin();
@@ -61,15 +68,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
       setSocket(null);
     });
 
+    // ── Order event listeners ────────────────────────────────────────────
     newSocket.on("order:new", ({ message }: { orderId: string; message: string }) => {
+      console.log("📦 order:new received:", message);
       showToast(`🛎️ ${message}`, "info");
     });
 
     newSocket.on("order:completed", ({ message }: { orderId: string; message: string }) => {
+      console.log("✅ order:completed received:", message);
       showToast(`🎉 ${message}`, "success");
     });
 
     newSocket.on("order:status", ({ message, status }: { orderId: string; status: string; message: string }) => {
+      console.log("📬 order:status received:", status, message);
       const type = status === "CANCELLED" ? "error" : "info";
       showToast(message, type);
     });
@@ -81,7 +92,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     connectSocket();
 
     const onStorage = (e: StorageEvent) => {
-      if (e.key === "user" && e.newValue) connectSocket();
+      if (e.key === "user" && e.newValue)  connectSocket();
       if (e.key === "user" && !e.newValue) {
         socketRef.current?.disconnect();
         socketRef.current = null;
