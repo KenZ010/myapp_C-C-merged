@@ -147,25 +147,28 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 500);
   }, []);
 
-  // ── Listen for new orders ─────────────────────────────────────────────────
+  // ── Listen for order events ───────────────────────────────────────────────
   useEffect(() => {
     if (!socket) return;
 
-    socket.on("order:new", ({ orderId, message }: { orderId: string; message: string }) => {
+    const showToast = (orderId: string, message: string) => {
       const id = Date.now();
-      const newToast: Toast = { id, orderId, message, visible: false };
-
-      setToasts((prev) => [...prev, newToast]);
-      // Small delay to trigger CSS transition
+      setToasts((prev) => [...prev, { id, orderId, message, visible: false }]);
       setTimeout(() => {
         setToasts((prev) => prev.map((t) => t.id === id ? { ...t, visible: true } : t));
       }, 50);
-
-      // Auto-dismiss after 6 seconds
       setTimeout(() => dismissToast(id), 6000);
-    });
+    };
 
-    return () => { socket.off("order:new"); };
+    socket.on("order:new",       ({ orderId, message }) => showToast(orderId, message));
+    socket.on("order:completed", ({ orderId, message }) => showToast(orderId, message));
+    socket.on("order:status",    ({ orderId, message }) => showToast(orderId, message));
+
+    return () => {
+      socket.off("order:new");
+      socket.off("order:completed");
+      socket.off("order:status");
+    };
   }, [socket, dismissToast]);
 
   if (!mounted) return null; // ← added
