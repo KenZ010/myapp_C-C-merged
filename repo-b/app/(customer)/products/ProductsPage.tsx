@@ -13,24 +13,22 @@ type CategoryType =
 
 type ProductStatus = "ACTIVE" | "INACTIVE" | "OUT_OF_STOCK";
 
-/** Mirrors the Prisma Product model exactly, plus computed API fields */
 type Product = {
   id:            string;
   productName:   string;
   category:      CategoryType;
   size:          string | null;
   barcode:       string | null;
-  price:         number;        // Float in Prisma
-  stock:         number;        // Int – computed by backend via getStock()
-  reservedStock: number;        // Int
-  piecesPerCase: number;        // Int
-  expiryDate:    string | null; // DateTime serialised as ISO string
-  image:         string | null; // Cloudinary URL
+  price:         number;
+  stock:         number;
+  reservedStock: number;
+  piecesPerCase: number;
+  expiryDate:    string | null;
+  image:         string | null;
   status:        ProductStatus;
   supplierId:    string;
   createdAt:     string;
   updatedAt:     string;
-  // Computed fields returned by the API
   finalPrice:    number | null;
   activePromo:   unknown | null;
 };
@@ -112,7 +110,6 @@ function ProductCard({ product, onAddToCart, addingId, addedId }: ProductCardPro
         outOfStock ? "opacity-60" : "",
       ].join(" ")}
     >
-      {/* Image / colour banner */}
       <div className={`relative w-full h-40 flex items-center justify-center ${getBg(product.category)}`}>
         {product.image ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -142,7 +139,6 @@ function ProductCard({ product, onAddToCart, addingId, addedId }: ProductCardPro
         )}
       </div>
 
-      {/* Body */}
       <div className="p-4">
         <p className="text-sm font-semibold text-gray-900 mb-0.5 truncate">
           {product.productName}
@@ -153,13 +149,12 @@ function ProductCard({ product, onAddToCart, addingId, addedId }: ProductCardPro
         <p className="text-[11.5px] text-gray-400 mb-3">{product.category}</p>
 
         <div className="flex items-end justify-between gap-2">
-          {/* Price */}
           <div>
             {hasPromo ? (
               <>
                 <p className="text-lg font-bold text-green-700 leading-none">
                   ₱{product.finalPrice!.toLocaleString()}
-                   <span className="text-xs font-normal text-green-600 ml-1">per case</span>
+                  <span className="text-xs font-normal text-green-600 ml-1">per case</span>
                 </p>
                 <p className="text-xs text-gray-300 line-through mt-0.5">
                   ₱{product.price.toLocaleString()}
@@ -168,7 +163,7 @@ function ProductCard({ product, onAddToCart, addingId, addedId }: ProductCardPro
             ) : (
               <p className="text-xl font-bold text-green-700 leading-none">
                 ₱{product.price.toLocaleString()}
-                 <span className="text-xs font-normal text-green-600 ml-1">per case</span>
+                <span className="text-xs font-normal text-green-600 ml-1">per case</span>
               </p>
             )}
             <p className="text-[10px] text-gray-300 mt-1">
@@ -176,7 +171,6 @@ function ProductCard({ product, onAddToCart, addingId, addedId }: ProductCardPro
             </p>
           </div>
 
-          {/* CTA */}
           <button
             onClick={() => onAddToCart(product)}
             disabled={outOfStock || isAdding}
@@ -231,24 +225,24 @@ export default function ProductsPage() {
 
   const filtered = useMemo<Product[]>(
     () => {
-    const stockPriority = (p: Product): number => {
-      if (p.stock <= 0)  return 2; // Out of stock → last
-      if (p.stock <= 10) return 1; // Low stock    → middle
-      return 0; 
-    };
+      const stockPriority = (p: Product): number => {
+        if (p.stock <= 0)  return 2;
+        if (p.stock <= 10) return 1;
+        return 0;
+      };
 
       return products
-      .filter((p) => {
-        const matchCat = activeCategory === "All" || p.category === activeCategory;
-        const matchQ   = p.productName.toLowerCase().includes(search.toLowerCase());
-        return matchCat && matchQ;
-      })
-      .sort((a, b) => {
-        const priorityDiff = stockPriority(a) - stockPriority(b);
-        if (priorityDiff !== 0) return priorityDiff;  // Sort by availability tier first
-        return b.stock - a.stock; 
-      }),
-    }.
+        .filter((p) => {
+          const matchCat = activeCategory === "All" || p.category === activeCategory;
+          const matchQ   = p.productName.toLowerCase().includes(search.toLowerCase());
+          return matchCat && matchQ;
+        })
+        .sort((a, b) => {
+          const priorityDiff = stockPriority(a) - stockPriority(b);
+          if (priorityDiff !== 0) return priorityDiff;
+          return b.stock - a.stock;
+        }); // ✅ fixed: was `},` with a stray `.` on the next line
+    },
     [products, activeCategory, search]
   );
 
@@ -275,9 +269,7 @@ export default function ProductsPage() {
 
   return (
     <div className="p-7">
-      {/* ── Filter bar ── */}
       <div className="flex flex-wrap items-center gap-2.5 mb-6">
-        {/* Search */}
         <div className="relative">
           <svg
             className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
@@ -300,7 +292,6 @@ export default function ProductsPage() {
 
         <div className="w-px h-7 bg-gray-200" />
 
-        {/* Category pills */}
         {loading ? (
           <>
             {[80, 104, 72, 88].map((w, i) => (
@@ -331,7 +322,6 @@ export default function ProductsPage() {
         )}
       </div>
 
-      {/* ── Skeleton grid ── */}
       {loading && (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
           {Array.from({ length: 8 }).map((_, i) => (
@@ -340,7 +330,6 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* ── Empty state ── */}
       {!loading && filtered.length === 0 && (
         <div className="text-center py-20">
           <p className="text-5xl mb-4">🔍</p>
@@ -349,7 +338,6 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* ── Product grid ── */}
       {!loading && filtered.length > 0 && (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
           {filtered.map((p) => (
