@@ -12,11 +12,7 @@ const faqs = [
   },
   {
     q: "How long does delivery take?",
-    a: "Delivery usually takes 1–2 hours depending on your location and current order volume.",
-  },
-  {
-    q: "Can I modify my order after placing it?",
-    a: 'You may request modifications while your order is still in "Waiting" status. Once it moves to "Processing," changes can no longer be made.',
+    a: "Delivery time may vary depending on the customer's location and the availability of delivery personnel.",
   },
   {
     q: "What is the minimum order quantity?",
@@ -24,19 +20,15 @@ const faqs = [
   },
   {
     q: "Do you offer discounts or promos?",
-    a: "Yes! We regularly offer promos such as Buy 3 Get 1 Free. Check the Home page for current announcements and special offers.",
+    a: "Yes, discounts are available for selected customers. Promotions are also offered occasionally during special events and occasions.",
   },
   {
     q: "What if I receive damaged items?",
-    a: 'You may return damaged items through the My Orders page. Select the order and choose "Return" then provide details about the issue.',
+    a: 'If you receive a damaged item, please visit the Return Page to submit a return request. Once your request has been reviewed and approved, the damaged product will be replaced through delivery.',
   },
   {
     q: "How do I track my order?",
     a: "Go to My Orders to see real-time status updates: Waiting, Processing, Out For Delivery, and Received.",
-  },
-  {
-    q: "Can I reorder previous purchases?",
-    a: "Yes! In the My Orders page, find any past order and tap the Reorder button to quickly add the same items to your cart.",
   },
   {
     q: "What areas do you deliver to?",

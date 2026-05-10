@@ -143,7 +143,7 @@ export default function ContactPage() {
               {
                 icon: "🚚",
                 label: "Service",
-                value: "Wholesale & Retail Delivery",
+                value: "Retail Delivery",
               },
               {
                 icon: "⭐",

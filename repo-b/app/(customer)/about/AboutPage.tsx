@@ -32,18 +32,18 @@ const values = [
 ];
 const team = [
   {
-    initial: "J",
-    name: "Julieta R.",
+    initial: "S",
+    name: "Simeon Salinas",
     role: "Founder & Owner",
     color: "#2d7a3a",
   },
   {
-    initial: "M",
-    name: "Marco S.",
+    initial: "NA",
+    name: "Not Available",
     role: "Operations Manager",
     color: "#7c3aed",
   },
-  { initial: "A", name: "Ana L.", role: "Customer Support", color: "#ec4899" },
+  { initial: "NA", name: "Not Available", role: "Customer Support", color: "#ec4899" },
 ];
 
 export default function AboutPage() {
