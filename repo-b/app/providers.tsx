@@ -1,7 +1,6 @@
 "use client";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://backend-production-740c.up.railway.app";
-const API_URL = `${BACKEND_URL}/api`;
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
@@ -25,13 +24,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
     setTimeout(() => setToast(null), 4000);
   };
 
-  useEffect(() => {
+  const connectSocket = () => {
+    if (socketRef.current?.connected) return;
+
     const user = JSON.parse(localStorage.getItem("user") || "null");
     if (!user?.id) return;
 
-    const newSocket = io(BACKEND_URL, {
-      transports: ["websocket"],
-    });
+    const newSocket = io(BACKEND_URL, { transports: ["websocket"] });
 
     newSocket.on("connect", () => {
       console.log("✅ Socket connected:", newSocket.id);
@@ -58,9 +57,28 @@ export function Providers({ children }: { children: React.ReactNode }) {
     });
 
     socketRef.current = newSocket;
+  };
+
+  useEffect(() => {
+    connectSocket();
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "user" && e.newValue) {
+        connectSocket();
+      }
+      if (e.key === "user" && !e.newValue) {
+        socketRef.current?.disconnect();
+        socketRef.current = null;
+        setSocket(null);
+      }
+    };
+
+    window.addEventListener("storage", onStorage);
 
     return () => {
-      newSocket.disconnect();
+      window.removeEventListener("storage", onStorage);
+      socketRef.current?.disconnect();
+      socketRef.current = null;
       setSocket(null);
     };
   }, []);
@@ -77,20 +95,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
       {mounted && (
         <>
-          {/* ── DEV: Test buttons — remove when done debugging ── */}
-          <div style={{ position: "fixed", bottom: "20px", left: "20px", zIndex: 99999, display: "flex", gap: "8px" }}>
-            <button onClick={() => showToast("✅ Success toast works!", "success")} style={{ background: "#166534", color: "#fff", border: "none", borderRadius: "8px", padding: "8px 12px", cursor: "pointer", fontSize: "12px", fontWeight: 600 }}>
-              Test Success
-            </button>
-            <button onClick={() => showToast("ℹ️ Info toast works!", "info")} style={{ background: "#1e3a5f", color: "#fff", border: "none", borderRadius: "8px", padding: "8px 12px", cursor: "pointer", fontSize: "12px", fontWeight: 600 }}>
-              Test Info
-            </button>
-            <button onClick={() => showToast("❌ Error toast works!", "error")} style={{ background: "#7f1d1d", color: "#fff", border: "none", borderRadius: "8px", padding: "8px 12px", cursor: "pointer", fontSize: "12px", fontWeight: 600 }}>
-              Test Error
-            </button>
-          </div>
-
-          {/* ── Global Toast ── */}
           {toast && (
             <div style={{
               position:     "fixed",
