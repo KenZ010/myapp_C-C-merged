@@ -458,7 +458,7 @@ export default function PurchaseOrderPage() {
       const normalized = (Array.isArray(p) ? p : []).map((prod: Product) => ({
         ...prod,
         supplierId: prod.supplierId || (typeof prod.supplier === 'object' ? prod.supplier?.id : prod.supplier) || "",
-        stockQuantity: prod.stockQuantity ?? 0,
+        stockQuantity: Number(prod.stockQuantity ?? (prod as any).stock ?? 0),
         stockUnit: (prod.stockUnit as CaseUnit) || "case_24",
       }));
       setAllProducts(normalized);
