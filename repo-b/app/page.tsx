@@ -562,25 +562,6 @@ export default function LoginPage() {
                     if (fallback) fallback.style.display = "flex";
                   }}
                 />
-                <div style={{ display: "none", flexDirection: "column", alignItems: "center" }}>
-                  <svg width="72" height="82" viewBox="0 0 70 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="18" y="18" width="34" height="48" rx="8" fill="#16a34a"/>
-                    <rect x="18" y="18" width="34" height="48" rx="8" fill="url(#cg)"/>
-                    <ellipse cx="35" cy="18" rx="17" ry="5" fill="#15803d"/>
-                    <ellipse cx="35" cy="66" rx="17" ry="5" fill="#14532d"/>
-                    <rect x="24" y="22" width="5" height="38" rx="2.5" fill="rgba(255,255,255,0.25)"/>
-                    <rect x="18" y="32" width="34" height="20" fill="rgba(255,255,255,0.12)"/>
-                    <text x="35" y="47" textAnchor="middle" fontFamily="Fredoka One,cursive" fontSize="14" fill="white" fontWeight="bold"></text>
-                    <ellipse cx="35" cy="14" rx="10" ry="3" fill="#0f4c0f"/>
-                    <rect x="32" y="9" width="6" height="8" rx="2" fill="#fbbf24"/>
-                    <defs>
-                      <linearGradient id="cg" x1="18" y1="18" x2="52" y2="66" gradientUnits="userSpaceOnUse">
-                        <stop offset="0%"   stopColor="rgba(255,255,255,0.15)"/>
-                        <stop offset="100%" stopColor="rgba(0,0,0,0.10)"/>
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                </div>
               </div>
             </div>
 
