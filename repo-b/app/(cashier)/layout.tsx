@@ -54,7 +54,7 @@ const navLinks = [
 const pageTitles: Record<string, { title: string; sub: string }> = {
   "/cashier/inventory":    { title: "Inventory",           sub: "View products & stock levels" },
   "/cashier/ordering":     { title: "Ordering",            sub: "Create order for customer" },
-  "/cashier/pending":      { title: "Pending",             sub: "Orders waiting for action" },          sub: "File and track return requests" },
+  "/cashier/pending":      { title: "Pending",             sub: "Orders waiting for action" },
   "/cashier/transactions": { title: "Transaction History", sub: "Sales reports & records" },
   "/cashier/payment":      { title: "Payment",             sub: "Complete the customer order" },
 };
