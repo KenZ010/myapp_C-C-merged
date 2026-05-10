@@ -110,27 +110,36 @@ export default function InventoryMaintenancePage() {
     fetchProducts();
   }, []);
 
-  const filtered = useMemo(() => {
-    let list = products.filter((p) => {
-      if (p.status === "INACTIVE") return false;
-      const supplierName = p.supplier?.supplierName || "";
-      const matchBrand = brand === "All" || supplierName === brand;
-      const matchSearch = `${p.productName} ${supplierName}`
-        .toLowerCase()
-        .includes(search.toLowerCase());
-      return matchBrand && matchSearch;
-    });
-    if (sortBy === "Stock: High to Low")
-      list = [...list].sort((a, b) => b.stock - a.stock);
-    if (sortBy === "Stock: Low to High")
-      list = [...list].sort((a, b) => a.stock - b.stock);
-    if (sortBy === "Price: Low to High")
-      list = [...list].sort((a, b) => a.price - b.price);
-    if (sortBy === "Price: High to Low")
-      list = [...list].sort((a, b) => b.price - a.price);
-    return list;
-  }, [search, brand, sortBy, products]);
+ const filtered = useMemo(() => {
+  let list = products.filter((p) => {
+    if (p.status === "INACTIVE") return false;
+    const supplierName = p.supplier?.supplierName || "";
+    const matchBrand = brand === "All" || supplierName === brand;
+    const matchSearch = `${p.productName} ${supplierName}`
+      .toLowerCase()
+      .includes(search.toLowerCase());
+    return matchBrand && matchSearch;
+  });
 
+  if (sortBy === "Stock: High to Low")
+    list = [...list].sort((a, b) => b.stock - a.stock);
+  if (sortBy === "Stock: Low to High")
+    list = [...list].sort((a, b) => a.stock - b.stock);
+  if (sortBy === "Price: Low to High")
+    list = [...list].sort((a, b) => a.price - b.price);
+  if (sortBy === "Price: High to Low")
+    list = [...list].sort((a, b) => b.price - a.price);
+
+  // ── Pin In Stock → Low Stock → Out of Stock ──
+  if (sortBy === "Default") {
+    const priority = { "In Stock": 0, "Low Stock": 1, "Out of Stock": 2 };
+    list = [...list].sort(
+      (a, b) => priority[getStatus(a.stock)] - priority[getStatus(b.stock)]
+    );
+  }
+
+  return list;
+}, [search, brand, sortBy, products]);
   const activeProducts = products.filter((p) => p.status !== "INACTIVE");
   const inStock = activeProducts.filter(
     (p) => getStatus(p.stock) === "In Stock",
@@ -141,7 +150,7 @@ export default function InventoryMaintenancePage() {
   const outOfStock = activeProducts.filter(
     (p) => getStatus(p.stock) === "Out of Stock",
   ).length;
-
+ 
   return (
     <div style={{ padding: "28px" }}>
       {/* ── Header Banner ── */}
