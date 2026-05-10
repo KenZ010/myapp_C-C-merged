@@ -115,32 +115,19 @@ export default function PendingPage() {
   const [activeTab,  setActiveTab]  = useState<FilterTab>("All Orders");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [toast,      setToast]      = useState<string | null>(null);
 
   const socket = useSocket();
-
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 4000);
-  };
 
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await api.getActiveOrders();
-
-      if (data?.message) {
-        setError(data.message);
-        setOrders([]);
-        return;
-      }
-
+      if (data?.message) { setError(data.message); setOrders([]); return; }
       const raw: Record<string, unknown>[] = Array.isArray(data) ? data : [];
       const activeOrders = raw
         .map(normalizeOrder)
         .filter((o) => ACTIVE_STATUSES.includes(o.status));
-
       setOrders(activeOrders);
     } catch (err) {
       setError((err as Error).message || "Failed to load orders.");
@@ -151,16 +138,11 @@ export default function PendingPage() {
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
-  // ── Socket listener for new orders ──────────────────────────────────────
+  // ── Auto-refresh orders list on new order (toast handled globally) ────────
   useEffect(() => {
     if (!socket) return;
-
-    socket.on('order:new', (data: { orderId: string; message: string }) => {
-      showToast(`🛎️ ${data.message}`);
-      fetchOrders();
-    });
-
-    return () => { socket.off('order:new'); };
+    socket.on("order:new", () => fetchOrders());
+    return () => { socket.off("order:new"); };
   }, [socket, fetchOrders]);
 
   const updateStatus = async (id: string, status: OrderStatus) => {
@@ -185,26 +167,7 @@ export default function PendingPage() {
     <>
       <style>{`
         @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-        @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
       `}</style>
-
-      {/* ── Toast Notification ── */}
-      {toast && (
-        <div style={{
-          position: "fixed", top: "24px", right: "24px", zIndex: 9999,
-          background: "#1a1a2e", color: "#fff", padding: "14px 20px",
-          borderRadius: "12px", fontSize: "14px", fontWeight: 600,
-          boxShadow: "0 8px 32px rgba(0,0,0,0.25)",
-          display: "flex", alignItems: "center", gap: "10px",
-          animation: "slideIn 0.3s ease"
-        }}>
-          {toast}
-          <button onClick={() => setToast(null)}
-            style={{ background: "none", border: "none", color: "#aaa", cursor: "pointer", fontSize: "16px", lineHeight: 1 }}>
-            ✕
-          </button>
-        </div>
-      )}
 
       <div style={{ padding: "28px" }}>
 
@@ -284,8 +247,6 @@ export default function PendingPage() {
 
               return (
                 <div key={order.id} style={{ background: "#fff", borderRadius: "16px", border: "0.5px solid #e8e8e8", overflow: "hidden" }}>
-
-                  {/* Card Header */}
                   <div style={{ padding: "14px 18px", borderBottom: "0.5px solid #f0f0f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
                       <p style={{ fontSize: "13px", fontWeight: 700, color: "#1a1a1a", margin: 0 }}>{order.id}</p>
@@ -301,7 +262,6 @@ export default function PendingPage() {
                     </div>
                   </div>
 
-                  {/* Card Body */}
                   <div style={{ padding: "14px 18px" }}>
                     <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
                       {[
@@ -325,7 +285,6 @@ export default function PendingPage() {
                       </div>
                     </div>
 
-                    {/* View Items Toggle */}
                     <button onClick={() => setExpandedId(isExpanded ? null : order.id)}
                       style={{ background: "none", border: "none", color: "#3c3eb1fb", fontSize: "13px", fontWeight: 600, cursor: "pointer", padding: "0", marginBottom: "10px" }}>
                       {isExpanded ? "Hide Items ▲" : "View Items ▼"}
@@ -342,7 +301,6 @@ export default function PendingPage() {
                       </div>
                     )}
 
-                    {/* Action Buttons */}
                     <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                       {order.status === "Pending" && (
                         <div style={{ display: "flex", gap: "8px" }}>
