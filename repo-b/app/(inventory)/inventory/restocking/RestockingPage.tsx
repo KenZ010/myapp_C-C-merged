@@ -539,7 +539,7 @@ export default function PurchaseOrderPage() {
                                   r.deliveryItemId === item.id ? { ...r, receivedQty: val } : r
                                 ));
                               }}
-                              style={{ width: "56px", textAlign: "center", padding: "5px", borderRadius: "8px", border: "1.5px solid #1a3c2e", fontSize: "14px", fontWeight: 700, outline: "none" }}
+                              style={{ width: "56px", textAlign: "center", padding: "5px", borderRadius: "8px", border: "1.5px solid #1a3c2e", fontSize: "14px", fontWeight: 700, outline: "none", color: "1a1a1a", background: "#fff"}}
                             />
                             <button
                               onClick={() => setReceiveQtys((prev) => prev.map((r) =>
