@@ -243,8 +243,12 @@ export default function ProductsPage() {
         const matchQ   = p.productName.toLowerCase().includes(search.toLowerCase());
         return matchCat && matchQ;
       })
-      .sort((a, b) => stockPriority(a) - stockPriority(b));
-    },
+      .sort((a, b) => {
+        const priorityDiff = stockPriority(a) - stockPriority(b);
+        if (priorityDiff !== 0) return priorityDiff;  // Sort by availability tier first
+        return b.stock - a.stock; 
+      }),
+    }.
     [products, activeCategory, search]
   );
 
