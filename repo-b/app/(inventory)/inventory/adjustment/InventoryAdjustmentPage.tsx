@@ -449,7 +449,7 @@ export default function InventoryAdjustmentPage() {
                 <div style={{ marginBottom: "14px" }}>
                   <label style={{ fontSize: "11px", fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: "6px" }}>Reason</label>
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                    {["Received", "Sold", "Damaged", "Return", "Audit Correction"].map((r) => (
+                    {["Received", "Expired", "Damaged", "Audit Correction"].map((r) => (
                       <button key={r} onClick={() => setAdjReason(r)}
                         style={{ padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, border: adjReason === r ? "none" : "1.5px solid #ddd", background: adjReason === r ? "#1a3c2e" : "#fff", color: adjReason === r ? "#fff" : "#555", cursor: "pointer", transition: "all 0.15s" }}>
                         {r}
