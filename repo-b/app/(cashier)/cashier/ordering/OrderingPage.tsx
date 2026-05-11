@@ -169,7 +169,7 @@ export default function OrderingPage() {
             <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "13px", color: "#aaa" }}>🔍</span>
             <input type="text" placeholder="Search products..." value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={{ padding: "9px 16px 9px 34px", borderRadius: "20px", border: "1px solid #e0e0e0", fontSize: "13px", outline: "none", background: "#fff", width: "220px" }} />
+              style={{ padding: "9px 16px 9px 34px", borderRadius: "20px", border: "1px solid #e0e0e0", fontSize: "13px", outline: "none", background: "#fff", width: "220px", color: "#1a1a1a" }} />
           </div>
           <div style={{ width: "1px", height: "28px", background: "#e0e0e0" }} />
           {categories.map((c) => (
