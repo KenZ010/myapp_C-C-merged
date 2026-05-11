@@ -33,7 +33,7 @@ const navItems = [
   { label: "Product Management",    icon: Package,         path: "/product"        },
   { label: "Account Management",    icon: User,            path: "/account"        },
   { label: "Purchase Order",        icon: ClipboardList,   path: "/purchase-order" },
-  { label: "Loss Report",                icon: AlertTriangle,       path: "/loss-report"         },
+  { label: "Loss Report",           icon: AlertTriangle,   path: "/loss-report"    },
   { label: "Promo Management",      icon: Gift,            path: "/promo"          },
 ];
 
@@ -225,8 +225,9 @@ export default function ProductManagementPage() {
   const [currentPage,      setCurrentPage]      = useState(1);
   const [products,  setProducts]  = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<{ id: string; supplierName: string }[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [saving,   setSaving]   = useState(false);
+  const [loading,        setLoading]        = useState(true);
+  const [saving,         setSaving]         = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false); // ← NEW
   const [success,  setSuccess]  = useState("");
   const [error,    setError]    = useState("");
 
@@ -342,7 +343,6 @@ export default function ProductManagementPage() {
   const softDrinksCount  = products.filter((p) => p.category === "SOFTDRINKS").length;
   const energyDrinkCount = products.filter((p) => p.category === "ENERGY_DRINK").length;
 
-  // ── RESOLVED: use incoming change that includes piecesPerCase ──
   const handleCardClick = (product: Product) => {
     setSelectedProduct(product);
     setEditForm({
@@ -357,6 +357,35 @@ export default function ProductManagementPage() {
     });
     setIsEditing(false);
     setShowProductModal(true);
+  };
+
+  // ── NEW: image upload handler ─────────────────────────────────────────────
+  const handleImageUpload = async (file: File) => {
+    if (!selectedProduct) return;
+    setUploadingImage(true);
+    try {
+      const form = new FormData();
+      form.append("image", file);
+      const res = await fetch(`/api/upload/product/${selectedProduct.id}`, {
+        method: "PATCH",
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.message || "Image upload failed.", true);
+        return;
+      }
+      // Update both modal state and grid card without full refetch
+      setSelectedProduct((prev) => prev ? { ...prev, image: data.image } : prev);
+      setProducts((prev) =>
+        prev.map((p) => p.id === selectedProduct.id ? { ...p, image: data.image } : p)
+      );
+      showToast("Product image updated!");
+    } catch {
+      showToast("Failed to upload image.", true);
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -758,12 +787,44 @@ export default function ProductManagementPage() {
               Product {isEditing ? "Editing" : "Details"}
             </p>
             <div className="flex gap-3">
-              <div className="w-20 h-20 md:w-28 md:h-28 bg-gray-100 rounded-xl shrink-0 flex items-center justify-center text-3xl md:text-4xl">
+
+              {/* ── Product image with upload overlay ── */}
+              <div className="w-20 h-20 md:w-28 md:h-28 bg-gray-100 rounded-xl shrink-0 flex items-center justify-center relative group overflow-hidden">
                 {selectedProduct.image
                   // eslint-disable-next-line @next/next/no-img-element
                   ? <img src={selectedProduct.image} alt={selectedProduct.productName} className="w-full h-full object-cover rounded-xl" />
-                  : React.createElement(getCategoryIcon(selectedProduct.category).icon, { className: `w-12 h-12 ${getCategoryIcon(selectedProduct.category).color}` })}
+                  : React.createElement(getCategoryIcon(selectedProduct.category).icon, {
+                      className: `w-12 h-12 ${getCategoryIcon(selectedProduct.category).color}`
+                    })
+                }
+                {/* Hover/upload overlay */}
+                <label className={`absolute inset-0 rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all
+                  ${uploadingImage
+                    ? "bg-black bg-opacity-50"
+                    : "bg-black bg-opacity-0 group-hover:bg-opacity-40"}`}>
+                  {uploadingImage
+                    ? <span className="text-white"><Spinner /></span>
+                    : (
+                      <span className="opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center gap-1">
+                        <span className="text-white text-xl">📷</span>
+                        <span className="text-white text-[10px] font-semibold tracking-wide">Change</span>
+                      </span>
+                    )
+                  }
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={uploadingImage}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleImageUpload(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
               </div>
+
               <div className="flex-1 flex flex-col gap-2.5 min-w-0">
                 {isEditing ? (
                   <>
