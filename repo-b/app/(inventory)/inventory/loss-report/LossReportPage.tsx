@@ -131,7 +131,7 @@ export default function LossReportPage() {
 
   const [search,    setSearch]    = useState("");
   const [reasonFil, setReasonFil] = useState<"ALL" | LossReason>("ALL");
-  const [activeTab, setActiveTab] = useState<"daily" | "weekly" | "monthly">("daily");
+  const [activeTab, setActiveTab] = useState<"daily" | "weekly" | "monthly" | "yearly">("daily");
   const [viewItem,  setViewItem]  = useState<LossRecord | null>(null);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
@@ -185,7 +185,8 @@ export default function LossReportPage() {
     const f = (x: Date) => x.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
     const weeklyDate  = `${f(ws)} – ${f(we)}`;
     const monthlyDate = today.toLocaleDateString("en-PH", { month: "long", year: "numeric" });
-    return { dailyDate, weeklyDate, monthlyDate };
+    const yearlyDate = String(today.getFullYear());
+    return { dailyDate, weeklyDate, monthlyDate, yearlyDate };
   }, []);
 
   // ── Filter base ───────────────────────────────────────────────────────────
@@ -216,7 +217,10 @@ export default function LossReportPage() {
         return d >= ws && d <= we;
       });
     }
-
+    if (activeTab === "yearly") {
+        const year = String(today.getFullYear());
+        return baseFiltered.filter((r) => r.createdAt.startsWith(year));
+      }
     const month = today.toISOString().slice(0, 7);
     return baseFiltered.filter((r) => r.createdAt.startsWith(month));
   }, [baseFiltered, activeTab, todayStr]);
@@ -344,7 +348,7 @@ export default function LossReportPage() {
               { key: "daily",   label: "Daily",   date: tabDates.dailyDate,   icon: Icons.sun   },
               { key: "weekly",  label: "Weekly",  date: tabDates.weeklyDate,  icon: Icons.week  },
               { key: "monthly", label: "Monthly", date: tabDates.monthlyDate, icon: Icons.month },
-              
+              { key: "yearly",  label: "Yearly",  date: tabDates.yearlyDate,  icon: Icons.year  }, // ← ADD HERE
             ] as const).map((tab) => (
               <button
                 key={tab.key}
