@@ -288,6 +288,16 @@ export default function InventoryMonitoringPage() {
               </button>
             )}
           </div>
+          <div style={{ display: "flex", gap: "4px", marginBottom: "8px" }}>
+            <button onClick={() => setActiveTab("expiring")}
+              style={{ padding: "2px 8px", borderRadius: "10px", border: "none", fontSize: "10px", fontWeight: 700, cursor: "pointer", background: activeTab === "expiring" ? "#fff9c4" : "#f5f5f5", color: activeTab === "expiring" ? "#e65100" : "#888" }}>
+              Expiring ({expiring})
+            </button>
+            <button onClick={() => setActiveTab("expired")}
+              style={{ padding: "2px 8px", borderRadius: "10px", border: "none", fontSize: "10px", fontWeight: 700, cursor: "pointer", background: activeTab === "expired" ? "#ffebee" : "#f5f5f5", color: activeTab === "expired" ? "#c62828" : "#888" }}>
+              Expired ({expired})
+            </button>
+          </div>
           {(() => {
             const batchList = activeTab === "expiring" ? expiringBatches : expiredBatches;
             return batchList.length === 0 ? (
@@ -295,39 +305,29 @@ export default function InventoryMonitoringPage() {
                 {activeTab === "expiring" ? "✅ No batches expiring in 30 days" : "✅ No expired batches"}
               </p>
             ) : (
-              <>
-                <div style={{ display: "flex", gap: "4px", marginBottom: "8px" }}>
-                  <button onClick={() => setActiveTab("expiring")}
-                    style={{ padding: "2px 8px", borderRadius: "10px", border: "none", fontSize: "10px", fontWeight: 700, cursor: "pointer", background: activeTab === "expiring" ? "#fff9c4" : "#f5f5f5", color: activeTab === "expiring" ? "#e65100" : "#888" }}>
-                    Expiring ({expiring})
-                  </button>
-                  <button onClick={() => setActiveTab("expired")}
-                    style={{ padding: "2px 8px", borderRadius: "10px", border: "none", fontSize: "10px", fontWeight: 700, cursor: "pointer", background: activeTab === "expired" ? "#ffebee" : "#f5f5f5", color: activeTab === "expired" ? "#c62828" : "#888" }}>
-                    Expired ({expired})
-                  </button>
-                </div>
-                {batchList.slice(0, 5).map((b) => {
-                  const daysLeft = b.expiryDate
-                    ? Math.ceil((new Date(b.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-                    : null;
-                  return (
-                    <div key={b.id} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "4px 0", borderBottom: "0.5px solid #f5f5f5" }}>
-                      <p style={{ flex: 1, fontSize: "11px", color: "#1a1a1a", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {b.product?.productName ?? b.productId}
-                      </p>
-                      <span style={{ fontSize: "10px", fontWeight: 700, padding: "1px 7px", borderRadius: "10px", flexShrink: 0,
-                        ...(activeTab === "expired"
+              <div style={{ maxHeight: "200px", overflowY: "auto" }}>
+              {batchList.map((b) => {
+                const daysLeft = b.expiryDate
+                  ? Math.ceil((new Date(b.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                  : null;
+                return (
+                  <div key={b.id} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "4px 0", borderBottom: "0.5px solid #f5f5f5" }}>
+                    <p style={{ flex: 1, fontSize: "11px", color: "#1a1a1a", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {b.product?.productName ?? b.productId}
+                    </p>
+                    <span style={{ fontSize: "10px", fontWeight: 700, padding: "1px 7px", borderRadius: "10px", flexShrink: 0,
+                      ...(activeTab === "expired"
+                        ? { background: "#ffebee", color: "#c62828" }
+                        : daysLeft !== null && daysLeft <= 7
                           ? { background: "#ffebee", color: "#c62828" }
-                          : daysLeft !== null && daysLeft <= 7
-                            ? { background: "#ffebee", color: "#c62828" }
-                            : { background: "#fff9c4", color: "#e65100" })
-                      }}>
-                        {activeTab === "expired" ? "Expired" : daysLeft !== null ? `${daysLeft}d` : "—"}
-                      </span>
-                    </div>
-                  );
-                })}
-              </>
+                          : { background: "#fff9c4", color: "#e65100" })
+                    }}>
+                      {activeTab === "expired" ? "Expired" : daysLeft !== null ? `${daysLeft}d` : "—"}
+                    </span>
+                  </div>
+                );
+              })}
+              </div>
             );
           })()}
         </div>
