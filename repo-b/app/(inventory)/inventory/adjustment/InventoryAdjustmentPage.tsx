@@ -12,8 +12,8 @@ type Product = {
   category:      CategoryType;
   size:          string | null;
   barcode:       string | null;
-  price:         number;   // price per piece
-  stock:         number;   // in CASES
+  price:         number;
+  stock:         number;
   piecesPerCase: number;
   reservedStock: number;
   expiryDate:    string | null;
@@ -24,14 +24,12 @@ type Product = {
   createdAt:     string;
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 const PIECES_PER_CASE_DEFAULT = 24;
 
 function getPiecesPerCase(p: Product): number {
   return p.piecesPerCase || PIECES_PER_CASE_DEFAULT;
 }
 
-// stock IS already in cases
 function totalPieces(p: Product): number {
   return p.stock * getPiecesPerCase(p);
 }
@@ -51,7 +49,6 @@ function fmtPrice(n: number): string {
   return `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
 }
 
-// ── Style Maps ────────────────────────────────────────────────────────────────
 const statusStyle = {
   "In Stock":     { bg: "#e8f5e9", color: "#2e7d32", dot: "#4caf50" },
   "Low Stock":    { bg: "#fff8e1", color: "#e65100", dot: "#ff9800" },
@@ -73,7 +70,6 @@ const productStatusStyle: Record<ProductStatus, { bg: string; color: string }> =
   OUT_OF_STOCK: { bg: "#ffebee", color: "#c62828" },
 };
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function InventoryAdjustmentPage() {
   const [products,   setProducts]   = useState<Product[]>([]);
   const [loading,    setLoading]    = useState(true);
@@ -83,8 +79,7 @@ export default function InventoryAdjustmentPage() {
   const [statFilter, setStatFilter] = useState<"All" | ProductStatus>("All");
   const [detailProd, setDetailProd] = useState<Product | null>(null);
 
-  // Adjust state
-  const [adjQty,     setAdjQty]     = useState(0); // in selected unit (cases or pieces)
+  const [adjQty,     setAdjQty]     = useState(0);
   const [adjUnit,    setAdjUnit]    = useState<"cases" | "pieces">("cases");
   const [adjReason,  setAdjReason]  = useState("Received");
   const [adjNote,    setAdjNote]    = useState("");
@@ -92,7 +87,6 @@ export default function InventoryAdjustmentPage() {
   const [adjError,   setAdjError]   = useState<string | null>(null);
   const [adjSuccess, setAdjSuccess] = useState(false);
 
-  // ── Fetch products ──────────────────────────────────────────────────────────
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -112,7 +106,7 @@ export default function InventoryAdjustmentPage() {
         size:          p.size ?? null,
         barcode:       p.barcode ?? null,
         price:         Number(p.price ?? 0),
-        stock:         Number(p.stock ?? 0),          // in CASES
+        stock:         Number(p.stock ?? 0),
         piecesPerCase: Number(p.piecesPerCase ?? PIECES_PER_CASE_DEFAULT),
         reservedStock: Number(p.reservedStock ?? 0),
         expiryDate:    p.expiryDate ?? null,
@@ -131,21 +125,18 @@ export default function InventoryAdjustmentPage() {
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
-  // ── Filters ─────────────────────────────────────────────────────────────────
   const filtered = useMemo(() =>
-  products
-    .filter((p) => {
-      const q = search.toLowerCase();
-      const matchSearch = !q || p.productName.toLowerCase().includes(q) || (p.barcode ?? "").toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
-      const matchCat    = catFilter  === "All" || p.category === catFilter;
-      const matchStat   = statFilter === "All" || p.status   === statFilter;
-      return matchSearch && matchCat && matchStat;
-    })
-    .sort((a, b) => b.stock - a.stock),   // ← highest stock first
-  [products, search, catFilter, statFilter]
-);
+    products
+      .filter((p) => {
+        const q = search.toLowerCase();
+        const matchSearch = !q || p.productName.toLowerCase().includes(q) || (p.barcode ?? "").toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
+        const matchCat    = catFilter  === "All" || p.category === catFilter;
+        const matchStat   = statFilter === "All" || p.status   === statFilter;
+        return matchSearch && matchCat && matchStat;
+      })
+      .sort((a, b) => b.stock - a.stock),
+  [products, search, catFilter, statFilter]);
 
-  // ── Summary counts ───────────────────────────────────────────────────────────
   const counts = useMemo(() => ({
     total:  products.length,
     active: products.filter(p => p.status === "ACTIVE").length,
@@ -153,7 +144,6 @@ export default function InventoryAdjustmentPage() {
     out:    products.filter(p => p.stock === 0).length,
   }), [products]);
 
-  // ── Open detail ──────────────────────────────────────────────────────────────
   const openDetail = (p: Product) => {
     setDetailProd({ ...p });
     setAdjQty(0);
@@ -164,25 +154,19 @@ export default function InventoryAdjustmentPage() {
     setAdjSuccess(false);
   };
 
-  // ── Preview new stock (in cases) ─────────────────────────────────────────────
-  // adjQty in cases → delta in cases; adjQty in pieces → convert to cases
   const caseDelta = detailProd
-    ? adjUnit === "cases"
-      ? adjQty
-      : adjQty / getPiecesPerCase(detailProd)
+    ? adjUnit === "cases" ? adjQty : adjQty / getPiecesPerCase(detailProd)
     : 0;
 
   const previewCases  = detailProd ? Math.max(0, detailProd.stock + caseDelta) : 0;
   const previewPieces = detailProd ? Math.round(previewCases * getPiecesPerCase(detailProd)) : 0;
 
-  // Pieces shown for the submit button label
   const adjPiecesAbs = detailProd
     ? adjUnit === "cases"
       ? Math.abs(adjQty) * getPiecesPerCase(detailProd)
       : Math.abs(adjQty)
     : 0;
 
-  // ── Apply adjustment via API ─────────────────────────────────────────────────
   const applyAdjustment = async () => {
     if (!detailProd || adjQty === 0) return;
     setAdjLoading(true);
@@ -191,26 +175,21 @@ export default function InventoryAdjustmentPage() {
     try {
       const employeeId = localStorage.getItem("employeeId") ?? "";
 
-      // Always send quantity in CASES to the backend
       const quantityInCases = adjUnit === "cases"
         ? adjQty
         : adjQty / getPiecesPerCase(detailProd);
 
       await api.adjustStock({
         productId:  detailProd.id,
-        quantity:   quantityInCases,   // positive = add, negative = deduct (in cases)
+        quantity:   quantityInCases,
         reason:     `${adjReason}${adjNote ? `: ${adjNote}` : ""}`,
         employeeId,
       });
 
-      // Update local state — stock is in cases
-      const newStock = Math.max(0, detailProd.stock + quantityInCases);
-      const updated  = { ...detailProd, stock: newStock };
-      setProducts(prev => prev.map(p => p.id === updated.id ? updated : p));
-      setDetailProd(updated);
       setAdjQty(0);
       setAdjNote("");
       setAdjSuccess(true);
+      await fetchProducts(); // ← re-fetch from server so table reflects DB truth
     } catch (e) {
       setAdjError(e instanceof Error ? e.message : "Adjustment failed");
     } finally {
@@ -218,7 +197,6 @@ export default function InventoryAdjustmentPage() {
     }
   };
 
-  // ── Loading / Error states ───────────────────────────────────────────────────
   if (loading) return (
     <div style={{ padding: "28px", fontFamily: "'Segoe UI', sans-serif", background: "#f7f8fa", minHeight: "100vh" }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "14px", marginBottom: "24px" }}>
@@ -267,8 +245,6 @@ export default function InventoryAdjustmentPage() {
             style={{ padding: "8px 14px 8px 34px", borderRadius: "20px", border: "1.5px solid #e0e0e0", fontSize: "13px", outline: "none", width: "220px", color: "#1a1a1a", background: "#fafafa" }}
           />
         </div>
-
-        {/* Category filter */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "#f5f5f5", borderRadius: "20px", padding: "5px 10px" }}>
           <span style={{ fontSize: "12px" }}>🏷</span>
           <select value={catFilter} onChange={(e) => setCatFilter(e.target.value as any)}
@@ -279,8 +255,6 @@ export default function InventoryAdjustmentPage() {
             ))}
           </select>
         </div>
-
-        {/* Status filter */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px", background: "#f5f5f5", borderRadius: "20px", padding: "5px 10px" }}>
           <span style={{ fontSize: "12px" }}>📊</span>
           <select value={statFilter} onChange={(e) => setStatFilter(e.target.value as any)}
@@ -291,7 +265,6 @@ export default function InventoryAdjustmentPage() {
             <option value="OUT_OF_STOCK">Out of Stock</option>
           </select>
         </div>
-
         <span style={{ marginLeft: "auto", fontSize: "12px", color: "#aaa" }}>
           {filtered.length} of {products.length} products
         </span>
@@ -321,7 +294,6 @@ export default function InventoryAdjustmentPage() {
               ) : filtered.map((p, idx) => {
                 const stockStatus = deriveStockStatus(p.stock);
                 const st          = statusStyle[stockStatus];
-                // p.stock = cases; totalPieces = cases × piecesPerCase
                 const pcs = totalPieces(p);
                 const pct = p.stock > 0 ? Math.min(100, Math.round((p.stock / Math.max(p.stock, 10)) * 100)) : 0;
                 return (
@@ -329,7 +301,6 @@ export default function InventoryAdjustmentPage() {
                     onMouseEnter={(e) => (e.currentTarget.style.background = "#f0faf2")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = idx % 2 === 0 ? "#fff" : "#fafafa")}
                   >
-                    {/* Product */}
                     <td style={{ padding: "13px 16px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                         {p.image ? (
@@ -343,29 +314,24 @@ export default function InventoryAdjustmentPage() {
                         </div>
                       </div>
                     </td>
-                    {/* Category */}
                     <td style={{ padding: "13px 16px" }}>
                       <span style={{ background: "#ede9fe", color: "#5b21b6", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 600 }}>
                         {categoryLabels[p.category] ?? p.category}
                       </span>
                     </td>
-                    {/* Barcode */}
                     <td style={{ padding: "13px 16px" }}>
                       <span style={{ background: "#f5f5f5", color: "#555", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontFamily: "monospace" }}>
                         {p.barcode ?? "—"}
                       </span>
                     </td>
-                    {/* Supplier */}
                     <td style={{ padding: "13px 16px" }}>
                       <span style={{ background: "#e8f0fe", color: "#1a237e", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 600 }}>
                         {p.supplierName}
                       </span>
                     </td>
-                    {/* Price */}
                     <td style={{ padding: "13px 16px", fontSize: "13px", fontWeight: 700, color: "#1a3c2e" }}>
                       {fmtPrice(p.price)}
                     </td>
-                    {/* Stock cases — p.stock IS cases */}
                     <td style={{ padding: "13px 16px" }}>
                       <div>
                         <p style={{ fontSize: "15px", fontWeight: 800, color: st.color }}>{p.stock}</p>
@@ -374,25 +340,16 @@ export default function InventoryAdjustmentPage() {
                         </div>
                       </div>
                     </td>
-                    {/* Stock pieces = cases × piecesPerCase */}
-                    <td style={{ padding: "13px 16px", fontSize: "13px", color: "#555" }}>
-                      {pcs} pcs
-                    </td>
-                    {/* Reserved */}
+                    <td style={{ padding: "13px 16px", fontSize: "13px", color: "#555" }}>{pcs} pcs</td>
                     <td style={{ padding: "13px 16px", fontSize: "13px", color: p.reservedStock > 0 ? "#e65100" : "#aaa", fontWeight: p.reservedStock > 0 ? 700 : 400 }}>
                       {p.reservedStock}
                     </td>
-                    {/* Expiry */}
-                    <td style={{ padding: "13px 16px", fontSize: "12px", color: "#888" }}>
-                      {fmtDate(p.expiryDate)}
-                    </td>
-                    {/* Status */}
+                    <td style={{ padding: "13px 16px", fontSize: "12px", color: "#888" }}>{fmtDate(p.expiryDate)}</td>
                     <td style={{ padding: "13px 16px" }}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "4px 12px", borderRadius: "20px", fontSize: "11px", fontWeight: 700, background: productStatusStyle[p.status].bg, color: productStatusStyle[p.status].color }}>
                         {p.status}
                       </span>
                     </td>
-                    {/* Action */}
                     <td style={{ padding: "13px 16px" }}>
                       <button onClick={() => openDetail(p)}
                         style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 16px", borderRadius: "20px", border: "none", background: "#6366f1", color: "#fff", fontSize: "12px", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
@@ -412,18 +369,11 @@ export default function InventoryAdjustmentPage() {
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════
-          DETAIL + ADJUST MODAL
-      ══════════════════════════════════════════ */}
+      {/* ── Detail + Adjust Modal ── */}
       {detailProd && (
         <>
           <div onClick={() => setDetailProd(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 40, backdropFilter: "blur(2px)" }} />
-          <div style={{
-            position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
-            zIndex: 50, background: "#fff", borderRadius: "24px",
-            width: "min(96vw, 580px)", maxHeight: "92vh", overflowY: "auto",
-            boxShadow: "0 32px 100px rgba(0,0,0,0.25)",
-          }}>
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 50, background: "#fff", borderRadius: "24px", width: "min(96vw, 580px)", maxHeight: "92vh", overflowY: "auto", boxShadow: "0 32px 100px rgba(0,0,0,0.25)" }}>
 
             {/* Modal Header */}
             <div style={{ background: "linear-gradient(135deg, #6366f1, #3c3eb1 100%)", borderRadius: "24px 24px 0 0", padding: "24px 28px" }}>
@@ -446,13 +396,10 @@ export default function InventoryAdjustmentPage() {
                 </div>
                 <button onClick={() => setDetailProd(null)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: "34px", height: "34px", cursor: "pointer", color: "#fff", fontSize: "16px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>✕</button>
               </div>
-
-              {/* Stock visual */}
               <div style={{ marginTop: "20px", background: "rgba(0,0,0,0.2)", borderRadius: "14px", padding: "16px 20px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "8px" }}>
                   <div>
                     <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>Current Stock</p>
-                    {/* stock IS cases */}
                     <p style={{ fontSize: "36px", fontWeight: 900, color: "#fff", lineHeight: 1 }}>{detailProd.stock}</p>
                     <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.45)", marginTop: "2px" }}>
                       cases · {totalPieces(detailProd)} total pcs · {detailProd.piecesPerCase} pcs/case
@@ -475,8 +422,6 @@ export default function InventoryAdjustmentPage() {
             </div>
 
             <div style={{ padding: "24px 28px" }}>
-
-              {/* Product Details Grid */}
               <p style={{ fontSize: "12px", fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px" }}>Product Details</p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "24px" }}>
                 {[
@@ -496,12 +441,11 @@ export default function InventoryAdjustmentPage() {
                 ))}
               </div>
 
-              {/* ── Adjustment Panel ── */}
+              {/* Adjustment Panel */}
               <div style={{ background: "#f0faf2", borderRadius: "16px", border: "1.5px solid #a5d6a7", padding: "20px", marginBottom: "16px" }}>
                 <p style={{ fontSize: "14px", fontWeight: 800, color: "#1a3c2e", marginBottom: "4px" }}>📦 Adjust Stock</p>
                 <p style={{ fontSize: "12px", color: "#888", marginBottom: "16px" }}>Positive = add stock · Negative = deduct stock</p>
 
-                {/* Reason */}
                 <div style={{ marginBottom: "14px" }}>
                   <label style={{ fontSize: "11px", fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: "6px" }}>Reason</label>
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -514,7 +458,6 @@ export default function InventoryAdjustmentPage() {
                   </div>
                 </div>
 
-                {/* Unit toggle */}
                 <div style={{ marginBottom: "14px" }}>
                   <label style={{ fontSize: "11px", fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: "6px" }}>Unit</label>
                   <div style={{ display: "flex", gap: "8px" }}>
@@ -527,7 +470,6 @@ export default function InventoryAdjustmentPage() {
                   </div>
                 </div>
 
-                {/* Qty input */}
                 <div style={{ marginBottom: "14px" }}>
                   <label style={{ fontSize: "11px", fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: "6px" }}>
                     Quantity ({adjUnit})
@@ -555,7 +497,6 @@ export default function InventoryAdjustmentPage() {
                   )}
                 </div>
 
-                {/* Note */}
                 <div style={{ marginBottom: "16px" }}>
                   <label style={{ fontSize: "11px", fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: "6px" }}>Note (Optional)</label>
                   <input
@@ -590,7 +531,6 @@ export default function InventoryAdjustmentPage() {
                 </button>
               </div>
 
-              {/* Close */}
               <button onClick={() => setDetailProd(null)}
                 style={{ width: "100%", padding: "12px", borderRadius: "14px", border: "1.5px solid #e0e0e0", background: "#fff", color: "#555", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
                 Close
