@@ -365,16 +365,18 @@ function ProductSelect({
             <div className="px-4 py-3 text-xs text-gray-400 text-center">No products</div>
           ) : (
             products.map((p) => {
-              const isUsed     = usedIds.includes(p.id) && p.id !== value;
-              const stockLabel = p.stockQuantity != null ? `${p.stockQuantity} ${getUnitShort(p.stockUnit)} left` : null;
+              const isUsed       = usedIds.includes(p.id) && p.id !== value;
+              const isOutOfStock = (p.stockQuantity ?? 0) === 0;
+              const isDisabled   = isUsed || isOutOfStock;
+              const stockLabel   = p.stockQuantity != null ? `${p.stockQuantity} ${getUnitShort(p.stockUnit)} left` : null;
               return (
                 <button
                   key={p.id}
                   type="button"
-                  disabled={isUsed}
-                  onClick={() => { if (!isUsed) { onChange(p.id); setOpen(false); } }}
+                  disabled={isDisabled}
+                  onClick={() => { if (!isDisabled) { onChange(p.id); setOpen(false); } }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors
-                    ${isUsed ? "opacity-40 cursor-not-allowed" : "hover:bg-indigo-50"}
+                    ${isDisabled ? "opacity-40 cursor-not-allowed" : "hover:bg-indigo-50"}
                     ${value === p.id ? "bg-indigo-50" : ""}`}
                 >
                   <div className="min-w-0">
@@ -382,7 +384,9 @@ function ProductSelect({
                       {p.productName}
                       {p.size && <span className="text-gray-400 font-normal ml-1">{p.size}</span>}
                     </p>
-                    {stockLabel && <p className="text-xs text-gray-400 mt-0.5">{stockLabel}</p>}
+                    {stockLabel && !isOutOfStock && <p className="text-xs text-gray-400 mt-0.5">{stockLabel}</p>}
+                    {isOutOfStock && <p className="text-xs text-red-500 font-medium mt-0.5">No Stock</p>}
+                    {isUsed && <p className="text-xs text-amber-600 font-medium mt-0.5">Already added — adjust quantity above</p>}
                   </div>
                   {value === p.id && <span className="text-indigo-600 text-xs ml-2 shrink-0">✓</span>}
                 </button>
