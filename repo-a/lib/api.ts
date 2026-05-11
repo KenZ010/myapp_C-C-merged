@@ -521,4 +521,18 @@ getReturnRequestById: async (returnRequestId: string) => {
   if (!res.ok) throw new Error(result.message || 'Failed to adjust stock');
   return result;
 },
+
+// ── UPLOAD ──────────────────────────────────────────────────────────────────
+uploadProductImage: async (productId: string, file: File) => {
+  const form = new FormData();
+  form.append("image", file);
+  const res = await fetch(`${API_URL}/upload/product/${productId}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${getToken()}` }, // NO Content-Type — browser sets it with boundary
+    body: form,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Image upload failed");
+  return data;
+},
 };

@@ -361,32 +361,21 @@ export default function ProductManagementPage() {
 
   // ── NEW: image upload handler ─────────────────────────────────────────────
   const handleImageUpload = async (file: File) => {
-    if (!selectedProduct) return;
-    setUploadingImage(true);
-    try {
-      const form = new FormData();
-      form.append("image", file);
-      const res = await fetch(`/api/upload/product/${selectedProduct.id}`, {
-        method: "PATCH",
-        body: form,
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        showToast(data.message || "Image upload failed.", true);
-        return;
-      }
-      // Update both modal state and grid card without full refetch
-      setSelectedProduct((prev) => prev ? { ...prev, image: data.image } : prev);
-      setProducts((prev) =>
-        prev.map((p) => p.id === selectedProduct.id ? { ...p, image: data.image } : p)
-      );
-      showToast("Product image updated!");
-    } catch {
-      showToast("Failed to upload image.", true);
-    } finally {
-      setUploadingImage(false);
-    }
-  };
+  if (!selectedProduct) return;
+  setUploadingImage(true);
+  try {
+    const data = await api.uploadProductImage(selectedProduct.id, file);
+    setSelectedProduct((prev) => prev ? { ...prev, image: data.image } : prev);
+    setProducts((prev) =>
+      prev.map((p) => p.id === selectedProduct.id ? { ...p, image: data.image } : p)
+    );
+    showToast("Product image updated!");
+  } catch (err: unknown) {
+    showToast(err instanceof Error ? err.message : "Failed to upload image.", true);
+  } finally {
+    setUploadingImage(false);
+  }
+};
 
   const handleSaveEdit = async () => {
     if (isEditingRef.current) return;
