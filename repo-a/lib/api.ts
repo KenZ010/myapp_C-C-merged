@@ -203,7 +203,7 @@ const API_URL = 'https://backend-production-740c.up.railway.app/api';
         method: 'DELETE',
         headers: authHeaders(),
       });
-      return res.json();
+      if (!res.ok) throw new Error('Delete failed');
     },
 
     // ── CART ────────────────────────────────────────────────────────────────────

@@ -37,7 +37,57 @@ type Product = {
   id: string;
   productName: string;
   price: number;
+  image: string | null;
+  category: string;
 };
+
+type OrderLine = {
+  productName: string; category: string;
+  quantity: number; price: number; subtotal: number;
+};
+
+type Transaction = {
+  id: string; customer: string; customerId: string | null;
+  cashier: string; total: number; paymentMethod: string;
+  createdAt: string; orderLines: OrderLine[];
+};
+
+function normalizeTransaction(o: Record<string, unknown>): Transaction {
+  const customer = o.customer as Record<string, unknown> | null;
+  const employee = o.employee as Record<string, unknown> | null;
+  const payment  = o.payment  as Record<string, unknown> | null;
+  const rawLines = (o.orderLines ?? []) as Record<string, unknown>[];
+  return {
+    id:            String(o.id ?? ""),
+    customer:      customer ? String(customer.name ?? "Guest") : "Walk-in",
+    customerId:    customer ? String(customer.id ?? "") : null,
+    cashier:       employee ? String(employee.name ?? "—") : "—",
+    total:         Number(o.totalAmount ?? 0),
+    paymentMethod: payment ? String(payment.method ?? "CASH") : "CASH",
+    createdAt:     String(o.createdAt ?? o.saleDate ?? ""),
+    orderLines:    rawLines.map(l => {
+      const product = l.product as Record<string, unknown> | null;
+      return {
+        productName: product ? String(product.productName ?? "Item") : "Item",
+        category:    product ? String(product.category ?? "")     : "",
+        quantity:    Number(l.quantity ?? 0),
+        price:       Number(l.price    ?? 0),
+        subtotal:    Number(l.subtotal ?? 0),
+      };
+    }),
+  };
+}
+
+function getPeriodKey(dateStr: string): "Today" | "Week" | "Month" | "Older" {
+  if (!dateStr) return "Older";
+  const date = new Date(dateStr);
+  const now  = new Date();
+  if (date.toDateString() === now.toDateString()) return "Today";
+  const days = (now.getTime() - date.getTime()) / 86400000;
+  if (days <= 7)  return "Week";
+  if (days <= 30) return "Month";
+  return "Older";
+}
 
 const inventoryData = [
   { name: "Soft Drinks", value: 47, color: "#60a5fa" },
@@ -85,6 +135,8 @@ export default function DashboardPage() {
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(true);
 
   // ✅ Fix hydration error — start null, only set on client
   const [now, setNow] = useState<Date | null>(null);
@@ -171,6 +223,22 @@ export default function DashboardPage() {
 
   fetchProducts();
 }, []);
+
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        setLoadingTransactions(true);
+        const data = await api.getCompletedOrders();
+        setTransactions((Array.isArray(data) ? data : []).map(normalizeTransaction));
+      } catch (err) {
+        console.error("Failed to fetch transactions:", err);
+        setTransactions([]);
+      } finally {
+        setLoadingTransactions(false);
+      }
+    };
+    fetchTransactions();
+  }, []);
 
   const handleLogout = () => {
     document.cookie = "token=; path=/; max-age=0";
@@ -459,13 +527,18 @@ export default function DashboardPage() {
               ) : products.length === 0 ? (
                 <p className="text-sm text-gray-400">No products found.</p>
               ) : (
+                <div className="max-h-64 overflow-y-auto">
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                   {products.map((product) => (
                     <div
                       key={product.id}
                       className="bg-gray-50 rounded-xl p-3 hover:shadow-md transition"
                     >
-                      <div className="w-full h-28 bg-gray-200 rounded-lg mb-2" />
+                      <div className="w-full h-28 bg-gray-100 rounded-lg mb-2 flex items-center justify-center">
+                        {product.image
+                          ? <img src={product.image} alt={product.productName} className="w-full h-full object-cover rounded-lg" />
+                          : <Package className="w-8 h-8 text-gray-400" />}
+                      </div>
 
                       <p className="text-sm font-semibold text-gray-800 truncate">
                         {product.productName}
@@ -476,6 +549,7 @@ export default function DashboardPage() {
                       </p>
                     </div>
                   ))}
+                </div>
                 </div>
               )}
             </div>
@@ -496,7 +570,29 @@ export default function DashboardPage() {
                   </button>
                 ))}
               </div>
-              <div className="mt-4 text-sm text-gray-400 text-center py-6">No transactions to show</div>
+              <div className="mt-4 space-y-2 max-h-64 overflow-y-auto">
+                {loadingTransactions ? (
+                  <p className="text-sm text-gray-400 text-center py-6">Loading...</p>
+                ) : transactions.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-6">No transactions to show</p>
+                ) : (
+                  (() => {
+                    const periodMap: Record<string, string> = { Daily: "Today", Weekly: "Week", Monthly: "Month" };
+                    const key = periodMap[activeTab] ?? "Today";
+                    const filtered = transactions.filter(t => getPeriodKey(t.createdAt) === key);
+                    if (filtered.length === 0) return <p className="text-sm text-gray-400 text-center py-6">No transactions for this period</p>;
+                    return filtered.slice(0, 10).map((t) => (
+                      <div key={t.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-gray-800 truncate">{t.customer}</p>
+                          <p className="text-[10px] text-gray-400">{new Date(t.createdAt).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" })}</p>
+                        </div>
+                        <p className="text-xs font-semibold text-gray-700 ml-2">₱{t.total.toFixed(2)}</p>
+                      </div>
+                    ));
+                  })()
+                )}
+              </div>
             </div>
           </div>
         </div>
