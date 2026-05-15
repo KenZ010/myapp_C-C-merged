@@ -174,7 +174,8 @@ type ProductCardProps = {
 };
 
 function ProductCard({ product, onAddToCart, addingId, addedId }: ProductCardProps) {
-  const [qty, setQty] = useState<number>(1);
+  const [qty, setQty]               = useState<number>(1);
+  const [atMaxStock, setAtMaxStock] = useState<boolean>(false);
 
   const outOfStock  = product.stock <= 0;
   const lowStock    = !outOfStock && product.stock <= 10;
@@ -187,11 +188,18 @@ function ProductCard({ product, onAddToCart, addingId, addedId }: ProductCardPro
     ? Math.round(((product.price - product.finalPrice!) / product.price) * 100)
     : 0;
 
-  // Reset qty if stock changes (e.g. re-fetch) and clamp
+  // Reset qty if stock changes and clamp
   useEffect(() => {
     if (product.stock > 0 && qty > product.stock) setQty(product.stock);
     if (product.stock <= 0) setQty(1);
+    setAtMaxStock(false);
   }, [product.stock, qty]);
+
+  const handleQtyChange = (next: number) => {
+    const clamped = Math.min(next, product.stock);
+    setQty(clamped);
+    setAtMaxStock(clamped >= product.stock);
+  };
 
   const handleAdd = () => {
     if (outOfStock || isAdding) return;
