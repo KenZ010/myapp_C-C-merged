@@ -117,12 +117,16 @@ export default function OrderingPage() {
     });
   };
 
-  const updateQty = (id: string, delta: number) => {
-    setCart((prev) =>
-      prev.map((i) => i.id === id ? { ...i, qty: Math.max(0, i.qty + delta) } : i)
-          .filter((i) => i.qty > 0),
-    );
-  };
+ const updateQty = (id: string, delta: number) => {
+  setCart((prev) =>
+    prev.map((i) => {
+      if (i.id !== id) return i;
+      const maxQty = i.stock ?? Infinity;
+      const newQty = Math.min(Math.max(0, i.qty + delta), maxQty);
+      return { ...i, qty: newQty };
+    }).filter((i) => i.qty > 0),
+  );
+};
 
   const total     = cart.reduce((sum, i) => sum + i.finalPrice * i.qty, 0);
   const itemCount = cart.reduce((sum, i) => sum + i.qty, 0);
@@ -243,13 +247,17 @@ export default function OrderingPage() {
                         )}
                       </div>
                       {inCart ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <button onClick={() => updateQty(p.id, -1)}
-                            style={{ width: "28px", height: "28px", borderRadius: "50%", border: "1.5px solid #e0e0e0", background: "#fff", fontSize: "16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#1a3c2e", fontWeight: 700 }}>−</button>
-                          <span style={{ fontSize: "14px", fontWeight: 700, minWidth: "20px", textAlign: "center" }}>{inCart.qty}</span>
-                          <button onClick={() => updateQty(p.id, 1)}
-                            style={{ width: "28px", height: "28px", borderRadius: "50%", border: "none", background: "#1a3c2e", fontSize: "16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700 }}>+</button>
-                        </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                       <button onClick={() => updateQty(p.id, -1)}
+                          style={{ width: "30px", height: "30px", borderRadius: "50%", border: "1.5px solid #e0e0e0", background: "#fff", fontSize: "16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#1a3c2e", fontWeight: 700 }}>−</button>
+                       <span style={{ fontSize: "14px", fontWeight: 800, minWidth: "28px", textAlign: "center", background: "#f0f4f2", borderRadius: "8px", padding: "2px 6px", color: "#1a3c2e" }}>
+                        {inCart.qty}
+                         </span>
+                        <button
+                         onClick={() => updateQty(p.id, 1)}
+                         disabled={inCart.qty >= (p.stock ?? 0)}
+                         style={{ width: "30px", height: "30px", borderRadius: "50%", border: "none", background: inCart.qty >= (p.stock ?? 0) ? "#ccc" : "#1a3c2e", fontSize: "16px", cursor: inCart.qty >= (p.stock ?? 0) ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700 }}>+</button>
+                    </div>
                       ) : (
                         <button onClick={() => addToCart(p)} disabled={outOfStock}
                           style={{ background: outOfStock ? "#ccc" : "#1a3c2e", color: "#fff", border: "none", borderRadius: "20px", padding: "7px 14px", fontSize: "12px", fontWeight: 600, cursor: outOfStock ? "not-allowed" : "pointer" }}>
