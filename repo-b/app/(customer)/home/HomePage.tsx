@@ -520,26 +520,27 @@ export default function HomePage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {recentOrders.map((order, i) => {
-              const status = (order.status ?? "pending") as string;
-              const { text, bg } = getStatusClasses(status);
-              const label = orderLabel(order);
+              const orderId = String(order._id ?? order.id ?? "");
               const time = formattedDates[i] ?? "";
               const total = Number(order.totalAmount ?? 0);
               const itemCount = ((order.items ?? order.orderLines ?? order.orderItems ?? []) as unknown[]).length;
 
               return (
                 <button
-                  key={(order._id ?? order.id ?? i) as string}
+                  key={orderId || i}
                   onClick={() => handleOrderClick(order)}
                   className="text-left bg-white rounded-2xl border border-gray-100 p-4 flex flex-col gap-3 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 border-0 w-full"
                 >
                   {/* Card Top */}
                   <div className="flex items-start gap-3">
-                    <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center text-lg flex-shrink-0`}>
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-lg flex-shrink-0">
                       🥤
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold text-gray-900 truncate leading-tight">{label}</p>
+                      <p className="text-[11px] text-gray-400 mb-0.5">Order ID</p>
+                      <p className="text-[13px] font-semibold text-gray-900 truncate leading-tight">
+                        {orderId || "—"}
+                      </p>
                       <p className="text-[11px] text-gray-400 mt-0.5" suppressHydrationWarning>{time}</p>
                     </div>
                   </div>
@@ -549,20 +550,18 @@ export default function HomePage() {
 
                   {/* Card Bottom */}
                   <div className="flex items-center justify-between">
-                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${bg} ${text}`}>
-                      {formatStatus(status)}
-                    </span>
-                    <div className="text-right">
+                    {itemCount > 0 && (
+                      <p className="text-[11px] text-gray-400">
+                        {itemCount} item{itemCount !== 1 ? "s" : ""}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-1.5 ml-auto">
                       {total > 0 && (
-                        <p className="text-[13px] font-bold text-emerald-700 leading-tight">
+                        <p className="text-[14px] font-bold text-emerald-700">
                           ₱{total.toLocaleString()}
                         </p>
                       )}
-                      {itemCount > 0 && (
-                        <p className="text-[10px] text-gray-300">
-                          {itemCount} item{itemCount !== 1 ? "s" : ""} · 🧾
-                        </p>
-                      )}
+                      <span className="text-[11px] text-gray-300">🧾</span>
                     </div>
                   </div>
                 </button>
