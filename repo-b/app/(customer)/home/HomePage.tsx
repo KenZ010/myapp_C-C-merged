@@ -41,6 +41,19 @@ const promos = [
 
 const INTERVAL_MS = 3500;
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type TxItem = { name: string; qty: number; price: number };
+
+type ReceiptData = {
+  id: string;
+  date: string;
+  total: number;
+  paymentMethod: string;
+  status: string;
+  items: TxItem[];
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getStatusClasses(status: string): { text: string; bg: string } {
@@ -62,7 +75,6 @@ function formatStatus(status: string) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// ✅ Only call this client-side (inside useEffect / state)
 function formatDate(dateStr: string) {
   if (!dateStr) return "";
   const d = new Date(dateStr);
@@ -74,6 +86,14 @@ function formatDate(dateStr: string) {
     return "Today, " + d.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
   if (diffDays === 1) return "Yesterday";
   return d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
+}
+
+function formatDateLong(dateStr: string) {
+  if (!dateStr) return "—";
+  return new Date(dateStr).toLocaleString("en-PH", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
 function orderLabel(order: Record<string, unknown>) {
@@ -89,6 +109,145 @@ function orderLabel(order: Record<string, unknown>) {
   return `${productName} x${qty}${extra}`;
 }
 
+function normalizeToReceipt(order: Record<string, unknown>): ReceiptData {
+  const rawItems = (order.items ?? order.orderLines ?? order.orderItems ?? []) as Record<string, unknown>[];
+
+  const items: TxItem[] = rawItems.map((i) => {
+    const product = i.product as Record<string, unknown> | null;
+    return {
+      name: product
+        ? String(product.productName ?? product.name ?? "Item")
+        : String(i.productName ?? i.name ?? "Item"),
+      qty: Number(i.quantity ?? i.qty ?? 1),
+      price: Number(i.price ?? i.unitPrice ?? 0),
+    };
+  });
+
+  const payment = order.payment as Record<string, unknown> | null;
+  const rawDate = String(order.createdAt ?? order.date ?? "");
+
+  return {
+    id: String(order._id ?? order.id ?? ""),
+    date: formatDateLong(rawDate),
+    total: Number(
+      order.totalAmount ?? items.reduce((s, i) => s + i.price * i.qty, 0)
+    ),
+    paymentMethod: payment ? String(payment.method ?? "CASH") : "CASH",
+    status: String(order.status ?? "pending"),
+    items,
+  };
+}
+
+// ─── Receipt Modal ─────────────────────────────────────────────────────────────
+
+function ReceiptModal({
+  receipt,
+  onClose,
+}: {
+  receipt: ReceiptData;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        className="fixed inset-0 bg-black/50 z-40"
+      />
+
+      {/* Modal */}
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[min(400px,92vw)] bg-white rounded-2xl overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto">
+
+        {/* Header */}
+        <div className="bg-gradient-to-br from-[#1a3c2e] to-[#2d7a3a] px-7 py-6 text-center relative">
+          <button
+            onClick={onClose}
+            className="absolute top-3.5 right-3.5 w-7 h-7 rounded-full bg-white/20 border-0 text-white text-sm cursor-pointer flex items-center justify-center hover:bg-white/30"
+          >
+            ✕
+          </button>
+          <div className="w-14 h-14 rounded-full bg-white/15 flex items-center justify-center text-2xl mx-auto mb-2.5">
+            🧾
+          </div>
+          <p className="text-white text-lg font-extrabold m-0">Julieta Soft Drinks</p>
+          <p className="text-white/65 text-xs m-0">Official Receipt</p>
+        </div>
+
+        {/* Zigzag edge */}
+        <div
+          className="h-3"
+          style={{
+            background:
+              "linear-gradient(135deg,#2d7a3a 25%,transparent 25%) -10px 0," +
+              "linear-gradient(225deg,#2d7a3a 25%,transparent 25%) -10px 0," +
+              "linear-gradient(315deg,#2d7a3a 25%,transparent 25%)," +
+              "linear-gradient(45deg,#2d7a3a 25%,transparent 25%)",
+            backgroundSize: "20px 12px",
+            backgroundRepeat: "repeat-x",
+          }}
+        />
+
+        {/* Body */}
+        <div className="px-7 py-5">
+          {[
+            ["Order ID", receipt.id],
+            ["Date", receipt.date],
+            ["Payment", receipt.paymentMethod],
+            ["Status", formatStatus(receipt.status)],
+          ].map(([label, value]) => (
+            <div key={label} className="flex justify-between mb-2">
+              <span className="text-xs text-gray-400">{label}</span>
+              <span className="text-xs font-semibold text-gray-700">{value}</span>
+            </div>
+          ))}
+
+          <div className="border-t border-dashed border-gray-200 my-3.5" />
+
+          <p className="text-[11px] font-bold text-gray-900 mb-2.5 uppercase tracking-wide">
+            Items Ordered
+          </p>
+
+          {receipt.items.length === 0 ? (
+            <p className="text-xs text-gray-400 italic">No item details available.</p>
+          ) : (
+            receipt.items.map((item, i) => (
+              <div key={i} className="flex justify-between mb-2">
+                <div>
+                  <p className="text-[13px] text-gray-700 m-0">{item.name}</p>
+                  <p className="text-[11px] text-gray-400 m-0">
+                    x{item.qty} × ₱{item.price.toLocaleString()}.00
+                  </p>
+                </div>
+                <span className="text-[13px] font-semibold">
+                  ₱{(item.price * item.qty).toLocaleString()}.00
+                </span>
+              </div>
+            ))
+          )}
+
+          <div className="border-t border-dashed border-gray-200 my-3.5" />
+
+          <div className="bg-[#f0faf2] rounded-xl px-4 py-3 flex justify-between items-center mb-4">
+            <span className="text-[15px] font-bold text-gray-900">TOTAL</span>
+            <span className="text-[22px] font-extrabold text-[#1a3c2e]">
+              ₱{receipt.total.toLocaleString()}.00
+            </span>
+          </div>
+
+          <div className="text-center pt-3.5 border-t border-dashed border-gray-200">
+            <p className="text-xs text-emerald-700 font-semibold mb-1">
+              Thank you for your purchase! 🎉
+            </p>
+            <p className="text-[11px] text-gray-400">
+              Julieta Soft Drink Store • TECHNOLOGIA @2026
+            </p>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
@@ -101,9 +260,10 @@ export default function HomePage() {
   const [recentOrders,  setRecentOrders]  = useState<Record<string, unknown>[]>([]);
   const [orderStats,    setOrderStats]    = useState({ total: 0, pending: 0, completed: 0 });
   const [loadingOrders, setLoadingOrders] = useState(true);
-
-  // ✅ Store formatted dates in state so they're only computed client-side
   const [formattedDates, setFormattedDates] = useState<string[]>([]);
+
+  // Receipt modal state
+  const [selectedReceipt, setSelectedReceipt] = useState<ReceiptData | null>(null);
 
   // Load customer + orders
   useEffect(() => {
@@ -133,7 +293,6 @@ export default function HomePage() {
         const recent = sorted.slice(0, 3);
         setRecentOrders(recent);
 
-        // ✅ Format dates here — client-side only, inside useEffect
         setFormattedDates(
           recent.map((o) => formatDate((o.createdAt ?? o.date ?? "") as string))
         );
@@ -190,6 +349,10 @@ export default function HomePage() {
   const handleDotClick = (i: number) => {
     goTo(i, i > promoIndex ? "left" : "right");
     startTimer();
+  };
+
+  const handleOrderClick = (order: Record<string, unknown>) => {
+    setSelectedReceipt(normalizeToReceipt(order));
   };
 
   const promo = promos[promoIndex];
@@ -321,7 +484,8 @@ export default function HomePage() {
       {/* Recent Orders */}
       <div className="flex justify-between items-center mb-3">
         <p className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">Recent Orders</p>
-        <Link href="/orders" className="text-[12px] text-emerald-700 no-underline font-semibold hover:underline">
+        {/* ✅ View All now links to /transactions */}
+        <Link href="/transactions" className="text-[12px] text-emerald-700 no-underline font-semibold hover:underline">
           View All →
         </Link>
       </div>
@@ -355,13 +519,13 @@ export default function HomePage() {
             const status = (order.status ?? "pending") as string;
             const { text, bg } = getStatusClasses(status);
             const label = orderLabel(order);
-            // ✅ Use pre-computed client-side date string from state
             const time = formattedDates[i] ?? "";
 
             return (
-              <div
+              <button
                 key={(order._id ?? order.id ?? i) as string}
-                className={`flex items-center justify-between px-[18px] py-[14px] gap-2.5 ${
+                onClick={() => handleOrderClick(order)}
+                className={`w-full text-left flex items-center justify-between px-[18px] py-[14px] gap-2.5 bg-transparent border-0 cursor-pointer hover:bg-gray-50 transition-colors ${
                   i < recentOrders.length - 1 ? "border-b border-gray-50" : ""
                 }`}
               >
@@ -371,14 +535,17 @@ export default function HomePage() {
                   </div>
                   <div>
                     <p className="text-[13px] font-medium text-gray-900">{label}</p>
-                    {/* ✅ suppressHydrationWarning as extra safety net */}
                     <p className="text-[11px] text-gray-400" suppressHydrationWarning>{time}</p>
                   </div>
                 </div>
-                <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap ${bg} ${text}`}>
-                  {formatStatus(status)}
-                </span>
-              </div>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap ${bg} ${text}`}>
+                    {formatStatus(status)}
+                  </span>
+                  {/* Receipt hint */}
+                  <span className="text-[11px] text-gray-300">🧾</span>
+                </div>
+              </button>
             );
           })
         )}
@@ -386,6 +553,14 @@ export default function HomePage() {
 
       {/* Footer */}
       <p className="text-center text-[11px] text-gray-300 font-medium">TECHNOLOGIA @2026</p>
+
+      {/* ✅ Receipt Modal */}
+      {selectedReceipt && (
+        <ReceiptModal
+          receipt={selectedReceipt}
+          onClose={() => setSelectedReceipt(null)}
+        />
+      )}
     </div>
   );
 }
