@@ -490,64 +490,85 @@ export default function HomePage() {
         </Link>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden mb-6">
+      <div className="mb-6">
         {loadingOrders ? (
-          [0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className={`flex items-center justify-between px-[18px] py-[14px] gap-2.5 ${i < 2 ? "border-b border-gray-50" : ""}`}
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-gray-100 flex-shrink-0 animate-pulse" />
-                <div>
-                  <div className="w-28 h-3 rounded-full bg-gray-100 mb-1.5 animate-pulse" />
-                  <div className="w-16 h-2.5 rounded-full bg-gray-50 animate-pulse" />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="bg-white rounded-2xl border border-gray-100 p-4 flex flex-col gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gray-100 flex-shrink-0 animate-pulse" />
+                  <div className="flex-1">
+                    <div className="w-3/4 h-3 rounded-full bg-gray-100 mb-2 animate-pulse" />
+                    <div className="w-1/2 h-2.5 rounded-full bg-gray-50 animate-pulse" />
+                  </div>
+                </div>
+                <div className="h-px bg-gray-50" />
+                <div className="flex justify-between items-center">
+                  <div className="w-16 h-6 rounded-full bg-gray-100 animate-pulse" />
+                  <div className="w-12 h-5 rounded-full bg-gray-50 animate-pulse" />
                 </div>
               </div>
-              <div className="w-16 h-6 rounded-full bg-gray-100 animate-pulse" />
-            </div>
-          ))
+            ))}
+          </div>
         ) : recentOrders.length === 0 ? (
-          <div className="py-8 text-center text-[13px] text-gray-400">
+          <div className="bg-white rounded-2xl border border-gray-100 py-10 text-center text-[13px] text-gray-400">
             No orders yet.{" "}
             <Link href="/products" className="text-emerald-700 font-semibold hover:underline">
               Start shopping →
             </Link>
           </div>
         ) : (
-          recentOrders.map((order, i) => {
-            const status = (order.status ?? "pending") as string;
-            const { text, bg } = getStatusClasses(status);
-            const label = orderLabel(order);
-            const time = formattedDates[i] ?? "";
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {recentOrders.map((order, i) => {
+              const status = (order.status ?? "pending") as string;
+              const { text, bg } = getStatusClasses(status);
+              const label = orderLabel(order);
+              const time = formattedDates[i] ?? "";
+              const total = Number(order.totalAmount ?? 0);
+              const itemCount = ((order.items ?? order.orderLines ?? order.orderItems ?? []) as unknown[]).length;
 
-            return (
-              <button
-                key={(order._id ?? order.id ?? i) as string}
-                onClick={() => handleOrderClick(order)}
-                className={`w-full text-left flex items-center justify-between px-[18px] py-[14px] gap-2.5 bg-transparent border-0 cursor-pointer hover:bg-gray-50 transition-colors ${
-                  i < recentOrders.length - 1 ? "border-b border-gray-50" : ""
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center text-base flex-shrink-0`}>
-                    🥤
+              return (
+                <button
+                  key={(order._id ?? order.id ?? i) as string}
+                  onClick={() => handleOrderClick(order)}
+                  className="text-left bg-white rounded-2xl border border-gray-100 p-4 flex flex-col gap-3 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 border-0 w-full"
+                >
+                  {/* Card Top */}
+                  <div className="flex items-start gap-3">
+                    <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center text-lg flex-shrink-0`}>
+                      🥤
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold text-gray-900 truncate leading-tight">{label}</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5" suppressHydrationWarning>{time}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[13px] font-medium text-gray-900">{label}</p>
-                    <p className="text-[11px] text-gray-400" suppressHydrationWarning>{time}</p>
+
+                  {/* Divider */}
+                  <div className="h-px bg-gray-50" />
+
+                  {/* Card Bottom */}
+                  <div className="flex items-center justify-between">
+                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${bg} ${text}`}>
+                      {formatStatus(status)}
+                    </span>
+                    <div className="text-right">
+                      {total > 0 && (
+                        <p className="text-[13px] font-bold text-emerald-700 leading-tight">
+                          ₱{total.toLocaleString()}
+                        </p>
+                      )}
+                      {itemCount > 0 && (
+                        <p className="text-[10px] text-gray-300">
+                          {itemCount} item{itemCount !== 1 ? "s" : ""} · 🧾
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap ${bg} ${text}`}>
-                    {formatStatus(status)}
-                  </span>
-                  {/* Receipt hint */}
-                  <span className="text-[11px] text-gray-300">🧾</span>
-                </div>
-              </button>
-            );
-          })
+                </button>
+              );
+            })}
+          </div>
         )}
       </div>
 
