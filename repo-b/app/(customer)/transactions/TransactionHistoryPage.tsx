@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 
@@ -8,17 +8,18 @@ type TxItem = { name: string; qty: number; price: number };
 type Transaction = {
   id: string;
   date: string;
+  rawDate: Date | null;
   total: number;
   paymentMethod: string;
   items: TxItem[];
 };
 
+type FilterPeriod = "today" | "weekly" | "monthly" | "yearly";
+
 function normalizeCompleted(o: Record<string, unknown>): Transaction {
-  // getCustomerOrders pre-shapes items as { name, qty, price }
   const rawItems = (o.items ?? o.orderLines ?? []) as Record<string, unknown>[];
 
   const items: TxItem[] = rawItems.map((i) => {
-    // handle both pre-shaped and raw orderLine shape
     const product = i.product as Record<string, unknown> | null;
     return {
       name: product
@@ -30,16 +31,18 @@ function normalizeCompleted(o: Record<string, unknown>): Transaction {
   });
 
   const payment = o.payment as Record<string, unknown> | null;
-  const rawDate = String(o.createdAt ?? o.date ?? "");
+  const rawDateStr = String(o.createdAt ?? o.date ?? "");
+  const parsedDate = rawDateStr ? new Date(rawDateStr) : null;
 
   return {
     id: String(o.id ?? ""),
-    date: rawDate
-      ? new Date(rawDate).toLocaleString("en-PH", {
+    date: parsedDate
+      ? parsedDate.toLocaleString("en-PH", {
           dateStyle: "medium",
           timeStyle: "short",
         })
       : "—",
+    rawDate: parsedDate,
     total: Number(
       o.totalAmount ?? items.reduce((s, i) => s + i.price * i.qty, 0),
     ),
@@ -81,11 +84,48 @@ function SkeletonCard() {
   );
 }
 
+const FILTERS: { key: FilterPeriod; label: string }[] = [
+  { key: "today", label: "Today" },
+  { key: "weekly", label: "Weekly" },
+  { key: "monthly", label: "Monthly" },
+  { key: "yearly", label: "Yearly" },
+];
+
+function getFilterStart(period: FilterPeriod): Date {
+  const now = new Date();
+  switch (period) {
+    case "today": {
+      const d = new Date(now);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    case "weekly": {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 6);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    case "monthly": {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 29);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+    case "yearly": {
+      const d = new Date(now);
+      d.setFullYear(d.getFullYear() - 1);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
+  }
+}
+
 export default function TransactionHistoryPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selected, setSelected] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activePeriod, setActivePeriod] = useState<FilterPeriod>("today");
 
   const getCustomerId = () =>
     JSON.parse(localStorage.getItem("user") || "{}")?.id ?? "";
@@ -110,7 +150,6 @@ export default function TransactionHistoryPage() {
 
       const raw: Record<string, unknown>[] = Array.isArray(data) ? data : [];
 
-      // Only COMPLETED orders
       const completed = raw
         .filter((o) => String(o.status ?? "").toUpperCase() === "COMPLETED")
         .map(normalizeCompleted);
@@ -127,7 +166,14 @@ export default function TransactionHistoryPage() {
     fetchTransactions();
   }, [fetchTransactions]);
 
-  const totalSpent = transactions.reduce((s, t) => s + t.total, 0);
+  const filteredTransactions = useMemo(() => {
+    const start = getFilterStart(activePeriod);
+    return transactions.filter(
+      (tx) => tx.rawDate !== null && tx.rawDate >= start,
+    );
+  }, [transactions, activePeriod]);
+
+  const totalSpent = filteredTransactions.reduce((s, t) => s + t.total, 0);
 
   // ── Loading ────────────────────────────────────────────────────────────────
   if (loading) {
@@ -202,7 +248,7 @@ export default function TransactionHistoryPage() {
     );
   }
 
-  // ── Empty ──────────────────────────────────────────────────────────────────
+  // ── Empty (all time) ───────────────────────────────────────────────────────
   if (transactions.length === 0) {
     return (
       <div
@@ -250,7 +296,18 @@ export default function TransactionHistoryPage() {
 
   return (
     <>
-      <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
+      <style>{`
+        @keyframes shimmer {
+          0% { background-position: 200% 0 }
+          100% { background-position: -200% 0 }
+        }
+        .filter-btn {
+          transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+        }
+        .filter-btn:hover {
+          opacity: 0.88;
+        }
+      `}</style>
 
       <div
         style={{
@@ -265,7 +322,7 @@ export default function TransactionHistoryPage() {
             background: "linear-gradient(135deg,#2d7a3a,#56ab6e)",
             borderRadius: "16px",
             padding: "20px 28px",
-            marginBottom: "24px",
+            marginBottom: "20px",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
@@ -291,7 +348,7 @@ export default function TransactionHistoryPage() {
                 margin: 0,
               }}
             >
-              {transactions.length}
+              {filteredTransactions.length}
             </h2>
           </div>
           <div style={{ textAlign: "right" }}>
@@ -317,136 +374,208 @@ export default function TransactionHistoryPage() {
           </div>
         </div>
 
-        {/* Grid */}
+        {/* Filter Tabs */}
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-            gap: "16px",
+            display: "flex",
+            gap: "8px",
+            marginBottom: "20px",
+            background: "#fff",
+            borderRadius: "50px",
+            padding: "5px",
+            width: "fit-content",
+            boxShadow: "0 1px 6px rgba(0,0,0,0.07)",
           }}
         >
-          {transactions.map((tx) => (
-            <div
-              key={tx.id}
-              style={{
-                background: "#fff",
-                borderRadius: "16px",
-                border: "0.5px solid #e8e8e8",
-                padding: "18px 20px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "10px",
-              }}
-            >
-              {/* Header */}
-              <div
+          {FILTERS.map(({ key, label }) => {
+            const isActive = activePeriod === key;
+            return (
+              <button
+                key={key}
+                className="filter-btn"
+                onClick={() => setActivePeriod(key)}
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
+                  padding: "8px 20px",
+                  borderRadius: "50px",
+                  border: "none",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background: isActive
+                    ? "linear-gradient(135deg,#2d7a3a,#56ab6e)"
+                    : "transparent",
+                  color: isActive ? "#fff" : "#888",
+                  boxShadow: isActive
+                    ? "0 2px 8px rgba(45,122,58,0.30)"
+                    : "none",
                 }}
               >
-                <div>
-                  <p style={{ fontSize: "11px", color: "#aaa", margin: 0 }}>
-                    Order ID
-                  </p>
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* No results for this period */}
+        {filteredTransactions.length === 0 ? (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "12px",
+              padding: "60px 0",
+            }}
+          >
+            <div style={{ fontSize: "48px" }}>📭</div>
+            <p
+              style={{
+                fontSize: "15px",
+                fontWeight: 700,
+                color: "#555",
+                margin: 0,
+              }}
+            >
+              No orders found for this period
+            </p>
+            <p style={{ fontSize: "12px", color: "#aaa", margin: 0 }}>
+              Try selecting a different time range.
+            </p>
+          </div>
+        ) : (
+          /* Grid */
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              gap: "16px",
+            }}
+          >
+            {filteredTransactions.map((tx) => (
+              <div
+                key={tx.id}
+                style={{
+                  background: "#fff",
+                  borderRadius: "16px",
+                  border: "0.5px solid #e8e8e8",
+                  padding: "18px 20px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                {/* Header */}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                  }}
+                >
+                  <div>
+                    <p style={{ fontSize: "11px", color: "#aaa", margin: 0 }}>
+                      Order ID
+                    </p>
+                    <p
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        color: "#1a1a1a",
+                        margin: 0,
+                      }}
+                    >
+                      {tx.id}
+                    </p>
+                  </div>
+                  <span
+                    style={{
+                      padding: "3px 10px",
+                      borderRadius: "20px",
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      background:
+                        tx.paymentMethod === "CASH" ? "#e3f2fd" : "#ede7f6",
+                      color:
+                        tx.paymentMethod === "CASH" ? "#1565c0" : "#6a1b9a",
+                    }}
+                  >
+                    {tx.paymentMethod}
+                  </span>
+                </div>
+
+                {/* Date */}
+                <p style={{ fontSize: "12px", color: "#aaa", margin: 0 }}>
+                  📅 {tx.date}
+                </p>
+
+                {/* Items preview */}
+                <div
+                  style={{
+                    background: "#f9f9f9",
+                    borderRadius: "8px",
+                    padding: "10px 12px",
+                  }}
+                >
+                  {tx.items.slice(0, 2).map((item, i) => (
+                    <p
+                      key={i}
+                      style={{
+                        fontSize: "12px",
+                        color: "#555",
+                        margin: "0 0 2px",
+                      }}
+                    >
+                      {item.name}{" "}
+                      <span style={{ color: "#aaa" }}>x{item.qty}</span>
+                    </p>
+                  ))}
+                  {tx.items.length > 2 && (
+                    <p style={{ fontSize: "11px", color: "#aaa", margin: 0 }}>
+                      +{tx.items.length - 2} more item
+                      {tx.items.length - 2 !== 1 ? "s" : ""}
+                    </p>
+                  )}
+                </div>
+
+                {/* Total + Button */}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
                   <p
                     style={{
-                      fontSize: "13px",
-                      fontWeight: 700,
-                      color: "#1a1a1a",
+                      fontSize: "18px",
+                      fontWeight: 800,
+                      color: "#2d7a3a",
                       margin: 0,
                     }}
                   >
-                    {tx.id}
+                    ₱{tx.total.toLocaleString()}.00
                   </p>
-                </div>
-                <span
-                  style={{
-                    padding: "3px 10px",
-                    borderRadius: "20px",
-                    fontSize: "11px",
-                    fontWeight: 700,
-                    background:
-                      tx.paymentMethod === "CASH" ? "#e3f2fd" : "#ede7f6",
-                    color: tx.paymentMethod === "CASH" ? "#1565c0" : "#6a1b9a",
-                  }}
-                >
-                  {tx.paymentMethod}
-                </span>
-              </div>
-
-              {/* Date */}
-              <p style={{ fontSize: "12px", color: "#aaa", margin: 0 }}>
-                📅 {tx.date}
-              </p>
-
-              {/* Items preview */}
-              <div
-                style={{
-                  background: "#f9f9f9",
-                  borderRadius: "8px",
-                  padding: "10px 12px",
-                }}
-              >
-                {tx.items.slice(0, 2).map((item, i) => (
-                  <p
-                    key={i}
+                  <button
+                    onClick={() => setSelected(tx)}
                     style={{
+                      background: "#7c3aed",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "20px",
+                      padding: "8px 16px",
                       fontSize: "12px",
-                      color: "#555",
-                      margin: "0 0 2px",
+                      fontWeight: 600,
+                      cursor: "pointer",
                     }}
                   >
-                    {item.name}{" "}
-                    <span style={{ color: "#aaa" }}>x{item.qty}</span>
-                  </p>
-                ))}
-                {tx.items.length > 2 && (
-                  <p style={{ fontSize: "11px", color: "#aaa", margin: 0 }}>
-                    +{tx.items.length - 2} more item
-                    {tx.items.length - 2 !== 1 ? "s" : ""}
-                  </p>
-                )}
+                    Receipt
+                  </button>
+                </div>
               </div>
-
-              {/* Total + Button */}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <p
-                  style={{
-                    fontSize: "18px",
-                    fontWeight: 800,
-                    color: "#2d7a3a",
-                    margin: 0,
-                  }}
-                >
-                  ₱{tx.total.toLocaleString()}.00
-                </p>
-                <button
-                  onClick={() => setSelected(tx)}
-                  style={{
-                    background: "#7c3aed",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "20px",
-                    padding: "8px 16px",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  Receipt
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Receipt Modal */}
