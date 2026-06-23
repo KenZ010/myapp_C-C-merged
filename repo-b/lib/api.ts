@@ -1,4 +1,4 @@
-const API_URL = 'https://backend-production-740c.up.railway.app/api';
+const API_URL = 'https://backend-production-ccf0.up.railway.app/api';
 
 // ─── Cookie helpers ───────────────────────────────────────────────────────────
 function setCookie(name: string, value: string) {
