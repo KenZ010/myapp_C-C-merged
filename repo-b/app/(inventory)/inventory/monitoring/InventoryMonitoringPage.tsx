@@ -127,7 +127,7 @@ export default function InventoryMonitoringPage() {
     setLoading(true);
     try {
       const [products, expiring, expired] = await Promise.all([
-        fetch("https://backend-production-740c.up.railway.app/api/products").then(r => r.json()),
+        fetch("https://backend-production-ccf0.up.railway.app/api/products").then(r => r.json()),
         api.getExpiringBatches(30).catch((e: unknown) => {
           console.error("expiring batches fetch failed:", e);
           return [] as StockBatch[];
