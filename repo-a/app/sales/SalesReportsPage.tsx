@@ -223,7 +223,14 @@ export default function SalesReportsPage() {
               {showMobileMenu ? "✕" : "☰"}
             </button>
             <div>
-              <h1 className="text-lg md:text-2xl font-bold text-gray-800">Sales Reports</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-lg md:text-2xl font-bold text-gray-800">Sales Reports</h1>
+                <span className={`px-3 py-1 rounded-full text-sm font-bold border-2 ${
+                  period === "Daily" ? "bg-blue-100 text-blue-700 border-blue-300" :
+                  period === "Weekly" ? "bg-purple-100 text-purple-700 border-purple-300" :
+                  "bg-green-100 text-green-700 border-green-300"
+                }`}>{period} Report</span>
+              </div>
               <p className="text-xs text-gray-400">Administrator Dashboard</p>
             </div>
             <div className="flex items-center gap-2">
@@ -304,42 +311,6 @@ export default function SalesReportsPage() {
               )}
             </div>
 
-            {/* Revenue Trend */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <h2 className="font-bold text-gray-800 mb-3">Revenue Trend</h2>
-              {loading ? <Skeleton h={200} /> : revenueData.length === 0 ? (
-                <div className="flex items-center justify-center h-[200px] text-gray-400 text-sm">No data for this period.</div>
-              ) : (
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={revenueData} margin={{ top: 5, right: 10, left: 0, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="date" tick={{ fontSize: 10 }} angle={-15} textAnchor="end" />
-                    <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip formatter={v => `₱${Number(v).toLocaleString()}`} />
-                    <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} dot={false} name="Revenue (₱)" />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-
-            {/* Transaction Volume */}
-            <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <h2 className="font-bold text-gray-800 mb-3">Transaction Volume</h2>
-              {loading ? <Skeleton h={200} /> : txChartData.length === 0 ? (
-                <div className="flex items-center justify-center h-[200px] text-gray-400 text-sm">No data for this period.</div>
-              ) : (
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={txChartData} margin={{ top: 5, right: 10, left: 0, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="date" tick={{ fontSize: 10 }} angle={-15} textAnchor="end" />
-                    <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip />
-                    <Bar dataKey="transactions" fill="#22c55e" radius={[3,3,0,0]} name="Transactions" />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-
             {/* Top Selling */}
             <div className="bg-white rounded-2xl p-4 shadow-sm overflow-x-auto">
               <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
@@ -412,6 +383,42 @@ export default function SalesReportsPage() {
                     ))}
                   </tbody>
                 </table>
+              )}
+            </div>
+
+            {/* Revenue Trend */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <h2 className="font-bold text-gray-800 mb-3">Revenue Trend</h2>
+              {loading ? <Skeleton h={200} /> : revenueData.length === 0 ? (
+                <div className="flex items-center justify-center h-[200px] text-gray-400 text-sm">No data for this period.</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={revenueData} margin={{ top: 5, right: 10, left: 0, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} angle={-15} textAnchor="end" />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip formatter={v => `₱${Number(v).toLocaleString()}`} />
+                    <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} dot={false} name="Revenue (₱)" />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            {/* Transaction Volume */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <h2 className="font-bold text-gray-800 mb-3">Transaction Volume</h2>
+              {loading ? <Skeleton h={200} /> : txChartData.length === 0 ? (
+                <div className="flex items-center justify-center h-[200px] text-gray-400 text-sm">No data for this period.</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={txChartData} margin={{ top: 5, right: 10, left: 0, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} angle={-15} textAnchor="end" />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <Bar dataKey="transactions" fill="#22c55e" radius={[3,3,0,0]} name="Transactions" />
+                  </BarChart>
+                </ResponsiveContainer>
               )}
             </div>
 

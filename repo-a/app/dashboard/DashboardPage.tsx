@@ -514,6 +514,14 @@ export default function DashboardPage() {
                   </Pie>
                   <Tooltip formatter={(value) => `${value}%`} />
                 </PieChart>
+                <div className="flex flex-wrap justify-center gap-4 mt-3 bg-gray-50 rounded-xl px-4 py-3 border border-gray-200">
+                  {inventoryData.map((entry) => (
+                    <div key={entry.name} className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded-sm" style={{ backgroundColor: entry.color, border: "1px solid rgba(0,0,0,0.1)" }} />
+                      <span className="text-sm font-medium text-gray-700">{entry.name}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

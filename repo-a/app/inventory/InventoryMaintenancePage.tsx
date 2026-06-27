@@ -758,10 +758,21 @@ export default function InventoryMaintenancePage() {
                         </span>
                       </div>
                     ))}
-                      <p style={{ fontSize: "11px", color: "#aaa", marginTop: "6px", display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span style={{ display: "inline-block", width: "12px", height: "12px", background: "#2d7a3a", borderRadius: "3px" }} />
-                        Stock (in units)
-                      </p>
+                      <div style={{ marginTop: "10px", padding: "10px 12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                        <p style={{ fontSize: "13px", color: "#334155", fontWeight: 700, marginBottom: "6px" }}>Rank Legend</p>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "12px" }}>
+                          {["#1a3c2e","#2d7a3a","#56ab6e","#a5d6a7","#c8e6c9"].map((c, i) => (
+                            <div key={i} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span style={{ display: "inline-block", width: "14px", height: "14px", background: c, borderRadius: "3px", border: "1px solid rgba(0,0,0,0.1)" }} />
+                              <span style={{ fontSize: "13px", fontWeight: 600, color: "#475569" }}>#{i + 1}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <p style={{ fontSize: "13px", color: "#475569", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px", marginTop: "6px", paddingTop: "6px", borderTop: "1px solid #e2e8f0" }}>
+                          <span style={{ display: "inline-block", width: "14px", height: "14px", background: "#2d7a3a", borderRadius: "3px", border: "1px solid rgba(0,0,0,0.1)" }} />
+                          Stock (in units)
+                        </p>
+                      </div>
                   </div>
                 );
               })()}
@@ -778,6 +789,22 @@ export default function InventoryMaintenancePage() {
                       className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
                         topPeriod === p ? "bg-indigo-900 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                       }`}>{p}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-4 mb-3 flex-wrap bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
+                <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                  <span className="mr-1">Rank:</span>
+                  {[
+                    { color: "#e53935", label: "1st" },
+                    { color: "#fb8c00", label: "2nd" },
+                    { color: "#f9a825", label: "3rd" },
+                    { color: "#aaa", label: "4th+" },
+                  ].map((r) => (
+                    <span key={r.label} className="flex items-center gap-1.5 mr-2">
+                      <span className="inline-block w-3.5 h-3.5 rounded-full" style={{ background: r.color, border: "1px solid rgba(0,0,0,0.15)" }} />
+                      <span className="text-gray-800">{r.label}</span>
+                    </span>
                   ))}
                 </div>
               </div>

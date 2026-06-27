@@ -1,6 +1,6 @@
 "use client";
 import Image from "next/image";
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 import AlertModal from "@/components/AlertModal";
@@ -267,6 +267,45 @@ export default function PromoManagementPage() {
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+
+  const [salesData, setSalesData] = useState<Record<string, unknown>[]>([]);
+  const [salesLoading, setSalesLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchSales = async () => {
+      try {
+        const data = await api.getCompletedOrders();
+        setSalesData(Array.isArray(data) ? data : []);
+      } catch {
+        setSalesData([]);
+      } finally {
+        setSalesLoading(false);
+      }
+    };
+    fetchSales();
+  }, []);
+
+  const unpopularItems = useMemo(() => {
+    const buildTopSelling = (txs: Record<string, unknown>[]) => {
+      const map: Record<string, { name: string; category: string; units: number; revenue: number }> = {};
+      txs.forEach((o) => {
+        const lines = (o.orderLines ?? []) as Record<string, unknown>[];
+        lines.forEach((l: Record<string, unknown>) => {
+          const product = l.product as Record<string, unknown> | null;
+          const name = product?.productName ? String(product.productName) : "Item";
+          const category = product?.category ? String(product.category) : "";
+          const qty = Number(l.quantity ?? 0);
+          const sub = Number(l.subtotal ?? 0);
+          if (!map[name]) map[name] = { name, category, units: 0, revenue: 0 };
+          map[name].units += qty;
+          map[name].revenue += sub;
+        });
+      });
+      return Object.values(map).sort((a, b) => b.units - a.units);
+    };
+    const sorted = buildTopSelling(salesData);
+    return sorted.slice().reverse().slice(0, 5);
+  }, [salesData]);
 
   const [alertModal, setAlertModal] = useState<{
     open: boolean; type?: "alert" | "confirm"; title?: string;
@@ -572,6 +611,38 @@ export default function PromoManagementPage() {
             <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-lg">💙</div><div><p className="text-xs text-gray-400">Discounts</p><p className="text-xl font-bold text-blue-600">{totalDiscount}</p></div></div>
             <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3"><div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-lg">🎀</div><div><p className="text-xs text-gray-400">BOGO</p><p className="text-xl font-bold text-purple-600">{totalBogo}</p></div></div>
           </div>
+
+          {!salesLoading && unpopularItems.length > 0 && (
+            <div className="bg-white rounded-2xl p-4 shadow-sm mb-4 border-l-4 border-red-400">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-lg">📢</span>
+                <h2 className="font-bold text-gray-800">Items Needing Promotion</h2>
+                <span className="bg-red-100 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">Low Sales</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-max">
+                  <thead>
+                    <tr className="text-xs text-gray-400 border-b border-gray-100">
+                      <th className="py-2 text-left">Product</th>
+                      <th className="py-2 text-left">Category</th>
+                      <th className="py-2 text-right">Units Sold</th>
+                      <th className="py-2 text-right">Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {unpopularItems.map((item, i) => (
+                      <tr key={i} className="border-b border-gray-50 hover:bg-gray-50">
+                        <td className="py-2 text-gray-700 font-medium">{item.name}</td>
+                        <td className="py-2 text-gray-400 text-xs">{item.category}</td>
+                        <td className="py-2 text-right text-red-500 font-medium">{item.units}</td>
+                        <td className="py-2 text-right text-gray-500">₱{item.revenue.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           <div className="bg-white rounded-2xl p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-6 flex-wrap">
