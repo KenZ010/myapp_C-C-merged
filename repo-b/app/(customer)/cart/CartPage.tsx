@@ -182,36 +182,34 @@ export default function CartPage() {
     fetchCart();
   }, [fetchCart]);
 
-  const handleUpdateQty = async (item: CartItem, delta: number) => {
-    const customerId = getCustomerId();
-    const newQty = item.quantity + delta;
-    const stock = item.product.stock ?? Infinity;
+const handleUpdateQty = async (item: CartItem, delta: number) => {
+  const customerId = getCustomerId();
+  const newQty = item.quantity + delta;
+  const stock = item.product.stock ?? Infinity;
 
-    if (delta > 0 && newQty > stock) {
-      setStockWarning(item.id);
-      setTimeout(() => setStockWarning(null), 2500);
-      return;
-    }
+  if (delta > 0 && newQty > stock) {
+    setStockWarning(item.id);
+    setTimeout(() => setStockWarning(null), 2500);
+    return;
+  }
 
-    if (newQty <= 0) {
-      setItems((prev) => prev.filter((i) => i.id !== item.id));
-    } else {
-      setItems((prev) =>
-        prev.map((i) => (i.id === item.id ? { ...i, quantity: newQty } : i))
-      );
-    }
+  // Instead of removing immediately when qty would hit 0, ask for confirmation
+  if (newQty <= 0) {
+    setDeleteTarget(item);
+    return;
+  }
 
-    try {
-      if (newQty <= 0) {
-        await api.removeCartItem(customerId, item.id);
-      } else {
-        await api.updateCartItem(customerId, item.id, newQty);
-      }
-    } catch (err) {
-      console.error("Failed to update cart:", err);
-      await fetchCart();
-    }
-  };
+  setItems((prev) =>
+    prev.map((i) => (i.id === item.id ? { ...i, quantity: newQty } : i))
+  );
+
+  try {
+    await api.updateCartItem(customerId, item.id, newQty);
+  } catch (err) {
+    console.error("Failed to update cart:", err);
+    await fetchCart();
+  }
+};
 
   // ── Show modal instead of removing directly ────────────────────────────────
   const promptRemove = (item: CartItem) => {
