@@ -182,34 +182,34 @@ export default function CartPage() {
     fetchCart();
   }, [fetchCart]);
 
-const handleUpdateQty = async (item: CartItem, delta: number) => {
-  const customerId = getCustomerId();
-  const newQty = item.quantity + delta;
-  const stock = item.product.stock ?? Infinity;
+  const handleUpdateQty = async (item: CartItem, delta: number) => {
+    const customerId = getCustomerId();
+    const newQty = item.quantity + delta;
+    const stock = item.product.stock ?? Infinity;
 
-  if (delta > 0 && newQty > stock) {
-    setStockWarning(item.id);
-    setTimeout(() => setStockWarning(null), 2500);
-    return;
-  }
+    if (delta > 0 && newQty > stock) {
+      setStockWarning(item.id);
+      setTimeout(() => setStockWarning(null), 2500);
+      return;
+    }
 
-  // Instead of removing immediately when qty would hit 0, ask for confirmation
-  if (newQty <= 0) {
-    setDeleteTarget(item);
-    return;
-  }
+    // Instead of removing immediately when qty would hit 0, ask for confirmation
+    if (newQty <= 0) {
+      setDeleteTarget(item);
+      return;
+    }
 
-  setItems((prev) =>
-    prev.map((i) => (i.id === item.id ? { ...i, quantity: newQty } : i))
-  );
+    setItems((prev) =>
+      prev.map((i) => (i.id === item.id ? { ...i, quantity: newQty } : i))
+    );
 
-  try {
-    await api.updateCartItem(customerId, item.id, newQty);
-  } catch (err) {
-    console.error("Failed to update cart:", err);
-    await fetchCart();
-  }
-};
+    try {
+      await api.updateCartItem(customerId, item.id, newQty);
+    } catch (err) {
+      console.error("Failed to update cart:", err);
+      await fetchCart();
+    }
+  };
 
   // ── Show modal instead of removing directly ────────────────────────────────
   const promptRemove = (item: CartItem) => {
@@ -1306,7 +1306,19 @@ const handleUpdateQty = async (item: CartItem, delta: number) => {
             <Link
               href={canCheckout ? "/checkout" : "#"}
               onClick={(e) => {
-                if (!canCheckout) e.preventDefault();
+                if (!canCheckout) {
+                  e.preventDefault();
+                  return;
+                }
+                // ── Persist payment info so CheckoutPage can read it ──
+                sessionStorage.setItem("paymentMethod", paymentMethod);
+                if (paymentMethod === "gcash") {
+                  sessionStorage.setItem("gcashRef", gcashRef);
+                  sessionStorage.removeItem("cashGiven");
+                } else {
+                  sessionStorage.setItem("cashGiven", cashInput);
+                  sessionStorage.removeItem("gcashRef");
+                }
               }}
               style={{
                 display: "block",

@@ -78,6 +78,7 @@ export default function CheckoutPage() {
   const [note,          setNote]          = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "gcash">("cod");
   const [gcashRef,      setGcashRef]      = useState("");
+  const [cashGiven,     setCashGiven]     = useState("");
 
   const fetchCart = useCallback(async () => {
     const customerId = getCustomerId();
@@ -108,10 +109,12 @@ export default function CheckoutPage() {
         });
     }
 
-    const pm  = sessionStorage.getItem("paymentMethod") as "cod" | "gcash" | null;
-    const ref = sessionStorage.getItem("gcashRef") ?? "";
-    if (pm)  setPaymentMethod(pm);
-    if (ref) setGcashRef(ref);
+    const pm   = sessionStorage.getItem("paymentMethod") as "cod" | "gcash" | null;
+    const ref  = sessionStorage.getItem("gcashRef") ?? "";
+    const cash = sessionStorage.getItem("cashGiven") ?? "";
+    if (pm)   setPaymentMethod(pm);
+    if (ref)  setGcashRef(ref);
+    if (cash) setCashGiven(cash);
 
     fetchCart();
   }, [fetchCart]);
@@ -125,6 +128,11 @@ export default function CheckoutPage() {
   }, 0);
   const total = subtotal;
 
+  // ── Cash / change calculation (carried over from CartPage) ──────────────────
+  const cashAmount    = parseFloat(cashGiven.replace(/,/g, "")) || 0;
+  const change        = cashAmount - total;
+  const isExactOrOver = cashAmount >= total;
+
   const handlePlaceOrder = () => {
     const customerId = getCustomerId();
     if (!customerId || items.length === 0) return;
@@ -134,6 +142,7 @@ export default function CheckoutPage() {
       customerId,
       paymentMethod,
       gcashRef: paymentMethod === "gcash" ? gcashRef : undefined,
+      cashGiven: paymentMethod === "cod" ? cashGiven || undefined : undefined,
       note:     note.trim() || undefined,
       items:    items.map((i) => ({
         productId: i.productId,
@@ -144,6 +153,7 @@ export default function CheckoutPage() {
 
     sessionStorage.removeItem("paymentMethod");
     sessionStorage.removeItem("gcashRef");
+    sessionStorage.removeItem("cashGiven");
 
     setPlacing(true);
     router.push("/order-placed");
@@ -203,12 +213,64 @@ export default function CheckoutPage() {
           <div className="bg-white rounded-2xl border border-gray-100 p-6">
             <p className="text-sm font-bold text-gray-900 mb-3">💳 Payment Method</p>
             {paymentMethod === "cod" ? (
-              <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
-                <span className="text-xl">💵</span>
-                <div>
-                  <p className="text-[13px] font-semibold text-green-700">Cash on Delivery</p>
-                  <p className="text-[11px] text-gray-400">Please prepare the exact amount upon delivery.</p>
+              <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-xl">💵</span>
+                  <div>
+                    <p className="text-[13px] font-semibold text-green-700">Cash on Delivery</p>
+                    <p className="text-[11px] text-gray-400">Please prepare the exact amount upon delivery.</p>
+                  </div>
                 </div>
+
+                {/* ── Cash given / change summary (carried over from cart) ── */}
+                {cashGiven && (
+                  <div className="bg-white rounded-xl border border-green-100 p-3 mt-1">
+                    <div className="flex justify-between text-[13px] mb-1.5">
+                      <span className="text-gray-400">Amount Due</span>
+                      <span className="font-semibold text-gray-900">
+                        ₱{total.toLocaleString()}.00
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[13px] mb-1.5">
+                      <span className="text-gray-400">Customer Cash</span>
+                      <span className="font-semibold text-gray-900">
+                        ₱{cashAmount.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                    <div
+                      className={[
+                        "flex justify-between items-center mt-2 px-3 py-2 rounded-lg",
+                        isExactOrOver ? "bg-green-50" : "bg-red-50",
+                      ].join(" ")}
+                    >
+                      <span
+                        className={`text-[12px] font-semibold ${
+                          isExactOrOver ? "text-green-700" : "text-red-600"
+                        }`}
+                      >
+                        {isExactOrOver ? "💰 Change" : "⚠️ Insufficient"}
+                      </span>
+                      <span
+                        className={`text-base font-bold ${
+                          isExactOrOver ? "text-green-700" : "text-red-600"
+                        }`}
+                      >
+                        {isExactOrOver
+                          ? `₱${change.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}`
+                          : `−₱${Math.abs(change).toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}`}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-center gap-3">
