@@ -324,7 +324,7 @@ export default function ContactPage() {
             }}
           >
             {[
-              ["📌", "Address", "3065 JP Rizal St. Pagasa Camarin"],
+              ["📌", "Address", "3065 JP Rizal St. Camarin Caloocan City"],
               ["🏙️", "City", "Caloocan City"],
               ["📮", "ZIP Code", "1400"],
             ].map(([icon, label, val]) => (
