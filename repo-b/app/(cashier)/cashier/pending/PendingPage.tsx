@@ -275,6 +275,9 @@ export default function PendingPage() {
               const isExpanded = expandedId === order.id;
               const isUpdating = updatingId === order.id;
 
+              const sub = order.items.reduce((s, i) => s + i.price * i.qty, 0);
+              const vat = sub * 0.12;
+
               return (
                 <div key={order.id} style={{ background: "#fff", borderRadius: "16px", border: "0.5px solid #e8e8e8", overflow: "hidden" }}>
                   <div style={{ padding: "14px 18px", borderBottom: "0.5px solid #f0f0f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -308,9 +311,20 @@ export default function PendingPage() {
                       ))}
                       <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
                         <span style={{ fontSize: "14px", marginTop: "1px" }}>💰</span>
-                        <div>
-                          <p style={{ fontSize: "10px", color: "#aaa", margin: 0 }}>Total Amount</p>
-                          <p style={{ fontSize: "18px", fontWeight: 800, color: "#3c3eb1fb", margin: 0 }}>₱{order.total.toLocaleString()}.00</p>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ fontSize: "10px", color: "#aaa", margin: 0 }}>Amount Breakdown</p>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#555", marginTop: "4px" }}>
+                            <span>Subtotal:</span>
+                            <span>₱{sub.toLocaleString()}.00</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#555" }}>
+                            <span>VAT (12%):</span>
+                            <span>₱{vat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "16px", fontWeight: 800, color: "#3c3eb1fb", marginTop: "2px" }}>
+                            <span>Total:</span>
+                            <span>₱{order.total.toLocaleString()}.00</span>
+                          </div>
                         </div>
                       </div>
                     </div>
