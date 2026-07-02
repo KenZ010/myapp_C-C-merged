@@ -18,6 +18,7 @@ interface PendingOrder {
 export default function OrderPlacedPage() {
   const [orderNo,  setOrderNo]  = useState<string | null>(null);
   const [subtotal, setSubtotal] = useState(0);
+  const [vat,      setVat]      = useState(0);
   const [delivery, setDelivery] = useState(0);
   const [total,    setTotal]    = useState(0);
   const [loading,  setLoading]  = useState(true);
@@ -41,10 +42,12 @@ export default function OrderPlacedPage() {
     }
 
     const sub = pending.items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+    const v = sub * 0.12;
     const del = sub >= 1000 ? 0 : 50;
     setSubtotal(sub);
+    setVat(v);
     setDelivery(del);
-    setTotal(sub + del);
+    setTotal(sub + v + del);
 
     api
       .placeOrder(pending)
@@ -127,6 +130,12 @@ export default function OrderPlacedPage() {
               <span className="text-sm text-gray-400">Subtotal:</span>
               <span className="text-sm text-gray-900">
                 ₱{subtotal.toLocaleString()}.00
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-400">VAT (12%):</span>
+              <span className="text-sm text-gray-900">
+                ₱{vat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
             <div className="flex justify-between">
