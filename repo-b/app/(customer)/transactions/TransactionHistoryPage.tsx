@@ -37,6 +37,11 @@ function normalizeCompleted(o: Record<string, unknown>): Transaction {
   const rawDateStr = String(o.createdAt ?? o.date ?? "");
   const parsedDate = rawDateStr ? new Date(rawDateStr) : null;
 
+  const cashReceived =
+    payment?.cashReceived ?? payment?.amountReceived ?? payment?.tendered;
+  const changeRaw =
+    payment?.change ?? payment?.changeAmount ?? payment?.changeDue;
+
   return {
     id: String(o.id ?? ""),
     date: parsedDate
@@ -50,6 +55,15 @@ function normalizeCompleted(o: Record<string, unknown>): Transaction {
       o.totalAmount ?? items.reduce((s, i) => s + i.price * i.qty, 0),
     ),
     paymentMethod: payment ? String(payment.method ?? "CASH") : "CASH",
+    cashier: String(o.cashier ?? o.cashierName ?? payment?.cashier ?? "N/A"),
+    cashReceived:
+      cashReceived !== undefined && cashReceived !== null
+        ? Number(cashReceived)
+        : undefined,
+    changeDue:
+      changeRaw !== undefined && changeRaw !== null
+        ? Number(changeRaw)
+        : undefined,
     items,
   };
 }
