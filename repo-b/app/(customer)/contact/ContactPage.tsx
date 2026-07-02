@@ -208,7 +208,7 @@ export default function ContactPage() {
             icon: "💬",
             bg: "#e3f2fd",
             label: "Text / SMS",
-            value: "0912 345 6789",
+            value: "+63 929 141 0133",
             desc: "Send us a text anytime",
           },
           {
