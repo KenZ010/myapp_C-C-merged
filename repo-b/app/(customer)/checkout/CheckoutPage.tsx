@@ -126,7 +126,9 @@ export default function CheckoutPage() {
       ? sum + (i.product.price - fp) * i.quantity
       : sum;
   }, 0);
-  const total = subtotal;
+  const VAT_RATE = 0.12;
+  const vat  = subtotal * VAT_RATE;
+  const total = subtotal + vat;
 
   // ── Cash / change calculation (carried over from CartPage) ──────────────────
   const cashAmount    = parseFloat(cashGiven.replace(/,/g, "")) || 0;
@@ -390,6 +392,13 @@ export default function CheckoutPage() {
               </span>
             </div>
           )}
+
+          <div className="flex justify-between mb-2">
+            <span className="text-[13px] text-gray-400">VAT (12%)</span>
+            <span className="text-[13px] text-gray-900">
+              ₱{vat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
 
           <div className="h-px bg-gray-100 my-3" />
 

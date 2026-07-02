@@ -612,7 +612,7 @@ export default function TransactionHistoryPage() {
           selected.changeDue !== undefined
             ? selected.changeDue
             : selected.cashReceived !== undefined
-            ? selected.cashReceived - totalDue
+            ? selected.cashReceived - selected.total
             : undefined;
 
         return (
