@@ -725,6 +725,26 @@ export default function CartPage() {
               </span>
             </div>
 
+            {/* ── VAT (12%) — directly under Subtotal ── */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: "8px",
+              }}
+            >
+              <span style={{ fontSize: "13px", color: "#888" }}>
+                VAT (12%)
+              </span>
+              <span style={{ fontSize: "13px", color: "#1a1a1a" }}>
+                ₱
+                {vat.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </span>
+            </div>
+
             {totalDiscount > 0 && (
               <div
                 style={{
@@ -747,26 +767,6 @@ export default function CartPage() {
                 </span>
               </div>
             )}
-
-            {/* ── VAT (12%) ── */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: "8px",
-              }}
-            >
-              <span style={{ fontSize: "13px", color: "#888" }}>
-                VAT (12%)
-              </span>
-              <span style={{ fontSize: "13px", color: "#1a1a1a" }}>
-                ₱
-                {vat.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </span>
-            </div>
 
             <div
               style={{
