@@ -274,10 +274,9 @@ export default function CartPage() {
   const canCheckout =
     items.length > 0 &&
     !hasStockIssue &&
-    (paymentMethod === "cod" ||
-      (paymentMethod === "gcash" &&
-        gcashRef.trim() !== "" &&
-        gcashImage !== null));
+    (paymentMethod === "gcash"
+      ? gcashRef.trim() !== "" && gcashImage !== null
+      : isExactOrOver);
 
   if (loading) {
     return (
@@ -1375,6 +1374,8 @@ export default function CartPage() {
                 ? "⚠️ Reduce quantity to match stock"
                 : paymentMethod === "gcash" && !canCheckout
                 ? "Complete GCash Details First"
+                : paymentMethod === "cod" && !canCheckout
+                ? "Enter Cash Amount First"
                 : "Proceed to Checkout →"}
             </Link>
 
