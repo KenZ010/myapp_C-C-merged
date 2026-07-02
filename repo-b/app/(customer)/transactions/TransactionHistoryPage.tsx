@@ -580,7 +580,7 @@ export default function TransactionHistoryPage() {
 
       {/* Receipt Modal — thermal paper style */}
       {selected && (() => {
-        const TAX_RATE = 0.08;
+        const TAX_RATE = 0.12;
         const subtotal = selected.items.reduce((s, i) => s + i.price * i.qty, 0);
         const tax = subtotal * TAX_RATE;
         const totalDue = subtotal + tax;
