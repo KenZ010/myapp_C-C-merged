@@ -230,7 +230,7 @@ export default function CashierTransactionsPage() {
   useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
 
   const periodFiltered = filterByPeriod(transactions, period);
-  const searchFiltered = transactions.filter((tx) => {
+  const searchFiltered = periodFiltered.filter((tx) => {
     const q = search.toLowerCase();
     return tx.id.toLowerCase().includes(q) || tx.customer.toLowerCase().includes(q) || tx.employeeName.toLowerCase().includes(q);
   });
@@ -334,6 +334,20 @@ export default function CashierTransactionsPage() {
         {/* ══════════════════════════════════════════ */}
         {activeTab === "Transactions" && (
           <div style={{ width: "100%" }}>
+            {/* Period filter */}
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+              <span style={{ fontSize: "12px", color: "#64748b", display: "flex", alignItems: "center", gap: "5px", fontWeight: 500 }}>
+                {Icon.calendar} Period:
+              </span>
+              <div style={{ display: "flex", gap: "4px", background: "#f1f5f9", borderRadius: "8px", padding: "3px" }}>
+                {(["Daily", "Weekly", "Monthly"] as Period[]).map((p) => (
+                  <button key={p} onClick={() => setPeriod(p)}
+                    style={{ padding: "6px 16px", borderRadius: "6px", fontSize: "12.5px", fontWeight: period === p ? 700 : 500, cursor: "pointer", border: "none", background: period === p ? "#fff" : "transparent", color: period === p ? "#1e1b4b" : "#64748b", boxShadow: period === p ? "0 1px 3px rgba(0,0,0,0.08)" : "none", transition: "all 0.15s" }}>
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
             {/* Search */}
             <div style={{ position: "relative", marginBottom: "20px", maxWidth: "420px", width: "100%" }}>
               <span style={{ position: "absolute", left: "13px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }}>{Icon.search}</span>
