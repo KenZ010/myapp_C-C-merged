@@ -700,3 +700,4 @@ export default function TransactionHistoryPage() {
                   </p>
                   <p style={{ margin: "1px 0 0", fontSize: "11px", color: "#555" }}>
                     Phone: +63 929 141 0133
+                  </p>
