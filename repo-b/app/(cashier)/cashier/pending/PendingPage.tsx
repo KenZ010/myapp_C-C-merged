@@ -323,7 +323,7 @@ export default function PendingPage() {
                           </div>
                           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "16px", fontWeight: 800, color: "#3c3eb1fb", marginTop: "2px" }}>
                             <span>Total:</span>
-                            <span>₱{order.total.toLocaleString()}.00</span>
+                            <span>₱{(sub + vat).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           </div>
                         </div>
                       </div>
