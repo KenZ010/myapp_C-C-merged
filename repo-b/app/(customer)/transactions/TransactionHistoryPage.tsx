@@ -11,6 +11,9 @@ type Transaction = {
   rawDate: Date | null;
   total: number;
   paymentMethod: string;
+  cashier: string;
+  cashReceived?: number;
+  changeDue?: number;
   items: TxItem[];
 };
 
@@ -34,6 +37,20 @@ function normalizeCompleted(o: Record<string, unknown>): Transaction {
   const rawDateStr = String(o.createdAt ?? o.date ?? "");
   const parsedDate = rawDateStr ? new Date(rawDateStr) : null;
 
+  const cashReceivedRaw =
+    payment?.cashReceived ?? payment?.amountReceived ?? payment?.tendered;
+  const cashReceived =
+    cashReceivedRaw !== undefined && cashReceivedRaw !== null
+      ? Number(cashReceivedRaw)
+      : undefined;
+
+  const changeRaw =
+    payment?.change ?? payment?.changeAmount ?? payment?.changeDue;
+  const changeDue =
+    changeRaw !== undefined && changeRaw !== null
+      ? Number(changeRaw)
+      : undefined;
+
   return {
     id: String(o.id ?? ""),
     date: parsedDate
@@ -47,6 +64,11 @@ function normalizeCompleted(o: Record<string, unknown>): Transaction {
       o.totalAmount ?? items.reduce((s, i) => s + i.price * i.qty, 0),
     ),
     paymentMethod: payment ? String(payment.method ?? "CASH") : "CASH",
+    cashier: String(
+      o.cashier ?? o.cashierName ?? payment?.cashier ?? "N/A",
+    ),
+    cashReceived,
+    changeDue,
     items,
   };
 }
@@ -584,6 +606,14 @@ export default function TransactionHistoryPage() {
         const subtotal = selected.items.reduce((s, i) => s + i.price * i.qty, 0);
         const tax = subtotal * TAX_RATE;
         const totalDue = subtotal + tax;
+        const showCash =
+          selected.paymentMethod === "CASH" && selected.cashReceived !== undefined;
+        const change =
+          selected.changeDue !== undefined
+            ? selected.changeDue
+            : selected.cashReceived !== undefined
+            ? selected.cashReceived - totalDue
+            : undefined;
 
         return (
           <>
@@ -610,7 +640,6 @@ export default function TransactionHistoryPage() {
                 overflowY: "auto",
                 overflowX: "hidden",
                 boxShadow: "0 8px 40px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.12)",
-                /* torn top edge */
                 borderRadius: "2px",
               }}
             >
@@ -632,6 +661,7 @@ export default function TransactionHistoryPage() {
                   color: "#1a1a1a",
                   padding: "18px 24px 10px",
                   lineHeight: 1.55,
+                  position: "relative",
                 }}
               >
                 {/* Close button */}
@@ -660,152 +690,13 @@ export default function TransactionHistoryPage() {
                 {/* Store header */}
                 <div style={{ textAlign: "center", marginBottom: "12px" }}>
                   <p style={{ margin: 0, fontWeight: 700, fontSize: "15px", letterSpacing: "0.5px" }}>
-                    ☐ JULIETA SOFT DRINKS
+                    JULIETA SOFTDRINK STORE
                   </p>
                   <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#555" }}>
-                    Drinks • Beverages • Refreshments
+                    3065 JP Rizal St.
                   </p>
                   <p style={{ margin: "1px 0 0", fontSize: "11px", color: "#555" }}>
-                    123 Cola Street, Quezon City
+                    Camarin Caloocan City
                   </p>
-                </div>
-
-                <Dash />
-
-                {/* Invoice meta */}
-                <p style={{ margin: "0 0 1px" }}>
-                  <span style={{ color: "#555" }}>Invoice #: </span>
-                  <span style={{ fontWeight: 700 }}>{selected.id}</span>
-                </p>
-                <p style={{ margin: "0 0 1px" }}>
-                  <span style={{ color: "#555" }}>Date: </span>{selected.date}
-                </p>
-                <p style={{ margin: "0 0 10px" }}>
-                  <span style={{ color: "#555" }}>Payment: </span>{selected.paymentMethod}
-                </p>
-
-                <Dash />
-
-                {/* Column header */}
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "2fr 1fr 1fr 1fr",
-                  fontSize: "12px",
-                  fontWeight: 700,
-                  padding: "4px 0",
-                  color: "#333",
-                }}>
-                  <span>Description</span>
-                  <span style={{ textAlign: "center" }}>Qty</span>
-                  <span style={{ textAlign: "right" }}>Unit</span>
-                  <span style={{ textAlign: "right" }}>Total</span>
-                </div>
-
-                <Dash />
-
-                {/* Items */}
-                {selected.items.map((item, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "2fr 1fr 1fr 1fr",
-                      padding: "3px 0",
-                      fontSize: "12px",
-                      alignItems: "start",
-                    }}
-                  >
-                    <span style={{ wordBreak: "break-word", paddingRight: "6px" }}>
-                      {item.name}
-                    </span>
-                    <span style={{ textAlign: "center" }}>{item.qty}</span>
-                    <span style={{ textAlign: "right" }}>
-                      ₱{item.price.toFixed(2)}
-                    </span>
-                    <span style={{ textAlign: "right", fontWeight: 600 }}>
-                      ₱{(item.price * item.qty).toFixed(2)}
-                    </span>
-                  </div>
-                ))}
-
-                <Dash />
-
-                {/* Subtotal / Tax */}
-                <ThermalRow label="Subtotal:" value={`₱${subtotal.toFixed(2)}`} />
-                <ThermalRow label="Tax (8%):" value={`₱${tax.toFixed(2)}`} />
-
-                <Dash />
-
-                {/* TOTAL DUE */}
-                <div style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontWeight: 700,
-                  fontSize: "15px",
-                  padding: "4px 0 6px",
-                }}>
-                  <span>TOTAL DUE:</span>
-                  <span>₱{totalDue.toFixed(2)}</span>
-                </div>
-
-                <Dash />
-
-                {/* Footer meta */}
-                <p style={{ margin: "6px 0 1px", fontSize: "12px" }}>
-                  <span style={{ color: "#555" }}>Paid: </span>{selected.paymentMethod === "CASH" ? "Cash" : "Card / E-Wallet"}
-                </p>
-                <p style={{ margin: "0 0 10px", fontSize: "12px" }}>
-                  <span style={{ color: "#555" }}>Staff: </span>#JST-2026
-                </p>
-
-                <Dash />
-
-                {/* Footer note */}
-                <div style={{ textAlign: "center", padding: "8px 0 4px", fontSize: "11px", color: "#666" }}>
-                  <p style={{ margin: "0 0 2px" }}>Thank you for your purchase!</p>
-                  <p style={{ margin: 0 }}>Visit us at: julietasoftdrinks.com</p>
-                  <p style={{ margin: "6px 0 0", fontSize: "10px", color: "#aaa" }}>
-                    Julieta Soft Drink Store • TECHNOLOGIA @2026
-                  </p>
-                </div>
-              </div>
-
-              {/* Torn bottom */}
-              <div style={{
-                height: "14px",
-                background: "linear-gradient(135deg, transparent 25%, #f7f4ee 25%) -8px 0,linear-gradient(225deg, transparent 25%, #f7f4ee 25%) -8px 0,linear-gradient(315deg, transparent 25%, #f7f4ee 25%),linear-gradient(45deg, transparent 25%, #f7f4ee 25%)",
-                backgroundSize: "16px 14px",
-                backgroundRepeat: "repeat-x",
-                backgroundColor: "#e8e4da",
-              }} />
-            </div>
-          </>
-        );
-      })()}
-    </>
-  );
-}
-
-/* ── Helpers ── */
-function Dash() {
-  return (
-    <div style={{
-      borderTop: "1px dashed #bbb",
-      margin: "8px 0",
-    }} />
-  );
-}
-
-function ThermalRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{
-      display: "flex",
-      justifyContent: "space-between",
-      fontSize: "12px",
-      padding: "1px 0",
-    }}>
-      <span>{label}</span>
-      <span>{value}</span>
-    </div>
-  );
-}
+                  <p style={{ margin: "1px 0 0", fontSize: "11px", color: "#555" }}>
+                    Phone: +63 929 141 0133
