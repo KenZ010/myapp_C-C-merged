@@ -195,23 +195,6 @@ export default function LoginPage() {
           z-index: 10;
         }
 
-        /* Decorative can silhouette */
-        .lr-can-shape {
-          position: absolute;
-          right: -55px;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 180px; height: 340px;
-          border-radius: 36px 36px 46px 46px;
-          background: linear-gradient(135deg,
-            rgba(255,255,255,0.09) 0%,
-            rgba(255,255,255,0.03) 50%,
-            rgba(0,0,0,0.05) 100%
-          );
-          border: 1px solid rgba(255,255,255,0.12);
-          z-index: 1;
-        }
-
         /* Bottom wave glow */
         .lr-wave {
           position: absolute;
@@ -515,7 +498,6 @@ export default function LoginPage() {
         @media (max-width: 768px) {
           .lr-root  { flex-direction: column; }
           .lr-left  { width: 100%; min-height: 250px; border-radius: 0 0 36px 36px; }
-          .lr-can-shape { display: none; }
           .lr-logo-outer { width: 100px; height: 100px; }
           .lr-logo-inner { width: 90px;  height: 90px; }
           .lr-brand-name { font-size: 1.4rem; }
@@ -528,7 +510,6 @@ export default function LoginPage() {
 
         {/* ══════════ LEFT PANEL ══════════ */}
         <div className="lr-left">
-          <div className="lr-can-shape" />
           <div className="lr-wave" />
 
           {BUBBLES.map(([size, left, bottom, dur, delay, op], i) => (
