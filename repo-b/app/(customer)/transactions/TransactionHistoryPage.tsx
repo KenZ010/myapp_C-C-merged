@@ -701,3 +701,72 @@ export default function TransactionHistoryPage() {
                   <p style={{ margin: "1px 0 0", fontSize: "11px", color: "#555" }}>
                     Phone: +63 929 141 0133
                   </p>
+                </div>
+
+                <div style={{ borderTop: "1px dashed #bbb", margin: "8px 0" }} />
+
+                {/* Order info */}
+                <div style={{ fontSize: "11px", marginBottom: "8px" }}>
+                  <p style={{ margin: "1px 0" }}><strong>Order ID:</strong> {selected.id}</p>
+                  <p style={{ margin: "1px 0" }}><strong>Date:</strong> {selected.date}</p>
+                  <p style={{ margin: "1px 0" }}><strong>Payment Method:</strong> {selected.paymentMethod}</p>
+                  <p style={{ margin: "1px 0" }}><strong>Cashier:</strong> {selected.cashier}</p>
+                </div>
+
+                <div style={{ borderTop: "1px dashed #bbb", margin: "8px 0" }} />
+
+                {/* Table header */}
+                <div style={{ display: "flex", fontSize: "11px", fontWeight: 700, borderBottom: "1px solid #bbb", paddingBottom: "4px", marginBottom: "6px" }}>
+                  <span style={{ flex: 1 }}>Description</span>
+                  <span style={{ width: "40px", textAlign: "center" }}>Qty</span>
+                  <span style={{ width: "70px", textAlign: "right" }}>Price</span>
+                </div>
+
+                {/* Items */}
+                {selected.items.map((item, i) => (
+                  <div key={i} style={{ display: "flex", fontSize: "11px", marginBottom: "3px" }}>
+                    <span style={{ flex: 1 }}>{item.name}</span>
+                    <span style={{ width: "40px", textAlign: "center" }}>{item.qty}</span>
+                    <span style={{ width: "70px", textAlign: "right" }}>₱{item.price.toLocaleString()}.00</span>
+                  </div>
+                ))}
+
+                <div style={{ borderTop: "1px dashed #bbb", margin: "8px 0" }} />
+
+                {/* Totals */}
+                <div style={{ fontSize: "12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
+                    <span>Subtotal:</span>
+                    <span>₱{subtotal.toLocaleString()}.00</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
+                    <span>Tax (12%):</span>
+                    <span>₱{tax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: "14px", marginTop: "6px" }}>
+                    <span>Total:</span>
+                    <span>₱{totalDue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+
+                {showCash && (
+                  <>
+                    <div style={{ borderTop: "1px dashed #bbb", margin: "8px 0" }} />
+                    <div style={{ fontSize: "12px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
+                        <span>Cash:</span>
+                        <span>₱{(selected.cashReceived ?? 0).toLocaleString()}.00</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
+                        <span>Change:</span>
+                        <span>
+                          ₱{(change ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                <div style={{ textAlign: "center", fontSize: "10px", color: "#999", marginTop: "14px", borderTop: "1px dashed #bbb", paddingTop: "10px" }}>
+                  Thank you for your purchase!
+                </div>
