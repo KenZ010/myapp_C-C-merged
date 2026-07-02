@@ -138,7 +138,7 @@ function CaseBadge({ quantity, piecesPerCase, compact = false }: {
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Product = {
   id: string; productName: string; size: string | null;
-  price: number; category: string; stockQuantity: number;
+  price: number; originalPrice: number; category: string; stockQuantity: number;
   piecesPerCase?: number | null;
   status: string; supplierId: string; image: string | null;
   supplier?: { id: string; supplierName: string };
@@ -206,7 +206,7 @@ function Spinner() {
 }
 
 const defaultForm = () => ({
-  productName: "", size: "500ml", price: "",
+  productName: "", size: "500ml", price: "", originalPrice: "",
   category: "SOFTDRINKS", stockQuantity: "",
   supplierId: "", status: "ACTIVE",
   piecesPerCase: "24",
@@ -285,19 +285,23 @@ export default function ProductManagementPage() {
   }, []);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const normalizeProduct = (p: any): Product => ({
-    id:            p.id,
-    productName:   p.productName ?? "",
-    size:          p.size ?? null,
-    price:         Number(p.price ?? 0),
-    category:      p.category ?? "OTHER",
-    stockQuantity: Number(p.stockQuantity ?? p.stock ?? 0),
-    piecesPerCase: p.piecesPerCase ?? null,
-    status:        p.status ?? "ACTIVE",
-    supplierId:    p.supplierId ?? "",
-    image:         p.image ?? null,
-    supplier:      p.supplier ?? undefined,
-  });
+  const normalizeProduct = (p: any): Product => {
+    const pr = Number(p.price ?? 0);
+    return {
+      id:            p.id,
+      productName:   p.productName ?? "",
+      size:          p.size ?? null,
+      price:         pr,
+      originalPrice: Number(p.originalPrice ?? pr),
+      category:      p.category ?? "OTHER",
+      stockQuantity: Number(p.stockQuantity ?? p.stock ?? 0),
+      piecesPerCase: p.piecesPerCase ?? null,
+      status:        p.status ?? "ACTIVE",
+      supplierId:    p.supplierId ?? "",
+      image:         p.image ?? null,
+      supplier:      p.supplier ?? undefined,
+    };
+  };
 
   const fetchProducts = async () => {
     try {
@@ -349,6 +353,7 @@ export default function ProductManagementPage() {
       productName:   product.productName,
       size:          product.size || "500ml",
       price:         String(product.price),
+      originalPrice: String(product.originalPrice),
       category:      product.category,
       stockQuantity: String(product.stockQuantity),
       supplierId:    product.supplierId,
@@ -388,6 +393,7 @@ export default function ProductManagementPage() {
     setSaving(true);
     try {
       const price         = editForm.price === "" ? 0 : Number(editForm.price);
+      const originalPrice = editForm.originalPrice === "" ? 0 : Number(editForm.originalPrice);
       const stockQuantity = editForm.stockQuantity === "" ? 0 : Number(editForm.stockQuantity);
       const pcs = Number(editForm.piecesPerCase);
       if (isNaN(pcs) || pcs < 1) {
@@ -398,7 +404,7 @@ export default function ProductManagementPage() {
         return;
       }
       const { piecesPerCase: _ppc, supplierId, ...payload } = editForm;
-      const body = { ...payload, price, stockQuantity, piecesPerCase: pcs };
+      const body = { ...payload, price, originalPrice, stockQuantity, piecesPerCase: pcs };
       const res = await api.updateProduct(selectedProduct!.id, body);
       if (res.message && !res.id) { showToast(res.message, true); return; }
       await fetchProducts();
@@ -442,6 +448,7 @@ export default function ProductManagementPage() {
     setSaving(true);
     try {
       const price         = addForm.price === "" ? 0 : Number(addForm.price);
+      const originalPrice = addForm.originalPrice === "" ? price : Number(addForm.originalPrice);
       const stockQuantity = addForm.stockQuantity === "" ? 0 : Number(addForm.stockQuantity);
       const pcs = Number(addForm.piecesPerCase);
       if (isNaN(pcs) || pcs < 1) {
@@ -452,7 +459,7 @@ export default function ProductManagementPage() {
         return;
       }
       const { piecesPerCase: _ppc, ...payload } = addForm;
-      const res = await api.createProduct({ ...payload, price, stockQuantity, piecesPerCase: pcs });
+      const res = await api.createProduct({ ...payload, price, originalPrice, stockQuantity, piecesPerCase: pcs });
       if (res.message && !res.id) {
         setShowAddModal(true);
         showToast(res.message, true);
@@ -717,7 +724,12 @@ export default function ProductManagementPage() {
                             <span className="text-gray-400 font-normal ml-1">{product.size}</span>
                           )}
                         </p>
-                        <p className="text-xs text-gray-500 font-medium">₱{product.price}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className="text-xs font-semibold text-gray-800">₱{product.price}</p>
+                          {product.originalPrice !== product.price && (
+                            <p className="text-xs text-gray-400 line-through">₱{product.originalPrice}</p>
+                          )}
+                        </div>
 
                         {/* Supplier name */}
                         {product.supplier && (
@@ -831,12 +843,21 @@ export default function ProductManagementPage() {
                         {sizes.filter((s) => s !== "All").map((s) => <option key={s}>{s}</option>)}
                       </select>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-400">Price (₱)</p>
-                      <input type="number" inputMode="numeric" min="0" value={editForm.price}
-                        onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
-                        onChange={(e) => setEditForm({ ...editForm, price: e.target.value.replace(/[^0-9]/g, "") })}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-xs text-gray-400">Retail Price (₱)</p>
+                        <input type="number" inputMode="numeric" min="0" value={editForm.price}
+                          onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
+                          onChange={(e) => setEditForm({ ...editForm, price: e.target.value.replace(/[^0-9]/g, "") })}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">Original Price (₱)</p>
+                        <input type="number" inputMode="numeric" min="0" value={editForm.originalPrice}
+                          onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
+                          onChange={(e) => setEditForm({ ...editForm, originalPrice: e.target.value.replace(/[^0-9]/g, "") })}
+                          className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                      </div>
                     </div>
                     {/* ── Piece per Case input with dropdown ── */}
                     <div ref={editPcsRef}>
@@ -904,9 +925,15 @@ export default function ProductManagementPage() {
                       </span>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-400">Price</p>
+                      <p className="text-xs text-gray-400">Retail Price</p>
                       <p className="text-sm font-semibold text-gray-800 mt-0.5">₱{selectedProduct.price}</p>
                     </div>
+                    {selectedProduct.originalPrice !== selectedProduct.price && (
+                      <div>
+                        <p className="text-xs text-gray-400">Original Price</p>
+                        <p className="text-sm font-semibold text-gray-400 line-through mt-0.5">₱{selectedProduct.originalPrice}</p>
+                      </div>
+                    )}
                     <div>
                       <p className="text-xs text-gray-400">Stock</p>
                       <div className="mt-1">
@@ -994,13 +1021,23 @@ export default function ProductManagementPage() {
                   {sizes.filter((s) => s !== "All").map((s) => <option key={s}>{s}</option>)}
                 </select>
               </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600">Price (₱)</label>
-                <input type="number" inputMode="numeric" min="0" value={addForm.price}
-                  onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
-                  onChange={(e) => setAddForm({ ...addForm, price: e.target.value.replace(/[^0-9]/g, "") })}
-                  placeholder="0"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-medium text-gray-600">Retail Price (₱)</label>
+                  <input type="number" inputMode="numeric" min="0" value={addForm.price}
+                    onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
+                    onChange={(e) => setAddForm({ ...addForm, price: e.target.value.replace(/[^0-9]/g, "") })}
+                    placeholder="0"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600">Original Price (₱)</label>
+                  <input type="number" inputMode="numeric" min="0" value={addForm.originalPrice}
+                    onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
+                    onChange={(e) => setAddForm({ ...addForm, originalPrice: e.target.value.replace(/[^0-9]/g, "") })}
+                    placeholder="0"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                </div>
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600">Supplier</label>

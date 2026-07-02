@@ -15,6 +15,7 @@ type ProductItem = {
   productName: string;
   size: string | null;
   price: number;
+  originalPrice: number;
   category: string;
   stockQuantity: number;
   stockUnit: string;
@@ -101,9 +102,9 @@ function AlertModal({ open, type = "alert", title, message, danger, onConfirm, o
             className={`flex-1 rounded-lg py-2 text-sm text-white font-medium ${danger ? "bg-red-500 hover:bg-red-600" : "bg-indigo-600 hover:bg-indigo-700"}`}>
             {type === "confirm" ? (danger ? "Delete" : "Confirm") : "OK"}
           </button>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
   );
 }
 
@@ -286,8 +287,39 @@ export default function SupplierMaintenancePage() {
   const fetchSuppliers = async () => {
     try {
       setLoading(true);
-      const data = await api.getSuppliers();
-      setItems(Array.isArray(data) ? data : []);
+      const [suppliersData, productsData] = await Promise.all([
+        api.getSuppliers(),
+        api.getProducts(),
+      ]);
+      const suppliers = Array.isArray(suppliersData) ? suppliersData : [];
+      const allProducts = Array.isArray(productsData) ? productsData : [];
+
+      // Group products by supplier
+      const productsBySupplier: Record<string, ProductItem[]> = {};
+      for (const p of allProducts) {
+        const sid = typeof p.supplier === "object" ? p.supplier?.id : p.supplier;
+        const supplierId = p.supplierId || sid;
+        if (supplierId) {
+          if (!productsBySupplier[supplierId]) productsBySupplier[supplierId] = [];
+          const pr = Number(p.price) || 0;
+          productsBySupplier[supplierId].push({
+            id: (p.id as string) || "",
+            productName: (p.productName as string) || "",
+            size: (p.size as string) || null,
+            price: pr,
+            originalPrice: pr,
+            category: (p.category as string) || "OTHER",
+            stockQuantity: Number(p.stockQuantity) || 0,
+            stockUnit: (p.stockUnit as string) || "case_24",
+            status: (p.status as string) || "ACTIVE",
+          });
+        }
+      }
+
+      setItems(suppliers.map((s: SupplierItem) => ({
+        ...s,
+        products: productsBySupplier[s.id] || [],
+      })));
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
@@ -310,19 +342,24 @@ export default function SupplierMaintenancePage() {
   const loadSupplierProducts = async (supplierId: string) => {
     const allProducts = await api.getProducts();
     return (Array.isArray(allProducts) ? allProducts : [])
-      .filter((p: { supplierId?: string; supplier?: string }) =>
-        (p.supplierId || p.supplier) === supplierId
-      )
-      .map((p: Record<string, unknown>) => ({
-        id: (p.id as string) || "",
-        productName: (p.productName as string) || "",
-        size: (p.size as string) || null,
-        price: Number(p.price) || 0,
-        category: (p.category as string) || "OTHER",
-        stockQuantity: Number(p.stockQuantity) || 0,
-        stockUnit: (p.stockUnit as string) || "case_24",
-        status: (p.status as string) || "ACTIVE",
-      }));
+      .filter((p: { supplierId?: string; supplier?: { id: string } | string }) => {
+        const sid = typeof p.supplier === "object" ? p.supplier?.id : p.supplier;
+        return (p.supplierId || sid) === supplierId;
+      })
+      .map((p: Record<string, unknown>) => {
+        const pr = Number(p.price) || 0;
+        return {
+          id: (p.id as string) || "",
+          productName: (p.productName as string) || "",
+          size: (p.size as string) || null,
+          price: pr,
+          originalPrice: pr,
+          category: (p.category as string) || "OTHER",
+          stockQuantity: Number(p.stockQuantity) || 0,
+          stockUnit: (p.stockUnit as string) || "case_24",
+          status: (p.status as string) || "ACTIVE",
+        };
+      });
   };
 
   const openEditModal = async () => {
@@ -391,19 +428,24 @@ export default function SupplierMaintenancePage() {
     setViewItem(supplier);
     const allProducts = await api.getProducts();
     const supplierProducts = (Array.isArray(allProducts) ? allProducts : [])
-      .filter((p: { supplierId?: string; supplier?: string }) =>
-        (p.supplierId || p.supplier) === supplierId
-      )
-      .map((p: Record<string, unknown>) => ({
-        id: (p.id as string) || "",
-        productName: (p.productName as string) || "",
-        size: (p.size as string) || null,
-        price: Number(p.price) || 0,
-        category: (p.category as string) || "OTHER",
-        stockQuantity: Number(p.stockQuantity) || 0,
-        stockUnit: (p.stockUnit as string) || "case_24",
-        status: (p.status as string) || "ACTIVE",
-      }));
+      .filter((p: { supplierId?: string; supplier?: { id: string } | string }) => {
+        const sid = typeof p.supplier === "object" ? p.supplier?.id : p.supplier;
+        return (p.supplierId || sid) === supplierId;
+      })
+      .map((p: Record<string, unknown>) => {
+        const pr = Number(p.price) || 0;
+        return {
+          id: (p.id as string) || "",
+          productName: (p.productName as string) || "",
+          size: (p.size as string) || null,
+          price: pr,
+          originalPrice: pr,
+          category: (p.category as string) || "OTHER",
+          stockQuantity: Number(p.stockQuantity) || 0,
+          stockUnit: (p.stockUnit as string) || "case_24",
+          status: (p.status as string) || "ACTIVE",
+        };
+      });
     setViewProducts(supplierProducts);
   };
 
@@ -616,10 +658,50 @@ export default function SupplierMaintenancePage() {
               </table>
             </div>
           </div>
+
+          {/* Products & Retail Prices */}
+          <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm mt-4">
+            <h2 className="font-bold text-gray-800 mb-3">Products &amp; Retail Prices</h2>
+            <div className="max-h-64 overflow-y-auto overflow-x-auto">
+              <table className="w-full text-sm min-w-max">
+                <thead>
+                  <tr className="bg-indigo-900 text-white text-xs">
+                    <th className="p-3 text-left">Supplier</th>
+                    <th className="p-3 text-left">Product Name</th>
+                    <th className="p-3 text-right">Retail Price</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(() => {
+                    const allProducts: { supplierName: string; productName: string; retailPrice: number }[] = [];
+                    for (const supplier of items) {
+                      if (supplier.products) {
+                        for (const prod of supplier.products) {
+                          allProducts.push({
+                            supplierName: supplier.supplierName,
+                            productName: prod.productName + (prod.size ? ` ${prod.size}` : ""),
+                            retailPrice: prod.originalPrice,
+                          });
+                        }
+                      }
+                    }
+                    if (allProducts.length === 0) {
+                      return <tr><td colSpan={3} className="p-6 text-center text-gray-400">No products found.</td></tr>;
+                    }
+                    return allProducts.map((p, i) => (
+                      <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="p-3 text-gray-600 text-xs">{p.supplierName}</td>
+                        <td className="p-3 text-gray-800 font-medium">{p.productName}</td>
+                        <td className="p-3 text-right text-gray-700 font-semibold">₱{p.retailPrice.toFixed(2)}</td>
+                      </tr>
+                    ));
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </main>
-
-      {/* View Details Modal */}
       {viewItem && (
         <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
@@ -672,7 +754,12 @@ export default function SupplierMaintenancePage() {
                           <p className="text-sm font-medium text-gray-800 truncate">{product.productName}{product.size ? ` ${product.size}` : ""}</p>
                           <p className="text-xs text-gray-400">{product.category}</p>
                         </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="text-right">
+                            <p className="text-xs text-gray-400">Retail</p>
+                            <p className="text-sm font-semibold text-gray-700">₱{product.originalPrice.toFixed(2)}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5">
                            <span className="text-xs text-gray-400">₱</span>
                            <input
                              type="number"
@@ -694,6 +781,7 @@ export default function SupplierMaintenancePage() {
                              {savingPrice === product.id ? "..." : "Save"}
                            </button>
                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -781,7 +869,12 @@ export default function SupplierMaintenancePage() {
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-medium text-gray-800 truncate">{product.productName}{product.size ? ` ${product.size}` : ""}</p>
                         </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="text-right">
+                            <p className="text-[10px] text-gray-400">Retail</p>
+                            <p className="text-xs font-semibold text-gray-500">₱{product.originalPrice.toFixed(2)}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5">
                            <span className="text-xs text-gray-400">₱</span>
                            <input
                              type="number"
@@ -797,6 +890,7 @@ export default function SupplierMaintenancePage() {
                            />
                            <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">Wholesale</span>
                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>

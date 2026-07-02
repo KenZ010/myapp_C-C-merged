@@ -319,13 +319,14 @@ const getProductName = (productId: string, allProducts: Product[], deliveryItems
 
 // ─── PRODUCT DROPDOWN (custom, no native select) ──────────────────────────────
 function ProductSelect({
-  value, onChange, products, usedIds,
+  value, onChange, products, usedIds, productSales,
 }: {
   value: string;
   onChange: (id: string) => void;
   products: Product[];
   usedIds: string[];
   idx: number;
+  productSales: Record<string, number>;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -369,6 +370,12 @@ function ProductSelect({
               const isOutOfStock = (p.stockQuantity ?? 0) === 0;
               const isDisabled   = isUsed || isOutOfStock;
               const stockLabel   = p.stockQuantity != null ? `${p.stockQuantity} ${getUnitShort(p.stockUnit)} left` : null;
+              const salesCount   = productSales[p.id] ?? 0;
+              const topSales     = products
+                .map((x) => productSales[x.id] ?? 0)
+                .sort((a, b) => b - a)
+                .filter((v) => v > 0);
+              const isRecommended = salesCount > 0 && topSales.length > 0 && salesCount >= (topSales[Math.min(2, topSales.length - 1)] ?? 0);
               return (
                 <button
                   key={p.id}
@@ -383,6 +390,7 @@ function ProductSelect({
                     <p className={`text-xs font-medium truncate ${value === p.id ? "text-indigo-700" : "text-gray-800"}`}>
                       {p.productName}
                       {p.size && <span className="text-gray-400 font-normal ml-1">{p.size}</span>}
+                      {isRecommended && <span className="ml-1.5 text-[10px] bg-orange-100 text-orange-700 font-semibold px-1.5 py-0.5 rounded-full">Recommended</span>}
                     </p>
                     {stockLabel && !isOutOfStock && <p className="text-xs text-gray-400 mt-0.5">{stockLabel}</p>}
                     {isOutOfStock && <p className="text-xs text-red-500 font-medium mt-0.5">No Stock</p>}
@@ -411,6 +419,7 @@ export default function PurchaseOrderPage() {
   const [loading,        setLoading]        = useState(true);
   const [suppliers,      setSuppliers]      = useState<Supplier[]>([]);
   const [allProducts,    setAllProducts]    = useState<Product[]>([]);
+  const [productSales,   setProductSales]   = useState<Record<string, number>>({});
   const [form,           setForm]           = useState<DeliveryForm>(makeEmptyForm());
   const [saving,         setSaving]         = useState(false);
 
@@ -436,7 +445,9 @@ export default function PurchaseOrderPage() {
   const [receiving,         setReceiving]         = useState(false);
 
   const supplierProducts = form.supplierId
-    ? allProducts.filter((p) => p.supplierId === form.supplierId && p.status !== "INACTIVE")
+    ? allProducts
+        .filter((p) => p.supplierId === form.supplierId && p.status !== "INACTIVE")
+        .sort((a, b) => (productSales[b.id] ?? 0) - (productSales[a.id] ?? 0))
     : [];
 
   const lowStockProducts = form.supplierId
@@ -457,7 +468,9 @@ export default function PurchaseOrderPage() {
   const fetchAll = async () => {
     try {
       setLoading(true);
-      const [d, s, p] = await Promise.all([api.getDeliveries(), api.getSuppliers(), api.getProducts()]);
+      const [d, s, p, orders] = await Promise.all([
+        api.getDeliveries(), api.getSuppliers(), api.getProducts(), api.getCompletedOrders(),
+      ]);
       setDeliveries(Array.isArray(d) ? d : []);
       setSuppliers((Array.isArray(s) ? s : []).filter((sup: { status?: string }) => sup.status !== "INACTIVE"));
       const normalized = (Array.isArray(p) ? p : []).map((prod: Product) => ({
@@ -467,6 +480,32 @@ export default function PurchaseOrderPage() {
         stockUnit: (prod.stockUnit as CaseUnit) || "case_24",
       }));
       setAllProducts(normalized);
+
+      // Compute sales count per product from completed orders
+      const sales: Record<string, number> = {};
+      const orderList = Array.isArray(orders) ? orders : [];
+      for (const order of orderList) {
+        const lines = (order as any).orderLines ?? [];
+        if (Array.isArray(lines)) {
+          for (const line of lines) {
+            const product = (line as any).product as Record<string, unknown> | null;
+            const prodId = product?.id ? String(product.id) : null;
+            const prodName = product?.productName ? String(product.productName) : null;
+            const qty = Number((line as any).quantity ?? 0);
+            // Try to match by product id first, then by name
+            if (prodId) {
+              sales[prodId] = (sales[prodId] ?? 0) + qty;
+            } else if (prodName) {
+              // Fallback: match by name across all products
+              const match = normalized.find((np) => np.productName === prodName);
+              if (match) {
+                sales[match.id] = (sales[match.id] ?? 0) + qty;
+              }
+            }
+          }
+        }
+      }
+      setProductSales(sales);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -512,6 +551,20 @@ export default function PurchaseOrderPage() {
   const addLineItem    = () => {
     if (!form.supplierId) { setCreateError("Please select a supplier first."); return; }
     setForm({ ...form, lineItems: [...form.lineItems, emptyLineItem()] });
+  };
+
+  const addRecommendedItem = (productId: string) => {
+    const p = supplierProducts.find((x) => x.id === productId);
+    if (!p) return;
+    const alreadyAdded = form.lineItems.some((i) => i.productId === productId);
+    if (alreadyAdded) return;
+    setForm({
+      ...form,
+      lineItems: [
+        ...form.lineItems,
+        { productId, productName: p.productName, size: p.size, quantity: 1, unitPrice: p.price, unit: (p.stockUnit as CaseUnit) || "case_24" },
+      ],
+    });
   };
   const removeLineItem = (idx: number) => setForm({ ...form, lineItems: form.lineItems.filter((_, i) => i !== idx) });
 
@@ -849,6 +902,61 @@ export default function PurchaseOrderPage() {
                   </div>
                 </div>
 
+                {/* Recommended Products */}
+                {form.supplierId && supplierProducts.length > 0 && (() => {
+                  const topProducts = supplierProducts
+                    .filter((p) => (productSales[p.id] ?? 0) > 0)
+                    .slice(0, 5);
+                  if (topProducts.length === 0) return null;
+                  return (
+                    <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-2xl p-4 md:p-5 shadow-sm">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-lg">🔥</span>
+                        <h2 className="text-sm font-bold text-orange-800">Top Seller Products</h2>
+                        <span className="text-xs text-orange-500 bg-orange-100 px-2 py-0.5 rounded-full">{topProducts.length} product{topProducts.length > 1 ? "s" : ""}</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {topProducts.map((p) => {
+                          const stock = p.stockQuantity ?? 0;
+                          const isOutOfStock = stock === 0;
+                          const inCart = form.lineItems.some((i) => i.productId === p.id);
+                          return (
+                            <div key={p.id} className={`flex items-center justify-between rounded-xl p-3 border ${isOutOfStock ? "border-red-200 bg-red-50/50" : "border-orange-100 bg-white"}`}>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-semibold text-gray-800 truncate">{p.productName}{p.size ? ` ${p.size}` : ""}</p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-xs font-medium text-gray-500">₱{p.price}</span>
+                                  {isOutOfStock ? (
+                                    <span className="text-xs text-red-500 font-medium">Out of Stock</span>
+                                  ) : (
+                                    <span className="text-xs text-gray-400">{stock} {getUnitShort(p.stockUnit)}</span>
+                                  )}
+                                  {productSales[p.id] && (
+                                    <span className="text-xs text-orange-600 font-medium">{productSales[p.id]} sold</span>
+                                  )}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                disabled={isOutOfStock || inCart}
+                                onClick={() => addRecommendedItem(p.id)}
+                                className={`ml-2 shrink-0 text-xs font-semibold rounded-lg px-3 py-1.5 transition-colors ${
+                                  inCart
+                                    ? "bg-green-100 text-green-700 cursor-default"
+                                    : isOutOfStock
+                                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                    : "bg-orange-500 text-white hover:bg-orange-600"
+                                }`}>
+                                {inCart ? "Added ✓" : "Add to Order"}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Step 2 — Products */}
                 <div className={`bg-white rounded-2xl p-4 md:p-5 shadow-sm transition-opacity ${!form.supplierId ? "opacity-50 pointer-events-none" : ""}`}>
                   <div className="flex items-center justify-between mb-3">
@@ -905,6 +1013,7 @@ export default function PurchaseOrderPage() {
                                   products={supplierProducts}
                                   usedIds={usedIds}
                                   idx={idx}
+                                  productSales={productSales}
                                 />
                               </div>
                               <div className="col-span-1 md:col-span-3">
@@ -981,6 +1090,15 @@ export default function PurchaseOrderPage() {
                               <div className="flex items-center gap-1.5">
                                 <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor} ${isOutOfStock ? "animate-pulse" : ""}`} />
                                 <p className="text-xs font-medium text-gray-800 truncate">{p.productName}{p.size ? ` ${p.size}` : ""}</p>
+                                {(() => {
+                                  const salesCount = productSales[p.id] ?? 0;
+                                  const topVals = supplierProducts
+                                    .map((x) => productSales[x.id] ?? 0)
+                                    .sort((a, b) => b - a)
+                                    .filter((v) => v > 0);
+                                  const isTop = salesCount > 0 && topVals.length > 0 && salesCount >= (topVals[Math.min(2, topVals.length - 1)] ?? 0);
+                                  return isTop ? <span className="ml-1 text-[10px] bg-orange-100 text-orange-700 font-semibold px-1.5 py-0.5 rounded-full shrink-0">Top Seller</span> : null;
+                                })()}
                               </div>
                               <p className={`text-xs mt-0.5 font-medium ${isOutOfStock ? "text-red-500" : isLowStock ? "text-yellow-600" : "text-green-600"}`}>{statusText}</p>
                             </div>

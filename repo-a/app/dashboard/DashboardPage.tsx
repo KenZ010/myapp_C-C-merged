@@ -465,7 +465,13 @@ export default function DashboardPage() {
             <div className="md:col-span-5 bg-white rounded-2xl p-4 shadow-sm overflow-x-auto">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-bold text-gray-800">Supplier Information</h2>
-                <span className="text-xs text-gray-400">{suppliers.length} total</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">{suppliers.length} total</span>
+                  <button onClick={() => router.push("/supplier")}
+                    className="text-xs border border-gray-300 rounded-full px-3 py-1 text-gray-500 hover:bg-gray-50 hover:border-indigo-300 hover:text-indigo-500 transition-colors">
+                    See more
+                  </button>
+                </div>
               </div>
               <table className="w-full text-sm min-w-max">
                 <thead>
@@ -518,7 +524,7 @@ export default function DashboardPage() {
                   {inventoryData.map((entry) => (
                     <div key={entry.name} className="flex items-center gap-2">
                       <div className="w-4 h-4 rounded-sm" style={{ backgroundColor: entry.color, border: "1px solid rgba(0,0,0,0.1)" }} />
-                      <span className="text-sm font-medium text-gray-700">{entry.name}</span>
+                      <span className="text-sm font-medium text-gray-700">{entry.name} {entry.value}%</span>
                     </div>
                   ))}
                 </div>
@@ -528,7 +534,13 @@ export default function DashboardPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
             <div className="md:col-span-7 bg-white rounded-2xl p-4 shadow-sm">
-              <h2 className="font-bold text-gray-800 mb-3">Product Maintenance</h2>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-bold text-gray-800">Product Maintenance</h2>
+                <button onClick={() => router.push("/product")}
+                  className="text-xs border border-gray-300 rounded-full px-3 py-1 text-gray-500 hover:bg-gray-50 hover:border-indigo-300 hover:text-indigo-500 transition-colors">
+                  See more
+                </button>
+              </div>
 
               {loadingProducts ? (
                 <p className="text-sm text-gray-400">Loading products...</p>
