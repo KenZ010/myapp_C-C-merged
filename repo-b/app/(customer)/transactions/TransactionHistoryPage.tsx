@@ -601,6 +601,14 @@ export default function TransactionHistoryPage() {
         const subtotal = selected.items.reduce((s, i) => s + i.price * i.qty, 0);
         const tax = subtotal * TAX_RATE;
         const totalDue = subtotal + tax;
+        const showCash =
+          selected.paymentMethod === "CASH" && selected.cashReceived !== undefined;
+        const change =
+          selected.changeDue !== undefined
+            ? selected.changeDue
+            : selected.cashReceived !== undefined
+            ? selected.cashReceived - selected.total
+            : undefined;
 
         return (
           <>
