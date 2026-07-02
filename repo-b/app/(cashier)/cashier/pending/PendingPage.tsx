@@ -21,6 +21,8 @@ type Order = {
   status: OrderStatus;
   isOnline: boolean;
   items: OrderItem[];
+  cashReceived?: number;
+  changeDue?: number;
 };
 
 const statusStyle: Record<OrderStatus, { bg: string; color: string }> = {
@@ -64,6 +66,10 @@ function normalizeOrder(o: Record<string, unknown>): Order {
   const customer  = o.customer as Record<string, unknown> | null;
   const rawLines  = (o.orderLines ?? []) as Record<string, unknown>[];
 
+  const payment = o.payment as Record<string, unknown> | null;
+  const cashReceived = payment?.cashReceived ?? payment?.amountReceived ?? payment?.tendered;
+  const changeRaw    = payment?.change ?? payment?.changeAmount ?? payment?.changeDue;
+
   return {
     id:       String(o.id ?? ""),
     date:     o.createdAt
@@ -82,6 +88,14 @@ function normalizeOrder(o: Record<string, unknown>): Order {
         price: Number(l.price ?? 0),
       };
     }),
+    cashReceived:
+      cashReceived !== undefined && cashReceived !== null
+        ? Number(cashReceived)
+        : undefined,
+    changeDue:
+      changeRaw !== undefined && changeRaw !== null
+        ? Number(changeRaw)
+        : undefined,
   };
 }
 
@@ -325,6 +339,19 @@ export default function PendingPage() {
                             <span>Total:</span>
                             <span>₱{(sub + vat).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           </div>
+                          {order.cashReceived !== undefined && (
+                            <>
+                              <div style={{ borderTop: "1px dashed #ddd", margin: "6px 0" }} />
+                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#555" }}>
+                                <span>Cash:</span>
+                                <span>₱{order.cashReceived.toLocaleString()}.00</span>
+                              </div>
+                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#555" }}>
+                                <span>Change:</span>
+                                <span>₱{(order.changeDue ?? order.cashReceived - order.total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
