@@ -386,7 +386,7 @@ function ProductSelect({
             products.map((p) => {
               const isUsed       = usedIds.includes(p.id) && p.id !== value;
               const isOutOfStock = (p.stockQuantity ?? 0) === 0;
-              const isDisabled   = isUsed || isOutOfStock;
+              const isDisabled   = isUsed;
               const stockLabel   = p.stockQuantity != null ? `${p.stockQuantity} ${getUnitShort(p.stockUnit)} left` : null;
               const salesCount   = productSales[p.id] ?? 0;
               const topSales     = products
@@ -1091,13 +1091,13 @@ export default function PurchaseOrderPage() {
                               </div>
                               <button
                                 type="button"
-                                disabled={isOutOfStock || inCart}
+                                disabled={inCart}
                                 onClick={() => addRecommendedItem(p.id)}
                                 className={`ml-2 shrink-0 text-xs font-semibold rounded-lg px-3 py-1.5 transition-colors ${
                                   inCart
                                     ? "bg-green-100 text-green-700 cursor-default"
                                     : isOutOfStock
-                                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                    ? "bg-orange-500 text-white hover:bg-orange-600 opacity-70"
                                     : "bg-orange-500 text-white hover:bg-orange-600"
                                 }`}>
                                 {inCart ? "Added ✓" : "Add to Order"}
