@@ -11,6 +11,9 @@ type Transaction = {
   rawDate: Date | null;
   total: number;
   paymentMethod: string;
+  cashier: string;
+  cashReceived?: number;
+  changeDue?: number;
   items: TxItem[];
 };
 
