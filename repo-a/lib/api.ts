@@ -522,6 +522,20 @@ getReturnRequestById: async (returnRequestId: string) => {
   return result;
 },
 
+// ── REORDER SUGGESTIONS ───────────────────────────────────────────────────────
+// GET /api/reorder/suggestions?supplierId=&windowDays=&bufferDays=
+getReorderSuggestions: async (params?: { supplierId?: string; windowDays?: number; bufferDays?: number }) => {
+  const query = new URLSearchParams();
+  if (params?.supplierId) query.set('supplierId', params.supplierId);
+  if (params?.windowDays) query.set('windowDays', String(params.windowDays));
+  if (params?.bufferDays) query.set('bufferDays', String(params.bufferDays));
+  const res = await fetch(`${API_URL}/reorder/suggestions?${query.toString()}`, {
+    headers: authHeaders(),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to fetch reorder suggestions');
+  return data;
+},
 // ── UPLOAD ──────────────────────────────────────────────────────────────────
 uploadProductImage: async (productId: string, file: File) => {
   const form = new FormData();

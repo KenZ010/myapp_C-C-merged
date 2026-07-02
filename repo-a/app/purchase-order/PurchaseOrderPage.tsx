@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { 
   LayoutDashboard, ShoppingCart, Users, LineChart, 
   FileText, Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift,
-  Building2, Box, Clock, CheckCircle, Calendar, Inbox, Search
+  Building2, Box, Clock, CheckCircle, Calendar, Inbox, Search, Lightbulb
 } from "lucide-react";
 
 // ─── CASE UNIT SYSTEM ────────────────────────────────────────────────────────
@@ -277,6 +277,24 @@ type Supplier    = { id: string; supplierName: string };
 type Product     = { id: string; productName: string; price: number; supplierId?: string; supplier?: { id: string; supplierName: string } | string; status?: string; stockUnit?: string; stockQuantity?: number; size?: string | null };
 type ReceiveQty  = { deliveryItemId: string; receivedQty: number; expiryDate: string };
 
+// Reorder suggestion shape returned by GET /api/reorder/suggestions
+type ReorderSuggestion = {
+  productId: string;
+  productName: string;
+  size?: string | null;
+  stock: number;
+  availableStock: number;
+  netUnitsSold: number;
+  dailyVelocity: number;
+  daysOfStockLeft: number | null;
+  needsReorder: boolean;
+  urgency: "high" | "medium" | "low";
+  unitProfit: number | null;
+  totalProfitWindow: number | null;
+  suggestedUnits: number;
+  suggestedCases: number | null;
+};
+
 const STATUS_CONFIG: Record<string, { bg: string; text: string }> = {
   PENDING:            { bg: "bg-yellow-100", text: "text-yellow-800" },
   PARTIALLY_RECEIVED: { bg: "bg-blue-100",   text: "text-blue-800"   },
@@ -423,6 +441,10 @@ export default function PurchaseOrderPage() {
   const [form,           setForm]           = useState<DeliveryForm>(makeEmptyForm());
   const [saving,         setSaving]         = useState(false);
 
+  // Reorder suggestions — fetched whenever a supplier is selected
+  const [reorderSuggestions, setReorderSuggestions] = useState<ReorderSuggestion[]>([]);
+  const [loadingReorder,     setLoadingReorder]     = useState(false);
+
   const [confirmModal,  setConfirmModal]  = useState<{ show: boolean; message: string; onConfirm: () => void }>({ show: false, message: "", onConfirm: () => {} });
   const [previewModal,   setPreviewModal]   = useState(false);
   const [createError,   setCreateError]   = useState("");
@@ -512,6 +534,25 @@ export default function PurchaseOrderPage() {
 
   useEffect(() => { fetchAll(); }, []);
 
+  // Fetch reorder suggestions whenever the selected supplier changes
+  useEffect(() => {
+    if (!form.supplierId) { setReorderSuggestions([]); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingReorder(true);
+        const res = await api.getReorderSuggestions({ supplierId: form.supplierId });
+        if (!cancelled) setReorderSuggestions(Array.isArray(res?.suggestions) ? res.suggestions : []);
+      } catch (e) {
+        console.error(e);
+        if (!cancelled) setReorderSuggestions([]);
+      } finally {
+        if (!cancelled) setLoadingReorder(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [form.supplierId]);
+
   const handleSupplierChange = (supplierId: string) => {
     setForm({ ...form, supplierId, lineItems: [emptyLineItem()] });
   };
@@ -566,6 +607,28 @@ export default function PurchaseOrderPage() {
       ],
     });
   };
+
+  // Add a reorder-suggested item to the order, prefilled with the suggested case quantity
+  const addSuggestedItem = (s: ReorderSuggestion) => {
+    const alreadyAdded = form.lineItems.some((i) => i.productId === s.productId);
+    if (alreadyAdded) return;
+    const p = supplierProducts.find((x) => x.id === s.productId);
+    setForm({
+      ...form,
+      lineItems: [
+        ...form.lineItems,
+        {
+          productId: s.productId,
+          productName: s.productName,
+          size: s.size,
+          quantity: s.suggestedCases ?? Math.max(1, s.suggestedUnits),
+          unitPrice: p?.price || 0,
+          unit: (p?.stockUnit as CaseUnit) || "case_24",
+        },
+      ],
+    });
+  };
+
   const removeLineItem = (idx: number) => setForm({ ...form, lineItems: form.lineItems.filter((_, i) => i !== idx) });
 
   const updateLineItem = (idx: number, field: keyof LineItem, value: string | number) => {
@@ -629,6 +692,11 @@ export default function PurchaseOrderPage() {
   const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("token"); localStorage.removeItem("employee"); router.push("/"); };
   const navigate     = (path: string) => { router.push(path); setShowMobileMenu(false); };
   const selectedSupplierName = suppliers.find((s) => s.id === form.supplierId)?.supplierName;
+
+  // Only the items the reorder engine actually flags as needing a reorder, sorted by profit
+  const flaggedSuggestions = reorderSuggestions
+    .filter((s) => s.needsReorder)
+    .sort((a, b) => (b.totalProfitWindow ?? -Infinity) - (a.totalProfitWindow ?? -Infinity));
 
   const PaginationBar = ({ page, totalPages, setPage, total, label }: {
     page: number; totalPages: number; setPage: (p: number) => void; total: number; label: string;
@@ -901,6 +969,91 @@ export default function PurchaseOrderPage() {
                     {/* Delivery date is set automatically to current date */}
                   </div>
                 </div>
+
+                {/* Suggested Reorders — shows only once a supplier is picked.
+                    Driven by /api/reorder/suggestions: sales velocity + profit + urgency,
+                    scoped to the selected supplier's products. */}
+                {form.supplierId && (
+                  <div className="bg-white border border-indigo-100 rounded-2xl p-4 md:p-5 shadow-sm">
+                    <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                          <Lightbulb className="w-3.5 h-3.5" />
+                        </div>
+                        <h2 className="text-sm font-bold text-gray-700">Suggested Reorders</h2>
+                        {flaggedSuggestions.length > 0 && (
+                          <span className="text-xs text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">
+                            {flaggedSuggestions.length} item{flaggedSuggestions.length > 1 ? "s" : ""}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-400">Based on last 30 days</span>
+                    </div>
+
+                    {loadingReorder ? (
+                      <p className="text-xs text-gray-400 text-center py-6">Calculating suggestions...</p>
+                    ) : flaggedSuggestions.length === 0 ? (
+                      <p className="text-xs text-gray-400 text-center py-6">
+                        No reorder suggestions right now — stock levels look healthy.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {flaggedSuggestions.map((s) => {
+                          const urgencyStyle = {
+                            high:   "bg-red-100 text-red-700",
+                            medium: "bg-yellow-100 text-yellow-700",
+                            low:    "bg-green-100 text-green-700",
+                          }[s.urgency];
+                          const dotColor = {
+                            high:   "bg-red-500",
+                            medium: "bg-yellow-500",
+                            low:    "bg-green-500",
+                          }[s.urgency];
+                          const inCart = form.lineItems.some((i) => i.productId === s.productId);
+                          return (
+                            <div key={s.productId} className="flex items-center justify-between rounded-xl p-3 border border-gray-100 bg-gray-50/50">
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="text-sm font-medium text-gray-800 truncate">
+                                      {s.productName}{s.size ? ` ${s.size}` : ""}
+                                    </p>
+                                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${urgencyStyle}`}>
+                                      {s.daysOfStockLeft !== null ? `${s.daysOfStockLeft}d left` : "no recent sales"}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-gray-400 mt-0.5">
+                                    {s.netUnitsSold} sold/30d
+                                    {s.unitProfit != null && ` · ₱${s.unitProfit.toFixed(2)} profit/unit`}
+                                    {s.totalProfitWindow != null && ` · ₱${s.totalProfitWindow.toLocaleString()} earned`}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0 ml-2">
+                                <p className="text-xs text-gray-400">Suggested</p>
+                                <p className="text-sm font-semibold text-gray-800 mb-1.5">
+                                  {s.suggestedCases != null ? `${s.suggestedCases} 24-cs` : `${s.suggestedUnits} units`}
+                                </p>
+                                <button
+                                  onClick={() => addSuggestedItem(s)}
+                                  disabled={inCart}
+                                  className={`text-xs font-semibold rounded-lg px-3 py-1.5 transition-colors ${
+                                    inCart
+                                      ? "bg-green-100 text-green-700 cursor-default"
+                                      : "bg-indigo-600 text-white hover:bg-indigo-700"
+                                  }`}
+                                >
+                                  {inCart ? "Added ✓" : "Add to Order"}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Recommended Products */}
                 {form.supplierId && supplierProducts.length > 0 && (() => {
