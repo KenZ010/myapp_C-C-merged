@@ -660,13 +660,16 @@ export default function TransactionHistoryPage() {
                 {/* Store header */}
                 <div style={{ textAlign: "center", marginBottom: "12px" }}>
                   <p style={{ margin: 0, fontWeight: 700, fontSize: "15px", letterSpacing: "0.5px" }}>
-                    ☐ JULIETA SOFT DRINKS
+                    Julieta SoftDrink Store
                   </p>
                   <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#555" }}>
-                    Drinks • Beverages • Refreshments
+                    3065 JP Rizal St.
                   </p>
                   <p style={{ margin: "1px 0 0", fontSize: "11px", color: "#555" }}>
-                    123 Cola Street, Quezon City
+                    Camarin Caloocan City
+                  </p>
+                  <p style={{ margin: "1px 0 0", fontSize: "11px", color: "#555" }}>
+                    Phone: +63 929 141 0133
                   </p>
                 </div>
 
@@ -674,14 +677,17 @@ export default function TransactionHistoryPage() {
 
                 {/* Invoice meta */}
                 <p style={{ margin: "0 0 1px" }}>
-                  <span style={{ color: "#555" }}>Invoice #: </span>
+                  <span style={{ color: "#555" }}>Order ID: </span>
                   <span style={{ fontWeight: 700 }}>{selected.id}</span>
                 </p>
                 <p style={{ margin: "0 0 1px" }}>
                   <span style={{ color: "#555" }}>Date: </span>{selected.date}
                 </p>
-                <p style={{ margin: "0 0 10px" }}>
+                <p style={{ margin: "0 0 1px" }}>
                   <span style={{ color: "#555" }}>Payment: </span>{selected.paymentMethod}
+                </p>
+                <p style={{ margin: "0 0 10px" }}>
+                  <span style={{ color: "#555" }}>Cashier: </span>{selected.cashier}
                 </p>
 
                 <Dash />
@@ -689,7 +695,7 @@ export default function TransactionHistoryPage() {
                 {/* Column header */}
                 <div style={{
                   display: "grid",
-                  gridTemplateColumns: "2fr 1fr 1fr 1fr",
+                  gridTemplateColumns: "1fr 60px 80px",
                   fontSize: "12px",
                   fontWeight: 700,
                   padding: "4px 0",
@@ -697,8 +703,7 @@ export default function TransactionHistoryPage() {
                 }}>
                   <span>Description</span>
                   <span style={{ textAlign: "center" }}>Qty</span>
-                  <span style={{ textAlign: "right" }}>Unit</span>
-                  <span style={{ textAlign: "right" }}>Total</span>
+                  <span style={{ textAlign: "right" }}>Price</span>
                 </div>
 
                 <Dash />
@@ -709,7 +714,7 @@ export default function TransactionHistoryPage() {
                     key={i}
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "2fr 1fr 1fr 1fr",
+                      gridTemplateColumns: "1fr 60px 80px",
                       padding: "3px 0",
                       fontSize: "12px",
                       alignItems: "start",
@@ -722,9 +727,6 @@ export default function TransactionHistoryPage() {
                     <span style={{ textAlign: "right" }}>
                       ₱{item.price.toFixed(2)}
                     </span>
-                    <span style={{ textAlign: "right", fontWeight: 600 }}>
-                      ₱{(item.price * item.qty).toFixed(2)}
-                    </span>
                   </div>
                 ))}
 
@@ -732,11 +734,11 @@ export default function TransactionHistoryPage() {
 
                 {/* Subtotal / Tax */}
                 <ThermalRow label="Subtotal:" value={`₱${subtotal.toFixed(2)}`} />
-                <ThermalRow label="Tax (8%):" value={`₱${tax.toFixed(2)}`} />
+                <ThermalRow label="Tax (12%):" value={`₱${tax.toFixed(2)}`} />
 
                 <Dash />
 
-                {/* TOTAL DUE */}
+                {/* Total */}
                 <div style={{
                   display: "flex",
                   justifyContent: "space-between",
@@ -744,30 +746,17 @@ export default function TransactionHistoryPage() {
                   fontSize: "15px",
                   padding: "4px 0 6px",
                 }}>
-                  <span>TOTAL DUE:</span>
+                  <span>Total:</span>
                   <span>₱{totalDue.toFixed(2)}</span>
                 </div>
 
-                <Dash />
-
-                {/* Footer meta */}
-                <p style={{ margin: "6px 0 1px", fontSize: "12px" }}>
-                  <span style={{ color: "#555" }}>Paid: </span>{selected.paymentMethod === "CASH" ? "Cash" : "Card / E-Wallet"}
-                </p>
-                <p style={{ margin: "0 0 10px", fontSize: "12px" }}>
-                  <span style={{ color: "#555" }}>Staff: </span>#JST-2026
-                </p>
-
-                <Dash />
-
-                {/* Footer note */}
-                <div style={{ textAlign: "center", padding: "8px 0 4px", fontSize: "11px", color: "#666" }}>
-                  <p style={{ margin: "0 0 2px" }}>Thank you for your purchase!</p>
-                  <p style={{ margin: 0 }}>Visit us at: julietasoftdrinks.com</p>
-                  <p style={{ margin: "6px 0 0", fontSize: "10px", color: "#aaa" }}>
-                    Julieta Soft Drink Store • TECHNOLOGIA @2026
-                  </p>
-                </div>
+                {showCash && (
+                  <>
+                    <Dash />
+                    <ThermalRow label="CASH:" value={`₱${(selected.cashReceived ?? 0).toFixed(2)}`} />
+                    <ThermalRow label="CHANGE:" value={`₱${(change ?? 0).toFixed(2)}`} />
+                  </>
+                )}
               </div>
 
               {/* Torn bottom */}
