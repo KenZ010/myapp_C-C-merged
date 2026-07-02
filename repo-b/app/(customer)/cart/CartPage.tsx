@@ -257,7 +257,10 @@ export default function CartPage() {
     return sum;
   }, 0);
 
-  const total = subtotal;
+  // ── VAT (12%) applied on top of subtotal ────────────────────────────────────
+  const VAT_RATE = 0.12;
+  const vat = subtotal * VAT_RATE;
+  const total = subtotal + vat;
 
   // ── Cash change logic ──────────────────────────────────────────────────────
   const cashAmount = parseFloat(cashInput.replace(/,/g, "")) || 0;
@@ -745,6 +748,26 @@ export default function CartPage() {
               </div>
             )}
 
+            {/* ── VAT (12%) ── */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: "8px",
+              }}
+            >
+              <span style={{ fontSize: "13px", color: "#888" }}>
+                VAT (12%)
+              </span>
+              <span style={{ fontSize: "13px", color: "#1a1a1a" }}>
+                ₱
+                {vat.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </span>
+            </div>
+
             <div
               style={{
                 height: "1px",
@@ -769,7 +792,11 @@ export default function CartPage() {
               <span
                 style={{ fontSize: "22px", fontWeight: 700, color: "#2d7a3a" }}
               >
-                ₱{total.toLocaleString()}.00
+                ₱
+                {total.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
               </span>
             </div>
 
@@ -963,7 +990,11 @@ export default function CartPage() {
                       marginTop: "4px",
                     }}
                   >
-                    ₱{total.toLocaleString()}.00
+                    ₱
+                    {total.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
                   </p>
                 </div>
                 <div style={{ marginBottom: "12px" }}>
@@ -1184,7 +1215,11 @@ export default function CartPage() {
                         color: "#1a1a1a",
                       }}
                     >
-                      ₱{total.toLocaleString()}.00
+                      ₱
+                      {total.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
                     </span>
                   </div>
 
@@ -1205,7 +1240,7 @@ export default function CartPage() {
                     min={0}
                     value={cashInput}
                     onChange={(e) => setCashInput(e.target.value)}
-                    placeholder={`e.g. ${total + 50}`}
+                    placeholder={`e.g. ${Math.ceil(total + 50)}`}
                     style={{
                       width: "100%",
                       padding: "10px 14px",
@@ -1271,7 +1306,7 @@ export default function CartPage() {
                     }}
                   >
                     {[
-                      total,
+                      Math.ceil(total),
                       Math.ceil(total / 50) * 50,
                       Math.ceil(total / 100) * 100,
                       Math.ceil(total / 500) * 500,
