@@ -37,19 +37,10 @@ function normalizeCompleted(o: Record<string, unknown>): Transaction {
   const rawDateStr = String(o.createdAt ?? o.date ?? "");
   const parsedDate = rawDateStr ? new Date(rawDateStr) : null;
 
-  const cashReceivedRaw =
-    payment?.cashReceived ?? payment?.amountReceived ?? payment?.tendered;
   const cashReceived =
-    cashReceivedRaw !== undefined && cashReceivedRaw !== null
-      ? Number(cashReceivedRaw)
-      : undefined;
-
+    payment?.cashReceived ?? payment?.amountReceived ?? payment?.tendered;
   const changeRaw =
     payment?.change ?? payment?.changeAmount ?? payment?.changeDue;
-  const changeDue =
-    changeRaw !== undefined && changeRaw !== null
-      ? Number(changeRaw)
-      : undefined;
 
   return {
     id: String(o.id ?? ""),
@@ -64,11 +55,15 @@ function normalizeCompleted(o: Record<string, unknown>): Transaction {
       o.totalAmount ?? items.reduce((s, i) => s + i.price * i.qty, 0),
     ),
     paymentMethod: payment ? String(payment.method ?? "CASH") : "CASH",
-    cashier: String(
-      o.cashier ?? o.cashierName ?? payment?.cashier ?? "N/A",
-    ),
-    cashReceived,
-    changeDue,
+    cashier: String(o.cashier ?? o.cashierName ?? payment?.cashier ?? "N/A"),
+    cashReceived:
+      cashReceived !== undefined && cashReceived !== null
+        ? Number(cashReceived)
+        : undefined,
+    changeDue:
+      changeRaw !== undefined && changeRaw !== null
+        ? Number(changeRaw)
+        : undefined,
     items,
   };
 }
@@ -612,7 +607,7 @@ export default function TransactionHistoryPage() {
           selected.changeDue !== undefined
             ? selected.changeDue
             : selected.cashReceived !== undefined
-            ? selected.cashReceived - totalDue
+            ? selected.cashReceived - selected.total
             : undefined;
 
         return (
@@ -640,6 +635,7 @@ export default function TransactionHistoryPage() {
                 overflowY: "auto",
                 overflowX: "hidden",
                 boxShadow: "0 8px 40px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.12)",
+                /* torn top edge */
                 borderRadius: "2px",
               }}
             >
@@ -661,7 +657,6 @@ export default function TransactionHistoryPage() {
                   color: "#1a1a1a",
                   padding: "18px 24px 10px",
                   lineHeight: 1.55,
-                  position: "relative",
                 }}
               >
                 {/* Close button */}
@@ -690,7 +685,7 @@ export default function TransactionHistoryPage() {
                 {/* Store header */}
                 <div style={{ textAlign: "center", marginBottom: "12px" }}>
                   <p style={{ margin: 0, fontWeight: 700, fontSize: "15px", letterSpacing: "0.5px" }}>
-                    JULIETA SOFTDRINK STORE
+                    Julieta SoftDrink Store
                   </p>
                   <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#555" }}>
                     3065 JP Rizal St.
@@ -700,3 +695,131 @@ export default function TransactionHistoryPage() {
                   </p>
                   <p style={{ margin: "1px 0 0", fontSize: "11px", color: "#555" }}>
                     Phone: +63 929 141 0133
+                  </p>
+                </div>
+
+                <Dash />
+
+                {/* Invoice meta */}
+                <p style={{ margin: "0 0 1px" }}>
+                  <span style={{ color: "#555" }}>Order ID: </span>
+                  <span style={{ fontWeight: 700 }}>{selected.id}</span>
+                </p>
+                <p style={{ margin: "0 0 1px" }}>
+                  <span style={{ color: "#555" }}>Date: </span>{selected.date}
+                </p>
+                <p style={{ margin: "0 0 1px" }}>
+                  <span style={{ color: "#555" }}>Payment: </span>{selected.paymentMethod}
+                </p>
+                <p style={{ margin: "0 0 10px" }}>
+                  <span style={{ color: "#555" }}>Cashier: </span>{selected.cashier}
+                </p>
+
+                <Dash />
+
+                {/* Column header */}
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 60px 80px",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  padding: "4px 0",
+                  color: "#333",
+                }}>
+                  <span>Description</span>
+                  <span style={{ textAlign: "center" }}>Qty</span>
+                  <span style={{ textAlign: "right" }}>Price</span>
+                </div>
+
+                <Dash />
+
+                {/* Items */}
+                {selected.items.map((item, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 60px 80px",
+                      padding: "3px 0",
+                      fontSize: "12px",
+                      alignItems: "start",
+                    }}
+                  >
+                    <span style={{ wordBreak: "break-word", paddingRight: "6px" }}>
+                      {item.name}
+                    </span>
+                    <span style={{ textAlign: "center" }}>{item.qty}</span>
+                    <span style={{ textAlign: "right" }}>
+                      ₱{item.price.toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+
+                <Dash />
+
+                {/* Subtotal / Tax */}
+                <ThermalRow label="Subtotal:" value={`₱${subtotal.toFixed(2)}`} />
+                <ThermalRow label="Tax (12%):" value={`₱${tax.toFixed(2)}`} />
+
+                <Dash />
+
+                {/* Total */}
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontWeight: 700,
+                  fontSize: "15px",
+                  padding: "4px 0 6px",
+                }}>
+                  <span>Total:</span>
+                  <span>₱{totalDue.toFixed(2)}</span>
+                </div>
+
+                {showCash && (
+                  <>
+                    <Dash />
+                    <ThermalRow label="CASH:" value={`₱${(selected.cashReceived ?? 0).toFixed(2)}`} />
+                    <ThermalRow label="CHANGE:" value={`₱${(change ?? 0).toFixed(2)}`} />
+                  </>
+                )}
+              </div>
+
+              {/* Torn bottom */}
+              <div style={{
+                height: "14px",
+                background: "linear-gradient(135deg, transparent 25%, #f7f4ee 25%) -8px 0,linear-gradient(225deg, transparent 25%, #f7f4ee 25%) -8px 0,linear-gradient(315deg, transparent 25%, #f7f4ee 25%),linear-gradient(45deg, transparent 25%, #f7f4ee 25%)",
+                backgroundSize: "16px 14px",
+                backgroundRepeat: "repeat-x",
+                backgroundColor: "#e8e4da",
+              }} />
+            </div>
+          </>
+        );
+      })()}
+    </>
+  );
+}
+
+/* ── Helpers ── */
+function Dash() {
+  return (
+    <div style={{
+      borderTop: "1px dashed #bbb",
+      margin: "8px 0",
+    }} />
+  );
+}
+
+function ThermalRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{
+      display: "flex",
+      justifyContent: "space-between",
+      fontSize: "12px",
+      padding: "1px 0",
+    }}>
+      <span>{label}</span>
+      <span>{value}</span>
+    </div>
+  );
+}
