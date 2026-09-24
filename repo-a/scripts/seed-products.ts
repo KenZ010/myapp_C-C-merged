@@ -1,4 +1,4 @@
-const API_URL = "https://backend-production-ccf0.up.railway.app/api";
+const API_URL = "https://backend-production-dcaab.up.railway.app/api";
 
 // Login to get token
 async function login() {
