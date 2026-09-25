@@ -174,7 +174,7 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
             }}
               >
                {isActive && (
-                <span style={{ position: "absolute", left: 0, top: "20%", bottom: "20%", width: "3px", borderRadius: "0 3px 3px 0", background: "linear-gradient(to bottom, #22c55e, #4ade80)" }} />
+                <span style={{ position: "absolute", right: 0, top: "20%", bottom: "20%", width: "3px", borderRadius: "3px 0 0 3px", background: "linear-gradient(to bottom, #22c55e, #4ade80)" }} />
               )}
                 <span style={{ color: isActive ? "#22c55e" : "#94a3b8", display: "flex", flexShrink: 0 }}>
                   {link.icon}
