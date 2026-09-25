@@ -167,7 +167,7 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
              padding: "11px 14px", borderRadius: "10px", marginBottom: "2px",
              fontSize: "13.5px", textDecoration: "none",
              color: isActive ? "#4338ca" : "#64748b",
-             background: isActive ? "#f0fdf4" : "transparent",
+             background: isActive ? "#eef2ff" : "transparent",
              fontWeight: isActive ? 600 : 400,
              transition: "all 0.15s ease",
              position: "relative",
@@ -176,7 +176,7 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
                {isActive && (
                 <span style={{ position: "absolute", right: 0, top: "20%", bottom: "20%", width: "3px", borderRadius: "3px 0 0 3px", background: "linear-gradient(to bottom, #22c55e, #4ade80)" }} />
               )}
-                <span style={{ color: isActive ? "#22c55e" : "#94a3b8", display: "flex", flexShrink: 0 }}>
+                <span style={{ color: isActive ? "#6366f1" : "#94a3b8", display: "flex", flexShrink: 0 }}>
                   {link.icon}
                 </span>
                 {link.label}
