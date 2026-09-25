@@ -166,7 +166,7 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
               display: "flex", alignItems: "center", gap: "12px",
              padding: "11px 14px", borderRadius: "10px", marginBottom: "2px",
              fontSize: "13.5px", textDecoration: "none",
-             color: isActive ? "#15803d" : "#64748b",
+             color: isActive ? "#4338ca" : "#64748b",
              background: isActive ? "#f0fdf4" : "transparent",
              fontWeight: isActive ? 600 : 400,
              transition: "all 0.15s ease",
