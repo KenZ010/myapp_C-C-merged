@@ -202,7 +202,9 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
       </aside>
 
       {/* ── Main ── */}
-      <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <main 
+      onClick={() => { if (sidebarOpen) setSidebarOpen(false); }}
+      style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
         {/* Topbar */}
         <header style={{ background: "#fff", padding: "0 20px", height: "60px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, borderBottom: "1px solid #eaecf4", boxShadow: "0 1px 6px rgba(99,102,241,0.06)" }}>
