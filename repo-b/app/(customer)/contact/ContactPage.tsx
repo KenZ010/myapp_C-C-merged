@@ -208,7 +208,7 @@ export default function ContactPage() {
             icon: "💬",
             bg: "#e3f2fd",
             label: "Text / SMS",
-            value: "0912 345 6789",
+            value: "+63 929 141 0133",
             desc: "Send us a text anytime",
           },
           {
@@ -324,7 +324,7 @@ export default function ContactPage() {
             }}
           >
             {[
-              ["📌", "Address", "3065 JP Rizal St. Pagasa Camarin"],
+              ["📌", "Address", "3065 JP Rizal St. Camarin Caloocan City"],
               ["🏙️", "City", "Caloocan City"],
               ["📮", "ZIP Code", "1400"],
             ].map(([icon, label, val]) => (

@@ -18,8 +18,8 @@ interface PendingOrder {
 export default function OrderPlacedPage() {
   const [orderNo,  setOrderNo]  = useState<string | null>(null);
   const [subtotal, setSubtotal] = useState(0);
-  const [delivery, setDelivery] = useState(0);
-  const [total,    setTotal]    = useState(0);
+  const [vat,   setVat]   = useState(0);
+  const [total, setTotal]  = useState(0);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState<string | null>(null);
 
@@ -41,10 +41,10 @@ export default function OrderPlacedPage() {
     }
 
     const sub = pending.items.reduce((sum, i) => sum + i.price * i.quantity, 0);
-    const del = sub >= 1000 ? 0 : 50;
+    const v = sub * 0.12;
     setSubtotal(sub);
-    setDelivery(del);
-    setTotal(sub + del);
+    setVat(v);
+    setTotal(sub + v);
 
     api
       .placeOrder(pending)
@@ -130,9 +130,9 @@ export default function OrderPlacedPage() {
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm text-gray-400">Delivery Fee:</span>
-              <span className={`text-sm font-medium ${delivery === 0 ? "text-green-700" : "text-gray-900"}`}>
-                {delivery === 0 ? "FREE" : `₱${delivery}.00`}
+              <span className="text-sm text-gray-400">VAT (12%):</span>
+              <span className="text-sm text-gray-900">
+                ₱{vat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
           </div>
@@ -145,14 +145,6 @@ export default function OrderPlacedPage() {
               ₱{total.toLocaleString()}.00
             </span>
           </div>
-        </div>
-
-        {/* Estimated delivery */}
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-3 mb-7 flex items-center justify-center gap-2.5">
-          <span className="text-lg">🚚</span>
-          <p className="text-[13px] font-semibold text-amber-700">
-            Estimated delivery: 1–2 hours
-          </p>
         </div>
 
         {/* Buttons */}

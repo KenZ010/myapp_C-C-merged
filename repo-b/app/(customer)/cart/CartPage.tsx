@@ -193,20 +193,18 @@ export default function CartPage() {
       return;
     }
 
+    // Instead of removing immediately when qty would hit 0, ask for confirmation
     if (newQty <= 0) {
-      setItems((prev) => prev.filter((i) => i.id !== item.id));
-    } else {
-      setItems((prev) =>
-        prev.map((i) => (i.id === item.id ? { ...i, quantity: newQty } : i))
-      );
+      setDeleteTarget(item);
+      return;
     }
 
+    setItems((prev) =>
+      prev.map((i) => (i.id === item.id ? { ...i, quantity: newQty } : i))
+    );
+
     try {
-      if (newQty <= 0) {
-        await api.removeCartItem(customerId, item.id);
-      } else {
-        await api.updateCartItem(customerId, item.id, newQty);
-      }
+      await api.updateCartItem(customerId, item.id, newQty);
     } catch (err) {
       console.error("Failed to update cart:", err);
       await fetchCart();
@@ -259,7 +257,10 @@ export default function CartPage() {
     return sum;
   }, 0);
 
-  const total = subtotal;
+  // ── VAT (12%) applied on top of subtotal ────────────────────────────────────
+  const VAT_RATE = 0.12;
+  const vat = subtotal * VAT_RATE;
+  const total = subtotal + vat;
 
   // ── Cash change logic ──────────────────────────────────────────────────────
   const cashAmount = parseFloat(cashInput.replace(/,/g, "")) || 0;
@@ -273,10 +274,9 @@ export default function CartPage() {
   const canCheckout =
     items.length > 0 &&
     !hasStockIssue &&
-    (paymentMethod === "cod" ||
-      (paymentMethod === "gcash" &&
-        gcashRef.trim() !== "" &&
-        gcashImage !== null));
+    (paymentMethod === "gcash"
+      ? gcashRef.trim() !== "" && gcashImage !== null
+      : isExactOrOver);
 
   if (loading) {
     return (
@@ -724,6 +724,26 @@ export default function CartPage() {
               </span>
             </div>
 
+            {/* ── VAT (12%) — directly under Subtotal ── */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: "8px",
+              }}
+            >
+              <span style={{ fontSize: "13px", color: "#888" }}>
+                VAT (12%)
+              </span>
+              <span style={{ fontSize: "13px", color: "#1a1a1a" }}>
+                ₱
+                {vat.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </span>
+            </div>
+
             {totalDiscount > 0 && (
               <div
                 style={{
@@ -771,7 +791,11 @@ export default function CartPage() {
               <span
                 style={{ fontSize: "22px", fontWeight: 700, color: "#2d7a3a" }}
               >
-                ₱{total.toLocaleString()}.00
+                ₱
+                {total.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
               </span>
             </div>
 
@@ -965,7 +989,11 @@ export default function CartPage() {
                       marginTop: "4px",
                     }}
                   >
-                    ₱{total.toLocaleString()}.00
+                    ₱
+                    {total.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
                   </p>
                 </div>
                 <div style={{ marginBottom: "12px" }}>
@@ -1186,7 +1214,11 @@ export default function CartPage() {
                         color: "#1a1a1a",
                       }}
                     >
-                      ₱{total.toLocaleString()}.00
+                      ₱
+                      {total.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
                     </span>
                   </div>
 
@@ -1207,7 +1239,7 @@ export default function CartPage() {
                     min={0}
                     value={cashInput}
                     onChange={(e) => setCashInput(e.target.value)}
-                    placeholder={`e.g. ${total + 50}`}
+                    placeholder={`e.g. ${Math.ceil(total + 50)}`}
                     style={{
                       width: "100%",
                       padding: "10px 14px",
@@ -1273,7 +1305,7 @@ export default function CartPage() {
                     }}
                   >
                     {[
-                      total,
+                      Math.ceil(total),
                       Math.ceil(total / 50) * 50,
                       Math.ceil(total / 100) * 100,
                       Math.ceil(total / 500) * 500,
@@ -1308,7 +1340,19 @@ export default function CartPage() {
             <Link
               href={canCheckout ? "/checkout" : "#"}
               onClick={(e) => {
-                if (!canCheckout) e.preventDefault();
+                if (!canCheckout) {
+                  e.preventDefault();
+                  return;
+                }
+                // ── Persist payment info so CheckoutPage can read it ──
+                sessionStorage.setItem("paymentMethod", paymentMethod);
+                if (paymentMethod === "gcash") {
+                  sessionStorage.setItem("gcashRef", gcashRef);
+                  sessionStorage.removeItem("cashGiven");
+                } else {
+                  sessionStorage.setItem("cashGiven", cashInput);
+                  sessionStorage.removeItem("gcashRef");
+                }
               }}
               style={{
                 display: "block",
@@ -1330,6 +1374,8 @@ export default function CartPage() {
                 ? "⚠️ Reduce quantity to match stock"
                 : paymentMethod === "gcash" && !canCheckout
                 ? "Complete GCash Details First"
+                : paymentMethod === "cod" && !canCheckout
+                ? "Enter Cash Amount First"
                 : "Proceed to Checkout →"}
             </Link>
 
