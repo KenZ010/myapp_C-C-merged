@@ -162,16 +162,16 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
                 key={link.href}
                 href={link.href}
                 onClick={() => setSidebarOpen(false)}
-                style={{
-                  display: "flex", alignItems: "center", gap: "12px",
-                  padding: "11px 14px", borderRadius: "10px", marginBottom: "2px",
-                  fontSize: "13.5px", textDecoration: "none",
-                  color: isActive ? "#4338ca" : "#64748b",
-                  background: isActive ? "#eef2ff" : "transparent",
-                  fontWeight: isActive ? 600 : 400,
-                  transition: "all 0.15s ease",
-                  position: "relative",
-                }}
+            style={{
+              display: "flex", alignItems: "center", gap: "12px",
+             padding: "11px 14px", borderRadius: "10px", marginBottom: "2px",
+             fontSize: "13.5px", textDecoration: "none",
+             color: isActive ? "#15803d" : "#64748b",
+             background: isActive ? "#f0fdf4" : "transparent",
+             fontWeight: isActive ? 600 : 400,
+             transition: "all 0.15s ease",
+             position: "relative",
+            }}
               >
                {isActive && (
                 <span style={{ position: "absolute", left: 0, top: "20%", bottom: "20%", width: "3px", borderRadius: "0 3px 3px 0", background: "linear-gradient(to bottom, #22c55e, #4ade80)" }} />
