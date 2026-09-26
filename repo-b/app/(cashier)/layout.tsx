@@ -226,45 +226,48 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
             </div>
           </div>
 
-          {/* ✅ User info + Live socket status badge */}
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+{/* ✅ Notification bell + User info */}
+<div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
 
-            {/* User Info */}
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "linear-gradient(135deg, #6366f1, #a78bfa)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                  <circle cx="12" cy="7" r="4"/>
-                </svg>
-              </div>
-              <div className="hidden sm:block">
-                <p style={{ fontSize: "12.5px", fontWeight: 700, color: "#1e1b4b", lineHeight: 1.2 }}>
-                  {currentUser?.name || currentUser?.username || "Cashier"}
-                </p>
-                <p style={{ fontSize: "10.5px", color: "#818cf8", fontWeight: 500 }}>
-                  {currentUser?.role || "Cashier"}
-                </p>
-              </div>
-            </div>
+  {/* Notification Icon */}
+  <button
+    onClick={() => { /* TODO: handle notification click */ }}
+    style={{
+      position: "relative", background: "rgba(255,255,255,0.12)", border: "none",
+      cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+      padding: "8px", borderRadius: "8px", flexShrink: 0,
+    }}
+  >
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+    {/* Optional unread dot — remove this span if not needed */}
+    <span style={{ position: "absolute", top: "6px", right: "6px", width: "8px", height: "8px", borderRadius: "50%", background: "#ef5350", border: "1.5px solid #3949ab" }} />
+  </button>
 
-            {/* Divider */}
-            <div style={{ width: "1px", height: "28px", background: "#eaecf4" }} />
+  {/* Divider */}
+  <div style={{ width: "1px", height: "28px", background: "rgba(255,255,255,0.2)" }} />
 
-            {/* Socket status badge */}
-            <div style={{
-              display: "flex", alignItems: "center", gap: "6px",
-              background: socket ? "#f0fdf4" : "#fef2f2",
-              borderRadius: "20px", padding: "5px 12px",
-              border: `1px solid ${socket ? "#bbf7d0" : "#fecaca"}`,
-              transition: "all 0.3s",
-            }}>
-              <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: socket ? "#22c55e" : "#ef4444", transition: "background 0.3s" }} />
-              <span style={{ fontSize: "12px", color: socket ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
-                {socket ? "Online" : "Connecting..."}
-              </span>
-            </div>
+  {/* User Info */}
+  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+    <div style={{ width: "30px", height: "30px", borderRadius: "50%", background: "rgba(255,255,255,0.15)", border: "1.5px solid rgba(255,255,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
+        <circle cx="9" cy="6" r="4" fill="#fff" opacity="0.9"/>
+        <path d="M2 17c0-3.866 3.134-7 7-7s7 3.134 7 7" fill="#fff" opacity="0.9"/>
+      </svg>
+    </div>
+    <div className="hidden sm:block">
+      <p style={{ fontSize: "12.5px", fontWeight: 700, color: "#fff", lineHeight: 1.2 }}>
+        {currentUser?.name || currentUser?.username || "Manager"}
+      </p>
+      <p style={{ fontSize: "10.5px", color: "rgba(255,255,255,0.55)", fontWeight: 500 }}>
+        {currentUser?.role || "Inventory Manager"}
+      </p>
+    </div>
+  </div>
 
-          </div>
+</div>
         </header>
 
         <div style={{ flex: 1, overflowY: "auto" }}>{children}</div>
