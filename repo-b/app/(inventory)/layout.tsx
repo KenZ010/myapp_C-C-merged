@@ -178,10 +178,13 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
                   color: isActive ? "#3949ab" : "#757575",
                   fontWeight: isActive ? 700 : 400,
                   background: isActive ? "#ede7f6" : "transparent",
-                  borderLeft: isActive ? "3px solid #5c6bc0" : "3px solid transparent",
                   transition: "all 0.15s",
+                  position: "relative",
                 }}
               >
+                {isActive && (
+                <span style={{ position: "absolute", right: 0, top: "20%", bottom: "20%", width: "3px", borderRadius: "3px 0 0 3px", background: "linear-gradient(to bottom, #22c55e, #4ade80)" }} />
+                )}
                 <Icon active={isActive} />
                 {label}
               </Link>
@@ -202,7 +205,9 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* ── Main ── */}
-      <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <main 
+      onClick={() => { if (sidebarOpen) setSidebarOpen(false); }}
+      style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <header style={{ background: "#3949ab", padding: "0 20px", height: "56px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, boxShadow: "0 2px 8px rgba(57,73,171,0.3)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
             <button
