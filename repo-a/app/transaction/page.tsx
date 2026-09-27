@@ -1,4 +1,5 @@
-import TransactionLogsPage from "./TransactionLogsPage";
+import { redirect } from "next/navigation";
+
 export default function Page() {
-  return <TransactionLogsPage />;
+  redirect("/sales");
 }

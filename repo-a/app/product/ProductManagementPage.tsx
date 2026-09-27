@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 import { 
   LayoutDashboard, ShoppingCart, Users, LineChart, 
-  FileText, Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift,
+  Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift,
   FolderOpen, Coffee, Zap, ChevronDown, Search, Beer, Droplets, ShoppingBasket, Bell
 } from "lucide-react";
 
@@ -29,7 +29,6 @@ const navItems = [
   { label: "Inventory Maintenance", icon: ShoppingCart,    path: "/inventory"      },
   { label: "Supplier Maintenance",  icon: Users,           path: "/supplier"       },
   { label: "Sales Reports",         icon: LineChart,       path: "/sales"          },
-  { label: "Transaction Logs",      icon: FileText,        path: "/transaction"    },
   { label: "Product Management",    icon: Package,         path: "/product"        },
   { label: "Account Management",    icon: User,            path: "/account"        },
   { label: "Purchase Order",        icon: ClipboardList,   path: "/purchase-order" },

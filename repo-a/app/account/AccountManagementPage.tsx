@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { 
   LayoutDashboard, ShoppingCart, Users, LineChart, 
-  FileText, Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift,
+  Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift,
   Search, Bell
 } from "lucide-react";
 
@@ -14,7 +14,6 @@ const navItems = [
   { label: "Inventory Maintenance", icon: ShoppingCart, path: "/inventory" },
   { label: "Supplier Maintenance", icon: Users, path: "/supplier" },
   { label: "Sales Reports", icon: LineChart, path: "/sales" },
-  { label: "Transaction Logs", icon: FileText, path: "/transaction" },
   { label: "Product Management", icon: Package, path: "/product" },
   { label: "Account Management", icon: User, path: "/account", active: true },
   { label: "Purchase Order", icon: ClipboardList, path: "/purchase-order" },
@@ -200,7 +199,6 @@ export default function AccountManagementPage() {
     if (label === "Inventory Maintenance") router.push("/inventory");
     if (label === "Supplier Maintenance") router.push("/supplier");
     if (label === "Sales Reports") router.push("/sales");
-    if (label === "Transaction Logs") router.push("/transaction");
     if (label === "Product Management") router.push("/product");
     if (label === "Account Management") router.push("/account");
     if (label === "Purchase Order") router.push("/purchase-order");

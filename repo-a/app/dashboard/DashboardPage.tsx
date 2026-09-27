@@ -6,7 +6,7 @@ import { PieChart, Pie, Cell, Tooltip } from "recharts";
 import { api } from "@/lib/api";
 import { 
   LayoutDashboard, ShoppingCart, Users, BarChart3, 
-  FileText, Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift, Bell
+  Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift, Bell
 } from "lucide-react";
 
 type Employee = {
@@ -102,7 +102,6 @@ const navItems = [
   { label: "Inventory Maintenance", icon: ShoppingCart, path: "/inventory" },
   { label: "Supplier Maintenance", icon: Users, path: "/supplier" },
   { label: "Sales Reports", icon: BarChart3, path: "/sales" },
-  { label: "Transaction Logs", icon: FileText, path: "/transaction" },
   { label: "Product Management", icon: Package, path: "/product" },
   { label: "Account Management", icon: User, path: "/account" },
   { label: "Purchase Order", icon: ClipboardList, path: "/purchase-order" },

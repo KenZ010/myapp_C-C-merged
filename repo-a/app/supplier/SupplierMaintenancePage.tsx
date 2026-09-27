@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
 import { 
   LayoutDashboard, ShoppingCart, Users, LineChart, 
-  FileText, Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift,
+  Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift,
   Calendar, Search, Bell
 } from "lucide-react";
 
@@ -39,7 +39,6 @@ const navItems = [
   { label: "Inventory Maintenance", icon: ShoppingCart, path: "/inventory" },
   { label: "Supplier Maintenance",  icon: Users, path: "/supplier", active: true },
   { label: "Sales Reports",         icon: LineChart, path: "/sales" },
-  { label: "Transaction Logs",      icon: FileText, path: "/transaction" },
   { label: "Product Management",    icon: Package, path: "/product" },
   { label: "Account Management",    icon: User, path: "/account" },
   { label: "Purchase Order",        icon: ClipboardList, path: "/purchase-order" },
@@ -248,7 +247,6 @@ export default function SupplierMaintenancePage() {
   const [viewItem,       setViewItem]       = useState<SupplierItem | null>(null);
   const [viewProducts,   setViewProducts]   = useState<ProductItem[]>([]);
   const [editProducts,   setEditProducts]   = useState<ProductItem[]>([]);
-  const [savingPrice,    setSavingPrice]    = useState<string | null>(null);
   const [success,        setSuccess]        = useState("");
   const [error,          setError]          = useState("");
 
@@ -379,22 +377,6 @@ export default function SupplierMaintenancePage() {
     setShowModal(true);
   };
 
-  const openEditFromView = async (item: SupplierItem) => {
-    setViewItem(null);
-    setForm({
-      supplierName: item.supplierName, contactNo: item.contactNo,
-      address: item.address || "", agentName: item.agentName || "",
-      socials: item.socials || "",
-      lastOrdered: item.lastOrdered ?? "",
-      status: item.status,
-    });
-    setSelected([item.id]);
-    setEditingId(item.id);
-    const products = await loadSupplierProducts(item.id);
-    setEditProducts(products);
-    setShowModal(true);
-  };
-
   const handleSave = async () => {
     if (!form.supplierName) { showAlert("Supplier Name is required.", "Missing Field"); return; }
     try {
@@ -449,19 +431,6 @@ export default function SupplierMaintenancePage() {
     setViewProducts(supplierProducts);
   };
 
-  const handleUpdatePrice = async (productId: string, newPrice: number) => {
-    setSavingPrice(productId);
-    try {
-      await api.updateProduct(productId, { price: newPrice });
-      setViewProducts(prev => prev.map(p => p.id === productId ? { ...p, price: newPrice } : p));
-      showToast(`Price updated for ${viewProducts.find(p => p.id === productId)?.productName}!`);
-    } catch {
-      showToast("Failed to update price.", true);
-    } finally {
-      setSavingPrice(null);
-    }
-  };
-
   const handleDelete = () => {
     if (selected.length === 0) { showAlert("Please select at least one item to delete.", "No Selection"); return; }
     showConfirm(`Are you sure you want to delete ${selected.length} supplier(s)? This action cannot be undone.`,
@@ -492,7 +461,6 @@ export default function SupplierMaintenancePage() {
     const routes: Record<string, string> = {
       "Dashboard": "/dashboard", "Inventory Maintenance": "/inventory",
       "Supplier Maintenance": "/supplier", "Sales Reports": "/sales",
-      "Transaction Logs": "/transaction", "Product Management": "/product",
       "Account Management": "/account", "Purchase Order": "/purchase-order",
       "Loss Report": "/loss-report", "Promo Management": "/promo",
     };
@@ -710,12 +678,11 @@ export default function SupplierMaintenancePage() {
                 <h2 className="text-lg font-bold text-gray-800">{viewItem.supplierName}</h2>
                 <p className="text-xs text-gray-400 mt-0.5">Supplier ID: {viewItem.id}</p>
               </div>
-              {/* ✅ Clickable status in view modal too */}
-              <button onClick={() => handleToggleStatus(viewItem)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer
-                  ${viewItem.status === "ACTIVE" ? "bg-green-500 text-white hover:bg-green-600" : "bg-yellow-400 text-black hover:bg-yellow-500"}`}>
-                {viewItem.status} (click to toggle)
-              </button>
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-medium
+                  ${viewItem.status === "ACTIVE" ? "bg-green-500 text-white" : "bg-yellow-400 text-black"}`}>
+                {viewItem.status}
+              </span>
             </div>
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-3">
@@ -744,8 +711,8 @@ export default function SupplierMaintenancePage() {
                   <p className="text-sm font-medium text-gray-800">{viewItem.lastOrdered ?? "—"}</p>
                 </div>
               </div>
-<div className="mt-4">
-                <p className="text-sm font-semibold text-gray-700 mb-2">Products &amp; Prices</p>
+              <div className="mt-4">
+                <p className="text-sm font-semibold text-gray-700 mb-2">Products &amp; Retail Prices</p>
                 {viewProducts.length > 0 ? (
                   <div className="max-h-60 overflow-y-auto space-y-2">
                     {viewProducts.map(product => (
@@ -754,33 +721,9 @@ export default function SupplierMaintenancePage() {
                           <p className="text-sm font-medium text-gray-800 truncate">{product.productName}{product.size ? ` ${product.size}` : ""}</p>
                           <p className="text-xs text-gray-400">{product.category}</p>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <div className="text-right">
-                            <p className="text-xs text-gray-400">Retail</p>
-                            <p className="text-sm font-semibold text-gray-700">₱{product.originalPrice.toFixed(2)}</p>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                           <span className="text-xs text-gray-400">₱</span>
-                           <input
-                             type="number"
-                             inputMode="numeric"
-                             min="0"
-                             value={product.price}
-                             onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
-                             onChange={e => {
-                               const val = e.target.value.replace(/[^0-9]/g, "");
-                               setViewProducts(prev => prev.map(p => p.id === product.id ? { ...p, price: val === "" ? 0 : Number(val) } : p));
-                             }}
-                             className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-xs text-right outline-none focus:border-indigo-400 text-gray-900"
-                           />
-                           <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">Wholesale</span>
-                           <button
-                             onClick={() => handleUpdatePrice(product.id, product.price)}
-                             disabled={savingPrice === product.id}
-                             className="bg-indigo-600 text-white rounded-lg px-2.5 py-1 text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 shrink-0">
-                             {savingPrice === product.id ? "..." : "Save"}
-                           </button>
-                         </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs text-gray-400">Retail</p>
+                          <p className="text-sm font-semibold text-gray-700">₱{product.originalPrice.toFixed(2)}</p>
                         </div>
                       </div>
                     ))}
@@ -792,7 +735,6 @@ export default function SupplierMaintenancePage() {
             </div>
             <div className="flex gap-3 mt-5">
               <button onClick={() => setViewItem(null)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Close</button>
-              <button onClick={() => openEditFromView(viewItem)} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700">✏️ Edit</button>
             </div>
           </div>
         </div>
