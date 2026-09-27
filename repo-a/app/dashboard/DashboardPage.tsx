@@ -9,14 +9,6 @@ import {
   Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift, Bell
 } from "lucide-react";
 
-type Employee = {
-  id: string;
-  name: string;
-  role: string;
-  userStatus: string;
-  phone: string;
-};
-
 type Supplier = {
   id: string;
   supplierName: string;
@@ -89,6 +81,27 @@ function getPeriodKey(dateStr: string): "Today" | "Week" | "Month" | "Older" {
   return "Older";
 }
 
+const PERIOD_TABS = ["Daily", "Weekly", "Monthly", "All"] as const;
+const periodMap: Record<string, string> = { Daily: "Today", Weekly: "Week", Monthly: "Month" };
+
+// "All" bypasses the 30-day window so older orders stay reachable
+function filterByPeriod(txs: Transaction[], tab: string) {
+  if (tab === "All") return txs;
+  return txs.filter(t => getPeriodKey(t.createdAt) === (periodMap[tab] ?? "Today"));
+}
+
+function buildTopSelling(txs: Transaction[]) {
+  const map: Record<string, { name: string; category: string; units: number; revenue: number }> = {};
+  txs.forEach(tx => tx.orderLines.forEach(line => {
+    if (!map[line.productName]) map[line.productName] = { name: line.productName, category: line.category, units: 0, revenue: 0 };
+    map[line.productName].units   += line.quantity;
+    map[line.productName].revenue += line.subtotal;
+  }));
+  return Object.values(map).sort((a, b) => b.units - a.units).slice(0, 3);
+}
+
+const rankColors = ["bg-amber-400 text-amber-900", "bg-gray-300 text-gray-700", "bg-orange-300 text-orange-900"];
+
 const inventoryData = [
   { name: "Soft Drinks", value: 47, color: "#60a5fa" },
   { name: "Beer", value: 27, color: "#7c3aed" },
@@ -121,15 +134,14 @@ const renderLabel = (props: any) => {
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("Daily");
+  const [salesTab, setSalesTab] = useState<(typeof PERIOD_TABS)[number]>("Daily");
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
 
   // Data states
-  const [employees, setEmployees] = useState<Employee[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loadingEmployees, setLoadingEmployees] = useState(true);
   const [loadingSuppliers, setLoadingSuppliers] = useState(true);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
@@ -151,26 +163,6 @@ export default function DashboardPage() {
 
   const router = useRouter();
   const pathname = usePathname();
-
-  // ✅ Fetch employees with Array guard
-  useEffect(() => {
-    const fetchEmployees = async () => {
-      try {
-        setLoadingEmployees(true);
-        const data = await api.getEmployees();
-        const filtered = Array.isArray(data)
-          ? data.filter((emp: Employee) => emp.role === "CASHIER" || emp.role === "STOCK_MANAGER")
-          : [];
-        setEmployees(filtered);
-      } catch (err) {
-        console.error("Failed to fetch employees:", err);
-        setEmployees([]);
-      } finally {
-        setLoadingEmployees(false);
-      }
-    };
-    fetchEmployees();
-  }, []);
 
   // ✅ Fetch suppliers with Array guard
   useEffect(() => {
@@ -238,6 +230,8 @@ export default function DashboardPage() {
     };
     fetchTransactions();
   }, []);
+
+  const topSelling = buildTopSelling(filterByPeriod(transactions, salesTab));
 
   const handleLogout = () => {
     document.cookie = "token=; path=/; max-age=0";
@@ -380,44 +374,43 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Account Management */}
+            {/* Top 3 Selling Items */}
             <div className="md:col-span-4 bg-white rounded-2xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="font-bold text-gray-800">Account Management</h2>
-                <span className="text-xs text-gray-400">{employees.length} staff</span>
+                <h2 className="font-bold text-gray-800">Top 3 Selling Items</h2>
+                <button onClick={() => router.push("/inventory")}
+                  className="flex items-center gap-1 text-xs border border-gray-300 rounded-full px-3 py-1 text-gray-500 hover:bg-gray-50 hover:border-indigo-300 hover:text-indigo-500 transition-colors">
+                  <ShoppingCart className="w-3 h-3" /> View Inventory
+                </button>
               </div>
-              {loadingEmployees ? (
-                <p className="text-xs text-gray-400 text-center py-4">Loading employees...</p>
-              ) : employees.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-4">No employees found.</p>
+              <div className="flex gap-1.5 mb-3">
+                {PERIOD_TABS.map((tab) => (
+                  <button key={tab} onClick={() => setSalesTab(tab)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${salesTab === tab ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                    {tab}
+                  </button>
+                ))}
+              </div>
+              {loadingTransactions ? (
+                <p className="text-xs text-gray-400 text-center py-4">Loading sales...</p>
+              ) : topSelling.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-4">
+                  {transactions.length === 0 ? "No sales recorded yet." : `No sales for this ${salesTab.toLowerCase()} period.`}
+                </p>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {employees.slice(0, 5).map((emp) => (
-                    <div key={emp.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs">
-                          {emp.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-800">{emp.name}</p>
-                          <p className="text-xs text-gray-400">{emp.phone}</p>
-                        </div>
+                  {topSelling.map((item, i) => (
+                    <div key={item.name} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
+                      <span className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-xs font-bold ${rankColors[i]}`}>
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-gray-800 truncate">{item.name}</p>
+                        <p className="text-xs text-gray-400">{item.units} sold</p>
                       </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${emp.role === "CASHIER" ? "bg-blue-100 text-blue-600" : "bg-purple-100 text-purple-600"}`}>
-                          {emp.role}
-                        </span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs ${emp.userStatus === "ACTIVE" ? "bg-green-100 text-green-600" : "bg-yellow-100 text-yellow-600"}`}>
-                          {emp.userStatus}
-                        </span>
-                      </div>
+                      <p className="text-sm font-semibold text-green-600 shrink-0">₱{item.revenue.toLocaleString()}</p>
                     </div>
                   ))}
-                  {employees.length > 5 && (
-                    <button onClick={() => router.push("/account")} className="text-xs text-indigo-600 hover:underline mt-1 text-left">
-                      See all {employees.length} employees →
-                    </button>
-                  )}
                 </div>
               )}
             </div>
@@ -512,17 +505,17 @@ export default function DashboardPage() {
             {/* Inventory Pie Chart */}
             <div className="md:col-span-7 bg-white rounded-2xl p-4 shadow-sm">
               <h2 className="font-bold text-green-500 mb-3">Inventory Maintenances</h2>
-              <div className="flex justify-center overflow-x-auto">
+              <div className="flex justify-center items-start gap-4">
                 <PieChart width={320} height={220}>
                   <Pie data={inventoryData} cx={155} cy={100} outerRadius={90} dataKey="value" label={renderLabel} labelLine={true}>
                     {inventoryData.map((entry, index) => (<Cell key={index} fill={entry.color} />))}
                   </Pie>
                   <Tooltip formatter={(value) => `${value}%`} />
                 </PieChart>
-                <div className="flex flex-wrap justify-center gap-4 mt-3 bg-gray-50 rounded-xl px-4 py-3 border border-gray-200">
+                <div className="flex flex-col items-start gap-2 bg-gray-50 rounded-xl px-4 py-3 border border-gray-200">
                   {inventoryData.map((entry) => (
-                    <div key={entry.name} className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded-sm" style={{ backgroundColor: entry.color, border: "1px solid rgba(0,0,0,0.1)" }} />
+                    <div key={entry.name} className="flex items-center gap-2 whitespace-nowrap">
+                      <div className="w-4 h-4 rounded-sm shrink-0" style={{ backgroundColor: entry.color, border: "1px solid rgba(0,0,0,0.1)" }} />
                       <span className="text-sm font-medium text-gray-700">{entry.name} {entry.value}%</span>
                     </div>
                   ))}
@@ -576,13 +569,13 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-bold text-gray-800">Transaction Logs</h2>
                 <button
-                  onClick={() => router.push("/transaction")}
+                  onClick={() => router.push("/sales")}
                   className="text-xs border border-gray-300 rounded-full px-3 py-1 text-gray-500 hover:bg-gray-50 hover:border-indigo-300 hover:text-indigo-500 transition-colors">
                   See more
                 </button>
               </div>
               <div className="flex gap-2">
-                {["Daily", "Weekly", "Monthly"].map((tab) => (
+                {PERIOD_TABS.map((tab) => (
                   <button key={tab} onClick={() => setActiveTab(tab)}
                     className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${activeTab === tab ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
                     {tab}
@@ -596,9 +589,7 @@ export default function DashboardPage() {
                   <p className="text-sm text-gray-400 text-center py-6">No transactions to show</p>
                 ) : (
                   (() => {
-                    const periodMap: Record<string, string> = { Daily: "Today", Weekly: "Week", Monthly: "Month" };
-                    const key = periodMap[activeTab] ?? "Today";
-                    const filtered = transactions.filter(t => getPeriodKey(t.createdAt) === key);
+                    const filtered = filterByPeriod(transactions, activeTab);
                     if (filtered.length === 0) return <p className="text-sm text-gray-400 text-center py-6">No transactions for this period</p>;
                     return filtered.slice(0, 10).map((t) => (
                       <div key={t.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">

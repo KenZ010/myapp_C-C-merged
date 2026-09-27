@@ -280,6 +280,7 @@ type ReceiveQty  = { deliveryItemId: string; receivedQty: number; expiryDate: st
 // Reorder suggestion shape returned by GET /api/reorder/suggestions
 type ReorderSuggestion = {
   productId: string;
+  supplierId?: string;
   productName: string;
   size?: string | null;
   stock: number;
@@ -533,14 +534,13 @@ export default function PurchaseOrderPage() {
 
   useEffect(() => { fetchAll(); }, []);
 
-  // Fetch reorder suggestions whenever the selected supplier changes
+  // Fetch reorder suggestions for every supplier once, then scope client-side
   useEffect(() => {
-    if (!form.supplierId) { setReorderSuggestions([]); return; }
     let cancelled = false;
     (async () => {
       try {
         setLoadingReorder(true);
-        const res = await api.getReorderSuggestions({ supplierId: form.supplierId });
+        const res = await api.getReorderSuggestions();
         if (!cancelled) setReorderSuggestions(Array.isArray(res?.suggestions) ? res.suggestions : []);
       } catch (e) {
         console.error(e);
@@ -550,7 +550,7 @@ export default function PurchaseOrderPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [form.supplierId]);
+  }, []);
 
   const handleSupplierChange = (supplierId: string) => {
     setForm({ ...form, supplierId, lineItems: [emptyLineItem()] });
@@ -692,10 +692,52 @@ export default function PurchaseOrderPage() {
   const navigate     = (path: string) => { router.push(path); setShowMobileMenu(false); };
   const selectedSupplierName = suppliers.find((s) => s.id === form.supplierId)?.supplierName;
 
-  // Only the items the reorder engine actually flags as needing a reorder, sorted by profit
-  const flaggedSuggestions = reorderSuggestions
-    .filter((s) => s.needsReorder)
-    .sort((a, b) => (b.totalProfitWindow ?? -Infinity) - (a.totalProfitWindow ?? -Infinity));
+  // Suggestions do not always carry a supplierId, so resolve each product's supplier locally
+  const supplierIdByProduct: Record<string, string> = {};
+  allProducts.forEach((p) => { supplierIdByProduct[p.id] = p.supplierId || ""; });
+  const supplierIdFor = (s: ReorderSuggestion) => s.supplierId || supplierIdByProduct[s.productId] || "";
+
+  // Only the items the reorder engine flags, sorted by profit
+  const flaggedFor = (supplierId: string) =>
+    reorderSuggestions
+      .filter((s) => s.needsReorder && supplierIdFor(s) === supplierId)
+      .sort((a, b) => (b.totalProfitWindow ?? -Infinity) - (a.totalProfitWindow ?? -Infinity));
+
+  const flaggedSuggestions = form.supplierId ? flaggedFor(form.supplierId) : [];
+
+  // One entry per supplier that actually needs restocking, heaviest first
+  const restockBySupplier = suppliers
+    .map((sup) => {
+      const items = flaggedFor(sup.id);
+      return { supplier: sup, items };
+    })
+    .filter((g) => g.items.length > 0)
+    .sort((a, b) => b.items.length - a.items.length);
+
+  // Picking a supplier from the restock overview pre-fills the whole order,
+  // so the user only has to review the quantities and confirm.
+  const applyRestock = (supplierId: string) => {
+    const items = flaggedFor(supplierId);
+    if (items.length === 0) {
+      setForm({ ...form, supplierId, lineItems: [emptyLineItem()] });
+      return;
+    }
+    setForm({
+      ...form,
+      supplierId,
+      lineItems: items.map((s) => {
+        const p = allProducts.find((x) => x.id === s.productId);
+        return {
+          productId: s.productId,
+          productName: s.productName,
+          size: s.size,
+          quantity: s.suggestedCases ?? Math.max(1, s.suggestedUnits),
+          unitPrice: p?.price || 0,
+          unit: (p?.stockUnit as CaseUnit) || "case_24",
+        };
+      }),
+    });
+  };
 
   const PaginationBar = ({ page, totalPages, setPage, total, label }: {
     page: number; totalPages: number; setPage: (p: number) => void; total: number; label: string;
@@ -926,6 +968,82 @@ export default function PurchaseOrderPage() {
           {activeTab === "create" && (
             <div className="flex flex-col lg:flex-row gap-4">
               <div className="flex-1 flex flex-col gap-4">
+
+                {/* Restock overview — every supplier's restock needs in one place.
+                    Picking a supplier pre-fills the order below with its suggested items. */}
+                <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm">
+                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                        <Lightbulb className="w-3.5 h-3.5" />
+                      </div>
+                      <h2 className="text-sm font-bold text-gray-700">Restock Needs by Supplier</h2>
+                      {restockBySupplier.length > 0 && (
+                        <span className="text-xs text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">
+                          {restockBySupplier.length} supplier{restockBySupplier.length > 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs text-gray-400">Based on last 30 days</span>
+                  </div>
+
+                  {loadingReorder ? (
+                    <p className="text-xs text-gray-400 text-center py-6">Calculating suggestions...</p>
+                  ) : restockBySupplier.length === 0 ? (
+                    <p className="text-xs text-gray-400 text-center py-6">
+                      Nothing needs restocking right now — stock levels look healthy across all suppliers.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                      {restockBySupplier.map(({ supplier, items }) => {
+                        const isActive = form.supplierId === supplier.id;
+                        const worst = items.some((s) => s.urgency === "high") ? "high"
+                          : items.some((s) => s.urgency === "medium") ? "medium" : "low";
+                        const ring = { high: "bg-red-500", medium: "bg-yellow-500", low: "bg-green-500" }[worst];
+                        return (
+                          <button
+                            key={supplier.id}
+                            type="button"
+                            onClick={() => applyRestock(supplier.id)}
+                            className={`text-left rounded-xl border p-3 transition-colors ${
+                              isActive
+                                ? "border-indigo-400 bg-indigo-50/60"
+                                : "border-gray-100 bg-gray-50/50 hover:border-indigo-200 hover:bg-indigo-50/30"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className={`w-2 h-2 rounded-full shrink-0 ${ring}`} />
+                                <p className="text-sm font-semibold text-gray-800 truncate">{supplier.supplierName}</p>
+                              </div>
+                              <span className="text-xs font-medium text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full shrink-0">
+                                {items.length} to restock
+                              </span>
+                            </div>
+                            <ul className="mt-2 space-y-1">
+                              {items.slice(0, 3).map((s) => (
+                                <li key={s.productId} className="flex items-center justify-between gap-2 text-xs">
+                                  <span className="text-gray-600 truncate">
+                                    {s.productName}{s.size ? ` ${s.size}` : ""}
+                                  </span>
+                                  <span className="text-gray-400 shrink-0">
+                                    {s.suggestedCases != null ? `${s.suggestedCases} cs` : `${s.suggestedUnits} u`}
+                                  </span>
+                                </li>
+                              ))}
+                              {items.length > 3 && (
+                                <li className="text-xs text-gray-400">+{items.length - 3} more</li>
+                              )}
+                            </ul>
+                            <p className={`text-xs font-semibold mt-2 ${isActive ? "text-indigo-600" : "text-indigo-500"}`}>
+                              {isActive ? "Loaded ✓ — review below" : "Review & pre-fill order →"}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
 
                 {/* Step 1 — Supplier + Date */}
                 <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm">
