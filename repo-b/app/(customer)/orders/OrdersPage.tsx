@@ -63,6 +63,17 @@ const STATUS_MAP: Record<string, OrderStatus> = {
 
 const ACTIVE_STATUSES: OrderStatus[] = ["Waiting", "Processing", "Out For Delivery"];
 
+// ── VAT (12%) — orders only store the VAT-inclusive total, so subtotal/VAT ──
+// ── are reverse-computed from it, same rate used on CartPage/Checkout/Receipt ──
+const VAT_RATE = 0.12;
+function splitVat(totalWithVat: number) {
+  const subtotal = totalWithVat / (1 + VAT_RATE);
+  const vat = totalWithVat - subtotal;
+  return { subtotal, vat };
+}
+const money = (n: number) =>
+  n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 type TabFilter = "All" | OrderStatus;
 const TABS: TabFilter[] = ["All", "Waiting", "Processing", "Out For Delivery"];
 
@@ -302,6 +313,7 @@ export default function OrdersPage() {
               const isSelected = selectedOrder?.id === order.id;
               const canCancel  = order.status === "Waiting" || order.status === "Processing";
               const canReceive = order.status === "Out For Delivery";
+              const { subtotal, vat } = splitVat(order.total);
 
               return (
                 <div
@@ -337,6 +349,18 @@ export default function OrdersPage() {
                         </span>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Subtotal / VAT breakdown */}
+                  <div className="flex flex-col gap-0.5 mb-3.5">
+                    <div className="flex justify-between">
+                      <span className="text-xs text-gray-400">Subtotal</span>
+                      <span className="text-xs text-gray-500">₱{money(subtotal)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-xs text-gray-400">VAT (12%)</span>
+                      <span className="text-xs text-gray-500">₱{money(vat)}</span>
+                    </div>
                   </div>
 
                   {/* Footer */}
@@ -389,6 +413,7 @@ export default function OrdersPage() {
             : -1;
           const canCancel  = selectedOrder.status === "Waiting" || selectedOrder.status === "Processing";
           const canReceive = selectedOrder.status === "Out For Delivery";
+          const { subtotal, vat } = splitVat(selectedOrder.total);
 
           return (
             <div className="bg-white rounded-2xl border border-gray-100 p-6 sticky top-5">
@@ -473,8 +498,20 @@ export default function OrdersPage() {
                 ))}
               </div>
 
+              {/* Subtotal / VAT / Total */}
+              <div className="flex flex-col gap-1.5 pt-1">
+                <div className="flex justify-between items-center">
+                  <span className="text-[13px] text-gray-400">Subtotal</span>
+                  <span className="text-[13px] text-gray-700">₱{money(subtotal)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[13px] text-gray-400">VAT (12%)</span>
+                  <span className="text-[13px] text-gray-700">₱{money(vat)}</span>
+                </div>
+              </div>
+
               {/* Total */}
-              <div className="flex justify-between items-center py-3.5 border-t border-gray-100 mb-4">
+              <div className="flex justify-between items-center py-3.5 border-t border-gray-100 mb-4 mt-1.5">
                 <span className="text-[15px] font-bold text-gray-900">Total Amount</span>
                 <span className="text-[22px] font-extrabold text-violet-600">
                   ₱{selectedOrder.total.toLocaleString()}.00
