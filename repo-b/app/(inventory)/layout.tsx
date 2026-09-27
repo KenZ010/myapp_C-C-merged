@@ -1,7 +1,7 @@
 "use client";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSocket, useSocketActions } from "@/app/providers";
 
 // ── SVG Icons ──────────────────────────────────────────────────────────
@@ -73,6 +73,21 @@ const pageTitles: Record<string, { title: string; sub: string }> = {
   "/inventory/loss-report": { title: "Loss Report",           sub: "Track product losses" },
 };
 
+// Sample notification data — replace with real data from your backend/socket
+type NotificationItem = {
+  id: string;
+  title: string;
+  message: string;
+  time: string;
+  read: boolean;
+};
+
+const sampleNotifications: NotificationItem[] = [
+  { id: "1", title: "Low stock alert", message: "Coke 1.5L is running low (3 left).", time: "5m ago", read: false },
+  { id: "2", title: "Restock received", message: "Delivery for Sprite 1L has arrived.", time: "40m ago", read: false },
+  { id: "3", title: "Return processed", message: "Return for order #1032 was completed.", time: "2h ago", read: true },
+];
+
 // ── Layout ─────────────────────────────────────────────────────────────
 export default function InventoryLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -84,6 +99,12 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>(sampleNotifications);
+  const notifRef = useRef<HTMLDivElement>(null);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
   useEffect(() => {
     const stored = localStorage.getItem("user");
     if (stored) setCurrentUser(JSON.parse(stored));
@@ -92,6 +113,19 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     connectSocket();
   }, []);
+
+  // Close the notification dropdown when clicking outside of it
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false);
+      }
+    }
+    if (notifOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [notifOpen]);
 
   const page = pageTitles[pathname] ?? { title: "Inventory Manager", sub: "" };
 
@@ -102,6 +136,14 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
     document.cookie = `token=; ${expired}`;
     document.cookie = `active_token=; ${expired}`;
     router.push("/");
+  };
+
+  const markAllRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  };
+
+  const markOneRead = (id: string) => {
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
   };
 
   return (
@@ -228,22 +270,107 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
           {/* ✅ Notification bell + User info */}
           <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
 
-         {/* Notification Icon */}
-        <button
-         onClick={() => { /* TODO: handle notification click */ }}
-        style={{
-         position: "relative", background: "rgba(255,255,255,0.12)", border: "none",
-         cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-         padding: "8px", borderRadius: "8px", flexShrink: 0,
-        }}
-         >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-    </svg>
-    {/* Optional unread dot — remove this span if not needed */}
-    <span style={{ position: "absolute", top: "6px", right: "6px", width: "8px", height: "8px", borderRadius: "50%", background: "#ef5350", border: "1.5px solid #3949ab" }} />
-  </button>
+         {/* Notification Icon + Dropdown */}
+        <div ref={notifRef} style={{ position: "relative" }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); setNotifOpen((prev) => !prev); }}
+            style={{
+              position: "relative", background: notifOpen ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.12)", border: "none",
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              padding: "8px", borderRadius: "8px", flexShrink: 0, transition: "background 0.15s ease",
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            {unreadCount > 0 && (
+              <span style={{ position: "absolute", top: "6px", right: "6px", width: "8px", height: "8px", borderRadius: "50%", background: "#ef5350", border: "1.5px solid #3949ab" }} />
+            )}
+          </button>
+
+          {notifOpen && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: "absolute", top: "calc(100% + 10px)", right: 0, width: "320px",
+                background: "#fff", borderRadius: "14px", border: "1px solid #ebebf0",
+                boxShadow: "0 12px 32px rgba(26,35,126,0.2)", zIndex: 60,
+                animation: "notifFadeIn 0.16s ease",
+                overflow: "hidden",
+              }}
+            >
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #ebebf0" }}>
+                <p style={{ fontSize: "13.5px", fontWeight: 700, color: "#1a237e" }}>Notifications</p>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={markAllRead}
+                    style={{ fontSize: "11.5px", fontWeight: 600, color: "#5c6bc0", background: "none", border: "none", cursor: "pointer" }}
+                  >
+                    Mark all read
+                  </button>
+                )}
+              </div>
+
+              {/* List */}
+              <div style={{ maxHeight: "320px", overflowY: "auto" }}>
+                {notifications.length === 0 ? (
+                  <div style={{ padding: "28px 16px", textAlign: "center" }}>
+                    <p style={{ fontSize: "12.5px", color: "#9e9e9e" }}>No notifications yet</p>
+                  </div>
+                ) : (
+                  notifications.map((n) => (
+                    <div
+                      key={n.id}
+                      onClick={() => markOneRead(n.id)}
+                      style={{
+                        display: "flex", gap: "10px", padding: "12px 16px",
+                        borderBottom: "1px solid #f5f6fa", cursor: "pointer",
+                        background: n.read ? "#fff" : "#f3f4fb",
+                        transition: "background 0.15s ease",
+                      }}
+                    >
+                      <span
+                        style={{
+                          marginTop: "5px", width: "7px", height: "7px", borderRadius: "50%",
+                          background: n.read ? "transparent" : "#5c6bc0", flexShrink: 0,
+                        }}
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: "12.5px", fontWeight: n.read ? 500 : 700, color: "#1a237e", lineHeight: 1.3 }}>
+                          {n.title}
+                        </p>
+                        <p style={{ fontSize: "11.5px", color: "#757575", lineHeight: 1.4, marginTop: "2px" }}>
+                          {n.message}
+                        </p>
+                        <p style={{ fontSize: "10.5px", color: "#9fa8da", marginTop: "4px", fontWeight: 500 }}>
+                          {n.time}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Footer */}
+              <div style={{ padding: "10px 16px", borderTop: "1px solid #ebebf0", textAlign: "center" }}>
+                <button
+                  style={{ fontSize: "11.5px", fontWeight: 600, color: "#7986cb", background: "none", border: "none", cursor: "pointer" }}
+                >
+                  View all notifications
+                </button>
+              </div>
+            </div>
+          )}
+
+          <style>{`
+            @keyframes notifFadeIn {
+              from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+              to   { opacity: 1; transform: translateY(0) scale(1); }
+            }
+          `}</style>
+        </div>
 
   {/* Divider */}
   <div style={{ width: "1px", height: "28px", background: "rgba(255,255,255,0.2)" }} />
