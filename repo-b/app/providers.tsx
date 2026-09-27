@@ -1,6 +1,8 @@
 "use client";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "https://backend-production-dcaab.up.railway.app/api";
+// Socket.IO treats any path after the host as a namespace, so it must NOT include /api
+const SOCKET_URL = BACKEND_URL.replace(/\/api\/?$/, "");
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
@@ -40,7 +42,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
   };
 
   const startPolling = () => {
-    // don't start a second interval if one is already running
     if (pollRef.current) return;
     pollRef.current = setInterval(() => {
       if (socketRef.current?.connected) {
@@ -61,7 +62,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // already connected — just rejoin rooms and stop polling
     if (socketRef.current?.connected) {
       socketRef.current.emit("join", { id: user.id, role: user.role });
       console.log("🔄 Rejoined rooms as:", user.id, user.role);
@@ -69,17 +69,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // socket exists but not connected yet — start polling and wait
     if (socketRef.current) {
       startPolling();
       return;
     }
 
-    // no socket at all — create one
-    console.log("🔌 Creating new socket for:", user.id, user.role);
+    console.log("🔌 Creating new socket for:", user.id, user.role, "→", SOCKET_URL);
 
-    const newSocket = io(BACKEND_URL, {
-      transports: ["websocket"],
+    const newSocket = io(SOCKET_URL, {
+      transports: ["polling", "websocket"],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 500,
@@ -96,8 +94,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
     newSocket.on("connect",   rejoin);
     newSocket.on("reconnect", rejoin);
 
+    newSocket.on("connect_error", (err) => {
+      console.log("⚠️ Socket connect_error:", err.message);
+    });
+
     newSocket.on("disconnect", () => {
       console.log("❌ Socket disconnected");
+      socketRef.current = null;
       setSocket(null);
     });
 
@@ -119,7 +122,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
     socketRef.current = newSocket;
 
-    // start polling to wait for connection
     startPolling();
   };
 
