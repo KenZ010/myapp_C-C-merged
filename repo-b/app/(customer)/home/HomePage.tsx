@@ -138,7 +138,20 @@ function normalizeToReceipt(order: Record<string, unknown>): ReceiptData {
   };
 }
 
-// ─── Receipt Modal ─────────────────────────────────────────────────────────────
+// ─── Receipt Modal — thermal paper style (matches transaction history pages) ──
+
+function Dash() {
+  return <div style={{ borderTop: "1px dashed #bbb", margin: "8px 0" }} />;
+}
+
+function ThermalRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", padding: "1px 0" }}>
+      <span>{label}</span>
+      <span>{value}</span>
+    </div>
+  );
+}
 
 function ReceiptModal({
   receipt,
@@ -147,102 +160,202 @@ function ReceiptModal({
   receipt: ReceiptData;
   onClose: () => void;
 }) {
+  const TAX_RATE = 0.12;
+  const subtotal = receipt.items.reduce((s, i) => s + i.price * i.qty, 0);
+  const tax = subtotal * TAX_RATE;
+  const totalDue = receipt.total || subtotal + tax;
+
   return (
     <>
       {/* Backdrop */}
+      <div onClick={onClose} className="fixed inset-0 bg-black/55 z-40" />
+
+      {/* Paper wrapper — torn-edge top/bottom */}
       <div
-        onClick={onClose}
-        className="fixed inset-0 bg-black/50 z-40"
-      />
-
-      {/* Modal */}
-      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[min(400px,92vw)] bg-white rounded-2xl overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto">
-
-        {/* Header */}
-        <div className="bg-gradient-to-br from-[#1a3c2e] to-[#2d7a3a] px-7 py-6 text-center relative">
-          <button
-            onClick={onClose}
-            className="absolute top-3.5 right-3.5 w-7 h-7 rounded-full bg-white/20 border-0 text-white text-sm cursor-pointer flex items-center justify-center hover:bg-white/30"
-          >
-            ✕
-          </button>
-          <div className="w-14 h-14 rounded-full bg-white/15 flex items-center justify-center text-2xl mx-auto mb-2.5">
-            🧾
-          </div>
-          <p className="text-white text-lg font-extrabold m-0">Julieta Soft Drinks</p>
-          <p className="text-white/65 text-xs m-0">Official Receipt</p>
-        </div>
-
-        {/* Zigzag edge */}
+        style={{
+          position: "fixed",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%,-50%)",
+          zIndex: 50,
+          width: "clamp(300px, 90vw, 380px)",
+          maxHeight: "90vh",
+          overflowY: "auto",
+          overflowX: "hidden",
+          boxShadow: "0 8px 40px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.12)",
+          borderRadius: "2px",
+        }}
+      >
+        {/* Torn top */}
         <div
-          className="h-3"
           style={{
+            height: "14px",
             background:
-              "linear-gradient(135deg,#2d7a3a 25%,transparent 25%) -10px 0," +
-              "linear-gradient(225deg,#2d7a3a 25%,transparent 25%) -10px 0," +
-              "linear-gradient(315deg,#2d7a3a 25%,transparent 25%)," +
-              "linear-gradient(45deg,#2d7a3a 25%,transparent 25%)",
-            backgroundSize: "20px 12px",
+              "linear-gradient(135deg, #f0ede6 25%, transparent 25%) -8px 0,linear-gradient(225deg, #f0ede6 25%, transparent 25%) -8px 0,linear-gradient(315deg, #f0ede6 25%, transparent 25%),linear-gradient(45deg, #f0ede6 25%, transparent 25%)",
+            backgroundSize: "16px 14px",
             backgroundRepeat: "repeat-x",
+            backgroundColor: "#e8e4da",
           }}
         />
 
-        {/* Body */}
-        <div className="px-7 py-5">
-          {[
-            ["Order ID", receipt.id],
-            ["Date", receipt.date],
-            ["Payment", receipt.paymentMethod],
-            ["Status", formatStatus(receipt.status)],
-          ].map(([label, value]) => (
-            <div key={label} className="flex justify-between mb-2">
-              <span className="text-xs text-gray-400">{label}</span>
-              <span className="text-xs font-semibold text-gray-700">{value}</span>
-            </div>
-          ))}
+        {/* Receipt body */}
+        <div
+          style={{
+            background: "#f7f4ee",
+            fontFamily: "'Courier New', Courier, monospace",
+            fontSize: "13px",
+            color: "#1a1a1a",
+            padding: "18px 24px 10px",
+            lineHeight: 1.55,
+            position: "relative",
+          }}
+        >
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            style={{
+              position: "absolute",
+              top: "18px",
+              right: "14px",
+              background: "rgba(0,0,0,0.08)",
+              border: "none",
+              borderRadius: "50%",
+              width: "26px",
+              height: "26px",
+              cursor: "pointer",
+              fontSize: "12px",
+              color: "#555",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            ✕
+          </button>
 
-          <div className="border-t border-dashed border-gray-200 my-3.5" />
+          {/* Store header */}
+          <div style={{ textAlign: "center", marginBottom: "12px" }}>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: "15px", letterSpacing: "0.5px" }}>
+              Julieta SoftDrink Store
+            </p>
+            <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#555" }}>
+              3065 JP Rizal St.
+            </p>
+            <p style={{ margin: "1px 0 0", fontSize: "11px", color: "#555" }}>
+              Camarin Caloocan City
+            </p>
+            <p style={{ margin: "1px 0 0", fontSize: "11px", color: "#555" }}>
+              Phone: +63 929 141 0133
+            </p>
+          </div>
 
-          <p className="text-[11px] font-bold text-gray-900 mb-2.5 uppercase tracking-wide">
-            Items Ordered
+          <Dash />
+
+          {/* Invoice meta */}
+          <p style={{ margin: "0 0 1px" }}>
+            <span style={{ color: "#555" }}>Order ID: </span>
+            <span style={{ fontWeight: 700 }}>{receipt.id}</span>
+          </p>
+          <p style={{ margin: "0 0 1px" }}>
+            <span style={{ color: "#555" }}>Date: </span>{receipt.date}
+          </p>
+          <p style={{ margin: "0 0 1px" }}>
+            <span style={{ color: "#555" }}>Payment: </span>{receipt.paymentMethod}
+          </p>
+          <p style={{ margin: "0 0 10px" }}>
+            <span style={{ color: "#555" }}>Status: </span>{formatStatus(receipt.status)}
           </p>
 
+          <Dash />
+
+          {/* Column header */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 60px 80px",
+              fontSize: "12px",
+              fontWeight: 700,
+              padding: "4px 0",
+              color: "#333",
+            }}
+          >
+            <span>Description</span>
+            <span style={{ textAlign: "center" }}>Qty</span>
+            <span style={{ textAlign: "right" }}>Price</span>
+          </div>
+
+          <Dash />
+
+          {/* Items */}
           {receipt.items.length === 0 ? (
-            <p className="text-xs text-gray-400 italic">No item details available.</p>
+            <p style={{ fontSize: "12px", color: "#888", fontStyle: "italic", margin: "6px 0" }}>
+              No item details available.
+            </p>
           ) : (
             receipt.items.map((item, i) => (
-              <div key={i} className="flex justify-between mb-2">
-                <div>
-                  <p className="text-[13px] text-gray-700 m-0">{item.name}</p>
-                  <p className="text-[11px] text-gray-400 m-0">
-                    x{item.qty} × ₱{item.price.toLocaleString()}.00
-                  </p>
-                </div>
-                <span className="text-[13px] font-semibold">
-                  ₱{(item.price * item.qty).toLocaleString()}.00
-                </span>
+              <div
+                key={i}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 60px 80px",
+                  padding: "3px 0",
+                  fontSize: "12px",
+                  alignItems: "start",
+                }}
+              >
+                <span style={{ wordBreak: "break-word", paddingRight: "6px" }}>{item.name}</span>
+                <span style={{ textAlign: "center" }}>{item.qty}</span>
+                <span style={{ textAlign: "right" }}>₱{item.price.toFixed(2)}</span>
               </div>
             ))
           )}
 
-          <div className="border-t border-dashed border-gray-200 my-3.5" />
+          <Dash />
 
-          <div className="bg-[#f0faf2] rounded-xl px-4 py-3 flex justify-between items-center mb-4">
-            <span className="text-[15px] font-bold text-gray-900">TOTAL</span>
-            <span className="text-[22px] font-extrabold text-[#1a3c2e]">
-              ₱{receipt.total.toLocaleString()}.00
-            </span>
+          {/* Subtotal / Tax */}
+          <ThermalRow label="Subtotal:" value={`₱${subtotal.toFixed(2)}`} />
+          <ThermalRow label="Tax (12%):" value={`₱${tax.toFixed(2)}`} />
+
+          <Dash />
+
+          {/* Total */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              fontWeight: 700,
+              fontSize: "15px",
+              padding: "4px 0 6px",
+            }}
+          >
+            <span>Total:</span>
+            <span>₱{totalDue.toFixed(2)}</span>
           </div>
 
-          <div className="text-center pt-3.5 border-t border-dashed border-gray-200">
-            <p className="text-xs text-emerald-700 font-semibold mb-1">
+          <Dash />
+
+          {/* Footer */}
+          <div style={{ textAlign: "center", paddingTop: "6px" }}>
+            <p style={{ fontSize: "12px", fontWeight: 700, margin: "0 0 2px" }}>
               Thank you for your purchase! 🎉
             </p>
-            <p className="text-[11px] text-gray-400">
-              Julieta Soft Drink Store • TECHNOLOGIA @2026
+            <p style={{ fontSize: "10px", color: "#777", margin: 0 }}>
+              Julieta Store • TECHNOLOGIA © 2026
             </p>
           </div>
         </div>
+
+        {/* Torn bottom */}
+        <div
+          style={{
+            height: "14px",
+            background:
+              "linear-gradient(135deg, transparent 25%, #f7f4ee 25%) -8px 0,linear-gradient(225deg, transparent 25%, #f7f4ee 25%) -8px 0,linear-gradient(315deg, transparent 25%, #f7f4ee 25%),linear-gradient(45deg, transparent 25%, #f7f4ee 25%)",
+            backgroundSize: "16px 14px",
+            backgroundRepeat: "repeat-x",
+            backgroundColor: "#e8e4da",
+          }}
+        />
       </div>
     </>
   );
