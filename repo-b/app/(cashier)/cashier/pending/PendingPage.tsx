@@ -156,13 +156,13 @@ export default function PendingPage() {
   // Initial fetch
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
-  // Poll every 10 seconds as fallback
-  useEffect(() => {
-    pollingRef.current = setInterval(() => fetchOrders(true), 10_000);
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-    };
-  }, [fetchOrders]);
+  // Poll every 10 seconds as fallback — DISABLED for testing
+  // useEffect(() => {
+  //   pollingRef.current = setInterval(() => fetchOrders(true), 10_000);
+  //   return () => {
+  //     if (pollingRef.current) clearInterval(pollingRef.current);
+  //   };
+  // }, [fetchOrders]);
 
   // Socket: refetch on new order + when socket (re)connects
   useEffect(() => {
