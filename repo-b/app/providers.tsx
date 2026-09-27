@@ -79,7 +79,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     console.log("🔌 Creating new socket for:", user.id, user.role);
 
     const newSocket = io(BACKEND_URL, {
-      transports: [ "polling","websocket"],
+      transports: ["websocket"],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 500,
