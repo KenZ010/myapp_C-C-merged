@@ -153,43 +153,34 @@ export default function PendingPage() {
     }
   }, []);
 
-
-  const [toast, setToast] = useState<string | null>(null);
-  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
+  // Initial fetch
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
-  // Poll every 10 seconds as fallback
-  useEffect(() => {
-    pollingRef.current = setInterval(() => fetchOrders(true), 10_000);
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-    };
-  }, [fetchOrders]);
+  // Poll every 10 seconds as fallback — DISABLED for testing
+  // useEffect(() => {
+  //   pollingRef.current = setInterval(() => fetchOrders(true), 10_000);
+  //   return () => {
+  //     if (pollingRef.current) clearInterval(pollingRef.current);
+  //   };
+  // }, [fetchOrders]);
 
   // Socket: refetch on new order + when socket (re)connects
   useEffect(() => {
-  if (!socket) return;
+    if (!socket) return;
 
-  fetchOrders(true);
-
-  socket.on("order:new", (data: { message?: string }) => {
-    console.log("order:new received:", data);
+    // Fetch immediately when socket connects (catches missed events during refresh)
     fetchOrders(true);
-    setToast(data?.message ?? "New order received!");
-    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    toastTimeoutRef.current = setTimeout(() => setToast(null), 5000);
-  });
-  socket.on("order:completed", () => fetchOrders(true));
-  socket.on("order:status",    () => fetchOrders(true));
 
-  return () => {
-    socket.off("order:new");
-    socket.off("order:completed");
-    socket.off("order:status");
-    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-  };
-}, [socket, fetchOrders]);
+    socket.on("order:new",       () => fetchOrders(true));
+    socket.on("order:completed", () => fetchOrders(true));
+    socket.on("order:status",    () => fetchOrders(true));
+
+    return () => {
+      socket.off("order:new");
+      socket.off("order:completed");
+      socket.off("order:status");
+    };
+  }, [socket, fetchOrders]);
 
   const updateStatus = async (id: string, status: OrderStatus) => {
     setUpdatingId(id);
@@ -216,15 +207,6 @@ export default function PendingPage() {
       `}</style>
 
       <div style={{ padding: "28px" }}>
-
-            {toast && (
-        <div
-          onClick={() => setToast(null)}
-          className="fixed top-5 right-5 z-[1000] max-w-xs cursor-pointer rounded-xl bg-neutral-900 px-5 py-3.5 text-[13px] font-semibold text-white shadow-2xl animate-in fade-in slide-in-from-top-2"
-        >
-          🔔 {toast}
-        </div>
-      )}
 
         {/* Banner */}
         <div style={{ background: "linear-gradient(135deg, #6366f1, #3c3eb1fb)", borderRadius: "16px", padding: "24px 32px", marginBottom: "24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "16px" }}>
