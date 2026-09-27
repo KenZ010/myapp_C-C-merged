@@ -174,6 +174,7 @@ export default function PendingPage() {
   fetchOrders(true);
 
   socket.on("order:new", (data: { message?: string }) => {
+    console.log("order:new received:", data);
     fetchOrders(true);
     setToast(data?.message ?? "New order received!");
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
