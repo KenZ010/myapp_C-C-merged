@@ -588,78 +588,231 @@ export default function CashierTransactionsPage() {
       </div>
 
       {/* ══════════════════════════════════════════ */}
-      {/* RECEIPT MODAL                             */}
+      {/* RECEIPT MODAL — thermal paper style (matches customer page) */}
       {/* ══════════════════════════════════════════ */}
-      {selectedTx && (
-        <>
-          <div onClick={() => setSelectedTx(null)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", zIndex: 40, backdropFilter: "blur(2px)" }} />
-          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 50, width: "min(420px, 94vw)", background: "#fff", borderRadius: "16px", overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" }}>
+      {selectedTx && (() => {
+        const TAX_RATE = 0.12;
+        const subtotal = selectedTx.items.reduce((s, i) => s + i.price * i.quantity, 0);
+        const tax = subtotal * TAX_RATE;
+        const totalDue = selectedTx.total || subtotal + tax;
 
-            {/* Modal Header */}
-            <div style={{ background: "#1e1b4b", padding: "22px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <div style={{ width: "40px", height: "40px", borderRadius: "10px", background: "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", color: "#a5b4fc" }}>
-                  {Icon.receipt}
+        return (
+          <>
+            <div
+              onClick={() => setSelectedTx(null)}
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.55)",
+                zIndex: 40,
+              }}
+            />
+
+            {/* Paper wrapper — torn-edge top/bottom */}
+            <div
+              style={{
+                position: "fixed",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%,-50%)",
+                zIndex: 50,
+                width: "clamp(300px, 90vw, 380px)",
+                maxHeight: "90vh",
+                overflowY: "auto",
+                overflowX: "hidden",
+                boxShadow: "0 8px 40px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.12)",
+                borderRadius: "2px",
+              }}
+            >
+              {/* Torn top */}
+              <div style={{
+                height: "14px",
+                background: "linear-gradient(135deg, #f0ede6 25%, transparent 25%) -8px 0,linear-gradient(225deg, #f0ede6 25%, transparent 25%) -8px 0,linear-gradient(315deg, #f0ede6 25%, transparent 25%),linear-gradient(45deg, #f0ede6 25%, transparent 25%)",
+                backgroundSize: "16px 14px",
+                backgroundRepeat: "repeat-x",
+                backgroundColor: "#e8e4da",
+              }} />
+
+              {/* Receipt body */}
+              <div
+                style={{
+                  background: "#f7f4ee",
+                  fontFamily: "'Courier New', Courier, monospace",
+                  fontSize: "13px",
+                  color: "#1a1a1a",
+                  padding: "18px 24px 10px",
+                  lineHeight: 1.55,
+                  position: "relative",
+                }}
+              >
+                {/* Close button */}
+                <button
+                  onClick={() => setSelectedTx(null)}
+                  style={{
+                    position: "absolute",
+                    top: "18px",
+                    right: "14px",
+                    background: "rgba(0,0,0,0.08)",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: "26px",
+                    height: "26px",
+                    cursor: "pointer",
+                    fontSize: "12px",
+                    color: "#555",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  ✕
+                </button>
+
+                {/* Store header */}
+                <div style={{ textAlign: "center", marginBottom: "12px" }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: "15px", letterSpacing: "0.5px" }}>
+                    Julieta SoftDrink Store
+                  </p>
+                  <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#555" }}>
+                    3065 JP Rizal St.
+                  </p>
+                  <p style={{ margin: "1px 0 0", fontSize: "11px", color: "#555" }}>
+                    Camarin Caloocan City
+                  </p>
+                  <p style={{ margin: "1px 0 0", fontSize: "11px", color: "#555" }}>
+                    Phone: +63 929 141 0133
+                  </p>
                 </div>
-                <div>
-                  <p style={{ color: "#fff", fontSize: "15px", fontWeight: 700, margin: 0 }}>Official Receipt</p>
-                  <p style={{ color: "#a5b4fc", fontSize: "11.5px", margin: 0 }}>Julieta Store</p>
+
+                <Dash />
+
+                {/* Invoice meta */}
+                <p style={{ margin: "0 0 1px" }}>
+                  <span style={{ color: "#555" }}>Order ID: </span>
+                  <span style={{ fontWeight: 700 }}>{selectedTx.id}</span>
+                </p>
+                <p style={{ margin: "0 0 1px" }}>
+                  <span style={{ color: "#555" }}>Date: </span>{selectedTx.date}
+                </p>
+                <p style={{ margin: "0 0 1px" }}>
+                  <span style={{ color: "#555" }}>Customer: </span>{selectedTx.customer}
+                </p>
+                <p style={{ margin: "0 0 1px" }}>
+                  <span style={{ color: "#555" }}>Payment: </span>{selectedTx.payment}
+                </p>
+                <p style={{ margin: "0 0 10px" }}>
+                  <span style={{ color: "#555" }}>Cashier: </span>{selectedTx.employeeName}
+                </p>
+
+                <Dash />
+
+                {/* Column header */}
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 60px 80px",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  padding: "4px 0",
+                  color: "#333",
+                }}>
+                  <span>Description</span>
+                  <span style={{ textAlign: "center" }}>Qty</span>
+                  <span style={{ textAlign: "right" }}>Price</span>
                 </div>
-              </div>
-              <button onClick={() => setSelectedTx(null)} style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: "7px", width: "30px", height: "30px", cursor: "pointer", color: "#a5b4fc", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                {Icon.close}
-              </button>
-            </div>
 
-            <div style={{ padding: "22px 24px" }}>
-              {/* Order Meta */}
-              <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "14px 16px", marginBottom: "18px" }}>
-                {[
-                  ["Order ID",  <span style={{ fontFamily: "monospace", fontSize: "12px", color: "#4f46e5" }}>{selectedTx.id}</span>],
-                  ["Customer",  selectedTx.customer],
-                  ["Cashier",   selectedTx.employeeName],
-                  ["Date",      selectedTx.date],
-                  ["Payment",   <span style={{ padding: "2px 10px", borderRadius: "20px", fontSize: "11.5px", fontWeight: 600, background: selectedTx.payment === "CASH" ? "#ecfdf5" : "#eff6ff", color: selectedTx.payment === "CASH" ? "#059669" : "#2563eb" }}>{selectedTx.payment}</span>],
-                ].map(([label, value]) => (
-                  <div key={String(label)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                    <span style={{ fontSize: "12px", color: "#64748b" }}>{label}</span>
-                    <span style={{ fontSize: "12.5px", fontWeight: 600, color: "#0f172a" }}>{value as React.ReactNode}</span>
-                  </div>
-                ))}
-              </div>
+                <Dash />
 
-              {/* Items */}
-              <p style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "10px" }}>Items Ordered</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "18px" }}>
+                {/* Items */}
                 {selectedTx.items.map((line, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "10px 12px", borderRadius: "8px", background: "#f8fafc" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <span style={{ color: "#94a3b8" }}>{getCatIcon(line.product.category)}</span>
-                      <div>
-                        <p style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a", margin: 0 }}>{line.product.productName}</p>
-                        <p style={{ fontSize: "11px", color: "#94a3b8", margin: 0 }}>×{line.quantity} @ ₱{line.price.toLocaleString()}.00</p>
-                      </div>
-                    </div>
-                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>₱{line.subtotal.toLocaleString()}.00</span>
+                  <div
+                    key={i}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 60px 80px",
+                      padding: "3px 0",
+                      fontSize: "12px",
+                      alignItems: "start",
+                    }}
+                  >
+                    <span style={{ wordBreak: "break-word", paddingRight: "6px" }}>
+                      {line.product.productName}
+                    </span>
+                    <span style={{ textAlign: "center" }}>{line.quantity}</span>
+                    <span style={{ textAlign: "right" }}>
+                      ₱{line.price.toFixed(2)}
+                    </span>
                   </div>
                 ))}
+
+                <Dash />
+
+                {/* Subtotal / Tax */}
+                <ThermalRow label="Subtotal:" value={`₱${subtotal.toFixed(2)}`} />
+                <ThermalRow label="Tax (12%):" value={`₱${tax.toFixed(2)}`} />
+
+                <Dash />
+
+                {/* Total */}
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontWeight: 700,
+                  fontSize: "15px",
+                  padding: "4px 0 6px",
+                }}>
+                  <span>Total:</span>
+                  <span>₱{totalDue.toFixed(2)}</span>
+                </div>
+
+                <Dash />
+
+                {/* Footer */}
+                <div style={{ textAlign: "center", paddingTop: "6px" }}>
+                  <p style={{ fontSize: "12px", fontWeight: 700, margin: "0 0 2px" }}>
+                    Thank you for your purchase!
+                  </p>
+                  <p style={{ fontSize: "10px", color: "#777", margin: 0 }}>
+                    Julieta Store • TECHNOLOGIA © 2026
+                  </p>
+                </div>
               </div>
 
-              {/* Total */}
-              <div style={{ background: "#eef2ff", borderRadius: "10px", padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" }}>
-                <span style={{ fontSize: "14px", fontWeight: 700, color: "#1e1b4b" }}>TOTAL</span>
-                <span style={{ fontSize: "24px", fontWeight: 800, color: "#4f46e5" }}>₱{selectedTx.total.toLocaleString()}.00</span>
-              </div>
-
-              {/* Footer */}
-              <div style={{ textAlign: "center", paddingTop: "14px", borderTop: "1px solid #f1f5f9" }}>
-                <p style={{ fontSize: "12.5px", fontWeight: 600, color: "#4f46e5", marginBottom: "4px" }}>Thank you for your purchase!</p>
-                <p style={{ fontSize: "11px", color: "#94a3b8" }}>Julieta Store • TECHNOLOGIA © 2026</p>
-              </div>
+              {/* Torn bottom */}
+              <div style={{
+                height: "14px",
+                background: "linear-gradient(135deg, transparent 25%, #f7f4ee 25%) -8px 0,linear-gradient(225deg, transparent 25%, #f7f4ee 25%) -8px 0,linear-gradient(315deg, transparent 25%, #f7f4ee 25%),linear-gradient(45deg, transparent 25%, #f7f4ee 25%)",
+                backgroundSize: "16px 14px",
+                backgroundRepeat: "repeat-x",
+                backgroundColor: "#e8e4da",
+              }} />
             </div>
-          </div>
-        </>
-      )}
+          </>
+        );
+      })()}
     </>
+  );
+}
+
+/* ── Helpers ── */
+function Dash() {
+  return (
+    <div style={{
+      borderTop: "1px dashed #bbb",
+      margin: "8px 0",
+    }} />
+  );
+}
+
+function ThermalRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{
+      display: "flex",
+      justifyContent: "space-between",
+      fontSize: "12px",
+      padding: "1px 0",
+    }}>
+      <span>{label}</span>
+      <span>{value}</span>
+    </div>
   );
 }
