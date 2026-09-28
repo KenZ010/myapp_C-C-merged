@@ -24,6 +24,9 @@ type Customer = {
   email?: string;
 };
 
+// ── VAT (12%), added on top of the item subtotal ─────────────────────────────
+const VAT_RATE = 0.12;
+
 export default function PaymentPage() {
   const router = useRouter();
   const [isNarrow, setIsNarrow] = useState(false);
@@ -49,6 +52,8 @@ export default function PaymentPage() {
   }, []);
 
   const subtotal = cartItems.reduce((s, i) => s + i.finalPrice * i.qty, 0);
+  const vat = subtotal * VAT_RATE;
+  const total = subtotal + vat;
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loadingCust, setLoadingCust] = useState(true);
@@ -126,7 +131,7 @@ export default function PaymentPage() {
         : null;
 
   const paid = parseFloat(amountPaid) || 0;
-  const change = paid - subtotal;
+  const change = paid - total;
 
   const phoneValid = newPhone.trim().length === 10 && /^\d{10}$/.test(newPhone);
   const newCustomerValid =
@@ -142,7 +147,7 @@ export default function PaymentPage() {
       : newCustomerValid) &&
     (paymentMethod === "GCash"
       ? gcashRef.trim() !== "" && gcashImage !== null
-      : paid >= subtotal);
+      : paid >= total);
 
   const lettersOnlyRegex = /^[a-zA-ZÀ-ÖØ-öø-ÿ\s.\-']*$/;
 
@@ -197,6 +202,9 @@ export default function PaymentPage() {
           quantity: item.qty,
           price: item.finalPrice,
         })),
+        subtotal,
+        vat,
+        totalAmount: total,
       };
       const res = await api.placeOrder(payload);
       if (res?.saleId) await api.updateOrderStatus(res.saleId, "PROCESSING");
@@ -293,16 +301,40 @@ export default function PaymentPage() {
             <strong>{activeCustomer?.customerName}</strong>.
           </p>
           <p style={{ fontSize: "14px", color: "#888", marginBottom: "6px" }}>
-            Total:{" "}
+            Subtotal:{" "}
             <strong style={{ color: "#1a3c2e" }}>
               ₱{subtotal.toLocaleString()}.00
+            </strong>
+          </p>
+          <p style={{ fontSize: "14px", color: "#888", marginBottom: "6px" }}>
+            VAT (12%):{" "}
+            <strong style={{ color: "#1a3c2e" }}>
+              ₱
+              {vat.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </strong>
+          </p>
+          <p style={{ fontSize: "14px", color: "#888", marginBottom: "6px" }}>
+            Total:{" "}
+            <strong style={{ color: "#1a3c2e" }}>
+              ₱
+              {total.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </strong>
           </p>
           {paymentMethod === "Cash" && change > 0 && (
             <p style={{ fontSize: "14px", color: "#888", marginBottom: "6px" }}>
               Change:{" "}
               <strong style={{ color: "#1a3c2e" }}>
-                ₱{change.toLocaleString()}.00
+                ₱
+                {change.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
               </strong>
             </p>
           )}
@@ -1035,6 +1067,20 @@ export default function PaymentPage() {
                   <p style={{ fontSize: "11px", color: "#aaa" }}>
                     GCash: 0912 345 6789
                   </p>
+                  <p
+                    style={{
+                      fontSize: "16px",
+                      fontWeight: 700,
+                      color: "#1a3c2e",
+                      marginTop: "6px",
+                    }}
+                  >
+                    Amount to Pay: ₱
+                    {total.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </p>
                 </div>
                 <div style={{ marginBottom: "12px" }}>
                   <label
@@ -1237,7 +1283,7 @@ export default function PaymentPage() {
                         fontSize: "18px",
                         fontWeight: 700,
                         border:
-                          paid >= subtotal
+                          paid >= total
                             ? "1.5px solid #2e7d32"
                             : "1.5px solid #e0e0e0",
                       }}
@@ -1255,7 +1301,21 @@ export default function PaymentPage() {
                   }}
                 >
                   {[
-                    ["Total Amount", `₱${subtotal.toLocaleString()}.00`],
+                    ["Subtotal", `₱${subtotal.toLocaleString()}.00`],
+                    [
+                      "VAT (12%)",
+                      `₱${vat.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}`,
+                    ],
+                    [
+                      "Total Amount Due",
+                      `₱${total.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}`,
+                    ],
                     [
                       "Amount Paid",
                       `₱${paid > 0 ? paid.toLocaleString() : "0"}.00`,
@@ -1306,10 +1366,16 @@ export default function PaymentPage() {
                         color: change >= 0 ? "#2e7d32" : "#e53935",
                       }}
                     >
-                      ₱{change >= 0 ? change.toLocaleString() : "0"}.00
+                      ₱
+                      {change >= 0
+                        ? change.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })
+                        : "0.00"}
                     </span>
                   </div>
-                  {paid > 0 && paid < subtotal && (
+                  {paid > 0 && paid < total && (
                     <p
                       style={{
                         fontSize: "11px",
@@ -1317,7 +1383,12 @@ export default function PaymentPage() {
                         textAlign: "center",
                       }}
                     >
-                      ⚠️ Amount is ₱{(subtotal - paid).toLocaleString()} short
+                      ⚠️ Amount is ₱
+                      {(total - paid).toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{" "}
+                      short
                     </p>
                   )}
                 </div>
@@ -1330,6 +1401,8 @@ export default function PaymentPage() {
                 <OrderSummaryCard
                   cartItems={cartItems}
                   subtotal={subtotal}
+                  vat={vat}
+                  total={total}
                   activeCustomer={activeCustomer}
                 />
               </div>
@@ -1344,6 +1417,8 @@ export default function PaymentPage() {
               <OrderSummaryCard
                 cartItems={cartItems}
                 subtotal={subtotal}
+                vat={vat}
+                total={total}
                 activeCustomer={activeCustomer}
               />
             </div>
@@ -1407,10 +1482,14 @@ export default function PaymentPage() {
 function OrderSummaryCard({
   cartItems,
   subtotal,
+  vat,
+  total,
   activeCustomer,
 }: {
   cartItems: CartItem[];
   subtotal: number;
+  vat: number;
+  total: number;
   activeCustomer: {
     customerName: string;
     address?: string;
@@ -1500,15 +1579,37 @@ function OrderSummaryCard({
           style={{
             display: "flex",
             justifyContent: "space-between",
+            marginTop: "6px",
+          }}
+        >
+          <span style={{ fontSize: "13px", color: "#888" }}>VAT (12%)</span>
+          <span style={{ fontSize: "13px" }}>
+            ₱
+            {vat.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </span>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
             alignItems: "center",
-            marginTop: "8px",
+            marginTop: "10px",
+            paddingTop: "10px",
+            borderTop: "0.5px solid #f0f0f0",
           }}
         >
           <span style={{ fontSize: "18px", fontWeight: 700, color: "#1a1a1a" }}>
             Total
           </span>
           <span style={{ fontSize: "28px", fontWeight: 800, color: "#1a3c2e" }}>
-            ₱{subtotal.toLocaleString()}.00
+            ₱
+            {total.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
           </span>
         </div>
       </div>
