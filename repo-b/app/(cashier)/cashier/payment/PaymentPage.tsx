@@ -1571,7 +1571,7 @@ function OrderSummaryCard({
           }}
         >
           <span style={{ fontSize: "13px", color: "#888" }}>Sub Total</span>
-          <span style={{ fontSize: "13px" }}>
+          <span style={{ fontSize: "13px", color: "#1a1a1a" }}>
             ₱{subtotal.toLocaleString()}.00
           </span>
         </div>
@@ -1583,7 +1583,7 @@ function OrderSummaryCard({
           }}
         >
           <span style={{ fontSize: "13px", color: "#888" }}>VAT (12%)</span>
-          <span style={{ fontSize: "13px" }}>
+          <span style={{ fontSize: "13px", color: "#1a1a1a" }}>
             ₱
             {vat.toLocaleString(undefined, {
               minimumFractionDigits: 2,
