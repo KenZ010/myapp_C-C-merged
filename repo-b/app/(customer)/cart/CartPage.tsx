@@ -138,23 +138,82 @@ function DeleteModal({
   );
 }
 
+// ── Max Stock Toast ─────────────────────────────────────────────────────────
+function MaxStockToast({
+  productName,
+  stock,
+}: {
+  productName: string;
+  stock: number;
+}) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: "20px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 2000,
+        background: "#1a1a1a",
+        color: "#fff",
+        borderRadius: "14px",
+        padding: "14px 20px",
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+        boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
+        maxWidth: "min(92vw, 420px)",
+        animation: "toastSlideDown 0.25s ease-out",
+      }}
+    >
+      <style>{`
+        @keyframes toastSlideDown {
+          from { opacity: 0; transform: translate(-50%, -12px); }
+          to   { opacity: 1; transform: translate(-50%, 0); }
+        }
+      `}</style>
+      <span style={{ fontSize: "22px", flexShrink: 0 }}>⚠️</span>
+      <div>
+        <p style={{ fontSize: "13px", fontWeight: 700, margin: 0 }}>
+          Max stock reached
+        </p>
+        <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.75)", margin: "2px 0 0" }}>
+          {productName} — only {stock} case{stock !== 1 ? "s" : ""} in stock.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function CartPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [stockWarning, setStockWarning] = useState<string | null>(null);
+  const [maxStockToast, setMaxStockToast] = useState<{
+    productName: string;
+    stock: number;
+  } | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "gcash">("cod");
   const [gcashRef, setGcashRef] = useState("");
   const [gcashImage, setGcashImage] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CartItem | null>(null);
   const [cashInput, setCashInput] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 900);
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // ── Clear any pending toast timer on unmount ──────────────────────────────
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
   }, []);
 
   const getCustomerId = () => {
@@ -190,6 +249,11 @@ export default function CartPage() {
     if (delta > 0 && newQty > stock) {
       setStockWarning(item.id);
       setTimeout(() => setStockWarning(null), 2500);
+
+      // ── Show a popup telling the customer this is the max stock ──────────
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      setMaxStockToast({ productName: item.product.productName, stock });
+      toastTimerRef.current = setTimeout(() => setMaxStockToast(null), 2800);
       return;
     }
 
@@ -340,6 +404,14 @@ export default function CartPage() {
 
   return (
     <>
+      {/* ── Max Stock Toast ── */}
+      {maxStockToast && (
+        <MaxStockToast
+          productName={maxStockToast.productName}
+          stock={maxStockToast.stock}
+        />
+      )}
+
       {/* ── Delete Confirmation Modal ── */}
       {deleteTarget && (
         <DeleteModal
