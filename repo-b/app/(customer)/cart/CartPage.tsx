@@ -618,9 +618,6 @@ export default function CartPage() {
                         </span>
                         <button
                           onClick={() => handleUpdateQty(item, 1)}
-                          disabled={
-                            item.quantity >= (item.product.stock ?? Infinity)
-                          }
                           style={{
                             width: "36px",
                             height: "36px",
