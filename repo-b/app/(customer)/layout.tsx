@@ -82,7 +82,8 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
   const user = mounted
     ? JSON.parse(localStorage.getItem("user") || "{}")
     : {};
-  const displayName = user?.name || "Guest";
+  const displayName: string = user?.name || "Guest";
+  const initial = displayName.trim().charAt(0).toUpperCase() || "G";
 
   const markAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
@@ -100,7 +101,6 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
       <Drawer
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        customerName={displayName}
       />
 
       {/* Topbar */}
@@ -223,6 +223,34 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
                 to   { opacity: 1; transform: translateY(0) scale(1); }
               }
             `}</style>
+          </div>
+
+          {/* Customer name — right side of the notification icon */}
+          <div
+            style={{
+              display: "flex", alignItems: "center", gap: "8px",
+              height: "38px", padding: "0 12px 0 6px", borderRadius: "8px",
+              background: "rgba(255,255,255,0.15)", flexShrink: 0,
+            }}
+          >
+            <span
+              style={{
+                width: "26px", height: "26px", borderRadius: "50%",
+                background: "#f5c842", color: "#2d7a3a", fontSize: "12px", fontWeight: 700,
+                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+              }}
+            >
+              {initial}
+            </span>
+            <span
+              title={displayName}
+              style={{
+                color: "#fff", fontSize: "13px", fontWeight: 500,
+                maxWidth: "140px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              }}
+            >
+              {displayName}
+            </span>
           </div>
 
           {!hideSearchCart.includes(pathname) && (
