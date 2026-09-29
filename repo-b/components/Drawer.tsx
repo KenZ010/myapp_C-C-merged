@@ -58,7 +58,7 @@ export default function Drawer({ isOpen, onClose }: DrawerProps) {
             ✕
           </button>
           <p style={{ color: "#fff", fontSize: "20px", fontWeight: 700, marginBottom: "2px" }}>Julieta</p>
-          <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "12px" }}>Premium Soft Drinks</p>
+          
         </div>
 
         {/* Scrollable Menu */}
