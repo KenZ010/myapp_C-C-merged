@@ -34,6 +34,18 @@ type Product = {
   activePromo:   unknown | null;
 };
 
+type Flight = {
+  id:     number;
+  startX: number;
+  startY: number;
+  size:   number;
+  dx:     number;
+  dy:     number;
+  image:  string | null;
+  emoji:  string;
+  bg:     string;
+};
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 const CATEGORY_META: Record<CategoryType, { emoji: string; label: string; color: string }> = {
   SOFTDRINKS:   { emoji: "🥤", label: "Soft Drinks",   color: "#dc2626" },
@@ -96,6 +108,59 @@ function SkeletonCard() {
           <div className="h-10 rounded-xl bg-gray-100 animate-pulse w-28" />
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Flying item (add-to-cart animation) ───────────────────────────────────────
+function FlyingItem({ flight, onDone }: { flight: Flight; onDone: (id: number) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const doneRef = useRef(onDone);
+  doneRef.current = onDone;
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const { dx, dy, id } = flight;
+    const anim = el.animate(
+      [
+        { transform: "translate(0px, 0px) scale(1)", opacity: 1, offset: 0 },
+        // Rises above the straight line so the item travels in an arc
+        { transform: `translate(${dx * 0.45}px, ${dy * 0.45 - 90}px) scale(0.7)`, opacity: 1, offset: 0.5 },
+        { transform: `translate(${dx}px, ${dy}px) scale(0.15)`, opacity: 0.5, offset: 1 },
+      ],
+      { duration: 800, easing: "cubic-bezier(0.45, 0, 0.55, 1)", fill: "forwards" }
+    );
+    anim.onfinish = () => doneRef.current(id);
+
+    return () => anim.cancel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      className="rounded-full overflow-hidden border-2 border-white shadow-2xl
+                 flex items-center justify-center select-none"
+      style={{
+        position: "fixed",
+        left: flight.startX,
+        top: flight.startY,
+        width: flight.size,
+        height: flight.size,
+        zIndex: 100,
+        pointerEvents: "none",
+        background: flight.bg,
+        fontSize: flight.size * 0.5,
+      }}
+    >
+      {flight.image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={flight.image} alt="" className="w-full h-full object-cover" />
+      ) : (
+        flight.emoji
+      )}
     </div>
   );
 }
@@ -177,7 +242,7 @@ function StockBadge({ stock }: { stock: number }) {
 // ── Product Card ──────────────────────────────────────────────────────────────
 type ProductCardProps = {
   product:     Product;
-  onAddToCart: (product: Product, qty: number) => Promise<void>;
+  onAddToCart: (product: Product, qty: number, sourceRect: DOMRect | null) => Promise<void>;
   addingId:    string | null;
   addedId:     string | null;
   inCartQty:   number;
@@ -187,6 +252,7 @@ function ProductCard({ product, onAddToCart, addingId, addedId, inCartQty }: Pro
   const [qty, setQty]                     = useState<number>(1);
   const [showMaxNotice, setShowMaxNotice] = useState<boolean>(false);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const imageRef    = useRef<HTMLDivElement>(null);
 
   const outOfStock  = product.stock <= 0;
   // How many more cases the customer can still add (stock minus what's already in the cart)
@@ -237,7 +303,9 @@ function ProductCard({ product, onAddToCart, addingId, addedId, inCartQty }: Pro
 
   const handleAdd = () => {
     if (outOfStock || cartIsFull || isAdding) return;
-    onAddToCart(product, qty);
+    // Capture where the product image is right now so the animation starts from it
+    const rect = imageRef.current?.getBoundingClientRect() ?? null;
+    onAddToCart(product, qty, rect);
   };
 
   const maxNotice = (
@@ -272,6 +340,7 @@ function ProductCard({ product, onAddToCart, addingId, addedId, inCartQty }: Pro
     >
       {/* ── Image / thumbnail ── */}
       <div
+        ref={imageRef}
         className="relative w-full h-44 flex items-center justify-center"
         style={{ background: getCategoryBg(product.category) }}
       >
@@ -453,8 +522,52 @@ export default function ProductsPage() {
   // productId -> number of cases currently in the customer's cart (from the server)
   const [cartQty, setCartQty] = useState<Record<string, number>>({});
 
+  // Add-to-cart animation
+  const [flights, setFlights] = useState<Flight[]>([]);
+  const flightId = useRef<number>(0);
+  const cartRef  = useRef<HTMLDivElement>(null);
+
   const cartTotalCases    = useMemo(() => Object.values(cartQty).reduce((sum, n) => sum + n, 0), [cartQty]);
   const cartProductsCount = Object.keys(cartQty).length;
+
+  // Start a flight from the product image to the cart button
+  const launchFlight = useCallback((product: Product, rect: DOMRect | null) => {
+    if (typeof window === "undefined" || !rect) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+
+    const target = cartRef.current?.getBoundingClientRect();
+    if (!target) return;
+
+    const size   = 72;
+    const startX = rect.left + rect.width  / 2 - size / 2;
+    const startY = rect.top  + rect.height / 2 - size / 2;
+    const dx     = target.left + target.width  / 2 - (startX + size / 2);
+    const dy     = target.top  + target.height / 2 - (startY + size / 2);
+
+    flightId.current += 1;
+    const flight: Flight = {
+      id: flightId.current,
+      startX, startY, size, dx, dy,
+      image: product.image,
+      emoji: getMeta(product.category).emoji,
+      bg:    getCategoryBg(product.category),
+    };
+    setFlights((prev) => [...prev, flight]);
+  }, []);
+
+  // When an item lands: remove it and give the cart button a little pop
+  const handleFlightDone = useCallback((id: number) => {
+    setFlights((prev) => prev.filter((f) => f.id !== id));
+    cartRef.current?.animate(
+      [
+        { transform: "scale(1)" },
+        { transform: "scale(1.18)" },
+        { transform: "scale(0.95)" },
+        { transform: "scale(1)" },
+      ],
+      { duration: 350, easing: "ease-out" }
+    );
+  }, []);
 
   // Load the real cart so counts include items added earlier
   const refreshCart = useCallback(async (): Promise<void> => {
@@ -514,7 +627,11 @@ export default function ProductsPage() {
       });
   }, [products, activeCategory, search]);
 
-  const handleAddToCart = useCallback(async (product: Product, qty: number): Promise<void> => {
+  const handleAddToCart = useCallback(async (
+    product: Product,
+    qty: number,
+    sourceRect: DOMRect | null
+  ): Promise<void> => {
     if (product.stock <= 0) return;
 
     const customerId = getCustomerId();
@@ -532,6 +649,10 @@ export default function ProductsPage() {
         alert(result.message as string);
         return;
       }
+
+      // Item was added successfully: fly it to the cart
+      launchFlight(product, sourceRect);
+
       // Re-read the cart so the counts always match the server
       await refreshCart();
 
@@ -542,7 +663,7 @@ export default function ProductsPage() {
     } finally {
       setAddingId(null);
     }
-  }, [cartQty, refreshCart]);
+  }, [cartQty, refreshCart, launchFlight]);
 
   return (
     <div className="min-h-screen bg-gray-50/60 px-6 py-7">
@@ -552,12 +673,12 @@ export default function ProductsPage() {
           from { opacity: 0; transform: translateY(6px) scale(0.97); }
           to   { opacity: 1; transform: translateY(0) scale(1); }
         }
-        @keyframes cartBump {
-          0%   { transform: scale(1); }
-          40%  { transform: scale(1.12); }
-          100% { transform: scale(1); }
-        }
       `}</style>
+
+      {/* ── Flying items ── */}
+      {flights.map((f) => (
+        <FlyingItem key={f.id} flight={f} onDone={handleFlightDone} />
+      ))}
 
       {/* ── Toolbar ── */}
       <div className="flex flex-wrap items-center gap-2.5 mb-7">
@@ -641,30 +762,32 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* ── Floating cart indicator ── */}
-      {cartTotalCases > 0 && (
+      {/* ── Floating cart button (always visible; it's the landing spot for the animation) ── */}
+      <div ref={cartRef} className="fixed bottom-6 right-6 z-30">
         <Link
           href="/cart"
-          key={cartTotalCases}
-          className="fixed bottom-6 right-6 z-30 flex items-center gap-3 bg-violet-600 hover:bg-violet-700
+          className="flex items-center gap-3 bg-violet-600 hover:bg-violet-700
                      text-white rounded-full pl-4 pr-5 py-3 shadow-xl shadow-violet-200 transition-colors"
-          style={{ animation: "cartBump 0.3s ease-out" }}
         >
           <span className="relative text-lg leading-none">
             🛒
-            <span className="absolute -top-2 -right-2.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-400
-                             text-violet-900 text-[10px] font-bold flex items-center justify-center">
-              {cartTotalCases}
-            </span>
+            {cartTotalCases > 0 && (
+              <span className="absolute -top-2 -right-2.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-400
+                               text-violet-900 text-[10px] font-bold flex items-center justify-center">
+                {cartTotalCases}
+              </span>
+            )}
           </span>
           <span className="leading-tight">
             <span className="block text-xs font-semibold">View Cart</span>
             <span className="block text-[10px] text-violet-100">
-              {cartProductsCount} product{cartProductsCount !== 1 ? "s" : ""} · {cartTotalCases} case{cartTotalCases !== 1 ? "s" : ""}
+              {cartTotalCases > 0
+                ? `${cartProductsCount} product${cartProductsCount !== 1 ? "s" : ""} · ${cartTotalCases} case${cartTotalCases !== 1 ? "s" : ""}`
+                : "Your cart is empty"}
             </span>
           </span>
         </Link>
-      )}
+      </div>
     </div>
   );
 }
