@@ -4,7 +4,6 @@ import { useRouter, usePathname } from "next/navigation";
 interface DrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  customerName?: string;
 }
 
 const menuItems = [
@@ -22,7 +21,7 @@ const bottomItems = [
   { href: "/settings",      icon: "⚙️", bg: "#ede7f6", label: "Settings" },
 ];
 
-export default function Drawer({ isOpen, onClose, customerName = "Customer Name" }: DrawerProps) {
+export default function Drawer({ isOpen, onClose }: DrawerProps) {
   const pathname = usePathname();
   const router   = useRouter();
 
@@ -59,16 +58,7 @@ export default function Drawer({ isOpen, onClose, customerName = "Customer Name"
             ✕
           </button>
           <p style={{ color: "#fff", fontSize: "20px", fontWeight: 700, marginBottom: "2px" }}>Julieta</p>
-          <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "12px", marginBottom: "16px" }}>Premium Soft Drinks</p>
-          <div style={{ background: "rgba(255,255,255,0.15)", borderRadius: "12px", padding: "12px 14px", display: "flex", alignItems: "center", gap: "12px" }}>
-            <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", flexShrink: 0 }}>
-              👤
-            </div>
-            <div>
-              <p style={{ fontSize: "10px", color: "rgba(255,255,255,0.65)", marginBottom: "2px" }}>Welcome back</p>
-              <p style={{ fontSize: "14px", fontWeight: 600, color: "#fff" }}>{customerName}</p>
-            </div>
-          </div>
+          <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "12px" }}>Premium Soft Drinks</p>
         </div>
 
         {/* Scrollable Menu */}
