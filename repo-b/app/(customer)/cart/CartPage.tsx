@@ -1,1466 +1,670 @@
 "use client";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 
-type CartItem = {
-  id: string;
-  productId: string;
-  quantity: number;
-  product: {
-    id: string;
-    productName: string;
-    price: number;
-    finalPrice?: number;
-    category?: string;
-    size?: string;
-    stock?: number;
-  };
+// ── Types ─────────────────────────────────────────────────────────────────────
+type CategoryType =
+  | "SOFTDRINKS"
+  | "ENERGY_DRINK"
+  | "BEER"
+  | "JUICE"
+  | "WATER"
+  | "OTHER";
+
+type ProductStatus = "ACTIVE" | "INACTIVE" | "OUT_OF_STOCK";
+
+type Product = {
+  id:            string;
+  productName:   string;
+  category:      CategoryType;
+  size:          string | null;
+  barcode:       string | null;
+  price:         number;
+  stock:         number;
+  reservedStock: number;
+  piecesPerCase: number;
+  expiryDate:    string | null;
+  image:         string | null;
+  status:        ProductStatus;
+  supplierId:    string;
+  createdAt:     string;
+  updatedAt:     string;
+  finalPrice:    number | null;
+  activePromo:   unknown | null;
 };
 
-const EMOJI_MAP: Record<string, string> = {
-  SOFTDRINKS: "🥤",
-  ENERGY_DRINK: "⚡",
-  BEER: "🍺",
-  JUICE: "🍹",
-  WATER: "💧",
-  OTHER: "🛒",
+// ── Constants ─────────────────────────────────────────────────────────────────
+const CATEGORY_META: Record<CategoryType, { emoji: string; label: string; color: string }> = {
+  SOFTDRINKS:   { emoji: "🥤", label: "Soft Drinks",   color: "#dc2626" },
+  ENERGY_DRINK: { emoji: "⚡", label: "Energy Drink",  color: "#4f46e5" },
+  BEER:         { emoji: "🍺", label: "Beer",           color: "#d97706" },
+  JUICE:        { emoji: "🍹", label: "Juice",          color: "#16a34a" },
+  WATER:        { emoji: "💧", label: "Water",          color: "#0284c7" },
+  OTHER:        { emoji: "🛒", label: "Other",          color: "#6b7280" },
 };
-const BG_MAP: Record<string, string> = {
-  SOFTDRINKS: "#b71c1c",
-  ENERGY_DRINK: "#1a237e",
-  BEER: "#f57f17",
-  JUICE: "#2e7d32",
-  WATER: "#0288d1",
-  OTHER: "#424242",
-};
-const getEmoji = (cat?: string) => EMOJI_MAP[cat?.toUpperCase() || ""] || "🥤";
-const getBg = (cat?: string) => BG_MAP[cat?.toUpperCase() || ""] || "#424242";
 
-// ── Delete Confirmation Modal ──────────────────────────────────────────────────
-function DeleteModal({
-  item,
-  onConfirm,
-  onCancel,
-}: {
-  item: CartItem;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
+const CATEGORY_BG: Record<CategoryType, string> = {
+  SOFTDRINKS:   "linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)",
+  ENERGY_DRINK: "linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)",
+  BEER:         "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)",
+  JUICE:        "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)",
+  WATER:        "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)",
+  OTHER:        "linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)",
+};
+
+const getMeta = (category: CategoryType) => CATEGORY_META[category] ?? CATEGORY_META.OTHER;
+const getCategoryBg = (category: CategoryType) => CATEGORY_BG[category] ?? CATEGORY_BG.OTHER;
+
+const getCustomerId = (): string => {
+  if (typeof window === "undefined") return "";
+  try { return JSON.parse(localStorage.getItem("user") ?? "{}")?.id ?? ""; }
+  catch { return ""; }
+};
+
+const formatExpiry = (dateStr: string | null): string | null => {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+};
+
+// ── Skeleton ──────────────────────────────────────────────────────────────────
+function SkeletonPill({ width }: { width: number }) {
   return (
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.45)",
-        zIndex: 1000,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "20px",
-        backdropFilter: "blur(3px)",
-      }}
-      onClick={onCancel}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: "#fff",
-          borderRadius: "20px",
-          padding: "28px 24px",
-          maxWidth: "360px",
-          width: "100%",
-          textAlign: "center",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
-        }}
-      >
-        <div style={{ fontSize: "48px", marginBottom: "12px" }}>🗑️</div>
-        <h3
-          style={{
-            fontSize: "17px",
-            fontWeight: 700,
-            color: "#1a1a1a",
-            marginBottom: "8px",
-          }}
-        >
-          Remove Item?
-        </h3>
-        <p style={{ fontSize: "13px", color: "#888", marginBottom: "6px" }}>
-          Are you sure you want to remove
-        </p>
-        <p
-          style={{
-            fontSize: "14px",
-            fontWeight: 600,
-            color: "#2d7a3a",
-            marginBottom: "24px",
-          }}
-        >
-          {item.product.productName}
-        </p>
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button
-            onClick={onCancel}
-            style={{
-              flex: 1,
-              padding: "12px",
-              borderRadius: "30px",
-              border: "1.5px solid #e0e0e0",
-              background: "#fff",
-              fontSize: "14px",
-              fontWeight: 600,
-              color: "#888",
-              cursor: "pointer",
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            style={{
-              flex: 1,
-              padding: "12px",
-              borderRadius: "30px",
-              border: "none",
-              background: "#e53935",
-              fontSize: "14px",
-              fontWeight: 700,
-              color: "#fff",
-              cursor: "pointer",
-              boxShadow: "0 4px 14px rgba(229,57,53,0.35)",
-            }}
-          >
-            Yes, Remove
-          </button>
+      className="h-9 rounded-full animate-pulse bg-gray-100"
+      style={{ width }}
+    />
+  );
+}
+
+function SkeletonCard() {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+      <div className="w-full h-44 animate-pulse bg-gray-100" />
+      <div className="p-5 flex flex-col gap-3">
+        <div className="h-4 rounded-lg bg-gray-100 animate-pulse w-3/4" />
+        <div className="h-3 rounded-lg bg-gray-100 animate-pulse w-1/3" />
+        <div className="h-px bg-gray-100 my-1" />
+        <div className="flex justify-between">
+          <div className="h-6 rounded-lg bg-gray-100 animate-pulse w-2/5" />
+          <div className="h-6 rounded-lg bg-gray-100 animate-pulse w-1/4" />
+        </div>
+        <div className="flex gap-2 mt-1">
+          <div className="h-10 rounded-xl bg-gray-100 animate-pulse flex-1" />
+          <div className="h-10 rounded-xl bg-gray-100 animate-pulse w-28" />
         </div>
       </div>
     </div>
   );
 }
 
-// ── Max Stock Toast ─────────────────────────────────────────────────────────
-function MaxStockToast({
-  productName,
-  stock,
-}: {
-  productName: string;
-  stock: number;
-}) {
+// ── Quantity Stepper ──────────────────────────────────────────────────────────
+type StepperProps = {
+  value:        number;
+  min:          number;
+  max:          number;
+  onChange:     (v: number) => void;
+  onMaxReached: () => void;
+};
+
+function QuantityStepper({ value, min, max, onChange, onMaxReached }: StepperProps) {
+  const atMax = value >= max;
+
   return (
-    <div
-      style={{
-        position: "fixed",
-        top: "20px",
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 2000,
-        background: "#1a1a1a",
-        color: "#fff",
-        borderRadius: "14px",
-        padding: "14px 20px",
-        display: "flex",
-        alignItems: "center",
-        gap: "12px",
-        boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
-        maxWidth: "min(92vw, 420px)",
-        animation: "toastSlideDown 0.25s ease-out",
-      }}
-    >
-      <style>{`
-        @keyframes toastSlideDown {
-          from { opacity: 0; transform: translate(-50%, -12px); }
-          to   { opacity: 1; transform: translate(-50%, 0); }
-        }
-      `}</style>
-      <span style={{ fontSize: "22px", flexShrink: 0 }}>⚠️</span>
-      <div>
-        <p style={{ fontSize: "13px", fontWeight: 700, margin: 0 }}>
-          Max stock reached
-        </p>
-        <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.75)", margin: "2px 0 0" }}>
-          {productName} — only {stock} case{stock !== 1 ? "s" : ""} in stock.
-        </p>
-      </div>
+    <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-1 py-1">
+      <button
+        onClick={() => onChange(Math.max(min, value - 1))}
+        disabled={value <= min}
+        aria-label="Decrease quantity"
+        className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500
+                   hover:bg-white hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed
+                   transition-all duration-150 font-bold text-base"
+      >
+        −
+      </button>
+      <span className="w-8 text-center text-sm font-semibold text-gray-800 tabular-nums">
+        {value}
+      </span>
+      {/* Not truly disabled at max, so tapping it can still show the "max stock" popup */}
+      <button
+        onClick={() => (atMax ? onMaxReached() : onChange(value + 1))}
+        aria-label="Increase quantity"
+        aria-disabled={atMax}
+        className={[
+          "w-8 h-8 rounded-lg flex items-center justify-center text-gray-500",
+          "transition-all duration-150 font-bold text-base",
+          atMax
+            ? "opacity-30 cursor-not-allowed"
+            : "hover:bg-white hover:text-gray-800",
+        ].join(" ")}
+      >
+        +
+      </button>
     </div>
   );
 }
 
-export default function CartPage() {
-  const [isMobile, setIsMobile] = useState(false);
-  const [items, setItems] = useState<CartItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [stockWarning, setStockWarning] = useState<string | null>(null);
-  const [maxStockToast, setMaxStockToast] = useState<{
-    productName: string;
-    stock: number;
-  } | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<"cod" | "gcash">("cod");
-  const [gcashRef, setGcashRef] = useState("");
-  const [gcashImage, setGcashImage] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<CartItem | null>(null);
-  const [cashInput, setCashInput] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+// ── Stock Badge ───────────────────────────────────────────────────────────────
+function StockBadge({ stock }: { stock: number }) {
+  if (stock <= 0) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] font-semibold
+                       bg-red-50 text-red-600 border border-red-100 rounded-full px-2 py-0.5">
+        <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+        Out of stock
+      </span>
+    );
+  }
+  if (stock <= 10) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] font-semibold
+                       bg-amber-50 text-amber-700 border border-amber-100 rounded-full px-2 py-0.5">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
+        Only {stock} left
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-medium
+                     text-gray-400 rounded-full px-2 py-0.5">
+      {stock} cases in stock
+    </span>
+  );
+}
+
+// ── Product Card ──────────────────────────────────────────────────────────────
+type ProductCardProps = {
+  product:     Product;
+  onAddToCart: (product: Product, qty: number) => Promise<void>;
+  addingId:    string | null;
+  addedId:     string | null;
+  inCartQty:   number;
+};
+
+function ProductCard({ product, onAddToCart, addingId, addedId, inCartQty }: ProductCardProps) {
+  const [qty, setQty]                     = useState<number>(1);
+  const [showMaxNotice, setShowMaxNotice] = useState<boolean>(false);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const outOfStock  = product.stock <= 0;
+  // How many more cases the customer can still add (stock minus what's already in the cart)
+  const remaining   = Math.max(0, product.stock - inCartQty);
+  const cartIsFull  = !outOfStock && remaining <= 0;
+  const hasPromo    = product.finalPrice != null && product.finalPrice < product.price;
+  const isAdding    = addingId === product.id;
+  const isAdded     = addedId  === product.id;
+  const meta        = getMeta(product.category);
+  const expiryLabel = formatExpiry(product.expiryDate);
+  const discount    = hasPromo
+    ? Math.round(((product.price - product.finalPrice!) / product.price) * 100)
+    : 0;
+
+  // Keep qty within what's still available
+  useEffect(() => {
+    setQty((q) => (remaining <= 0 ? 1 : Math.min(q, remaining)));
+  }, [remaining]);
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 900);
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+    setShowMaxNotice(false);
+  }, [product.stock]);
 
-  // ── Clear any pending toast timer on unmount ──────────────────────────────
+  // Clean up the popup timer on unmount
   useEffect(() => {
     return () => {
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      if (noticeTimer.current) clearTimeout(noticeTimer.current);
     };
   }, []);
 
-  const getCustomerId = () => {
-    if (typeof window === "undefined") return "";
-    return JSON.parse(localStorage.getItem("user") || "{}")?.id || "";
+  const flashMaxNotice = useCallback(() => {
+    setShowMaxNotice(true);
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setShowMaxNotice(false), 2800);
+  }, []);
+
+  const hideMaxNotice = () => {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    setShowMaxNotice(false);
   };
 
-  const fetchCart = useCallback(async () => {
+  const handleQtyChange = (next: number) => {
+    const clamped = Math.max(1, Math.min(next, remaining));
+    setQty(clamped);
+    if (clamped >= remaining) flashMaxNotice();
+    else hideMaxNotice();
+  };
+
+  const handleAdd = () => {
+    if (outOfStock || cartIsFull || isAdding) return;
+    onAddToCart(product, qty);
+  };
+
+  const maxNotice = (
+    <div
+      role="status"
+      onClick={hideMaxNotice}
+      className="absolute bottom-full left-0 right-0 mb-2.5 z-10 cursor-pointer
+                 bg-amber-50 border border-amber-200 text-amber-800
+                 rounded-xl px-3 py-2 shadow-lg"
+      style={{ animation: "maxPopIn 0.18s ease-out" }}
+    >
+      <p className="text-xs font-bold">⚠️ Maximum stock reached</p>
+      <p className="text-[11px] mt-0.5">
+        {inCartQty > 0
+          ? `You already have ${inCartQty} case${inCartQty !== 1 ? "s" : ""} in your cart. We only have ${product.stock} case${product.stock !== 1 ? "s" : ""} of this product.`
+          : `We only have ${product.stock} case${product.stock !== 1 ? "s" : ""} of this product available.`}
+      </p>
+      <span
+        className="absolute -bottom-1.5 left-6 w-3 h-3 rotate-45 bg-amber-50
+                   border-r border-b border-amber-200"
+      />
+    </div>
+  );
+
+  return (
+    <div
+      className={[
+        "bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm",
+        "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:border-gray-200",
+        outOfStock ? "opacity-60" : "",
+      ].join(" ")}
+    >
+      {/* ── Image / thumbnail ── */}
+      <div
+        className="relative w-full h-44 flex items-center justify-center"
+        style={{ background: getCategoryBg(product.category) }}
+      >
+        {product.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={product.image}
+            alt={product.productName}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <span className="text-7xl select-none drop-shadow-sm">{meta.emoji}</span>
+        )}
+
+        {/* Category chip */}
+        <span
+          className="absolute bottom-2.5 left-2.5 text-[10px] font-bold px-2 py-0.5 rounded-full
+                     bg-white/80 backdrop-blur-sm border border-white/60"
+          style={{ color: meta.color }}
+        >
+          {meta.label}
+        </span>
+
+        {/* In-cart indicator */}
+        {inCartQty > 0 && (
+          <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 bg-green-600 text-white
+                           text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-sm">
+            🛒 {inCartQty} in cart
+          </span>
+        )}
+
+        {/* Promo badge */}
+        {hasPromo && !outOfStock && (
+          <span className="absolute top-2.5 right-2.5 bg-red-600 text-white text-[10px]
+                           font-bold px-2.5 py-0.5 rounded-full shadow-sm">
+            −{discount}% OFF
+          </span>
+        )}
+      </div>
+
+      {/* ── Body ── */}
+      <div className="p-5">
+        {/* Name + size */}
+        <div className="mb-1">
+          <h3 className="text-sm font-semibold text-gray-900 leading-snug line-clamp-1">
+            {product.productName}
+          </h3>
+          {product.size && (
+            <p className="text-xs text-gray-400 mt-0.5">{product.size}</p>
+          )}
+        </div>
+
+        {/* Metadata row */}
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-400 mb-3">
+          {product.piecesPerCase > 0 && (
+            <span title="Pieces per case">
+              📦 {product.piecesPerCase} pcs/case
+            </span>
+          )}
+          {expiryLabel && (
+            <span title="Expiry date" className={
+              (() => {
+                const d = new Date(product.expiryDate!);
+                const daysLeft = (d.getTime() - Date.now()) / 86_400_000;
+                return daysLeft < 30 ? "text-red-400 font-semibold" : "";
+              })()
+            }>
+              📅 Expires {expiryLabel}
+            </span>
+          )}
+        </div>
+
+        {/* Divider */}
+        <div className="h-px bg-gray-100 mb-3" />
+
+        {/* Price + stock */}
+        <div className="flex items-end justify-between gap-2 mb-3">
+          <div>
+            {hasPromo ? (
+              <>
+                <div className="flex items-baseline gap-1.5">
+                  <p className="text-xl font-bold text-green-700 leading-none">
+                    ₱{product.finalPrice!.toLocaleString()}
+                  </p>
+                  <span className="text-[11px] text-gray-400 line-through">
+                    ₱{product.price.toLocaleString()}
+                  </span>
+                </div>
+                <p className="text-[11px] text-green-600 mt-0.5">per case (promo price)</p>
+              </>
+            ) : (
+              <>
+                <p className="text-xl font-bold text-gray-900 leading-none">
+                  ₱{product.price.toLocaleString()}
+                </p>
+                <p className="text-[11px] text-gray-400 mt-0.5">per case</p>
+              </>
+            )}
+          </div>
+          <StockBadge stock={product.stock} />
+        </div>
+
+        {/* Subtotal hint (when qty > 1) */}
+        {!outOfStock && !cartIsFull && qty > 1 && (
+          <div className="mb-3 px-3 py-2 rounded-xl bg-green-50 border border-green-100">
+            <p className="text-xs text-green-700 font-medium">
+              Subtotal: ₱{((product.finalPrice ?? product.price) * qty).toLocaleString()}
+              <span className="font-normal text-green-500 ml-1">for {qty} case{qty !== 1 ? "s" : ""}</span>
+            </p>
+          </div>
+        )}
+
+        {/* Controls */}
+        {outOfStock ? (
+          <button
+            disabled
+            className="w-full py-2.5 rounded-xl bg-gray-100 text-gray-400
+                       text-xs font-semibold cursor-not-allowed"
+          >
+            Out of Stock
+          </button>
+        ) : cartIsFull ? (
+          <div className="relative">
+            {showMaxNotice && maxNotice}
+            <button
+              onClick={flashMaxNotice}
+              className="w-full py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700
+                         text-xs font-semibold cursor-not-allowed"
+            >
+              Max stock in your cart
+            </button>
+          </div>
+        ) : (
+          <div className="relative flex items-center gap-2">
+            {showMaxNotice && maxNotice}
+
+            <QuantityStepper
+              value={qty}
+              min={1}
+              max={remaining}
+              onChange={handleQtyChange}
+              onMaxReached={flashMaxNotice}
+            />
+            <button
+              onClick={handleAdd}
+              disabled={isAdding}
+              className={[
+                "flex-1 py-2.5 rounded-xl text-xs font-semibold text-white",
+                "transition-all duration-200 active:scale-95",
+                isAdded
+                  ? "bg-green-600"
+                  : isAdding
+                    ? "bg-violet-400 cursor-not-allowed"
+                    : "bg-violet-600 hover:bg-violet-700",
+              ].join(" ")}
+            >
+              {isAdding
+                ? "Adding…"
+                : isAdded
+                  ? "✓ Added!"
+                  : `Add ${qty > 1 ? `${qty} ` : ""}to Cart`}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+export default function ProductsPage() {
+  const [products,       setProducts]       = useState<Product[]>([]);
+  const [loading,        setLoading]        = useState<boolean>(true);
+  const [activeCategory, setActiveCategory] = useState<CategoryType | "All">("All");
+  const [search,         setSearch]         = useState<string>("");
+  const [addingId,       setAddingId]       = useState<string | null>(null);
+  const [addedId,        setAddedId]        = useState<string | null>(null);
+
+  // productId -> number of cases currently in the customer's cart (from the server)
+  const [cartQty, setCartQty] = useState<Record<string, number>>({});
+
+  const cartTotalCases    = useMemo(() => Object.values(cartQty).reduce((sum, n) => sum + n, 0), [cartQty]);
+  const cartProductsCount = Object.keys(cartQty).length;
+
+  // Load the real cart so counts include items added earlier
+  const refreshCart = useCallback(async (): Promise<void> => {
     const customerId = getCustomerId();
-    if (!customerId) {
-      setLoading(false);
-      return;
-    }
+    if (!customerId) { setCartQty({}); return; }
     try {
       const data = await api.getCart(customerId);
-      setItems(Array.isArray(data?.items) ? data.items : []);
+      const items: Array<{ productId: string; quantity: number }> =
+        Array.isArray(data?.items) ? data.items : [];
+      const map: Record<string, number> = {};
+      for (const it of items) {
+        map[it.productId] = (map[it.productId] ?? 0) + it.quantity;
+      }
+      setCartQty(map);
     } catch (err) {
       console.error("Failed to fetch cart:", err);
-    } finally {
-      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchCart();
-  }, [fetchCart]);
+    (async () => {
+      try {
+        const data: Product[] = await api.getProducts();
+        setProducts(
+          Array.isArray(data) ? data.filter((p) => p.status === "ACTIVE") : []
+        );
+      } catch (err) {
+        console.error("Failed to fetch products:", err);
+      } finally {
+        setLoading(false);
+      }
+    })();
+    refreshCart();
+  }, [refreshCart]);
 
-  const handleUpdateQty = async (item: CartItem, delta: number) => {
-    const customerId = getCustomerId();
-    const newQty = item.quantity + delta;
-    const stock = item.product.stock ?? Infinity;
-
-    if (delta > 0 && newQty > stock) {
-      setStockWarning(item.id);
-      setTimeout(() => setStockWarning(null), 2500);
-
-      // ── Show a popup telling the customer this is the max stock ──────────
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-      setMaxStockToast({ productName: item.product.productName, stock });
-      toastTimerRef.current = setTimeout(() => setMaxStockToast(null), 2800);
-      return;
-    }
-
-    // Instead of removing immediately when qty would hit 0, ask for confirmation
-    if (newQty <= 0) {
-      setDeleteTarget(item);
-      return;
-    }
-
-    setItems((prev) =>
-      prev.map((i) => (i.id === item.id ? { ...i, quantity: newQty } : i))
-    );
-
-    try {
-      await api.updateCartItem(customerId, item.id, newQty);
-    } catch (err) {
-      console.error("Failed to update cart:", err);
-      await fetchCart();
-    }
-  };
-
-  // ── Show modal instead of removing directly ────────────────────────────────
-  const promptRemove = (item: CartItem) => {
-    setDeleteTarget(item);
-  };
-
-  const confirmRemove = async () => {
-    if (!deleteTarget) return;
-    const item = deleteTarget;
-    setDeleteTarget(null);
-    const customerId = getCustomerId();
-    setItems((prev) => prev.filter((i) => i.id !== item.id));
-    try {
-      await api.removeCartItem(customerId, item.id);
-    } catch (err) {
-      console.error("Failed to remove item:", err);
-      await fetchCart();
-    }
-  };
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => setGcashImage(ev.target?.result as string);
-    reader.readAsDataURL(file);
-  };
-
-  const getEffectivePrice = (item: CartItem) =>
-    item.product.finalPrice != null &&
-    item.product.finalPrice < item.product.price
-      ? item.product.finalPrice
-      : item.product.price;
-
-  const subtotal = items.reduce(
-    (sum, i) => sum + getEffectivePrice(i) * i.quantity,
-    0
+  const categories = useMemo<Array<CategoryType | "All">>(
+    () => ["All", ...Array.from(new Set(products.map((p) => p.category)))],
+    [products]
   );
 
-  const totalDiscount = items.reduce((sum, i) => {
-    const fp = i.product.finalPrice;
-    if (fp != null && fp < i.product.price) {
-      return sum + (i.product.price - fp) * i.quantity;
+  const filtered = useMemo<Product[]>(() => {
+    const stockPriority = (p: Product): number => {
+      if (p.stock <= 0)  return 2;
+      if (p.stock <= 10) return 1;
+      return 0;
+    };
+    return products
+      .filter((p) => {
+        const matchCat = activeCategory === "All" || p.category === activeCategory;
+        const matchQ   = p.productName.toLowerCase().includes(search.toLowerCase());
+        return matchCat && matchQ;
+      })
+      .sort((a, b) => {
+        const priorityDiff = stockPriority(a) - stockPriority(b);
+        if (priorityDiff !== 0) return priorityDiff;
+        return b.stock - a.stock;
+      });
+  }, [products, activeCategory, search]);
+
+  const handleAddToCart = useCallback(async (product: Product, qty: number): Promise<void> => {
+    if (product.stock <= 0) return;
+
+    const customerId = getCustomerId();
+    if (!customerId) { alert("Please log in to add items to cart."); return; }
+
+    // Guard: qty must not exceed what's still available
+    const alreadyInCart = cartQty[product.id] ?? 0;
+    const safeQty = Math.min(qty, product.stock - alreadyInCart);
+    if (safeQty < 1) return;
+
+    setAddingId(product.id);
+    try {
+      const result = await api.addCartItem(customerId, product.id, safeQty);
+      if ((result?.message as string | undefined)?.toLowerCase().includes("insufficient")) {
+        alert(result.message as string);
+        return;
+      }
+      // Re-read the cart so the counts always match the server
+      await refreshCart();
+
+      setAddedId(product.id);
+      setTimeout(() => setAddedId(null), 1200);
+    } catch {
+      alert("Failed to add item to cart. Please try again.");
+    } finally {
+      setAddingId(null);
     }
-    return sum;
-  }, 0);
-
-  // ── VAT (12%) applied on top of subtotal ────────────────────────────────────
-  const VAT_RATE = 0.12;
-  const vat = subtotal * VAT_RATE;
-  const total = subtotal + vat;
-
-  // ── Cash change logic ──────────────────────────────────────────────────────
-  const cashAmount = parseFloat(cashInput.replace(/,/g, "")) || 0;
-  const change = cashAmount - total;
-  const isExactOrOver = cashAmount >= total;
-
-  const hasStockIssue = items.some(
-    (i) => i.quantity > (i.product.stock ?? Infinity)
-  );
-
-  const canCheckout =
-    items.length > 0 &&
-    !hasStockIssue &&
-    (paymentMethod === "gcash"
-      ? gcashRef.trim() !== "" && gcashImage !== null
-      : isExactOrOver);
-
-  if (loading) {
-    return (
-      <div
-        style={{
-          minHeight: "calc(100vh - 56px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <p style={{ color: "#aaa", fontSize: "14px" }}>Loading cart...</p>
-      </div>
-    );
-  }
-
-  if (items.length === 0) {
-    return (
-      <div
-        style={{
-          minHeight: "calc(100vh - 56px)",
-          background: "linear-gradient(160deg, #f0faf2, #e8f5e9)",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <div style={{ fontSize: "72px", marginBottom: "20px" }}>🛒</div>
-        <h2
-          style={{
-            fontSize: "22px",
-            fontWeight: 700,
-            color: "#1a1a1a",
-            marginBottom: "10px",
-          }}
-        >
-          Your cart is empty
-        </h2>
-        <p style={{ fontSize: "14px", color: "#888", marginBottom: "28px" }}>
-          Add some products to get started!
-        </p>
-        <Link
-          href="/products"
-          style={{
-            background: "#2d7a3a",
-            color: "#fff",
-            textDecoration: "none",
-            padding: "13px 40px",
-            borderRadius: "30px",
-            fontSize: "15px",
-            fontWeight: 600,
-            boxShadow: "0 6px 20px rgba(45,122,58,0.3)",
-          }}
-        >
-          Browse Products
-        </Link>
-      </div>
-    );
-  }
+  }, [cartQty, refreshCart]);
 
   return (
-    <>
-      {/* ── Max Stock Toast ── */}
-      {maxStockToast && (
-        <MaxStockToast
-          productName={maxStockToast.productName}
-          stock={maxStockToast.stock}
-        />
-      )}
+    <div className="min-h-screen bg-gray-50/60 px-6 py-7">
+      {/* Animations */}
+      <style>{`
+        @keyframes maxPopIn {
+          from { opacity: 0; transform: translateY(6px) scale(0.97); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes cartBump {
+          0%   { transform: scale(1); }
+          40%  { transform: scale(1.12); }
+          100% { transform: scale(1); }
+        }
+      `}</style>
 
-      {/* ── Delete Confirmation Modal ── */}
-      {deleteTarget && (
-        <DeleteModal
-          item={deleteTarget}
-          onConfirm={confirmRemove}
-          onCancel={() => setDeleteTarget(null)}
-        />
-      )}
-
-      <div
-        style={{
-          padding: isMobile ? "16px" : "28px",
-          background: "#f5f5f5",
-          minHeight: "calc(100vh - 56px)",
-        }}
-      >
-        <p style={{ fontSize: "13px", color: "#888", marginBottom: "20px" }}>
-          🛒 {items.length} item{items.length !== 1 ? "s" : ""} in your cart
-        </p>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "1fr" : "1fr 400px",
-            gap: "24px",
-            alignItems: "start",
-          }}
-        >
-          {/* ── LEFT: Cart Items ── */}
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "14px" }}
+      {/* ── Toolbar ── */}
+      <div className="flex flex-wrap items-center gap-2.5 mb-7">
+        {/* Search */}
+        <div className="relative">
+          <svg
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
           >
-            {items.map((item) => {
-              const emoji = getEmoji(item.product.category);
-              const bg = getBg(item.product.category);
-              const effectivePrice = getEffectivePrice(item);
-              const hasDiscount =
-                item.product.finalPrice != null &&
-                item.product.finalPrice < item.product.price;
-
-              return (
-                <div
-                  key={item.id}
-                  style={{
-                    background: "#fff",
-                    borderRadius: "16px",
-                    border: "0.5px solid #e8e8e8",
-                    padding: "18px 22px",
-                    display: "flex",
-                    flexDirection: isMobile ? "column" : "row",
-                    alignItems: isMobile ? "flex-start" : "center",
-                    gap: "18px",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: isMobile ? "60px" : "80px",
-                      height: isMobile ? "60px" : "80px",
-                      borderRadius: "14px",
-                      background: bg,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: "36px",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {emoji}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <p
-                      style={{
-                        fontSize: "15px",
-                        fontWeight: 600,
-                        color: "#1a1a1a",
-                        marginBottom: "3px",
-                      }}
-                    >
-                      {item.product.productName}
-                    </p>
-                    <p
-                      style={{
-                        fontSize: "12px",
-                        color: "#aaa",
-                        marginBottom: "10px",
-                      }}
-                    >
-                      {item.product.size
-                        ? `Size: ${item.product.size}`
-                        : item.product.category || ""}
-                    </p>
-
-                    {hasDiscount ? (
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                        }}
-                      >
-                        <p
-                          style={{
-                            fontSize: "14px",
-                            color: "#bbb",
-                            textDecoration: "line-through",
-                            margin: 0,
-                          }}
-                        >
-                          ₱
-                          {(item.product.price * item.quantity).toLocaleString()}
-                          .00
-                        </p>
-                        <p
-                          style={{
-                            fontSize: "18px",
-                            fontWeight: 700,
-                            color: "#2d7a3a",
-                            margin: 0,
-                          }}
-                        >
-                          ₱{(effectivePrice * item.quantity).toLocaleString()}
-                          .00
-                        </p>
-                        <span
-                          style={{
-                            fontSize: "10px",
-                            fontWeight: 700,
-                            color: "#fff",
-                            background: "#e53935",
-                            borderRadius: "6px",
-                            padding: "2px 6px",
-                          }}
-                        >
-                          PROMO
-                        </span>
-                      </div>
-                    ) : (
-                      <p
-                        style={{
-                          fontSize: "18px",
-                          fontWeight: 700,
-                          color: "#2d7a3a",
-                          margin: 0,
-                        }}
-                      >
-                        ₱{(effectivePrice * item.quantity).toLocaleString()}.00
-                      </p>
-                    )}
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "12px",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        gap: "4px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          border: "1.5px solid #e8e8e8",
-                          borderRadius: "30px",
-                          overflow: "hidden",
-                        }}
-                      >
-                        <button
-                          onClick={() => handleUpdateQty(item, -1)}
-                          style={{
-                            width: "36px",
-                            height: "36px",
-                            background: "none",
-                            border: "none",
-                            fontSize: "18px",
-                            cursor: "pointer",
-                            color: "#2d7a3a",
-                            fontWeight: 700,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          −
-                        </button>
-                        <span
-                          style={{
-                            minWidth: "32px",
-                            textAlign: "center",
-                            fontSize: "15px",
-                            fontWeight: 600,
-                            color: "#1a1a1a",
-                          }}
-                        >
-                          {item.quantity}
-                        </span>
-                        <button
-                          onClick={() => handleUpdateQty(item, 1)}
-                          style={{
-                            width: "36px",
-                            height: "36px",
-                            background: "none",
-                            border: "none",
-                            fontSize: "18px",
-                            cursor:
-                              item.quantity >= (item.product.stock ?? Infinity)
-                                ? "not-allowed"
-                                : "pointer",
-                            color:
-                              item.quantity >= (item.product.stock ?? Infinity)
-                                ? "#ccc"
-                                : "#2d7a3a",
-                            fontWeight: 700,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          +
-                        </button>
-                      </div>
-                      {stockWarning === item.id && (
-                        <span
-                          style={{
-                            fontSize: "10px",
-                            color: "#e53935",
-                            fontWeight: 600,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          ⚠️ Max stock reached
-                        </span>
-                      )}
-                    </div>
-
-                    {/* ── Remove button now triggers modal ── */}
-                    <button
-                      onClick={() => promptRemove(item)}
-                      style={{
-                        width: "36px",
-                        height: "36px",
-                        borderRadius: "10px",
-                        background: "#ffebee",
-                        border: "none",
-                        cursor: "pointer",
-                        fontSize: "16px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-            <Link
-              href="/products"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                color: "#2d7a3a",
-                fontSize: "13px",
-                fontWeight: 500,
-                textDecoration: "none",
-                padding: "4px 0",
-              }}
-            >
-              ← Continue Shopping
-            </Link>
-          </div>
-
-          {/* ── RIGHT: Order Summary ── */}
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: "20px",
-              border: "0.5px solid #e8e8e8",
-              padding: "24px",
-              position: isMobile ? "relative" : "sticky",
-              top: isMobile ? "auto" : "20px",
-            }}
-          >
-            <p
-              style={{
-                fontSize: "16px",
-                fontWeight: 700,
-                color: "#1a1a1a",
-                marginBottom: "20px",
-              }}
-            >
-              Order Summary
-            </p>
-
-            {/* Itemized list */}
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "10px",
-                marginBottom: "16px",
-              }}
-            >
-              {items.map((item) => {
-                const effectivePrice = getEffectivePrice(item);
-                const hasDiscount =
-                  item.product.finalPrice != null &&
-                  item.product.finalPrice < item.product.price;
-
-                return (
-                  <div
-                    key={item.id}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <span style={{ fontSize: "13px", color: "#555" }}>
-                      {item.product.productName} × {item.quantity}
-                    </span>
-                    <div style={{ textAlign: "right" }}>
-                      {hasDiscount && (
-                        <div
-                          style={{
-                            fontSize: "11px",
-                            color: "#bbb",
-                            textDecoration: "line-through",
-                          }}
-                        >
-                          ₱
-                          {(item.product.price * item.quantity).toLocaleString()}
-                          .00
-                        </div>
-                      )}
-                      <div
-                        style={{
-                          fontSize: "13px",
-                          fontWeight: 600,
-                          color: "#2d7a3a",
-                        }}
-                      >
-                        ₱{(effectivePrice * item.quantity).toLocaleString()}.00
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div
-              style={{
-                height: "1px",
-                background: "#f0f0f0",
-                margin: "14px 0",
-              }}
-            />
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: "8px",
-              }}
-            >
-              <span style={{ fontSize: "13px", color: "#888" }}>Subtotal</span>
-              <span style={{ fontSize: "13px", color: "#1a1a1a" }}>
-                ₱{subtotal.toLocaleString()}.00
-              </span>
-            </div>
-
-            {/* ── VAT (12%) — directly under Subtotal ── */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: "8px",
-              }}
-            >
-              <span style={{ fontSize: "13px", color: "#888" }}>
-                VAT (12%)
-              </span>
-              <span style={{ fontSize: "13px", color: "#1a1a1a" }}>
-                ₱
-                {vat.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </span>
-            </div>
-
-            {totalDiscount > 0 && (
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "8px",
-                }}
-              >
-                <span style={{ fontSize: "13px", color: "#e53935" }}>
-                  🏷️ Promo Discount
-                </span>
-                <span
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: 600,
-                    color: "#e53935",
-                  }}
-                >
-                  −₱{totalDiscount.toLocaleString()}.00
-                </span>
-              </div>
-            )}
-
-            <div
-              style={{
-                height: "1px",
-                background: "#f0f0f0",
-                margin: "14px 0",
-              }}
-            />
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}
-            >
-              <span
-                style={{ fontSize: "16px", fontWeight: 700, color: "#1a1a1a" }}
-              >
-                Total
-              </span>
-              <span
-                style={{ fontSize: "22px", fontWeight: 700, color: "#2d7a3a" }}
-              >
-                ₱
-                {total.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </span>
-            </div>
-
-            {/* Payment Method */}
-            <p
-              style={{ fontSize: "12px", color: "#aaa", marginBottom: "10px" }}
-            >
-              Payment Method
-            </p>
-            <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
-              {[
-                { key: "cod", label: "💵 Cash on Delivery" },
-                { key: "gcash", label: "📱 GCash" },
-              ].map((m) => (
-                <button
-                  key={m.key}
-                  onClick={() => setPaymentMethod(m.key as "cod" | "gcash")}
-                  style={{
-                    flex: 1,
-                    padding: "10px",
-                    borderRadius: "10px",
-                    cursor: "pointer",
-                    fontFamily: "sans-serif",
-                    border:
-                      paymentMethod === m.key
-                        ? "2px solid #2d7a3a"
-                        : "1.5px solid #e0e0e0",
-                    background: paymentMethod === m.key ? "#f0faf2" : "#fff",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    color: paymentMethod === m.key ? "#2d7a3a" : "#888",
-                  }}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-
-            {/* ── GCash Section ── */}
-            {paymentMethod === "gcash" && (
-              <div
-                style={{
-                  background: "#f8f0ff",
-                  borderRadius: "14px",
-                  padding: "16px",
-                  marginBottom: "16px",
-                  border: "1px solid #e0c8ff",
-                }}
-              >
-                <p
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: 600,
-                    color: "#6a1b9a",
-                    marginBottom: "10px",
-                    textAlign: "center",
-                  }}
-                >
-                  📲 Scan to Pay via GCash
-                </p>
-                <div
-                  style={{
-                    background: "#fff",
-                    borderRadius: "12px",
-                    padding: "16px",
-                    textAlign: "center",
-                    marginBottom: "14px",
-                    border: "1px solid #e0c8ff",
-                  }}
-                >
-                  <svg
-                    width="120"
-                    height="120"
-                    viewBox="0 0 120 120"
-                    style={{ margin: "0 auto", display: "block" }}
-                  >
-                    <rect
-                      x="2"
-                      y="2"
-                      width="116"
-                      height="116"
-                      rx="8"
-                      fill="white"
-                      stroke="#6a1b9a"
-                      strokeWidth="3"
-                    />
-                    <rect
-                      x="10"
-                      y="10"
-                      width="30"
-                      height="30"
-                      rx="3"
-                      fill="#6a1b9a"
-                    />
-                    <rect
-                      x="15"
-                      y="15"
-                      width="20"
-                      height="20"
-                      rx="2"
-                      fill="white"
-                    />
-                    <rect
-                      x="19"
-                      y="19"
-                      width="12"
-                      height="12"
-                      rx="1"
-                      fill="#6a1b9a"
-                    />
-                    <rect
-                      x="80"
-                      y="10"
-                      width="30"
-                      height="30"
-                      rx="3"
-                      fill="#6a1b9a"
-                    />
-                    <rect
-                      x="85"
-                      y="15"
-                      width="20"
-                      height="20"
-                      rx="2"
-                      fill="white"
-                    />
-                    <rect
-                      x="89"
-                      y="19"
-                      width="12"
-                      height="12"
-                      rx="1"
-                      fill="#6a1b9a"
-                    />
-                    <rect
-                      x="10"
-                      y="80"
-                      width="30"
-                      height="30"
-                      rx="3"
-                      fill="#6a1b9a"
-                    />
-                    <rect
-                      x="15"
-                      y="85"
-                      width="20"
-                      height="20"
-                      rx="2"
-                      fill="white"
-                    />
-                    <rect
-                      x="19"
-                      y="89"
-                      width="12"
-                      height="12"
-                      rx="1"
-                      fill="#6a1b9a"
-                    />
-                    {[
-                      [50, 10],[56, 10],[62, 10],[50, 16],[62, 16],[50, 22],
-                      [54, 22],[58, 22],[62, 22],[10, 50],[16, 50],[22, 50],
-                      [28, 50],[10, 56],[22, 56],[28, 56],[10, 62],[16, 62],
-                      [28, 62],[50, 50],[58, 50],[66, 50],[74, 50],[50, 58],
-                      [54, 58],[62, 58],[70, 58],[50, 66],[58, 66],[66, 66],
-                      [80, 50],[88, 50],[96, 50],[104, 50],[80, 58],[96, 58],
-                      [80, 66],[88, 66],[96, 66],[104, 66],[50, 80],[58, 80],
-                      [66, 80],[50, 88],[62, 88],[70, 88],[54, 96],[58, 96],
-                      [66, 96],[74, 96],
-                    ].map(([x, y], i) => (
-                      <rect key={i} x={x} y={y} width="5" height="5" fill="#6a1b9a" />
-                    ))}
-                  </svg>
-                  <p
-                    style={{
-                      fontSize: "13px",
-                      fontWeight: 700,
-                      color: "#6a1b9a",
-                      marginTop: "8px",
-                    }}
-                  >
-                    Julieta Soft Drinks
-                  </p>
-                  <p style={{ fontSize: "11px", color: "#aaa" }}>
-                    GCash: 0912 345 6789
-                  </p>
-                  <p
-                    style={{
-                      fontSize: "18px",
-                      fontWeight: 700,
-                      color: "#2d7a3a",
-                      marginTop: "4px",
-                    }}
-                  >
-                    ₱
-                    {total.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </p>
-                </div>
-                <div style={{ marginBottom: "12px" }}>
-                  <label
-                    style={{
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      color: "#6a1b9a",
-                      marginBottom: "6px",
-                      display: "block",
-                    }}
-                  >
-                    🔢 GCash Reference Number{" "}
-                    <span style={{ color: "#e53935" }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={gcashRef}
-                    onChange={(e) => setGcashRef(e.target.value)}
-                    placeholder="e.g. 1234567890123"
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      borderRadius: "10px",
-                      border: gcashRef
-                        ? "1.5px solid #6a1b9a"
-                        : "1.5px solid #e0c8ff",
-                      fontSize: "13px",
-                      outline: "none",
-                      background: "#fff",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </div>
-                <div>
-                  <label
-                    style={{
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      color: "#6a1b9a",
-                      marginBottom: "6px",
-                      display: "block",
-                    }}
-                  >
-                    📸 Upload Payment Screenshot{" "}
-                    <span style={{ color: "#e53935" }}>*</span>
-                  </label>
-                  {gcashImage ? (
-                    <div
-                      style={{
-                        position: "relative",
-                        borderRadius: "10px",
-                        overflow: "hidden",
-                        border: "1.5px solid #6a1b9a",
-                      }}
-                    >
-                      <img
-                        src={gcashImage}
-                        alt="receipt"
-                        style={{
-                          width: "100%",
-                          height: "120px",
-                          objectFit: "cover",
-                          display: "block",
-                        }}
-                      />
-                      <button
-                        onClick={() => setGcashImage(null)}
-                        style={{
-                          position: "absolute",
-                          top: "6px",
-                          right: "6px",
-                          background: "rgba(0,0,0,0.55)",
-                          border: "none",
-                          color: "#fff",
-                          borderRadius: "50%",
-                          width: "24px",
-                          height: "24px",
-                          cursor: "pointer",
-                          fontSize: "12px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        ✕
-                      </button>
-                      <div
-                        style={{
-                          background: "#e8f5e9",
-                          padding: "6px",
-                          textAlign: "center",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: "11px",
-                            color: "#2e7d32",
-                            fontWeight: 600,
-                          }}
-                        >
-                          ✅ Receipt uploaded
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div
-                      onClick={() => fileRef.current?.click()}
-                      style={{
-                        border: "2px dashed #c084fc",
-                        borderRadius: "10px",
-                        padding: "18px",
-                        textAlign: "center",
-                        cursor: "pointer",
-                        background: "#fff",
-                      }}
-                    >
-                      <div style={{ fontSize: "24px", marginBottom: "4px" }}>
-                        🖼️
-                      </div>
-                      <p
-                        style={{
-                          fontSize: "12px",
-                          fontWeight: 500,
-                          color: "#6a1b9a",
-                        }}
-                      >
-                        Click to upload screenshot
-                      </p>
-                      <p style={{ fontSize: "11px", color: "#bbb" }}>
-                        JPG, PNG supported
-                      </p>
-                    </div>
-                  )}
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    style={{ display: "none" }}
-                  />
-                </div>
-                {(!gcashRef || !gcashImage) && (
-                  <p
-                    style={{
-                      fontSize: "11px",
-                      color: "#e53935",
-                      marginTop: "10px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
-                    }}
-                  >
-                    ⚠️ Please provide both the reference number and screenshot to
-                    proceed.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* ── COD Section with Cash Change Calculator ── */}
-            {paymentMethod === "cod" && (
-              <div
-                style={{
-                  background: "#f0faf2",
-                  borderRadius: "14px",
-                  padding: "16px",
-                  marginBottom: "16px",
-                  border: "1px solid #a5d6a7",
-                }}
-              >
-                <p
-                  style={{
-                    fontSize: "12px",
-                    color: "#2e7d32",
-                    marginBottom: "14px",
-                  }}
-                >
-                  💵 Pay in cash when your order arrives. Please prepare the
-                  exact amount.
-                </p>
-
-                {/* Cash Change Calculator */}
-                <div
-                  style={{
-                    background: "#fff",
-                    borderRadius: "10px",
-                    padding: "14px",
-                    border: "1px solid #c8e6c9",
-                  }}
-                >
-                  <p
-                    style={{
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      color: "#1b5e20",
-                      marginBottom: "10px",
-                    }}
-                  >
-                    🧮 Change Calculator
-                  </p>
-
-                  {/* Amount due row */}
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      marginBottom: "10px",
-                    }}
-                  >
-                    <span style={{ fontSize: "12px", color: "#888" }}>
-                      Amount Due
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "13px",
-                        fontWeight: 700,
-                        color: "#1a1a1a",
-                      }}
-                    >
-                      ₱
-                      {total.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </span>
-                  </div>
-
-                  {/* Cash input */}
-                  <label
-                    style={{
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      color: "#2e7d32",
-                      marginBottom: "6px",
-                      display: "block",
-                    }}
-                  >
-                    Customer Cash (₱)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={cashInput}
-                    onChange={(e) => setCashInput(e.target.value)}
-                    placeholder={`e.g. ${Math.ceil(total + 50)}`}
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      borderRadius: "10px",
-                      border: cashInput
-                        ? isExactOrOver
-                          ? "1.5px solid #2d7a3a"
-                          : "1.5px solid #e53935"
-                        : "1.5px solid #c8e6c9",
-                      fontSize: "14px",
-                      fontWeight: 600,
-                      outline: "none",
-                      background: "#fff",
-                      boxSizing: "border-box",
-                      color: "#1a1a1a",
-                    }}
-                  />
-
-                  {/* Change display */}
-                  {cashInput !== "" && (
-                    <div
-                      style={{
-                        marginTop: "12px",
-                        padding: "12px 14px",
-                        borderRadius: "10px",
-                        background: isExactOrOver ? "#e8f5e9" : "#ffebee",
-                        border: `1.5px solid ${isExactOrOver ? "#a5d6a7" : "#ef9a9a"}`,
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "13px",
-                          fontWeight: 600,
-                          color: isExactOrOver ? "#2e7d32" : "#c62828",
-                        }}
-                      >
-                        {isExactOrOver ? "💰 Change" : "⚠️ Insufficient"}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "18px",
-                          fontWeight: 700,
-                          color: isExactOrOver ? "#2d7a3a" : "#e53935",
-                        }}
-                      >
-                        {isExactOrOver
-                          ? `₱${change.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                          : `−₱${Math.abs(change).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Quick-fill buttons */}
-                  <div
-                    style={{
-                      marginTop: "10px",
-                      display: "flex",
-                      gap: "6px",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    {[
-                      Math.ceil(total),
-                      Math.ceil(total / 50) * 50,
-                      Math.ceil(total / 100) * 100,
-                      Math.ceil(total / 500) * 500,
-                    ]
-                      .filter((v, i, arr) => arr.indexOf(v) === i)
-                      .slice(0, 4)
-                      .map((amt) => (
-                        <button
-                          key={amt}
-                          onClick={() => setCashInput(String(amt))}
-                          style={{
-                            padding: "5px 10px",
-                            borderRadius: "20px",
-                            border: "1.5px solid #a5d6a7",
-                            background:
-                              cashInput === String(amt) ? "#2d7a3a" : "#fff",
-                            color:
-                              cashInput === String(amt) ? "#fff" : "#2e7d32",
-                            fontSize: "11px",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                          }}
-                        >
-                          ₱{amt.toLocaleString()}
-                        </button>
-                      ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <Link
-              href={canCheckout ? "/checkout" : "#"}
-              onClick={(e) => {
-                if (!canCheckout) {
-                  e.preventDefault();
-                  return;
-                }
-                // ── Persist payment info so CheckoutPage can read it ──
-                sessionStorage.setItem("paymentMethod", paymentMethod);
-                if (paymentMethod === "gcash") {
-                  sessionStorage.setItem("gcashRef", gcashRef);
-                  sessionStorage.removeItem("cashGiven");
-                } else {
-                  sessionStorage.setItem("cashGiven", cashInput);
-                  sessionStorage.removeItem("gcashRef");
-                }
-              }}
-              style={{
-                display: "block",
-                textAlign: "center",
-                textDecoration: "none",
-                padding: "14px",
-                borderRadius: "30px",
-                fontSize: "15px",
-                fontWeight: 700,
-                background: canCheckout ? "#2d7a3a" : "#ccc",
-                color: "#fff",
-                cursor: canCheckout ? "pointer" : "not-allowed",
-                boxShadow: canCheckout
-                  ? "0 6px 20px rgba(45,122,58,0.3)"
-                  : "none",
-              }}
-            >
-              {hasStockIssue
-                ? "⚠️ Reduce quantity to match stock"
-                : paymentMethod === "gcash" && !canCheckout
-                ? "Complete GCash Details First"
-                : paymentMethod === "cod" && !canCheckout
-                ? "Enter Cash Amount First"
-                : "Proceed to Checkout →"}
-            </Link>
-
-            <p
-              style={{
-                textAlign: "center",
-                fontSize: "11px",
-                color: "#bbb",
-                marginTop: "14px",
-              }}
-            >
-              🔒 Secure checkout — your info is safe
-            </p>
-          </div>
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search products…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10 pr-4 py-2.5 rounded-full border border-gray-200 text-sm
+                       bg-white text-gray-900 w-60 outline-none shadow-sm
+                       focus:border-violet-400 focus:ring-2 focus:ring-violet-100
+                       transition-all placeholder:text-gray-400"
+          />
         </div>
+
+        <div className="w-px h-7 bg-gray-200" />
+
+        {/* Category pills */}
+        {loading ? (
+          [80, 104, 72, 88, 64].map((w, i) => <SkeletonPill key={i} width={w} />)
+        ) : (
+          categories.map((c) => (
+            <button
+              key={c}
+              onClick={() => setActiveCategory(c)}
+              className={[
+                "px-4 py-2 rounded-full text-[13px] font-medium transition-all duration-150",
+                activeCategory === c
+                  ? "bg-violet-600 text-white shadow-sm shadow-violet-200"
+                  : "border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:border-gray-300",
+              ].join(" ")}
+            >
+              {c === "All" ? "All" : getMeta(c as CategoryType).label}
+            </button>
+          ))
+        )}
+
+        {!loading && (
+          <span className="ml-auto text-xs text-gray-400 whitespace-nowrap">
+            {filtered.length} product{filtered.length !== 1 ? "s" : ""}
+          </span>
+        )}
       </div>
-    </>
+
+      {/* ── Grid ── */}
+      {loading && (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
+          {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
+        </div>
+      )}
+
+      {!loading && filtered.length === 0 && (
+        <div className="text-center py-24">
+          <p className="text-5xl mb-4">🔍</p>
+          <p className="text-base font-semibold text-gray-800 mb-2">No products found</p>
+          <p className="text-sm text-gray-400">Try a different search or category</p>
+        </div>
+      )}
+
+      {!loading && filtered.length > 0 && (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5 pb-20">
+          {filtered.map((p) => (
+            <ProductCard
+              key={p.id}
+              product={p}
+              onAddToCart={handleAddToCart}
+              addingId={addingId}
+              addedId={addedId}
+              inCartQty={cartQty[p.id] ?? 0}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* ── Floating cart indicator ── */}
+      {cartTotalCases > 0 && (
+        <Link
+          href="/cart"
+          key={cartTotalCases}
+          className="fixed bottom-6 right-6 z-30 flex items-center gap-3 bg-violet-600 hover:bg-violet-700
+                     text-white rounded-full pl-4 pr-5 py-3 shadow-xl shadow-violet-200 transition-colors"
+          style={{ animation: "cartBump 0.3s ease-out" }}
+        >
+          <span className="relative text-lg leading-none">
+            🛒
+            <span className="absolute -top-2 -right-2.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-400
+                             text-violet-900 text-[10px] font-bold flex items-center justify-center">
+              {cartTotalCases}
+            </span>
+          </span>
+          <span className="leading-tight">
+            <span className="block text-xs font-semibold">View Cart</span>
+            <span className="block text-[10px] text-violet-100">
+              {cartProductsCount} product{cartProductsCount !== 1 ? "s" : ""} · {cartTotalCases} case{cartTotalCases !== 1 ? "s" : ""}
+            </span>
+          </span>
+        </Link>
+      )}
+    </div>
   );
 }

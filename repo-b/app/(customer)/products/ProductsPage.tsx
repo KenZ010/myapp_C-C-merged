@@ -1,5 +1,6 @@
 "use client";
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import { api } from "@/lib/api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -101,13 +102,16 @@ function SkeletonCard() {
 
 // ── Quantity Stepper ──────────────────────────────────────────────────────────
 type StepperProps = {
-  value:    number;
-  min:      number;
-  max:      number;
-  onChange: (v: number) => void;
+  value:        number;
+  min:          number;
+  max:          number;
+  onChange:     (v: number) => void;
+  onMaxReached: () => void;
 };
 
-function QuantityStepper({ value, min, max, onChange }: StepperProps) {
+function QuantityStepper({ value, min, max, onChange, onMaxReached }: StepperProps) {
+  const atMax = value >= max;
+
   return (
     <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-1 py-1">
       <button
@@ -123,13 +127,18 @@ function QuantityStepper({ value, min, max, onChange }: StepperProps) {
       <span className="w-8 text-center text-sm font-semibold text-gray-800 tabular-nums">
         {value}
       </span>
+      {/* Not truly disabled at max, so clicking it can still show the "max stock" popup */}
       <button
-        onClick={() => onChange(Math.min(max, value + 1))}
-        disabled={value >= max}
+        onClick={() => (atMax ? onMaxReached() : onChange(value + 1))}
         aria-label="Increase quantity"
-        className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500
-                   hover:bg-white hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed
-                   transition-all duration-150 font-bold text-base"
+        aria-disabled={atMax}
+        className={[
+          "w-8 h-8 rounded-lg flex items-center justify-center text-gray-500",
+          "transition-all duration-150 font-bold text-base",
+          atMax
+            ? "opacity-30 cursor-not-allowed"
+            : "hover:bg-white hover:text-gray-800",
+        ].join(" ")}
       >
         +
       </button>
@@ -171,14 +180,15 @@ type ProductCardProps = {
   onAddToCart: (product: Product, qty: number) => Promise<void>;
   addingId:    string | null;
   addedId:     string | null;
+  inCartQty:   number;
 };
 
-function ProductCard({ product, onAddToCart, addingId, addedId }: ProductCardProps) {
-  const [qty, setQty]               = useState<number>(1);
-  const [atMaxStock, setAtMaxStock] = useState<boolean>(false);
+function ProductCard({ product, onAddToCart, addingId, addedId, inCartQty }: ProductCardProps) {
+  const [qty, setQty]                     = useState<number>(1);
+  const [showMaxNotice, setShowMaxNotice] = useState<boolean>(false);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const outOfStock  = product.stock <= 0;
-  const lowStock    = !outOfStock && product.stock <= 10;
   const hasPromo    = product.finalPrice != null && product.finalPrice < product.price;
   const isAdding    = addingId === product.id;
   const isAdded     = addedId  === product.id;
@@ -188,17 +198,35 @@ function ProductCard({ product, onAddToCart, addingId, addedId }: ProductCardPro
     ? Math.round(((product.price - product.finalPrice!) / product.price) * 100)
     : 0;
 
-  // Reset qty if stock changes and clamp
+  // Clamp qty if stock changes (only depends on stock, so it won't fight the stepper)
   useEffect(() => {
-    if (product.stock > 0 && qty > product.stock) setQty(product.stock);
-    if (product.stock <= 0) setQty(1);
-    setAtMaxStock(false);
-  }, [product.stock, qty]);
+    setQty((q) => (product.stock <= 0 ? 1 : Math.min(q, product.stock)));
+    setShowMaxNotice(false);
+  }, [product.stock]);
+
+  // Clean up the popup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    };
+  }, []);
+
+  const flashMaxNotice = useCallback(() => {
+    setShowMaxNotice(true);
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setShowMaxNotice(false), 2800);
+  }, []);
+
+  const hideMaxNotice = () => {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    setShowMaxNotice(false);
+  };
 
   const handleQtyChange = (next: number) => {
-    const clamped = Math.min(next, product.stock);
+    const clamped = Math.max(1, Math.min(next, product.stock));
     setQty(clamped);
-    setAtMaxStock(clamped >= product.stock);
+    if (clamped >= product.stock) flashMaxNotice();
+    else hideMaxNotice();
   };
 
   const handleAdd = () => {
@@ -238,6 +266,14 @@ function ProductCard({ product, onAddToCart, addingId, addedId }: ProductCardPro
         >
           {meta.label}
         </span>
+
+        {/* In-cart indicator */}
+        {inCartQty > 0 && (
+          <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 bg-green-600 text-white
+                           text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-sm">
+            🛒 {inCartQty} in cart
+          </span>
+        )}
 
         {/* Promo badge */}
         {hasPromo && !outOfStock && (
@@ -330,12 +366,34 @@ function ProductCard({ product, onAddToCart, addingId, addedId }: ProductCardPro
             Out of Stock
           </button>
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="relative flex items-center gap-2">
+            {/* Max stock popup */}
+            {showMaxNotice && (
+              <div
+                role="status"
+                onClick={hideMaxNotice}
+                className="absolute bottom-full left-0 right-0 mb-2.5 z-10 cursor-pointer
+                           bg-amber-50 border border-amber-200 text-amber-800
+                           rounded-xl px-3 py-2 shadow-lg"
+                style={{ animation: "maxPopIn 0.18s ease-out" }}
+              >
+                <p className="text-xs font-bold">⚠️ Maximum stock reached</p>
+                <p className="text-[11px] mt-0.5">
+                  We only have {product.stock} case{product.stock !== 1 ? "s" : ""} of this product available.
+                </p>
+                <span
+                  className="absolute -bottom-1.5 left-6 w-3 h-3 rotate-45 bg-amber-50
+                             border-r border-b border-amber-200"
+                />
+              </div>
+            )}
+
             <QuantityStepper
               value={qty}
               min={1}
               max={product.stock}
-              onChange={setQty}
+              onChange={handleQtyChange}
+              onMaxReached={flashMaxNotice}
             />
             <button
               onClick={handleAdd}
@@ -371,6 +429,12 @@ export default function ProductsPage() {
   const [search,         setSearch]         = useState<string>("");
   const [addingId,       setAddingId]       = useState<string | null>(null);
   const [addedId,        setAddedId]        = useState<string | null>(null);
+
+  // productId -> number of cases the customer added from this page
+  const [cartQty, setCartQty] = useState<Record<string, number>>({});
+
+  const cartTotalCases    = useMemo(() => Object.values(cartQty).reduce((sum, n) => sum + n, 0), [cartQty]);
+  const cartProductsCount = Object.keys(cartQty).length;
 
   useEffect(() => {
     (async () => {
@@ -428,6 +492,9 @@ export default function ProductsPage() {
         alert(result.message as string);
         return;
       }
+      // Update the cart indicator
+      setCartQty((prev) => ({ ...prev, [product.id]: (prev[product.id] ?? 0) + safeQty }));
+
       setAddedId(product.id);
       setTimeout(() => setAddedId(null), 1200);
     } catch {
@@ -439,6 +506,19 @@ export default function ProductsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50/60 px-6 py-7">
+      {/* Animations */}
+      <style>{`
+        @keyframes maxPopIn {
+          from { opacity: 0; transform: translateY(6px) scale(0.97); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes cartBump {
+          0%   { transform: scale(1); }
+          40%  { transform: scale(1.12); }
+          100% { transform: scale(1); }
+        }
+      `}</style>
+
       {/* ── Toolbar ── */}
       <div className="flex flex-wrap items-center gap-2.5 mb-7">
         {/* Search */}
@@ -507,7 +587,7 @@ export default function ProductsPage() {
       )}
 
       {!loading && filtered.length > 0 && (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5 pb-20">
           {filtered.map((p) => (
             <ProductCard
               key={p.id}
@@ -515,9 +595,35 @@ export default function ProductsPage() {
               onAddToCart={handleAddToCart}
               addingId={addingId}
               addedId={addedId}
+              inCartQty={cartQty[p.id] ?? 0}
             />
           ))}
         </div>
+      )}
+
+      {/* ── Floating cart indicator ── */}
+      {cartTotalCases > 0 && (
+        <Link
+          href="/cart"
+          key={cartTotalCases}
+          className="fixed bottom-6 right-6 z-30 flex items-center gap-3 bg-violet-600 hover:bg-violet-700
+                     text-white rounded-full pl-4 pr-5 py-3 shadow-xl shadow-violet-200 transition-colors"
+          style={{ animation: "cartBump 0.3s ease-out" }}
+        >
+          <span className="relative text-lg leading-none">
+            🛒
+            <span className="absolute -top-2 -right-2.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-400
+                             text-violet-900 text-[10px] font-bold flex items-center justify-center">
+              {cartTotalCases}
+            </span>
+          </span>
+          <span className="leading-tight">
+            <span className="block text-xs font-semibold">View Cart</span>
+            <span className="block text-[10px] text-violet-100">
+              {cartProductsCount} product{cartProductsCount !== 1 ? "s" : ""} · {cartTotalCases} case{cartTotalCases !== 1 ? "s" : ""}
+            </span>
+          </span>
+        </Link>
       )}
     </div>
   );
