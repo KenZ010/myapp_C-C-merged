@@ -127,7 +127,7 @@ function QuantityStepper({ value, min, max, onChange, onMaxReached }: StepperPro
       <span className="w-8 text-center text-sm font-semibold text-gray-800 tabular-nums">
         {value}
       </span>
-      {/* Not truly disabled at max, so clicking it can still show the "max stock" popup */}
+      {/* Not truly disabled at max, so tapping it can still show the "max stock" popup */}
       <button
         onClick={() => (atMax ? onMaxReached() : onChange(value + 1))}
         aria-label="Increase quantity"
@@ -189,6 +189,9 @@ function ProductCard({ product, onAddToCart, addingId, addedId, inCartQty }: Pro
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const outOfStock  = product.stock <= 0;
+  // How many more cases the customer can still add (stock minus what's already in the cart)
+  const remaining   = Math.max(0, product.stock - inCartQty);
+  const cartIsFull  = !outOfStock && remaining <= 0;
   const hasPromo    = product.finalPrice != null && product.finalPrice < product.price;
   const isAdding    = addingId === product.id;
   const isAdded     = addedId  === product.id;
@@ -198,9 +201,12 @@ function ProductCard({ product, onAddToCart, addingId, addedId, inCartQty }: Pro
     ? Math.round(((product.price - product.finalPrice!) / product.price) * 100)
     : 0;
 
-  // Clamp qty if stock changes (only depends on stock, so it won't fight the stepper)
+  // Keep qty within what's still available
   useEffect(() => {
-    setQty((q) => (product.stock <= 0 ? 1 : Math.min(q, product.stock)));
+    setQty((q) => (remaining <= 0 ? 1 : Math.min(q, remaining)));
+  }, [remaining]);
+
+  useEffect(() => {
     setShowMaxNotice(false);
   }, [product.stock]);
 
@@ -223,16 +229,38 @@ function ProductCard({ product, onAddToCart, addingId, addedId, inCartQty }: Pro
   };
 
   const handleQtyChange = (next: number) => {
-    const clamped = Math.max(1, Math.min(next, product.stock));
+    const clamped = Math.max(1, Math.min(next, remaining));
     setQty(clamped);
-    if (clamped >= product.stock) flashMaxNotice();
+    if (clamped >= remaining) flashMaxNotice();
     else hideMaxNotice();
   };
 
   const handleAdd = () => {
-    if (outOfStock || isAdding) return;
+    if (outOfStock || cartIsFull || isAdding) return;
     onAddToCart(product, qty);
   };
+
+  const maxNotice = (
+    <div
+      role="status"
+      onClick={hideMaxNotice}
+      className="absolute bottom-full left-0 right-0 mb-2.5 z-10 cursor-pointer
+                 bg-amber-50 border border-amber-200 text-amber-800
+                 rounded-xl px-3 py-2 shadow-lg"
+      style={{ animation: "maxPopIn 0.18s ease-out" }}
+    >
+      <p className="text-xs font-bold">⚠️ Maximum stock reached</p>
+      <p className="text-[11px] mt-0.5">
+        {inCartQty > 0
+          ? `You already have ${inCartQty} case${inCartQty !== 1 ? "s" : ""} in your cart. We only have ${product.stock} case${product.stock !== 1 ? "s" : ""} of this product.`
+          : `We only have ${product.stock} case${product.stock !== 1 ? "s" : ""} of this product available.`}
+      </p>
+      <span
+        className="absolute -bottom-1.5 left-6 w-3 h-3 rotate-45 bg-amber-50
+                   border-r border-b border-amber-200"
+      />
+    </div>
+  );
 
   return (
     <div
@@ -347,7 +375,7 @@ function ProductCard({ product, onAddToCart, addingId, addedId, inCartQty }: Pro
         </div>
 
         {/* Subtotal hint (when qty > 1) */}
-        {!outOfStock && qty > 1 && (
+        {!outOfStock && !cartIsFull && qty > 1 && (
           <div className="mb-3 px-3 py-2 rounded-xl bg-green-50 border border-green-100">
             <p className="text-xs text-green-700 font-medium">
               Subtotal: ₱{((product.finalPrice ?? product.price) * qty).toLocaleString()}
@@ -365,33 +393,25 @@ function ProductCard({ product, onAddToCart, addingId, addedId, inCartQty }: Pro
           >
             Out of Stock
           </button>
+        ) : cartIsFull ? (
+          <div className="relative">
+            {showMaxNotice && maxNotice}
+            <button
+              onClick={flashMaxNotice}
+              className="w-full py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700
+                         text-xs font-semibold cursor-not-allowed"
+            >
+              Max stock in your cart
+            </button>
+          </div>
         ) : (
           <div className="relative flex items-center gap-2">
-            {/* Max stock popup */}
-            {showMaxNotice && (
-              <div
-                role="status"
-                onClick={hideMaxNotice}
-                className="absolute bottom-full left-0 right-0 mb-2.5 z-10 cursor-pointer
-                           bg-amber-50 border border-amber-200 text-amber-800
-                           rounded-xl px-3 py-2 shadow-lg"
-                style={{ animation: "maxPopIn 0.18s ease-out" }}
-              >
-                <p className="text-xs font-bold">⚠️ Maximum stock reached</p>
-                <p className="text-[11px] mt-0.5">
-                  We only have {product.stock} case{product.stock !== 1 ? "s" : ""} of this product available.
-                </p>
-                <span
-                  className="absolute -bottom-1.5 left-6 w-3 h-3 rotate-45 bg-amber-50
-                             border-r border-b border-amber-200"
-                />
-              </div>
-            )}
+            {showMaxNotice && maxNotice}
 
             <QuantityStepper
               value={qty}
               min={1}
-              max={product.stock}
+              max={remaining}
               onChange={handleQtyChange}
               onMaxReached={flashMaxNotice}
             />
@@ -430,11 +450,29 @@ export default function ProductsPage() {
   const [addingId,       setAddingId]       = useState<string | null>(null);
   const [addedId,        setAddedId]        = useState<string | null>(null);
 
-  // productId -> number of cases the customer added from this page
+  // productId -> number of cases currently in the customer's cart (from the server)
   const [cartQty, setCartQty] = useState<Record<string, number>>({});
 
   const cartTotalCases    = useMemo(() => Object.values(cartQty).reduce((sum, n) => sum + n, 0), [cartQty]);
   const cartProductsCount = Object.keys(cartQty).length;
+
+  // Load the real cart so counts include items added earlier
+  const refreshCart = useCallback(async (): Promise<void> => {
+    const customerId = getCustomerId();
+    if (!customerId) { setCartQty({}); return; }
+    try {
+      const data = await api.getCart(customerId);
+      const items: Array<{ productId: string; quantity: number }> =
+        Array.isArray(data?.items) ? data.items : [];
+      const map: Record<string, number> = {};
+      for (const it of items) {
+        map[it.productId] = (map[it.productId] ?? 0) + it.quantity;
+      }
+      setCartQty(map);
+    } catch (err) {
+      console.error("Failed to fetch cart:", err);
+    }
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -449,7 +487,8 @@ export default function ProductsPage() {
         setLoading(false);
       }
     })();
-  }, []);
+    refreshCart();
+  }, [refreshCart]);
 
   const categories = useMemo<Array<CategoryType | "All">>(
     () => ["All", ...Array.from(new Set(products.map((p) => p.category)))],
@@ -481,8 +520,9 @@ export default function ProductsPage() {
     const customerId = getCustomerId();
     if (!customerId) { alert("Please log in to add items to cart."); return; }
 
-    // Guard: qty must not exceed available stock
-    const safeQty = Math.min(qty, product.stock);
+    // Guard: qty must not exceed what's still available
+    const alreadyInCart = cartQty[product.id] ?? 0;
+    const safeQty = Math.min(qty, product.stock - alreadyInCart);
     if (safeQty < 1) return;
 
     setAddingId(product.id);
@@ -492,8 +532,8 @@ export default function ProductsPage() {
         alert(result.message as string);
         return;
       }
-      // Update the cart indicator
-      setCartQty((prev) => ({ ...prev, [product.id]: (prev[product.id] ?? 0) + safeQty }));
+      // Re-read the cart so the counts always match the server
+      await refreshCart();
 
       setAddedId(product.id);
       setTimeout(() => setAddedId(null), 1200);
@@ -502,7 +542,7 @@ export default function ProductsPage() {
     } finally {
       setAddingId(null);
     }
-  }, []);
+  }, [cartQty, refreshCart]);
 
   return (
     <div className="min-h-screen bg-gray-50/60 px-6 py-7">
