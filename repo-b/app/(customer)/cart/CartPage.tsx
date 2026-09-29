@@ -1251,3 +1251,236 @@ export default function CartPage() {
                 style={{
                   background: "#f8f0ff",
                   borderRadius: "14px",
+                  padding: "16px",
+                  border: "1px solid #e0c8ff",
+                }}
+              >
+                {gcashExpired && (
+                  <div
+                    style={{
+                      background: "#ffebee",
+                      border: "1px solid #ef9a9a",
+                      color: "#c62828",
+                      borderRadius: "10px",
+                      padding: "10px 12px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      marginBottom: "12px",
+                    }}
+                  >
+                    ⏱️ Your payment session expired. Please click Continue to start again.
+                  </div>
+                )}
+
+                <p style={{ fontSize: "13px", fontWeight: 700, color: "#6a1b9a", marginBottom: "8px" }}>
+                  📲 GCash Payment Notice
+                </p>
+                <p style={{ fontSize: "12.5px", color: "#555", lineHeight: 1.6, marginBottom: "10px" }}>
+                  Please prepare <strong style={{ color: "#2d7a3a" }}>{peso(total)}</strong> in your GCash
+                  account before continuing. You will have{" "}
+                  <strong>{Math.floor(GCASH_TIME_LIMIT_SECONDS / 60)} minutes</strong> to scan the QR code,
+                  pay the exact amount, then enter your reference number and upload your payment
+                  screenshot.
+                </p>
+                <p style={{ fontSize: "11.5px", color: "#8e6bb0", lineHeight: 1.5, marginBottom: "14px" }}>
+                  If the time runs out, the form will close and you will need to click Continue again.
+                </p>
+
+                <button
+                  onClick={openGcashForm}
+                  disabled={hasStockIssue}
+                  style={{
+                    width: "100%",
+                    padding: "13px",
+                    borderRadius: "30px",
+                    border: "none",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    color: "#fff",
+                    background: hasStockIssue ? "#ccc" : "#6a1b9a",
+                    cursor: hasStockIssue ? "not-allowed" : "pointer",
+                    boxShadow: hasStockIssue ? "none" : "0 6px 18px rgba(106,27,154,0.3)",
+                  }}
+                >
+                  {hasStockIssue ? "⚠️ Reduce quantity to match stock" : "Continue →"}
+                </button>
+              </div>
+            )}
+
+            {/* ── COD Section with Cash Change Calculator ── */}
+            {paymentMethod === "cod" && (
+              <>
+                <div
+                  style={{
+                    background: "#f0faf2",
+                    borderRadius: "14px",
+                    padding: "16px",
+                    marginBottom: "16px",
+                    border: "1px solid #a5d6a7",
+                  }}
+                >
+                  <p style={{ fontSize: "12px", color: "#2e7d32", marginBottom: "14px" }}>
+                    💵 Pay in cash when your order arrives. Please prepare the exact amount.
+                  </p>
+
+                  <div
+                    style={{
+                      background: "#fff",
+                      borderRadius: "10px",
+                      padding: "14px",
+                      border: "1px solid #c8e6c9",
+                    }}
+                  >
+                    <p style={{ fontSize: "12px", fontWeight: 600, color: "#1b5e20", marginBottom: "10px" }}>
+                      🧮 Change Calculator
+                    </p>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
+                      <span style={{ fontSize: "12px", color: "#888" }}>Amount Due</span>
+                      <span style={{ fontSize: "13px", fontWeight: 700, color: "#1a1a1a" }}>{peso(total)}</span>
+                    </div>
+
+                    <label
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        color: "#2e7d32",
+                        marginBottom: "6px",
+                        display: "block",
+                      }}
+                    >
+                      Customer Cash (₱)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={cashInput}
+                      onChange={(e) => setCashInput(e.target.value)}
+                      placeholder={`e.g. ${Math.ceil(total + 50)}`}
+                      style={{
+                        width: "100%",
+                        padding: "10px 14px",
+                        borderRadius: "10px",
+                        border: cashInput
+                          ? isExactOrOver
+                            ? "1.5px solid #2d7a3a"
+                            : "1.5px solid #e53935"
+                          : "1.5px solid #c8e6c9",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        outline: "none",
+                        background: "#fff",
+                        boxSizing: "border-box",
+                        color: "#1a1a1a",
+                      }}
+                    />
+
+                    {cashInput !== "" && (
+                      <div
+                        style={{
+                          marginTop: "12px",
+                          padding: "12px 14px",
+                          borderRadius: "10px",
+                          background: isExactOrOver ? "#e8f5e9" : "#ffebee",
+                          border: `1.5px solid ${isExactOrOver ? "#a5d6a7" : "#ef9a9a"}`,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            color: isExactOrOver ? "#2e7d32" : "#c62828",
+                          }}
+                        >
+                          {isExactOrOver ? "💰 Change" : "⚠️ Insufficient"}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: "18px",
+                            fontWeight: 700,
+                            color: isExactOrOver ? "#2d7a3a" : "#e53935",
+                          }}
+                        >
+                          {isExactOrOver ? peso(change) : `−${peso(Math.abs(change))}`}
+                        </span>
+                      </div>
+                    )}
+
+                    <div style={{ marginTop: "10px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                      {[
+                        Math.ceil(total),
+                        Math.ceil(total / 50) * 50,
+                        Math.ceil(total / 100) * 100,
+                        Math.ceil(total / 500) * 500,
+                      ]
+                        .filter((v, i, arr) => arr.indexOf(v) === i)
+                        .slice(0, 4)
+                        .map((amt) => (
+                          <button
+                            key={amt}
+                            onClick={() => setCashInput(String(amt))}
+                            style={{
+                              padding: "5px 10px",
+                              borderRadius: "20px",
+                              border: "1.5px solid #a5d6a7",
+                              background: cashInput === String(amt) ? "#2d7a3a" : "#fff",
+                              color: cashInput === String(amt) ? "#fff" : "#2e7d32",
+                              fontSize: "11px",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            ₱{amt.toLocaleString()}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                </div>
+
+                <Link
+                  href={canCheckoutCod ? "/checkout" : "#"}
+                  onClick={(e) => {
+                    if (!canCheckoutCod) {
+                      e.preventDefault();
+                      return;
+                    }
+                    sessionStorage.setItem("paymentMethod", "cod");
+                    sessionStorage.setItem("cashGiven", cashInput);
+                    sessionStorage.removeItem("gcashRef");
+                    sessionStorage.removeItem("gcashProof");
+                  }}
+                  style={{
+                    display: "block",
+                    textAlign: "center",
+                    textDecoration: "none",
+                    padding: "14px",
+                    borderRadius: "30px",
+                    fontSize: "15px",
+                    fontWeight: 700,
+                    background: canCheckoutCod ? "#2d7a3a" : "#ccc",
+                    color: "#fff",
+                    cursor: canCheckoutCod ? "pointer" : "not-allowed",
+                    boxShadow: canCheckoutCod ? "0 6px 20px rgba(45,122,58,0.3)" : "none",
+                  }}
+                >
+                  {hasStockIssue
+                    ? "⚠️ Reduce quantity to match stock"
+                    : !canCheckoutCod
+                    ? "Enter Cash Amount First"
+                    : "Proceed to Checkout →"}
+                </Link>
+              </>
+            )}
+
+            <p style={{ textAlign: "center", fontSize: "11px", color: "#bbb", marginTop: "14px" }}>
+              🔒 Secure checkout — your info is safe
+            </p>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
