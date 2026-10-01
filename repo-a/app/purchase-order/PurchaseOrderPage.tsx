@@ -274,7 +274,11 @@ type LineItem = {
 
 type DeliveryForm = { supplierId: string; lineItems: LineItem[]; notes: string; deliveryDate: string };
 type Supplier    = { id: string; supplierName: string };
-type Product     = { id: string; productName: string; price: number; supplierId?: string; supplier?: { id: string; supplierName: string } | string; status?: string; stockUnit?: string; stockQuantity?: number; size?: string | null };
+type Product     = { 
+  id: string; productName: string; price: number; costPrice?: number | null; 
+  supplierId?: string; supplier?: { id: string; supplierName: string } | string; 
+  status?: string; stockUnit?: string; stockQuantity?: number; size?: string | null 
+};
 type ReceiveQty  = { deliveryItemId: string; receivedQty: number; expiryDate: string };
 
 // Reorder suggestion shape returned by GET /api/reorder/suggestions
@@ -500,6 +504,7 @@ export default function PurchaseOrderPage() {
         supplierId: prod.supplierId || (typeof prod.supplier === 'object' ? prod.supplier?.id : prod.supplier) || "",
         stockQuantity: Number(prod.stockQuantity ?? (prod as any).stock ?? 0),
         stockUnit: (prod.stockUnit as CaseUnit) || "case_24",
+        costPrice: prod.costPrice != null ? Number(prod.costPrice) : null,
       }));
       setAllProducts(normalized);
 
@@ -602,7 +607,7 @@ export default function PurchaseOrderPage() {
       ...form,
       lineItems: [
         ...form.lineItems,
-        { productId, productName: p.productName, size: p.size, quantity: 1, unitPrice: p.price, unit: (p.stockUnit as CaseUnit) || "case_24" },
+        { productId, productName: p.productName, size: p.size, quantity: 1, unitPrice: p.costPrice ?? 0, unit: (p.stockUnit as CaseUnit) || "case_24" },
       ],
     });
   };
@@ -621,7 +626,7 @@ export default function PurchaseOrderPage() {
           productName: s.productName,
           size: s.size,
           quantity: s.suggestedCases ?? Math.max(1, s.suggestedUnits),
-          unitPrice: p?.price || 0,
+          unitPrice: p?.costPrice ?? 0,
           unit: (p?.stockUnit as CaseUnit) || "case_24",
         },
       ],
@@ -634,7 +639,7 @@ export default function PurchaseOrderPage() {
     const items = [...form.lineItems];
     if (field === "productId") {
       const p = supplierProducts.find((p) => p.id === value);
-      items[idx] = { ...items[idx], productId: String(value), productName: p?.productName || "", size: p?.size || null, unitPrice: p?.price || 0, unit: (p?.stockUnit as CaseUnit) || "case_24" };
+      items[idx] = { ...items[idx], productId: String(value), productName: p?.productName || "", size: p?.size || null, unitPrice: p?.costPrice ?? 0, unit: (p?.stockUnit as CaseUnit) || "case_24" };
     } else {
       items[idx] = { ...items[idx], [field]: value };
     }
@@ -732,7 +737,7 @@ export default function PurchaseOrderPage() {
           productName: s.productName,
           size: s.size,
           quantity: s.suggestedCases ?? Math.max(1, s.suggestedUnits),
-          unitPrice: p?.price || 0,
+          unitPrice: p?.costPrice ?? 0,
           unit: (p?.stockUnit as CaseUnit) || "case_24",
         };
       }),
@@ -1195,7 +1200,7 @@ export default function PurchaseOrderPage() {
                               <div className="min-w-0 flex-1">
                                 <p className="text-xs font-semibold text-gray-800 truncate">{p.productName}{p.size ? ` ${p.size}` : ""}</p>
                                 <div className="flex items-center gap-2 mt-0.5">
-                                  <span className="text-xs font-medium text-gray-500">₱{p.price}</span>
+                                  <span className="text-xs font-medium text-gray-500">₱{p.costPrice ?? "—"}</span>
                                   {isOutOfStock ? (
                                     <span className="text-xs text-red-500 font-medium">Out of Stock</span>
                                   ) : (
