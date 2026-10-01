@@ -4,11 +4,17 @@ import React from "react";
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
+import {
+  PERIOD_TABS,
+  earliestOf,
+  getReportWindow,
+  withinRange,
+} from "@/lib/periodWindow";
 import { 
   LayoutDashboard, ShoppingCart, Users, LineChart, 
   Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift,
   Coffee, Zap, Beer, Droplets, ShoppingBasket, ClipboardListIcon, Inbox,
-  Search, Box, Bell
+  Search, Box, Bell, Calendar
 } from "lucide-react";
 
 // ─── CASE UNIT SYSTEM ────────────────────────────────────────────────────────
@@ -92,11 +98,11 @@ type OrderLine = {
 };
 
 type Transaction = {
-  id: string; date: string; customer: string; employeeName: string;
+  id: string; date: string; rawDate: string; customer: string; employeeName: string;
   total: number; payment: string; items: OrderLine[];
 };
 
-type Period = "Daily" | "Weekly" | "Monthly";
+type PeriodTab = (typeof PERIOD_TABS)[number];
 
 const CATEGORY_ICONS: Record<string, typeof Coffee> = {
   SOFTDRINKS: Coffee, ENERGY_DRINK: Zap, BEER: Beer,
@@ -110,9 +116,13 @@ function normalizeTransaction(o: Record<string, unknown>): Transaction {
   const employee = o.employee as Record<string, unknown> | null;
   const payment  = o.payment  as Record<string, unknown> | null;
   const rawLines = (o.orderLines ?? []) as Record<string, unknown>[];
+  // rawDate is kept alongside the display string so period filtering never has to
+  // parse a localized date back into a Date.
+  const rawDate = String(o.createdAt ?? o.saleDate ?? "");
   return {
     id: String(o.id ?? ""),
-    date: o.createdAt ? new Date(String(o.createdAt)).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" }) : "—",
+    date: rawDate ? new Date(rawDate).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" }) : "—",
+    rawDate,
     customer: customer ? String(customer.name ?? "Walk-in") : "Walk-in",
     employeeName: employee ? String(employee.name ?? "—") : "—",
     total: Number(o.totalAmount ?? 0),
@@ -129,16 +139,6 @@ function normalizeTransaction(o: Record<string, unknown>): Transaction {
       };
     }),
   };
-}
-
-function filterByPeriod(txs: Transaction[], period: Period): Transaction[] {
-  const now = new Date();
-  return txs.filter((tx) => {
-    const d = new Date(tx.date);
-    if (period === "Daily")  return d.toDateString() === now.toDateString();
-    if (period === "Weekly") { const w = new Date(now); w.setDate(now.getDate() - 7); return d >= w; }
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  });
 }
 
 const LOG_TYPE_STYLE: Record<LogType, { label: string; bg: string; color: string }> = {
@@ -385,23 +385,58 @@ export default function InventoryMaintenancePage() {
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [txLoading,    setTxLoading]    = useState(true);
-  const [topPeriod,    setTopPeriod]    = useState<Period>("Monthly");
+  const [topPeriod,    setTopPeriod]    = useState<PeriodTab>("Monthly");
+  const [txLoadedAt,   setTxLoadedAt]   = useState(0);
 
-  useEffect(() => {
-    const fetchTx = async () => {
-      try {
-        setTxLoading(true);
-        const data = await api.getCompletedOrders();
-        if (data?.message) return;
-        setTransactions((Array.isArray(data) ? data : []).map(normalizeTransaction));
-      } catch (err) { console.error(err); }
-      finally { setTxLoading(false); }
-    };
-    fetchTx();
+  // ✅ Top Selling is built from completed orders, which are placed outside this app,
+  // so it refreshes on the same tab-focus rule as the dashboard. `withSpinner` is
+  // false on background refreshes so the table never blanks to its loading state.
+  const fetchTransactions = useCallback(async (withSpinner: boolean) => {
+    try {
+      if (withSpinner) setTxLoading(true);
+      const data = await api.getCompletedOrders();
+      if (data?.message) return;
+      setTransactions((Array.isArray(data) ? data : []).map(normalizeTransaction));
+      setTxLoadedAt(Date.now());
+    } catch (err) { console.error(err); }
+    finally { if (withSpinner) setTxLoading(false); }
   }, []);
 
+  useEffect(() => { fetchTransactions(true); }, [fetchTransactions]);
+
+  const txInFlight = useRef(false);
+  const lastTxFetch = useRef(0);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      if (txInFlight.current) return;
+      if (Date.now() - lastTxFetch.current < 3000) return;
+      txInFlight.current = true;
+      fetchTransactions(false)
+        .then(() => { lastTxFetch.current = Date.now(); })
+        .finally(() => { txInFlight.current = false; });
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [fetchTransactions]);
+
+  const earliestTx = useMemo(() => earliestOf(transactions.map((t) => ({ createdAt: t.rawDate }))), [transactions]);
+
+  const topWindow = useMemo(
+    () => getReportWindow(topPeriod, earliestTx, new Date(txLoadedAt || Date.now())),
+    [topPeriod, earliestTx, txLoadedAt],
+  );
+
   const topSelling = useMemo(() => {
-    const pf = filterByPeriod(transactions, topPeriod);
+    const pf = withinRange(
+      transactions.map((t) => ({ ...t, createdAt: t.rawDate })),
+      topWindow.current,
+    );
     const pm: Record<string, { name: string; qty: number; revenue: number; category: string }> = {};
     pf.forEach((tx) => tx.items.forEach((line) => {
       const key = line.product.productName;
@@ -409,7 +444,7 @@ export default function InventoryMaintenancePage() {
       pm[key].qty += line.quantity; pm[key].revenue += line.subtotal;
     }));
     return Object.values(pm).sort((a, b) => b.qty - a.qty).slice(0, 8).map((p, i) => ({ ...p, rank: i + 1 }));
-  }, [transactions, topPeriod]);
+  }, [transactions, topWindow]);
 
   const handleLogout = () => {
     document.cookie = "token=; path=/; max-age=0";
@@ -783,7 +818,7 @@ export default function InventoryMaintenancePage() {
                 <span className="text-lg">📈</span>
                 <h2 className="font-bold text-gray-800">Top Selling Items</h2>
                 <div className="ml-auto flex gap-1">
-                  {(["Daily", "Weekly", "Monthly"] as Period[]).map((p) => (
+                  {(["Daily", "Weekly", "Monthly"] as PeriodTab[]).map((p) => (
                     <button key={p} onClick={() => setTopPeriod(p)}
                       className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
                         topPeriod === p ? "bg-indigo-900 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
@@ -791,6 +826,9 @@ export default function InventoryMaintenancePage() {
                   ))}
                 </div>
               </div>
+              <p className="text-xs text-gray-400 mb-3 flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> Items sold {topWindow.rangeLabel}
+              </p>
               <div className="flex items-center gap-4 mb-3 flex-wrap bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
                 <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                   <span className="mr-1">Rank:</span>
@@ -810,7 +848,9 @@ export default function InventoryMaintenancePage() {
               {txLoading ? (
                 <div className="flex items-center justify-center h-[220px] text-gray-400 text-sm">Loading...</div>
               ) : topSelling.length === 0 ? (
-                <div className="flex items-center justify-center h-[220px] text-gray-400 text-sm">No sales data for this period.</div>
+                <div className="flex items-center justify-center h-[220px] text-gray-400 text-sm text-center px-4">
+                  No items sold between {topWindow.rangeLabel}.
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
