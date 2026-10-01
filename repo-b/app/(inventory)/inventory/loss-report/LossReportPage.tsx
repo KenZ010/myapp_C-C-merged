@@ -12,9 +12,9 @@ type LossRecord = {
   category: string;
   size?: string;
   image?: string;
-  quantity: number;       // pieces lost
+  quantity: number;
   lossReason: LossReason;
-  reason?: string;        // free-text note from employee
+  reason?: string;
   createdAt: string;
   employeeId: string;
   employeeName?: string;
@@ -27,14 +27,81 @@ type SummaryItem = {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const fmt = (n: number) =>
-  `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
-
 const fmtDate = (d: string) =>
   new Date(d).toLocaleDateString("en-PH", {
     year: "numeric", month: "short", day: "numeric",
   });
 
+const fmtShort = (d: Date) =>
+  d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
+
+const fmtFull = (d: Date) =>
+  d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+
+/** Returns Monday of the week containing `d` */
+function getMonday(d: Date): Date {
+  const day = d.getDay(); // 0=Sun
+  const mon = new Date(d);
+  mon.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  mon.setHours(0, 0, 0, 0);
+  return mon;
+}
+
+/** Returns Sunday of the week containing `d` */
+function getSunday(d: Date): Date {
+  const mon = getMonday(d);
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  sun.setHours(23, 59, 59, 999);
+  return sun;
+}
+
+function getWeekKey(dateStr: string) {
+  const d   = new Date(dateStr);
+  const jan1 = new Date(d.getFullYear(), 0, 1);
+  const week = Math.ceil(
+    ((d.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7,
+  );
+  return `${d.getFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+function getWeekRange(dateStr: string) {
+  const d   = new Date(dateStr);
+  const mon = getMonday(d);
+  const sun = getSunday(d);
+  return `${fmtShort(mon)} – ${fmtShort(sun)}, ${sun.getFullYear()}`;
+}
+
+function groupBy<T>(arr: T[], keyFn: (i: T) => string): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  arr.forEach((item) => {
+    const k = keyFn(item);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k)!.push(item);
+  });
+  return map;
+}
+
+function normalizeLossRecord(raw: Record<string, unknown>): LossRecord {
+  const product  = raw.product  as Record<string, unknown> | null;
+  const employee = raw.employee as Record<string, unknown> | null;
+  return {
+    id:           String(raw.id ?? ""),
+    productId:    String(raw.productId ?? ""),
+    productName:  String(product?.productName ?? "Unknown Product"),
+    category:     String(product?.category ?? ""),
+    size:         undefined,
+    image:        undefined,
+    quantity:     Number(raw.quantity ?? 0),
+    lossReason:   String(raw.lossReason ?? "OTHER") as LossReason,
+    reason:       raw.reason ? String(raw.reason) : undefined,
+    createdAt:    String(raw.createdAt ?? ""),
+    employeeId:   String(raw.employeeId ?? ""),
+    employeeName: employee?.name ? String(employee.name) : undefined,
+  };
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
 const REASON_LABELS: Record<LossReason, string> = {
   EXPIRED:     "Expired",
   DAMAGED:     "Damaged",
@@ -51,57 +118,6 @@ const REASON_CLASSES: Record<LossReason, { badge: string; header: string }> = {
   OTHER:       { badge: "bg-slate-50  text-slate-600",   header: "bg-slate-800"   },
 };
 
-function getWeekKey(dateStr: string) {
-  const d = new Date(dateStr);
-  const jan1 = new Date(d.getFullYear(), 0, 1);
-  const week = Math.ceil(
-    ((d.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7
-  );
-  return `${d.getFullYear()}-W${String(week).padStart(2, "0")}`;
-}
-
-function getWeekRange(dateStr: string) {
-  const d = new Date(dateStr);
-  const day = d.getDay();
-  const mon = new Date(d);
-  mon.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
-  const sun = new Date(mon);
-  sun.setDate(mon.getDate() + 6);
-  const f = (x: Date) =>
-    x.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
-  return `${f(mon)} – ${f(sun)}, ${sun.getFullYear()}`;
-}
-
-function groupBy<T>(arr: T[], keyFn: (i: T) => string): Map<string, T[]> {
-  const map = new Map<string, T[]>();
-  arr.forEach((item) => {
-    const k = keyFn(item);
-    if (!map.has(k)) map.set(k, []);
-    map.get(k)!.push(item);
-  });
-  return map;
-}
-
-/** Pull productName / size / category / image out of the raw API shape */
-function normalizeLossRecord(raw: Record<string, unknown>): LossRecord {
-  const product  = raw.product  as Record<string, unknown> | null;
-  const employee = raw.employee as Record<string, unknown> | null;
-  return {
-    id:           String(raw.id ?? ""),
-    productId:    String(raw.productId ?? ""),
-    productName:  String(product?.productName ?? "Unknown Product"),
-    category:     String(product?.category ?? ""),
-    size:         undefined,   // not included in backend select
-    image:        undefined,   // not included in backend select
-    quantity:     Number(raw.quantity ?? 0),   // already Math.abs'd by backend
-    lossReason:   String(raw.lossReason ?? "OTHER") as LossReason,
-    reason:       raw.reason ? String(raw.reason) : undefined,
-    createdAt:    String(raw.createdAt ?? ""),
-    employeeId:   String(raw.employeeId ?? ""),
-    employeeName: employee?.name ? String(employee.name) : undefined,
-  };
-}
-
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
 const Icons = {
   warning:  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
@@ -117,6 +133,7 @@ const Icons = {
   week:     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/></svg>,
   month:    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
   year:     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="7" y1="14" x2="7" y2="14"/><line x1="12" y1="14" x2="12" y2="14"/><line x1="17" y1="14" x2="17" y2="14"/></svg>,
+  custom:   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><polyline points="9 16 12 13 15 16"/></svg>,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -124,72 +141,74 @@ export default function LossReportPage() {
   const today    = new Date();
   const todayStr = today.toISOString().split("T")[0];
 
-  const [records,  setRecords]  = useState<LossRecord[]>([]);
-  const [summary,  setSummary]  = useState<SummaryItem[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState<string | null>(null);
+  const [records,     setRecords]     = useState<LossRecord[]>([]);
+  const [summary,     setSummary]     = useState<SummaryItem[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState<string | null>(null);
 
-  const [search,    setSearch]    = useState("");
-  const [reasonFil, setReasonFil] = useState<"ALL" | LossReason>("ALL");
-  const [activeTab, setActiveTab] = useState<"daily" | "weekly" | "monthly" | "yearly">("daily");
-  const [viewItem,  setViewItem]  = useState<LossRecord | null>(null);
+  const [search,      setSearch]      = useState("");
+  const [reasonFil,   setReasonFil]   = useState<"ALL" | LossReason>("ALL");
+  const [activeTab,   setActiveTab]   = useState<"daily" | "weekly" | "monthly" | "yearly" | "custom">("daily");
+  const [customFrom,  setCustomFrom]  = useState("");
+  const [customTo,    setCustomTo]    = useState("");
+  const [viewItem,    setViewItem]    = useState<LossRecord | null>(null);
+
+  // ── Pre-compute week boundaries for today ────────────────────────────────
+  const weekStart = useMemo(() => getMonday(today), []);
+  const weekEnd   = useMemo(() => getSunday(today), []);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
-  setLoading(true);
-  setError(null);
-  try {
-    const [rawReports, rawSummary] = await Promise.allSettled([
-      api.getLossReports({ limit: 50 }),      // ← backend max is 50
-      api.getLossReportSummary(),
-    ]).then(([r1, r2]) => [
-      r1.status === "fulfilled" ? r1.value : null,
-      r2.status === "fulfilled" ? r2.value : null,
-    ]);
+    setLoading(true);
+    setError(null);
+    try {
+      const [rawReports, rawSummary] = await Promise.allSettled([
+        api.getLossReports({ limit: 50 }),
+        api.getLossReportSummary(),
+      ]).then(([r1, r2]) => [
+        r1.status === "fulfilled" ? r1.value : null,
+        r2.status === "fulfilled" ? r2.value : null,
+      ]);
 
-    // Backend returns { logs: [...], total, page, ... }
-    const arr: Record<string, unknown>[] = Array.isArray(rawReports?.logs)
-      ? rawReports.logs
-      : [];
+      const arr: Record<string, unknown>[] = Array.isArray(rawReports?.logs)
+        ? rawReports.logs
+        : [];
+      setRecords(arr.map(normalizeLossRecord));
 
-    setRecords(arr.map(normalizeLossRecord));
+      const rawSum: Array<{ lossReason: LossReason; totalIncidents: number; totalPiecesLost: number }> =
+        Array.isArray(rawSummary?.summary) ? rawSummary.summary : [];
 
-    // Backend returns { summary: [{ lossReason, totalIncidents, totalPiecesLost }] }
-    const rawSum: Array<{ lossReason: LossReason; totalIncidents: number; totalPiecesLost: number }> =
-      Array.isArray(rawSummary?.summary) ? rawSummary.summary : [];
-
-    // Re-shape to match what the UI expects: { lossReason, _count: { id }, _sum: { quantity } }
-    const normalizedSummary: SummaryItem[] = rawSum.map((s) => ({
-      lossReason: s.lossReason,
-      _count:     { id: s.totalIncidents },
-      _sum:       { quantity: s.totalPiecesLost },
-    }));
-
-    setSummary(normalizedSummary);
-
-  } catch (e) {
-    setError(e instanceof Error ? e.message : "Failed to load loss reports");
-  } finally {
-    setLoading(false);
-  }
-}, []);
+      setSummary(rawSum.map((s) => ({
+        lossReason: s.lossReason,
+        _count:     { id: s.totalIncidents },
+        _sum:       { quantity: s.totalPiecesLost },
+      })));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load loss reports");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
   // ── Tab date labels ───────────────────────────────────────────────────────
-  const tabDates = useMemo(() => {
-    const dailyDate = today.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
-    const ws = new Date(today);
-    ws.setDate(today.getDate() - (today.getDay() === 0 ? 6 : today.getDay() - 1));
-    const we = new Date(ws); we.setDate(ws.getDate() + 6);
-    const f = (x: Date) => x.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
-    const weeklyDate  = `${f(ws)} – ${f(we)}`;
-    const monthlyDate = today.toLocaleDateString("en-PH", { month: "long", year: "numeric" });
-    const yearlyDate = String(today.getFullYear());
-    return { dailyDate, weeklyDate, monthlyDate, yearlyDate };
-  }, []);
+  const tabDates = useMemo(() => ({
+    dailyDate:   fmtFull(today),
+    weeklyDate:  `${fmtShort(weekStart)} – ${fmtShort(weekEnd)}`,   // Mon – Sun
+    monthlyDate: today.toLocaleDateString("en-PH", { month: "long", year: "numeric" }),
+    yearlyDate:  String(today.getFullYear()),
+  }), [weekStart, weekEnd]);
 
-  // ── Filter base ───────────────────────────────────────────────────────────
+  // ── Custom date label ─────────────────────────────────────────────────────
+  const customLabel = useMemo(() => {
+    if (customFrom && customTo)
+      return `${fmtFull(new Date(customFrom + "T00:00"))} – ${fmtFull(new Date(customTo + "T00:00"))}`;
+    if (customFrom) return `From ${fmtFull(new Date(customFrom + "T00:00"))}`;
+    return "Pick dates";
+  }, [customFrom, customTo]);
+
+  // ── Base filter (search + reason) ────────────────────────────────────────
   const baseFiltered = useMemo(() => {
     const q = search.toLowerCase();
     return records.filter((r) =>
@@ -198,7 +217,7 @@ export default function LossReportPage() {
         r.productName.toLowerCase().includes(q) ||
         r.id.toLowerCase().includes(q) ||
         (r.employeeName ?? "").toLowerCase().includes(q) ||
-        (r.reason ?? "").toLowerCase().includes(q))
+        (r.reason ?? "").toLowerCase().includes(q)),
     );
   }, [records, search, reasonFil]);
 
@@ -208,66 +227,68 @@ export default function LossReportPage() {
       return baseFiltered.filter((r) => r.createdAt.startsWith(todayStr));
     }
     if (activeTab === "weekly") {
-      const ws = new Date(today);
-      ws.setDate(today.getDate() - (today.getDay() === 0 ? 6 : today.getDay() - 1));
-      ws.setHours(0, 0, 0, 0);
-      const we = new Date(ws); we.setDate(ws.getDate() + 6); we.setHours(23, 59, 59, 999);
       return baseFiltered.filter((r) => {
         const d = new Date(r.createdAt);
-        return d >= ws && d <= we;
+        return d >= weekStart && d <= weekEnd;
       });
     }
+    if (activeTab === "monthly") {
+      const month = today.toISOString().slice(0, 7);
+      return baseFiltered.filter((r) => r.createdAt.startsWith(month));
+    }
     if (activeTab === "yearly") {
-        const year = String(today.getFullYear());
-        return baseFiltered.filter((r) => r.createdAt.startsWith(year));
-      }
-    const month = today.toISOString().slice(0, 7);
-    return baseFiltered.filter((r) => r.createdAt.startsWith(month));
-  }, [baseFiltered, activeTab, todayStr]);
+      const year = String(today.getFullYear());
+      return baseFiltered.filter((r) => r.createdAt.startsWith(year));
+    }
+    // custom
+    const start = customFrom ? new Date(customFrom + "T00:00:00") : new Date(0);
+    const end   = customTo   ? new Date(customTo   + "T23:59:59") : new Date();
+    return baseFiltered.filter((r) => {
+      const d = new Date(r.createdAt);
+      return d >= start && d <= end;
+    });
+  }, [baseFiltered, activeTab, todayStr, weekStart, weekEnd, customFrom, customTo]);
 
-  // ── Overall stats from summary ────────────────────────────────────────────
-  const totalRecords  = records.length;
-  const totalQty      = summary.reduce((s, i) => s + (i._sum?.quantity ?? 0), 0);
-  const bySummary     = (reason: LossReason) =>
-    summary.find((s) => s.lossReason === reason);
+  // ── Stats ─────────────────────────────────────────────────────────────────
+  const totalRecords = records.length;
+  const totalQty     = summary.reduce((s, i) => s + (i._sum?.quantity ?? 0), 0);
+  const bySummary    = (reason: LossReason) => summary.find((s) => s.lossReason === reason);
+  const periodQty    = periodData.reduce((s, r) => s + r.quantity, 0);
 
-  // ── Period stats ──────────────────────────────────────────────────────────
-  const periodQty     = periodData.reduce((s, r) => s + r.quantity, 0);
+  // ── Grouped table data ────────────────────────────────────────────────────
+  const groupedData = useMemo(() => {
+    let keyFn:   (r: LossRecord) => string;
+    let labelFn: (k: string, rows: LossRecord[]) => string;
 
-  // ── Group period data ─────────────────────────────────────────────────────
- const groupedData = useMemo(() => {
-  let keyFn:   (r: LossRecord) => string;
-  let labelFn: (k: string, rows: LossRecord[]) => string;
+    if (activeTab === "daily") {
+      keyFn   = (r) => r.createdAt.slice(0, 10);
+      labelFn = (k) => new Date(k).toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    } else if (activeTab === "weekly") {
+      keyFn   = (r) => getWeekKey(r.createdAt);
+      labelFn = (_k, rows) => getWeekRange(rows[0].createdAt);
+    } else if (activeTab === "custom") {
+      keyFn   = (r) => r.createdAt.slice(0, 10);
+      labelFn = (k) => new Date(k).toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    } else {
+      // monthly / yearly: group by YYYY-MM
+      keyFn   = (r) => r.createdAt.slice(0, 7);
+      labelFn = (_k, rows) => new Date(rows[0].createdAt).toLocaleDateString("en-PH", { month: "long", year: "numeric" });
+    }
 
-  if (activeTab === "daily") {
-    keyFn   = (r) => r.createdAt.slice(0, 10);
-    labelFn = (k) => new Date(k).toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-  } else if (activeTab === "weekly") {
-    keyFn   = (r) => getWeekKey(r.createdAt);
-    labelFn = (_k, rows) => getWeekRange(rows[0].createdAt);
-  } else if (activeTab === "monthly") {
-    keyFn   = (r) => r.createdAt.slice(0, 7);        // group by "YYYY-MM"
-    labelFn = (_k, rows) => new Date(rows[0].createdAt).toLocaleDateString("en-PH", { month: "long", year: "numeric" });
-  } else {
-    // yearly — group each month of the selected year
-    keyFn   = (r) => r.createdAt.slice(0, 7);        // still group by "YYYY-MM"
-    labelFn = (_k, rows) => new Date(rows[0].createdAt).toLocaleDateString("en-PH", { month: "long", year: "numeric" });
-  }
+    const map    = groupBy(periodData, keyFn);
+    const sorted = [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+    return sorted.map(([k, rows]) => ({ key: k, label: labelFn(k, rows), rows }));
+  }, [periodData, activeTab]);
 
-  const map    = groupBy(periodData, keyFn);
-  const sorted = [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
-  return sorted.map(([k, rows]) => ({ key: k, label: labelFn(k, rows), rows }));
-}, [periodData, activeTab]);
-
-  // ── Loading skeleton ──────────────────────────────────────────────────────
+  // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="px-8 py-7 bg-slate-50 min-h-screen">
         <div className="h-20 rounded-2xl mb-5 animate-pulse bg-slate-200" />
         <div className="grid grid-cols-4 gap-3 mb-5">
-          {[1,2,3,4].map(i => <div key={i} className="h-20 rounded-xl animate-pulse bg-slate-200" />)}
+          {[1,2,3,4].map((i) => <div key={i} className="h-20 rounded-xl animate-pulse bg-slate-200" />)}
         </div>
-        {[1,2].map(i => <div key={i} className="h-48 rounded-xl animate-pulse bg-slate-200 mb-4" />)}
+        {[1,2].map((i) => <div key={i} className="h-48 rounded-xl animate-pulse bg-slate-200 mb-4" />)}
       </div>
     );
   }
@@ -284,54 +305,56 @@ export default function LossReportPage() {
     );
   }
 
+  // ── Tab config ────────────────────────────────────────────────────────────
+  const TABS = [
+    { key: "daily"   as const, label: "Daily",   date: tabDates.dailyDate,   icon: Icons.sun    },
+    { key: "weekly"  as const, label: "Weekly",  date: tabDates.weeklyDate,  icon: Icons.week   },
+    { key: "monthly" as const, label: "Monthly", date: tabDates.monthlyDate, icon: Icons.month  },
+    { key: "yearly"  as const, label: "Yearly",  date: tabDates.yearlyDate,  icon: Icons.year   },
+    { key: "custom"  as const, label: "Custom",  date: activeTab === "custom" ? customLabel : "Pick range", icon: Icons.custom },
+  ];
+
   return (
     <>
       <style>{`
         @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes spin   { to{transform:rotate(360deg)} }
-        .spin { animation: spin 0.8s linear infinite; display:inline-block; }
         .loss-row:hover { background:#fafbff !important; }
+        .date-inp { font-family:inherit; font-size:12px; border:1px solid #cbd5e1; border-radius:8px; padding:6px 10px; color:#1e293b; background:#fff; outline:none; cursor:pointer; }
+        .date-inp:focus { border-color:#6366f1; box-shadow:0 0 0 2px rgba(99,102,241,0.12); }
       `}</style>
 
       <div className="px-8 py-7 bg-slate-50 min-h-screen">
 
         {/* Page Header */}
-        <div className="flex items-start justify-between mb-7 flex-wrap gap-3" style={{ animation: "fadeUp 0.4s ease" }}>
+        <div className="flex items-start justify-between mb-7 flex-wrap gap-3" style={{ animation:"fadeUp 0.4s ease" }}>
           <div>
             <div className="flex items-center gap-2.5 mb-1">
               <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center text-red-600">
                 {Icons.report}
               </div>
-              <h1 className="text-[21px] font-extrabold text-slate-900 tracking-tight m-0">
-                Loss Report
-              </h1>
+              <h1 className="text-[21px] font-extrabold text-slate-900 tracking-tight m-0">Loss Report</h1>
             </div>
             <p className="text-[13px] text-slate-400 m-0 pl-[46px]">
               Records of all damaged, expired, stolen, and miscounted inventory losses
             </p>
           </div>
-          <button
-            onClick={fetchData}
-            className="flex items-center gap-2 px-[18px] py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-semibold cursor-pointer hover:bg-slate-50 transition-colors"
-          >
+          <button onClick={fetchData} className="flex items-center gap-2 px-[18px] py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-semibold cursor-pointer hover:bg-slate-50 transition-colors">
             {Icons.refresh} Refresh
           </button>
         </div>
 
         {/* Summary Cards */}
-        <div className="grid gap-3.5 mb-6" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", animation: "fadeUp 0.45s ease" }}>
+        <div className="grid gap-3.5 mb-6" style={{ gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", animation:"fadeUp 0.45s ease" }}>
           {[
-            { label: "Total Records",   value: String(totalRecords),                                    icon: Icons.box,     accent: "text-indigo-600",  bg: "bg-indigo-50"  },
-            { label: "Total Qty Lost",  value: String(totalQty),                                        icon: Icons.warning, accent: "text-amber-600",   bg: "bg-amber-50"   },
-            { label: "Expired",         value: String(bySummary("EXPIRED")?._count?.id ?? 0),           icon: Icons.warning, accent: "text-yellow-700",  bg: "bg-yellow-50"  },
-            { label: "Damaged",         value: String(bySummary("DAMAGED")?._count?.id ?? 0),           icon: Icons.box,     accent: "text-orange-600",  bg: "bg-orange-50"  },
-            { label: "Theft",           value: String(bySummary("THEFT")?._count?.id ?? 0),             icon: Icons.warning, accent: "text-red-600",     bg: "bg-red-50"     },
-            { label: "Count Error",     value: String(bySummary("COUNT_ERROR")?._count?.id ?? 0),       icon: Icons.box,     accent: "text-purple-600",  bg: "bg-purple-50"  },
+            { label:"Total Records",   value:String(totalRecords),                              icon:Icons.box,     accent:"text-indigo-600",  bg:"bg-indigo-50"  },
+            { label:"Total Qty Lost",  value:String(totalQty),                                  icon:Icons.warning, accent:"text-amber-600",   bg:"bg-amber-50"   },
+            { label:"Expired",         value:String(bySummary("EXPIRED")?._count?.id ?? 0),     icon:Icons.warning, accent:"text-yellow-700",  bg:"bg-yellow-50"  },
+            { label:"Damaged",         value:String(bySummary("DAMAGED")?._count?.id ?? 0),     icon:Icons.box,     accent:"text-orange-600",  bg:"bg-orange-50"  },
+            { label:"Theft",           value:String(bySummary("THEFT")?._count?.id ?? 0),       icon:Icons.warning, accent:"text-red-600",     bg:"bg-red-50"     },
+            { label:"Count Error",     value:String(bySummary("COUNT_ERROR")?._count?.id ?? 0), icon:Icons.box,     accent:"text-purple-600",  bg:"bg-purple-50"  },
           ].map((s) => (
             <div key={s.label} className="bg-white rounded-xl border border-slate-100 p-[17px] flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-xl ${s.bg} flex items-center justify-center ${s.accent} flex-shrink-0`}>
-                {s.icon}
-              </div>
+              <div className={`w-9 h-9 rounded-xl ${s.bg} flex items-center justify-center ${s.accent} flex-shrink-0`}>{s.icon}</div>
               <div>
                 <p className="text-[10.5px] font-semibold text-slate-400 m-0 uppercase tracking-wide">{s.label}</p>
                 <p className="text-xl font-extrabold text-slate-900 m-0 mt-0.5 leading-none tracking-tight">{s.value}</p>
@@ -341,15 +364,10 @@ export default function LossReportPage() {
         </div>
 
         {/* Period Tabs */}
-        <div className="mb-4" style={{ animation: "fadeUp 0.5s ease" }}>
+        <div className="mb-4" style={{ animation:"fadeUp 0.5s ease" }}>
           <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2.5">View by Period</p>
           <div className="flex gap-2 flex-wrap">
-            {([
-              { key: "daily",   label: "Daily",   date: tabDates.dailyDate,   icon: Icons.sun   },
-              { key: "weekly",  label: "Weekly",  date: tabDates.weeklyDate,  icon: Icons.week  },
-              { key: "monthly", label: "Monthly", date: tabDates.monthlyDate, icon: Icons.month },
-              { key: "yearly",  label: "Yearly",  date: tabDates.yearlyDate,  icon: Icons.year  }, // ← ADD HERE
-            ] as const).map((tab) => (
+            {TABS.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
@@ -364,18 +382,56 @@ export default function LossReportPage() {
               </button>
             ))}
           </div>
+
+          {/* Custom date picker — only visible when Custom tab is active */}
+          {activeTab === "custom" && (
+            <div
+              className="mt-3 bg-white rounded-xl border border-slate-200 px-4 py-3 flex flex-wrap items-center gap-3"
+              style={{ width:"fit-content", boxShadow:"0 1px 4px rgba(0,0,0,0.05)", animation:"fadeUp 0.2s ease" }}
+            >
+              <span className="text-[12px] font-semibold text-slate-500">From</span>
+              <input
+                type="date"
+                className="date-inp"
+                value={customFrom}
+                max={customTo || undefined}
+                onChange={(e) => setCustomFrom(e.target.value)}
+              />
+              <span className="text-[12px] font-semibold text-slate-500">To</span>
+              <input
+                type="date"
+                className="date-inp"
+                value={customTo}
+                min={customFrom || undefined}
+                onChange={(e) => setCustomTo(e.target.value)}
+              />
+              {(customFrom || customTo) && (
+                <button
+                  onClick={() => { setCustomFrom(""); setCustomTo(""); }}
+                  className="text-[11px] text-slate-400 border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white cursor-pointer hover:bg-slate-50 transition-colors"
+                >
+                  Clear
+                </button>
+              )}
+              {customFrom && customTo && (
+                <span className="text-[12px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-full px-3 py-1">
+                  📅 {customLabel}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Period Summary Strip */}
         <div className="grid grid-cols-3 gap-2.5 mb-4">
           {[
-            { label: "Records This Period", value: String(periodData.length), red: false },
-            { label: "Units Lost",          value: String(periodQty),          red: false },
-            { label: "Period Records",      value: `${periodData.length} entries`, red: false },
+            { label:"Records This Period", value:String(periodData.length) },
+            { label:"Units Lost",          value:String(periodQty)         },
+            { label:"Period Entries",      value:`${periodData.length} records` },
           ].map((s) => (
             <div key={s.label} className="bg-white rounded-xl border border-slate-100 px-4 py-3">
               <p className="text-[11px] text-slate-400 m-0">{s.label}</p>
-              <p className={`text-[18px] font-extrabold m-0 mt-0.5 ${s.red ? "text-red-600" : "text-slate-900"}`}>{s.value}</p>
+              <p className="text-[18px] font-extrabold m-0 mt-0.5 text-slate-900">{s.value}</p>
             </div>
           ))}
         </div>
@@ -392,9 +448,8 @@ export default function LossReportPage() {
             />
           </div>
 
-          {/* Reason filter */}
           <div className="flex gap-0.5 bg-slate-100 rounded-lg p-0.5">
-            {(["ALL", "EXPIRED", "DAMAGED", "THEFT", "COUNT_ERROR", "OTHER"] as const).map((r) => (
+            {(["ALL","EXPIRED","DAMAGED","THEFT","COUNT_ERROR","OTHER"] as const).map((r) => (
               <button
                 key={r}
                 onClick={() => setReasonFil(r)}
@@ -420,16 +475,18 @@ export default function LossReportPage() {
             <div className="flex justify-center text-slate-300 mb-3">{Icons.report}</div>
             <p className="text-[15px] font-semibold text-slate-500 m-0">No records for this period</p>
             <p className="text-[13px] text-slate-400 m-0 mt-1.5">
-              Try switching to a different period or adjusting your filters.
+              {activeTab === "custom" && !customFrom
+                ? "Select a date range above to get started."
+                : "Try switching to a different period or adjusting your filters."}
             </p>
           </div>
         ) : (
           groupedData.map(({ key, label, rows }) => {
-            const groupQty      = rows.reduce((s, r) => s + r.quantity, 0);
-            const byReason      = (reason: LossReason) => rows.filter((r) => r.lossReason === reason).length;
+            const groupQty = rows.reduce((s, r) => s + r.quantity, 0);
+            const byReason = (reason: LossReason) => rows.filter((r) => r.lossReason === reason).length;
 
             return (
-              <div key={key} className="bg-white rounded-xl border border-slate-100 overflow-hidden mb-4" style={{ animation: "fadeUp 0.4s ease" }}>
+              <div key={key} className="bg-white rounded-xl border border-slate-100 overflow-hidden mb-4" style={{ animation:"fadeUp 0.4s ease" }}>
 
                 {/* Group Header */}
                 <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex justify-between items-center flex-wrap gap-2">
@@ -438,23 +495,22 @@ export default function LossReportPage() {
                   </span>
                   <span className="flex gap-4 items-center">
                     {(["EXPIRED","DAMAGED","THEFT","COUNT_ERROR","OTHER"] as LossReason[])
-                      .filter(r => byReason(r) > 0)
-                      .map(r => (
+                      .filter((r) => byReason(r) > 0)
+                      .map((r) => (
                         <span key={r} className={`text-[11px] font-semibold px-2 py-0.5 rounded ${REASON_CLASSES[r].badge}`}>
                           {byReason(r)} {REASON_LABELS[r]}
                         </span>
-                      ))
-                    }
+                      ))}
                     <span className="text-[12px] font-bold text-slate-700">{groupQty} units</span>
                   </span>
                 </div>
 
                 {/* Table */}
                 <div className="overflow-x-auto">
-                  <table className="w-full border-collapse" style={{ minWidth: 760 }}>
+                  <table className="w-full border-collapse" style={{ minWidth:760 }}>
                     <thead>
                       <tr>
-                        {["Report ID", "Product", "Qty Lost", "Reason", "Note", "Reported By", "Date", ""].map((h) => (
+                        {["Report ID","Product","Qty Lost","Reason","Note","Reported By","Date",""].map((h) => (
                           <th key={h} className="px-3.5 py-[11px] text-left text-[10.5px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 border-b border-slate-200 whitespace-nowrap">
                             {h}
                           </th>
@@ -464,64 +520,45 @@ export default function LossReportPage() {
                     <tbody>
                       {rows.map((r) => (
                         <tr key={r.id} className="loss-row transition-colors">
-                          {/* ID */}
                           <td className="px-3.5 py-[13px] text-[13px] text-slate-700 border-b border-slate-50 align-middle">
                             <span className="font-mono text-[11.5px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
-                              {r.id.slice(0, 8).toUpperCase()}…
+                              {r.id.slice(0,8).toUpperCase()}…
                             </span>
                           </td>
-
-                          {/* Product */}
                           <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle">
                             <div className="flex items-center gap-2">
                               {r.image ? (
                                 <img src={r.image} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
                               ) : (
-                                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">
-                                  {Icons.box}
-                                </div>
+                                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">{Icons.box}</div>
                               )}
                               <div>
                                 <p className="text-[13px] font-semibold text-slate-900 m-0">{r.productName}</p>
-                                <p className="text-[11px] text-slate-400 m-0">
-                                  {[r.size, r.category].filter(Boolean).join(" · ") || "—"}
-                                </p>
+                                <p className="text-[11px] text-slate-400 m-0">{[r.size, r.category].filter(Boolean).join(" · ") || "—"}</p>
                               </div>
                             </div>
                           </td>
-
-                          {/* Qty */}
                           <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle text-center">
                             <span className="text-[15px] font-extrabold text-red-600">{r.quantity}</span>
                             <p className="text-[10px] text-slate-400 m-0">pcs</p>
                           </td>
-
-                          {/* Reason */}
                           <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle">
                             <span className={`px-2 py-0.5 rounded text-[11.5px] font-bold ${REASON_CLASSES[r.lossReason]?.badge ?? "bg-slate-50 text-slate-600"}`}>
                               {REASON_LABELS[r.lossReason] ?? r.lossReason}
                             </span>
                           </td>
-
-                          {/* Note */}
                           <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle max-w-[180px]">
                             <p className="text-[12px] text-slate-500 m-0 truncate">{r.reason || "—"}</p>
                           </td>
-
-                          {/* Reported By */}
                           <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle">
                             <div className="flex items-center gap-1.5 text-[12px] text-slate-500">
                               <span className="text-slate-300">{Icons.user}</span>
                               {r.employeeName ?? "—"}
                             </div>
                           </td>
-
-                          {/* Date */}
                           <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle text-[12px] text-slate-500">
                             {fmtDate(r.createdAt)}
                           </td>
-
-                          {/* Action */}
                           <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle">
                             <button
                               onClick={() => setViewItem(r)}
@@ -541,9 +578,7 @@ export default function LossReportPage() {
                   <p className="text-[12px] text-slate-400 m-0">
                     <strong className="text-slate-900">{rows.length}</strong> record{rows.length !== 1 ? "s" : ""}
                   </p>
-                  <p className="text-[12px] font-bold text-red-600 m-0">
-                    {groupQty} units lost
-                  </p>
+                  <p className="text-[12px] font-bold text-red-600 m-0">{groupQty} units lost</p>
                 </div>
               </div>
             );
@@ -551,26 +586,20 @@ export default function LossReportPage() {
         )}
       </div>
 
-      {/* ═══════════════════════════════════
-          VIEW DETAILS MODAL
-      ═══════════════════════════════════ */}
+      {/* View Details Modal */}
       {viewItem && (
         <>
-          <div
-            onClick={() => setViewItem(null)}
-            className="fixed inset-0 bg-slate-900/55 z-40 backdrop-blur-sm"
-          />
+          <div onClick={() => setViewItem(null)} className="fixed inset-0 bg-slate-900/55 z-40 backdrop-blur-sm" />
           <div
             className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-white rounded-2xl overflow-hidden shadow-2xl overflow-y-auto"
-            style={{ width: "min(96vw,500px)", maxHeight: "92vh", animation: "fadeUp 0.25s ease" }}
+            style={{ width:"min(96vw,500px)", maxHeight:"92vh", animation:"fadeUp 0.25s ease" }}
           >
-            {/* Header */}
             <div className={`${REASON_CLASSES[viewItem.lossReason]?.header ?? "bg-slate-800"} px-6 py-[22px]`}>
               <div className="flex justify-between items-start">
                 <div>
                   <div className="flex items-center gap-2 mb-2.5">
                     <span className="font-mono text-[11.5px] font-bold text-white/70 bg-white/10 px-2.5 py-0.5 rounded">
-                      {viewItem.id.slice(0, 8).toUpperCase()}…
+                      {viewItem.id.slice(0,8).toUpperCase()}…
                     </span>
                     <span className={`px-2.5 py-0.5 rounded text-[11.5px] font-bold ${REASON_CLASSES[viewItem.lossReason]?.badge}`}>
                       {REASON_LABELS[viewItem.lossReason] ?? viewItem.lossReason}
@@ -581,15 +610,11 @@ export default function LossReportPage() {
                     {[viewItem.size, viewItem.category].filter(Boolean).join(" · ") || "—"}
                   </p>
                 </div>
-                <button
-                  onClick={() => setViewItem(null)}
-                  className="w-8 h-8 rounded-lg bg-white/10 border-0 text-white/70 flex items-center justify-center cursor-pointer hover:bg-white/20 transition-colors"
-                >
+                <button onClick={() => setViewItem(null)} className="w-8 h-8 rounded-lg bg-white/10 border-0 text-white/70 flex items-center justify-center cursor-pointer hover:bg-white/20 transition-colors">
                   {Icons.close}
                 </button>
               </div>
 
-              {/* Value summary */}
               <div className="mt-4 bg-black/20 rounded-xl px-[18px] py-3.5 flex justify-between items-center">
                 <div>
                   <p className="text-[10.5px] text-white/45 uppercase tracking-wide m-0">Units Lost</p>
@@ -607,8 +632,6 @@ export default function LossReportPage() {
             </div>
 
             <div className="px-6 py-[22px] flex flex-col gap-[18px]">
-
-              {/* Details */}
               <div>
                 <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Record Details</p>
                 <div className="bg-slate-50 rounded-xl overflow-hidden border border-slate-100">
@@ -629,19 +652,14 @@ export default function LossReportPage() {
                 </div>
               </div>
 
-              {/* Note */}
               {viewItem.reason && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3.5">
                   <p className="text-[11px] font-bold text-amber-700 uppercase tracking-wide m-0 mb-1.5">Note</p>
                   <p className="text-[13px] text-slate-600 m-0 leading-relaxed">{viewItem.reason}</p>
                 </div>
               )}
-              
 
-              <button
-                onClick={() => setViewItem(null)}
-                className="w-full py-[11px] rounded-lg border border-slate-200 bg-white text-slate-600 text-[13px] font-semibold cursor-pointer hover:bg-slate-50 transition-colors"
-              >
+              <button onClick={() => setViewItem(null)} className="w-full py-[11px] rounded-lg border border-slate-200 bg-white text-slate-600 text-[13px] font-semibold cursor-pointer hover:bg-slate-50 transition-colors">
                 Close
               </button>
             </div>
