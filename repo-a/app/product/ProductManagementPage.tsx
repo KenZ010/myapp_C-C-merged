@@ -137,7 +137,7 @@ function CaseBadge({ quantity, piecesPerCase, compact = false }: {
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Product = {
   id: string; productName: string; size: string | null;
-  price: number; originalPrice: number; category: string; stockQuantity: number;
+  price: number; originalPrice: number; costPrice: number | null; category: string; stockQuantity: number;
   piecesPerCase?: number | null;
   status: string; supplierId: string; image: string | null;
   supplier?: { id: string; supplierName: string };
@@ -205,7 +205,7 @@ function Spinner() {
 }
 
 const defaultForm = () => ({
-  productName: "", size: "500ml", price: "", originalPrice: "",
+  productName: "", size: "500ml", price: "", originalPrice: "", costPrice: "",
   category: "SOFTDRINKS", stockQuantity: "",
   supplierId: "", status: "ACTIVE",
   piecesPerCase: "24",
@@ -292,6 +292,7 @@ export default function ProductManagementPage() {
       size:          p.size ?? null,
       price:         pr,
       originalPrice: Number(p.originalPrice ?? pr),
+      costPrice:     p.costPrice != null ? Number(p.costPrice) : null,
       category:      p.category ?? "OTHER",
       stockQuantity: Number(p.stockQuantity ?? p.stock ?? 0),
       piecesPerCase: p.piecesPerCase ?? null,
@@ -353,6 +354,7 @@ export default function ProductManagementPage() {
       size:          product.size || "500ml",
       price:         String(product.price),
       originalPrice: String(product.originalPrice),
+      costPrice:     product.costPrice != null ? String(product.costPrice) : "",
       category:      product.category,
       stockQuantity: String(product.stockQuantity),
       supplierId:    product.supplierId,
@@ -393,6 +395,7 @@ export default function ProductManagementPage() {
     try {
       const price         = editForm.price === "" ? 0 : Number(editForm.price);
       const originalPrice = editForm.originalPrice === "" ? 0 : Number(editForm.originalPrice);
+      const costPrice      = editForm.costPrice === "" ? null : Number(editForm.costPrice);
       const stockQuantity = editForm.stockQuantity === "" ? 0 : Number(editForm.stockQuantity);
       const pcs = Number(editForm.piecesPerCase);
       if (isNaN(pcs) || pcs < 1) {
@@ -403,7 +406,7 @@ export default function ProductManagementPage() {
         return;
       }
       const { piecesPerCase: _ppc, supplierId, ...payload } = editForm;
-      const body = { ...payload, price, originalPrice, stockQuantity, piecesPerCase: pcs };
+      const body = { ...payload, price, originalPrice, costPrice, stockQuantity, piecesPerCase: pcs };
       const res = await api.updateProduct(selectedProduct!.id, body);
       if (res.message && !res.id) { showToast(res.message, true); return; }
       await fetchProducts();
@@ -448,6 +451,7 @@ export default function ProductManagementPage() {
     try {
       const price         = addForm.price === "" ? 0 : Number(addForm.price);
       const originalPrice = addForm.originalPrice === "" ? price : Number(addForm.originalPrice);
+      const costPrice      = addForm.costPrice === "" ? null : Number(addForm.costPrice);
       const stockQuantity = addForm.stockQuantity === "" ? 0 : Number(addForm.stockQuantity);
       const pcs = Number(addForm.piecesPerCase);
       if (isNaN(pcs) || pcs < 1) {
@@ -458,7 +462,7 @@ export default function ProductManagementPage() {
         return;
       }
       const { piecesPerCase: _ppc, ...payload } = addForm;
-      const res = await api.createProduct({ ...payload, price, originalPrice, stockQuantity, piecesPerCase: pcs });
+      const res = await api.createProduct({ ...payload, price, originalPrice, costPrice, stockQuantity, piecesPerCase: pcs });
       if (res.message && !res.id) {
         setShowAddModal(true);
         showToast(res.message, true);
@@ -858,6 +862,14 @@ export default function ProductManagementPage() {
                           className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
                       </div>
                     </div>
+                    <div>
+                      <p className="text-xs text-gray-400">Cost Price (₱)</p>
+                      <input type="number" inputMode="numeric" min="0" value={editForm.costPrice}
+                        onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
+                        onChange={(e) => setEditForm({ ...editForm, costPrice: e.target.value.replace(/[^0-9]/g, "") })}
+                        placeholder="What you pay the supplier"
+                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900 placeholder:text-gray-400" />
+                    </div>
                     {/* ── Piece per Case input with dropdown ── */}
                     <div ref={editPcsRef}>
                       <p className="text-xs text-gray-400">Piece per Case</p>
@@ -931,6 +943,12 @@ export default function ProductManagementPage() {
                       <div>
                         <p className="text-xs text-gray-400">Original Price</p>
                         <p className="text-sm font-semibold text-gray-400 line-through mt-0.5">₱{selectedProduct.originalPrice}</p>
+                      </div>
+                    )}
+                    {selectedProduct.costPrice != null && (
+                      <div>
+                        <p className="text-xs text-gray-400">Cost Price</p>
+                        <p className="text-sm font-semibold text-gray-800 mt-0.5">₱{selectedProduct.costPrice}</p>
                       </div>
                     )}
                     <div>
@@ -1037,6 +1055,14 @@ export default function ProductManagementPage() {
                     placeholder="0"
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
                 </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600">Cost Price (₱)</label>
+                <input type="number" inputMode="numeric" min="0" value={addForm.costPrice}
+                  onKeyDown={(e) => { if (["e","E","+","-","."].includes(e.key)) e.preventDefault(); }}
+                  onChange={(e) => setAddForm({ ...addForm, costPrice: e.target.value.replace(/[^0-9]/g, "") })}
+                  placeholder="What you pay the supplier"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900 placeholder:text-gray-400" />
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600">Supplier</label>
