@@ -173,7 +173,7 @@ export default function InventoryAdjustmentPage() {
     setAdjError(null);
     setAdjSuccess(false);
     try {
-      const employeeId = localStorage.getItem("employeeId") ?? "";
+      const employeeId = JSON.parse(localStorage.getItem("user") || "null")?.id ?? "";
 
       const quantityInCases = adjUnit === "cases"
         ? adjQty
