@@ -21,11 +21,6 @@ const pageTitles: Record<string, { title: string; sub: string }> = {
   "/order-placed":  { title: "Order Placed",        sub: "Order placed successfully" },
 };
 
-const hideSearchCart = [
-  "/contact", "/about", "/faqs", "/home", "/return-order",
-  "/transactions", "/settings", "/cart", "/checkout", "/order-placed",
-];
-
 // Sample notification data — replace with real data from your backend/socket
 type NotificationItem = {
   id: string;
@@ -43,7 +38,7 @@ const sampleNotifications: NotificationItem[] = [
 
 function DashboardInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { connectSocket } = useSocketActions(); // ✅
+  const { connectSocket } = useSocketActions();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mounted,    setMounted]    = useState(false);
@@ -56,9 +51,6 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { setMounted(true); }, []);
 
-  // ✅ Connect socket on mount so the customer joins their room
-  // The Providers already listens for order:completed / order:status
-  // and fires the toast — this just ensures the socket is connected
   useEffect(() => {
     connectSocket();
   }, []);
@@ -77,7 +69,6 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
   }, [notifOpen]);
 
   const page = pageTitles[pathname] ?? { title: "Julieta Store", sub: "" };
-  const { totalCount } = useCart();
 
   const user = mounted
     ? JSON.parse(localStorage.getItem("user") || "{}")
@@ -225,7 +216,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
             `}</style>
           </div>
 
-          {/* Customer name — right side of the notification icon */}
+          {/* Customer name */}
           <div
             style={{
               display: "flex", alignItems: "center", gap: "8px",
@@ -253,16 +244,6 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
             </span>
           </div>
 
-          {!hideSearchCart.includes(pathname) && (
-            <Link href="/cart" style={{ width: "38px", height: "38px", borderRadius: "8px", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px", textDecoration: "none", position: "relative" }}>
-              🛒
-              {totalCount > 0 && (
-                <span style={{ position: "absolute", top: "4px", right: "4px", width: "16px", height: "16px", borderRadius: "50%", background: "#f5c842", fontSize: "9px", color: "#2d7a3a", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {totalCount}
-                </span>
-              )}
-            </Link>
-          )}
         </div>
       </header>
 
