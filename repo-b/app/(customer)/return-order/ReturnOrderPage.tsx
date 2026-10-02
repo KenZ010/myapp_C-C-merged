@@ -67,8 +67,14 @@ function normalizeOrder(o: Record<string, unknown>): Order {
   };
 }
 
+// Total pieces originally ordered for this line
+function totalOrdered(line: OrderLine): number {
+  return line.quantity * line.piecesPerCase;
+}
+
+// Pieces still eligible to return (ordered - already returned)
 function maxReturnable(line: OrderLine): number {
-  return line.quantity * line.piecesPerCase - line.returnedQty;
+  return totalOrdered(line) - line.returnedQty;
 }
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
@@ -93,15 +99,15 @@ function ReturnFormModal({
   onSuccess: (returnRequestId: string) => void;
 }) {
   const [selectedLines, setSelectedLines] = useState<Record<string, boolean>>({});
-  // Store raw string values so the user can freely edit the input (including clearing it)
   const [rawValues,     setRawValues]     = useState<Record<string, string>>({});
   const [reason,        setReason]        = useState<ReturnReason | "">("");
   const [submitting,    setSubmitting]    = useState(false);
   const [error,         setError]         = useState<string | null>(null);
 
+  // Only lines from this order that still have returnable pieces
   const returnableLines = order.orderLines.filter((l) => maxReturnable(l) > 0);
 
-  // Resolved numeric quantity for a line (falls back to max when raw is empty/invalid)
+  // Resolve raw string → valid number (falls back to max when blank)
   const resolvedQty = (lineId: string, max: number): number => {
     const raw = rawValues[lineId];
     if (raw === undefined || raw === "") return max;
@@ -109,10 +115,24 @@ function ReturnFormModal({
     return isNaN(n) ? max : Math.min(max, Math.max(1, n));
   };
 
+  // Check whether the current raw value is out of range (for live feedback)
+  const isOverMax = (lineId: string, max: number): boolean => {
+    const raw = rawValues[lineId];
+    if (!raw) return false;
+    const n = parseInt(raw, 10);
+    return !isNaN(n) && n > max;
+  };
+
+  const isUnderMin = (lineId: string): boolean => {
+    const raw = rawValues[lineId];
+    if (!raw) return false;
+    const n = parseInt(raw, 10);
+    return !isNaN(n) && n < 1;
+  };
+
   const toggleLine = (lineId: string, max: number) => {
     setSelectedLines((prev) => {
       const next = { ...prev, [lineId]: !prev[lineId] };
-      // Pre-fill raw value with max when first selected
       if (next[lineId] && rawValues[lineId] === undefined) {
         setRawValues((r) => ({ ...r, [lineId]: String(max) }));
       }
@@ -120,15 +140,14 @@ function ReturnFormModal({
     });
   };
 
-  // Called on every keystroke — just store the raw string, no clamping yet
+  // Allow free typing of digits only — no immediate clamping
   const handleRawChange = (lineId: string, val: string) => {
-    // Allow only digits
     if (/^\d*$/.test(val)) {
       setRawValues((prev) => ({ ...prev, [lineId]: val }));
     }
   };
 
-  // Called on blur — clamp and normalise the value
+  // Clamp & normalise on blur
   const handleBlur = (lineId: string, max: number) => {
     const raw = rawValues[lineId];
     const n   = parseInt(raw ?? "", 10);
@@ -142,8 +161,12 @@ function ReturnFormModal({
     setRawValues((prev) => ({ ...prev, [lineId]: String(next) }));
   };
 
-  const anySelected = returnableLines.some((l) => selectedLines[l.id]);
-  const canSubmit   = anySelected && !!reason && !submitting;
+  const anySelected  = returnableLines.some((l) => selectedLines[l.id]);
+  // Block submit if any selected line has an out-of-range raw value
+  const anyInvalid   = returnableLines.some((l) =>
+    selectedLines[l.id] && (isOverMax(l.id, maxReturnable(l)) || isUnderMin(l.id))
+  );
+  const canSubmit    = anySelected && !!reason && !submitting && !anyInvalid;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -219,9 +242,13 @@ function ReturnFormModal({
             )}
 
             {returnableLines.map((line) => {
-              const max     = maxReturnable(line);
-              const checked = !!selectedLines[line.id];
-              const raw     = rawValues[line.id] ?? String(max);
+              const max      = maxReturnable(line);
+              const ordered  = totalOrdered(line);
+              const checked  = !!selectedLines[line.id];
+              const raw      = rawValues[line.id] ?? String(max);
+              const overMax  = isOverMax(line.id, max);
+              const underMin = isUnderMin(line.id);
+              const invalid  = overMax || underMin;
 
               return (
                 <div key={line.id} style={{ marginBottom: 8 }}>
@@ -230,12 +257,14 @@ function ReturnFormModal({
                     onClick={() => toggleLine(line.id, max)}
                     style={{
                       display: "flex", alignItems: "center", gap: 12,
-                      padding: "12px 14px", borderRadius: checked ? "10px 10px 0 0" : 10,
+                      padding: "12px 14px",
+                      borderRadius: checked ? "10px 10px 0 0" : 10,
                       border: `1.5px solid ${checked ? "#e91e8c" : "#f0e0e8"}`,
                       background: checked ? "#fff0f6" : "#fff8fa",
                       cursor: "pointer", transition: "all 0.15s",
                     }}
                   >
+                    {/* Checkbox circle */}
                     <div style={{
                       width: 20, height: 20, borderRadius: "50%",
                       border: `2px solid ${checked ? "#e91e8c" : "#ddd"}`,
@@ -245,50 +274,117 @@ function ReturnFormModal({
                     }}>
                       {checked ? "✓" : ""}
                     </div>
+
+                    {/* Product info */}
                     <div style={{ flex: 1 }}>
-                      <p style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a", margin: 0 }}>{line.productName}</p>
-                      <p style={{ fontSize: 11, color: "#aaa", margin: 0 }}>
-                        {line.quantity} case{line.quantity !== 1 ? "s" : ""} × {line.piecesPerCase} pcs
-                        {line.returnedQty > 0 && ` · ${line.returnedQty} pcs already returned`}
+                      <p style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a", margin: 0 }}>
+                        {line.productName}
                       </p>
+                      {/* Ordered breakdown */}
+                      <p style={{ fontSize: 11, color: "#aaa", margin: "2px 0 0" }}>
+                        Ordered: {line.quantity} case{line.quantity !== 1 ? "s" : ""} × {line.piecesPerCase} pcs = <strong style={{ color: "#888" }}>{ordered} pcs total</strong>
+                      </p>
+                      {line.returnedQty > 0 && (
+                        <p style={{ fontSize: 11, color: "#e91e8c", margin: "1px 0 0" }}>
+                          Already returned: {line.returnedQty} pcs
+                        </p>
+                      )}
                     </div>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "#c2185b", whiteSpace: "nowrap" }}>
-                      Max: {max} pcs
-                    </span>
+
+                    {/* Max badge */}
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <span style={{
+                        display: "inline-block", fontSize: 11, fontWeight: 700,
+                        color: "#fff", background: "#e91e8c",
+                        borderRadius: 20, padding: "2px 10px",
+                      }}>
+                        Max {max} pcs
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Qty selector — only when checked */}
+                  {/* Qty selector — visible only when checked */}
                   {checked && (
                     <div style={{
-                      display: "flex", alignItems: "center", gap: 10,
-                      padding: "10px 14px",
-                      border: "1.5px solid #e91e8c", borderTop: "none",
+                      padding: "12px 14px",
+                      border: `1.5px solid ${invalid ? "#e53935" : "#e91e8c"}`,
+                      borderTop: "none",
                       borderRadius: "0 0 10px 10px",
-                      background: "#fff8fb",
+                      background: invalid ? "#fff5f5" : "#fff8fb",
+                      transition: "all 0.15s",
                     }}>
-                      <span style={{ fontSize: 12, color: "#888", flex: 1 }}>Pieces to return:</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 12, color: "#888", flex: 1 }}>Pieces to return:</span>
 
-                      <button
-                        onClick={(e) => { e.stopPropagation(); stepQty(line.id, -1, max); }}
-                        style={{ width: 28, height: 28, borderRadius: "50%", border: "1.5px solid #e91e8c", background: "#fff", color: "#e91e8c", fontWeight: 700, fontSize: 16, cursor: "pointer", lineHeight: 1 }}
-                      >−</button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); stepQty(line.id, -1, max); }}
+                          disabled={resolvedQty(line.id, max) <= 1}
+                          style={{
+                            width: 28, height: 28, borderRadius: "50%",
+                            border: "1.5px solid #e91e8c", background: "#fff",
+                            color: resolvedQty(line.id, max) <= 1 ? "#f0c0cc" : "#e91e8c",
+                            fontWeight: 700, fontSize: 16, cursor: resolvedQty(line.id, max) <= 1 ? "not-allowed" : "pointer", lineHeight: 1,
+                          }}
+                        >−</button>
 
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        value={raw}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => handleRawChange(line.id, e.target.value)}
-                        onBlur={() => handleBlur(line.id, max)}
-                        style={{ width: 52, textAlign: "center", padding: "4px 8px", borderRadius: 8, border: "1.5px solid #f0c0cc", fontSize: 13, fontWeight: 700, color: "#c2185b" }}
-                      />
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={raw}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => handleRawChange(line.id, e.target.value)}
+                          onBlur={() => handleBlur(line.id, max)}
+                          style={{
+                            width: 52, textAlign: "center", padding: "4px 8px",
+                            borderRadius: 8,
+                            border: `1.5px solid ${invalid ? "#e53935" : "#f0c0cc"}`,
+                            fontSize: 13, fontWeight: 700,
+                            color: invalid ? "#e53935" : "#c2185b",
+                            background: invalid ? "#fff0f0" : "#fff",
+                            outline: "none",
+                            transition: "all 0.15s",
+                          }}
+                        />
 
-                      <button
-                        onClick={(e) => { e.stopPropagation(); stepQty(line.id, 1, max); }}
-                        style={{ width: 28, height: 28, borderRadius: "50%", border: "1.5px solid #e91e8c", background: "#fff", color: "#e91e8c", fontWeight: 700, fontSize: 16, cursor: "pointer", lineHeight: 1 }}
-                      >+</button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); stepQty(line.id, 1, max); }}
+                          disabled={resolvedQty(line.id, max) >= max}
+                          style={{
+                            width: 28, height: 28, borderRadius: "50%",
+                            border: "1.5px solid #e91e8c", background: "#fff",
+                            color: resolvedQty(line.id, max) >= max ? "#f0c0cc" : "#e91e8c",
+                            fontWeight: 700, fontSize: 16, cursor: resolvedQty(line.id, max) >= max ? "not-allowed" : "pointer", lineHeight: 1,
+                          }}
+                        >+</button>
 
-                      <span style={{ fontSize: 11, color: "#bbb" }}>/ {max} max</span>
+                        <span style={{ fontSize: 11, color: "#bbb" }}>/ {max} max</span>
+                      </div>
+
+                      {/* Live validation message */}
+                      {overMax && (
+                        <p style={{ fontSize: 11, color: "#e53935", margin: "8px 0 0", display: "flex", alignItems: "center", gap: 4 }}>
+                          ⚠️ You can only return up to <strong>{max} pcs</strong> (what you ordered minus already returned).
+                        </p>
+                      )}
+                      {underMin && (
+                        <p style={{ fontSize: 11, color: "#e53935", margin: "8px 0 0", display: "flex", alignItems: "center", gap: 4 }}>
+                          ⚠️ Minimum return quantity is 1 piece.
+                        </p>
+                      )}
+
+                      {/* Return summary pill */}
+                      {!invalid && (
+                        <div style={{
+                          marginTop: 8, padding: "6px 12px", borderRadius: 20,
+                          background: "#fff0f6", border: "1px solid #f8c0d8",
+                          display: "inline-flex", alignItems: "center", gap: 6,
+                        }}>
+                          <span style={{ fontSize: 11, color: "#c2185b" }}>
+                            Returning <strong>{resolvedQty(line.id, max)}</strong> of <strong>{ordered}</strong> pcs
+                            {line.returnedQty > 0 && ` (${line.returnedQty} already returned)`}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -312,6 +408,13 @@ function ReturnFormModal({
               ))}
             </select>
           </div>
+
+          {/* Validation hint before submit */}
+          {anyInvalid && (
+            <div style={{ background: "#fff3cd", border: "1px solid #ffc107", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#856404" }}>
+              ⚠️ Please fix the quantity errors above before submitting.
+            </div>
+          )}
 
           {/* Submit */}
           <button
@@ -375,7 +478,6 @@ export default function ReturnOrderPage() {
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
-  // ── Success screen ──────────────────────────────────────────────────────────
   if (successId) {
     return (
       <div style={{ minHeight: "calc(100vh - 56px)", background: "linear-gradient(160deg,#fff0f3,#ffe4ec)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -397,7 +499,6 @@ export default function ReturnOrderPage() {
     );
   }
 
-  // ── Loading ─────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div style={{ padding: "clamp(14px,3vw,28px)", background: "#fdf2f6", minHeight: "calc(100vh - 56px)" }}>
@@ -412,7 +513,6 @@ export default function ReturnOrderPage() {
     );
   }
 
-  // ── Error ───────────────────────────────────────────────────────────────────
   if (error) {
     return (
       <div style={{ minHeight: "calc(100vh - 56px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, background: "#fdf2f6" }}>
@@ -422,7 +522,6 @@ export default function ReturnOrderPage() {
     );
   }
 
-  // ── Empty ───────────────────────────────────────────────────────────────────
   if (orders.length === 0) {
     return (
       <div style={{ minHeight: "calc(100vh - 56px)", background: "linear-gradient(160deg,#fff0f3,#ffe4ec)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14 }}>
@@ -446,7 +545,6 @@ export default function ReturnOrderPage() {
       `}</style>
 
       <div style={{ padding: "clamp(14px,3vw,28px)", background: "#fdf2f6", minHeight: "calc(100vh - 56px)" }}>
-        {/* Banner */}
         <div style={{ background: "linear-gradient(135deg,#c2185b,#e91e8c,#ff6b8a)", borderRadius: 16, padding: "20px 24px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div>
             <p style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, margin: "0 0 2px" }}>Return Orders</p>
@@ -461,9 +559,7 @@ export default function ReturnOrderPage() {
           </div>
         </div>
 
-        {/* Order List */}
         <div style={{ background: "#fff", borderRadius: 16, border: "0.5px solid #f5e0e8", overflow: "hidden" }}>
-          {/* Table Header */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr 1fr auto", gap: 12, padding: "12px 20px", background: "#fff0f5", borderBottom: "1px solid #f5e0e8" }}>
             {["Order ID", "Date", "Items", "Total", "Action"].map((h) => (
               <p key={h} style={{ fontSize: 11, fontWeight: 700, color: "#e91e8c", textTransform: "uppercase", letterSpacing: "0.5px", margin: 0 }}>{h}</p>
@@ -484,9 +580,7 @@ export default function ReturnOrderPage() {
                     {badge.label}
                   </span>
                 </div>
-
                 <p style={{ fontSize: 12, color: "#555", margin: 0 }}>{order.date}</p>
-
                 <div>
                   {order.orderLines.slice(0, 2).map((line, i) => (
                     <p key={i} style={{ fontSize: 12, color: "#555", margin: "0 0 1px" }}>
@@ -497,11 +591,9 @@ export default function ReturnOrderPage() {
                     <p style={{ fontSize: 11, color: "#bbb", margin: 0 }}>+{order.orderLines.length - 2} more</p>
                   )}
                 </div>
-
                 <p style={{ fontSize: 14, fontWeight: 800, color: "#c2185b", margin: 0 }}>
                   ₱{order.total.toLocaleString()}.00
                 </p>
-
                 <button
                   onClick={() => setSelected(order)}
                   style={{ background: "linear-gradient(135deg,#ff6b8a,#e91e8c)", color: "#fff", border: "none", borderRadius: 20, padding: "8px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxShadow: "0 4px 12px rgba(233,30,140,0.3)" }}
