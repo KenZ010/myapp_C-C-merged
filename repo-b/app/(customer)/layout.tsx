@@ -3,8 +3,8 @@ import { useState, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Drawer from "@/components/Drawer";
-import { CartProvider, useCart } from "@/context/CartContext";
-import { useSocketActions } from "@/app/providers"; // ← adjust path if needed
+import { CartProvider } from "@/context/CartContext";
+import { useSocketActions } from "@/app/providers";
 
 const pageTitles: Record<string, { title: string; sub: string }> = {
   "/home":          { title: "Dashboard",           sub: "Welcome back" },
@@ -21,7 +21,6 @@ const pageTitles: Record<string, { title: string; sub: string }> = {
   "/order-placed":  { title: "Order Placed",        sub: "Order placed successfully" },
 };
 
-// Sample notification data — replace with real data from your backend/socket
 type NotificationItem = {
   id: string;
   title: string;
@@ -31,71 +30,111 @@ type NotificationItem = {
 };
 
 const sampleNotifications: NotificationItem[] = [
-  { id: "1", title: "Order shipped", message: "Your order #1042 is on its way.", time: "10m ago", read: false },
-  { id: "2", title: "Order confirmed", message: "Order #1039 has been confirmed.", time: "1h ago", read: false },
-  { id: "3", title: "Return approved", message: "Your return request was approved.", time: "1d ago", read: true },
+  { id: "1", title: "Order shipped",   message: "Your order #1042 is on its way.",  time: "10m ago", read: false },
+  { id: "2", title: "Order confirmed", message: "Order #1039 has been confirmed.",   time: "1h ago",  read: false },
+  { id: "3", title: "Return approved", message: "Your return request was approved.", time: "1d ago",  read: true  },
 ];
 
 function DashboardInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { connectSocket } = useSocketActions();
 
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [mounted,    setMounted]    = useState(false);
-
-  const [notifOpen, setNotifOpen] = useState(false);
+  const [drawerOpen,    setDrawerOpen]    = useState(false);
+  const [mounted,       setMounted]       = useState(false);
+  const [isMobile,      setIsMobile]      = useState(false);
+  const [notifOpen,     setNotifOpen]     = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>(sampleNotifications);
   const notifRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   useEffect(() => { setMounted(true); }, []);
+  useEffect(() => { connectSocket(); }, []);
 
+  // Track viewport width
   useEffect(() => {
-    connectSocket();
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
   }, []);
 
-  // Close the notification dropdown when clicking outside of it
+  // Close on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
         setNotifOpen(false);
       }
     }
-    if (notifOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
+    if (notifOpen) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [notifOpen]);
+
+  // Close on Escape
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setNotifOpen(false);
+    }
+    if (notifOpen) document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
   }, [notifOpen]);
 
   const page = pageTitles[pathname] ?? { title: "Julieta Store", sub: "" };
 
-  const user = mounted
-    ? JSON.parse(localStorage.getItem("user") || "{}")
-    : {};
+  const user = mounted ? JSON.parse(localStorage.getItem("user") || "{}") : {};
   const displayName: string = user?.name || "Guest";
   const initial = displayName.trim().charAt(0).toUpperCase() || "G";
 
-  const markAllRead = () => {
+  const markAllRead = () =>
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  };
 
-  const markOneRead = (id: string) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
-  };
+  const markOneRead = (id: string) =>
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+    );
 
   if (!mounted) return null;
+
+  // ── Dropdown style: full-width bottom sheet on mobile, popover on desktop ──
+  const dropdownStyle: React.CSSProperties = isMobile
+    ? {
+        position: "fixed",
+        top: "56px",
+        left: 0,
+        right: 0,
+        width: "100%",
+        background: "#fff",
+        borderRadius: "0 0 20px 20px",
+        border: "1px solid #e5e7eb",
+        borderTop: "none",
+        boxShadow: "0 16px 40px rgba(0,0,0,0.18)",
+        zIndex: 70,
+        animation: "notifFadeIn 0.18s ease",
+        overflow: "hidden",
+      }
+    : {
+        position: "absolute",
+        top: "calc(100% + 10px)",
+        right: 0,
+        width: "320px",
+        background: "#fff",
+        borderRadius: "14px",
+        border: "1px solid #e5e7eb",
+        boxShadow: "0 12px 32px rgba(0,0,0,0.18)",
+        zIndex: 70,
+        animation: "notifFadeIn 0.16s ease",
+        overflow: "hidden",
+      };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", background: "#f5f5f5", position: "relative" }}>
 
-      <Drawer
-        isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-      />
+      <Drawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
       {/* Topbar */}
       <header style={{ background: "#2d7a3a", padding: "0 28px", height: "56px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, position: "relative", zIndex: 60 }}>
+
+        {/* Left — hamburger + page title */}
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <button
             onClick={() => setDrawerOpen(true)}
@@ -111,9 +150,10 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
+        {/* Right — bell + customer name */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
 
-          {/* Notification Icon + Dropdown */}
+          {/* ── Notification bell ── */}
           <div ref={notifRef} style={{ position: "relative" }}>
             <button
               onClick={(e) => { e.stopPropagation(); setNotifOpen((prev) => !prev); }}
@@ -133,35 +173,56 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
               )}
             </button>
 
+            {/* ── Dropdown ── */}
             {notifOpen && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                style={{
-                  position: "absolute", top: "calc(100% + 10px)", right: 0, width: "320px",
-                  background: "#fff", borderRadius: "14px", border: "1px solid #e5e7eb",
-                  boxShadow: "0 12px 32px rgba(0,0,0,0.18)", zIndex: 70,
-                  animation: "notifFadeIn 0.16s ease",
-                  overflow: "hidden",
-                }}
-              >
+              <div onClick={(e) => e.stopPropagation()} style={dropdownStyle}>
+
+                {/* Mobile drag handle */}
+                {isMobile && (
+                  <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 2px" }}>
+                    <div style={{ width: "36px", height: "4px", borderRadius: "2px", background: "#e0e0e0" }} />
+                  </div>
+                )}
+
                 {/* Header */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: "1px solid #eee" }}>
-                  <p style={{ fontSize: "13.5px", fontWeight: 700, color: "#1f2d24" }}>Notifications</p>
-                  {unreadCount > 0 && (
-                    <button
-                      onClick={markAllRead}
-                      style={{ fontSize: "11.5px", fontWeight: 600, color: "#2d7a3a", background: "none", border: "none", cursor: "pointer" }}
-                    >
-                      Mark all read
-                    </button>
-                  )}
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <p style={{ fontSize: "13.5px", fontWeight: 700, color: "#1f2d24", margin: 0 }}>
+                      Notifications
+                    </p>
+                    {unreadCount > 0 && (
+                      <span style={{ background: "#2d7a3a", color: "#fff", fontSize: "10px", fontWeight: 700, borderRadius: "10px", padding: "1px 7px" }}>
+                        {unreadCount}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={markAllRead}
+                        style={{ fontSize: "11.5px", fontWeight: 600, color: "#2d7a3a", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                    {/* Close button visible on mobile */}
+                    {isMobile && (
+                      <button
+                        onClick={() => setNotifOpen(false)}
+                        style={{ width: "24px", height: "24px", borderRadius: "50%", background: "#f5f5f5", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", color: "#888" }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* List */}
-                <div style={{ maxHeight: "320px", overflowY: "auto" }}>
+                <div style={{ maxHeight: isMobile ? "55vh" : "320px", overflowY: "auto" }}>
                   {notifications.length === 0 ? (
-                    <div style={{ padding: "28px 16px", textAlign: "center" }}>
-                      <p style={{ fontSize: "12.5px", color: "#9ca3af" }}>No notifications yet</p>
+                    <div style={{ padding: "40px 16px", textAlign: "center" }}>
+                      <div style={{ fontSize: "32px", marginBottom: "8px" }}>🔔</div>
+                      <p style={{ fontSize: "12.5px", color: "#9ca3af", margin: 0 }}>No notifications yet</p>
                     </div>
                   ) : (
                     notifications.map((n) => (
@@ -169,26 +230,22 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
                         key={n.id}
                         onClick={() => markOneRead(n.id)}
                         style={{
-                          display: "flex", gap: "10px", padding: "12px 16px",
+                          display: "flex", gap: "10px",
+                          padding: isMobile ? "14px 20px" : "12px 16px",
                           borderBottom: "1px solid #f5f5f5", cursor: "pointer",
                           background: n.read ? "#fff" : "#f2f9f3",
                           transition: "background 0.15s ease",
                         }}
                       >
-                        <span
-                          style={{
-                            marginTop: "5px", width: "7px", height: "7px", borderRadius: "50%",
-                            background: n.read ? "transparent" : "#2d7a3a", flexShrink: 0,
-                          }}
-                        />
+                        <span style={{ marginTop: "5px", width: "7px", height: "7px", borderRadius: "50%", background: n.read ? "transparent" : "#2d7a3a", flexShrink: 0 }} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ fontSize: "12.5px", fontWeight: n.read ? 500 : 700, color: "#1f2d24", lineHeight: 1.3 }}>
+                          <p style={{ fontSize: isMobile ? "13px" : "12.5px", fontWeight: n.read ? 500 : 700, color: "#1f2d24", lineHeight: 1.3, margin: 0 }}>
                             {n.title}
                           </p>
-                          <p style={{ fontSize: "11.5px", color: "#6b7280", lineHeight: 1.4, marginTop: "2px" }}>
+                          <p style={{ fontSize: isMobile ? "12px" : "11.5px", color: "#6b7280", lineHeight: 1.4, marginTop: "3px", marginBottom: 0 }}>
                             {n.message}
                           </p>
-                          <p style={{ fontSize: "10.5px", color: "#4c9a55", marginTop: "4px", fontWeight: 500 }}>
+                          <p style={{ fontSize: "10.5px", color: "#4c9a55", marginTop: "5px", fontWeight: 500, marginBottom: 0 }}>
                             {n.time}
                           </p>
                         </div>
@@ -198,20 +255,19 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
                 </div>
 
                 {/* Footer */}
-                <div style={{ padding: "10px 16px", borderTop: "1px solid #eee", textAlign: "center" }}>
-                  <button
-                    style={{ fontSize: "11.5px", fontWeight: 600, color: "#2d7a3a", background: "none", border: "none", cursor: "pointer" }}
-                  >
+                <div style={{ padding: "12px 16px", borderTop: "1px solid #eee", textAlign: "center" }}>
+                  <button style={{ fontSize: "11.5px", fontWeight: 600, color: "#2d7a3a", background: "none", border: "none", cursor: "pointer" }}>
                     View all notifications
                   </button>
                 </div>
+
               </div>
             )}
 
             <style>{`
               @keyframes notifFadeIn {
                 from { opacity: 0; transform: translateY(-6px) scale(0.98); }
-                to   { opacity: 1; transform: translateY(0) scale(1); }
+                to   { opacity: 1; transform: translateY(0)  scale(1); }
               }
             `}</style>
           </div>
@@ -237,7 +293,8 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
               title={displayName}
               style={{
                 color: "#fff", fontSize: "13px", fontWeight: 500,
-                maxWidth: "140px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                maxWidth: isMobile ? "70px" : "140px",
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
               }}
             >
               {displayName}
