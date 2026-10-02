@@ -63,8 +63,6 @@ const STATUS_MAP: Record<string, OrderStatus> = {
 
 const ACTIVE_STATUSES: OrderStatus[] = ["Waiting", "Processing", "Out For Delivery"];
 
-// ── VAT (12%) — added on top of the subtotal, same as CartPage/Checkout ──
-// ── (the stored order amount is the pre-VAT subtotal) ──
 const VAT_RATE = 0.12;
 function withVat(subtotal: number) {
   const vat = subtotal * VAT_RATE;
@@ -100,6 +98,122 @@ function normalizeOrder(o: Record<string, unknown>): Order {
   return { id: String(o.id ?? ""), date, status, note: statusNote[status], total, items };
 }
 
+// ── Receive Confirmation Modal ─────────────────────────────────────────────────
+function ReceiveModal({
+  order,
+  onConfirm,
+  onCancel,
+}: {
+  order: Order;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const { subtotal, vat, grandTotal } = withVat(order.total);
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-5"
+      style={{ backdropFilter: "blur(3px)" }}
+      onClick={onCancel}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-2xl w-full max-w-[420px] shadow-[0_20px_60px_rgba(0,0,0,0.2)] overflow-hidden"
+      >
+        {/* Header */}
+        <div className="bg-[#2d7a3a] px-6 py-5 text-white">
+          <div className="text-3xl mb-1">📦</div>
+          <p className="text-base font-bold m-0">Confirm Order Received</p>
+          <p className="text-[12px] text-green-200 m-0 mt-0.5">
+            Please review your items before confirming
+          </p>
+        </div>
+
+        {/* Order ID + date */}
+        <div className="px-6 pt-4 pb-3 border-b border-gray-100 flex justify-between items-center">
+          <div>
+            <p className="text-[10px] text-gray-400 m-0">Order ID</p>
+            <p className="text-[13px] font-bold text-gray-900 m-0">{order.id}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] text-gray-400 m-0">Date</p>
+            <p className="text-[12px] text-gray-600 m-0">{order.date}</p>
+          </div>
+        </div>
+
+        {/* Items list */}
+        <div className="px-6 py-4 max-h-[240px] overflow-y-auto">
+          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3">
+            Items Ordered
+          </p>
+          <div className="flex flex-col gap-2.5">
+            {order.items.map((item, i) => (
+              <div
+                key={i}
+                className="flex justify-between items-center bg-gray-50 rounded-xl px-3.5 py-2.5"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-[#2d7a3a]/10 flex items-center justify-center text-base shrink-0">
+                    🛒
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-semibold text-gray-900 m-0">{item.name}</p>
+                    <p className="text-[11px] text-gray-400 m-0">Qty: {item.qty}</p>
+                  </div>
+                </div>
+                <p className="text-[13px] font-bold text-[#2d7a3a] m-0">
+                  ₱{(item.price * item.qty).toLocaleString()}.00
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Price breakdown */}
+        <div className="mx-6 mb-4 bg-gray-50 rounded-xl px-4 py-3 flex flex-col gap-1.5">
+          <div className="flex justify-between text-[12px]">
+            <span className="text-gray-400">Subtotal</span>
+            <span className="text-gray-600">₱{money(subtotal)}</span>
+          </div>
+          <div className="flex justify-between text-[12px]">
+            <span className="text-gray-400">VAT (12%)</span>
+            <span className="text-gray-600">₱{money(vat)}</span>
+          </div>
+          <div className="h-px bg-gray-200 my-1" />
+          <div className="flex justify-between items-center">
+            <span className="text-[13px] font-bold text-gray-900">Total</span>
+            <span className="text-[18px] font-extrabold text-[#2d7a3a]">₱{money(grandTotal)}</span>
+          </div>
+        </div>
+
+        {/* Notice */}
+        <div className="mx-6 mb-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 flex gap-2 items-start">
+          <span className="text-base shrink-0">⚠️</span>
+          <p className="text-[11px] text-amber-700 m-0 leading-relaxed">
+            By confirming, you acknowledge that you have received all the items listed above in good condition.
+          </p>
+        </div>
+
+        {/* Buttons */}
+        <div className="px-6 pb-6 flex gap-2.5">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-3 rounded-full border border-gray-200 bg-white text-gray-500 text-[14px] font-semibold cursor-pointer hover:bg-gray-50 transition-colors"
+          >
+            Not Yet
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 py-3 rounded-full border-0 bg-[#2d7a3a] text-white text-[14px] font-bold cursor-pointer hover:bg-[#245f2d] transition-colors shadow-[0_4px_14px_rgba(45,122,58,0.35)]"
+          >
+            ✅ Yes, Received!
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function OrdersPage() {
   const [isMobile,          setIsMobile]          = useState(false);
@@ -110,6 +224,7 @@ export default function OrdersPage() {
   const [activeTab,         setActiveTab]         = useState<TabFilter>("All");
   const [cancellingId,      setCancellingId]      = useState<string | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
+  const [showReceiveConfirm, setShowReceiveConfirm] = useState<Order | null>(null);
 
   const socket = useSocket();
 
@@ -145,20 +260,19 @@ export default function OrdersPage() {
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
-  // ── Auto-refresh orders list when status changes (toast is handled globally) ──
   useEffect(() => {
     if (!socket) return;
-
     socket.on("order:completed", () => fetchOrders());
     socket.on("order:status",    () => fetchOrders());
-
     return () => {
       socket.off("order:completed");
       socket.off("order:status");
     };
   }, [socket, fetchOrders]);
 
+  // ── Called after the receive modal is confirmed ────────────────────────────
   const markReceived = async (id: string) => {
+    setShowReceiveConfirm(null);
     const order = orders.find((o) => o.id === id);
     if (!order || order.status !== "Out For Delivery") return;
     setOrders((prev) => prev.map((o) => o.id === id ? { ...o, status: "Received" } : o));
@@ -219,6 +333,15 @@ export default function OrdersPage() {
 
   return (
     <div className={`min-h-[calc(100vh-56px)] bg-[#f5f5f5] ${isMobile ? "p-4" : "p-7"}`}>
+
+      {/* ── Receive Confirmation Modal ───────────────────────────────────── */}
+      {showReceiveConfirm && (
+        <ReceiveModal
+          order={showReceiveConfirm}
+          onConfirm={() => markReceived(showReceiveConfirm.id)}
+          onCancel={() => setShowReceiveConfirm(null)}
+        />
+      )}
 
       {/* ── Cancel Confirmation Modal ────────────────────────────────────── */}
       {showCancelConfirm && (
@@ -386,7 +509,7 @@ export default function OrdersPage() {
                         </button>
                       )}
                       <button
-                        onClick={() => markReceived(order.id)}
+                        onClick={() => canReceive && setShowReceiveConfirm(order)}
                         disabled={!canReceive}
                         className={[
                           "border-0 rounded-full px-[18px] py-2.5 text-[13px] font-semibold transition-colors",
@@ -520,7 +643,7 @@ export default function OrdersPage() {
               {/* Actions */}
               <div className="flex flex-col gap-2.5">
                 <button
-                  onClick={() => markReceived(selectedOrder.id)}
+                  onClick={() => canReceive && setShowReceiveConfirm(selectedOrder)}
                   disabled={!canReceive}
                   className={[
                     "w-full py-3 rounded-full border-0 text-sm font-bold transition-colors",
