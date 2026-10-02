@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -8,9 +8,9 @@ type ReturnReason = "WRONG_ITEM_SENT" | "DAMAGED" | "EXPIRED" | "OTHER";
 type OrderLine = {
   id: string;
   productName: string;
-  quantity: number;         // cases
+  quantity: number;
   piecesPerCase: number;
-  returnedQty: number;      // pieces already returned
+  returnedQty: number;
   price: number;
 };
 
@@ -26,7 +26,7 @@ type Order = {
 
 type ReturnItem = {
   orderLineId: string;
-  returnQty: number;        // pieces
+  returnQty: number;
 };
 
 const RETURN_REASON_LABELS: Record<ReturnReason, string> = {
@@ -42,18 +42,18 @@ const RETURNABLE_STATUSES = ["COMPLETED", "PARTIALLY_RETURNED"];
 function normalizeOrder(o: Record<string, unknown>): Order {
   const rawLines = (o.orderLines ?? o.items ?? []) as Record<string, unknown>[];
   const orderLines: OrderLine[] = rawLines.map((l) => {
-  const product = (l.product ?? null) as Record<string, unknown> | null;
-  return {
-    id:            String(l.id ?? ""),
-    productName:   String(product?.productName ?? l.name ?? "Item"),
-    quantity:      Number(l.quantity ?? 1),
-    piecesPerCase: Number(product?.productPiecesPerCase ?? product?.piecesPerCase ?? l.piecesPerCase ?? 1),
-    returnedQty:   Number(l.returnedQty ?? 0),
-    price:         Number(l.price ?? 0),
-  };
-});
-  const payment  = o.payment as Record<string, unknown> | null;
-  const rawDate  = String(o.createdAt ?? o.date ?? "");
+    const product = (l.product ?? null) as Record<string, unknown> | null;
+    return {
+      id:            String(l.id ?? ""),
+      productName:   String(product?.productName ?? l.name ?? "Item"),
+      quantity:      Number(l.quantity ?? 1),
+      piecesPerCase: Number(product?.productPiecesPerCase ?? product?.piecesPerCase ?? l.piecesPerCase ?? 1),
+      returnedQty:   Number(l.returnedQty ?? 0),
+      price:         Number(l.price ?? 0),
+    };
+  });
+  const payment = o.payment as Record<string, unknown> | null;
+  const rawDate = String(o.createdAt ?? o.date ?? "");
   return {
     id:            String(o.id ?? ""),
     rawDate,
@@ -92,28 +92,55 @@ function ReturnFormModal({
   onClose:   () => void;
   onSuccess: (returnRequestId: string) => void;
 }) {
-  // which lines are selected + how many pieces to return
   const [selectedLines, setSelectedLines] = useState<Record<string, boolean>>({});
-  const [quantities,    setQuantities]    = useState<Record<string, number>>({});
+  // Store raw string values so the user can freely edit the input (including clearing it)
+  const [rawValues,     setRawValues]     = useState<Record<string, string>>({});
   const [reason,        setReason]        = useState<ReturnReason | "">("");
   const [submitting,    setSubmitting]    = useState(false);
   const [error,         setError]         = useState<string | null>(null);
 
+  const returnableLines = order.orderLines.filter((l) => maxReturnable(l) > 0);
+
+  // Resolved numeric quantity for a line (falls back to max when raw is empty/invalid)
+  const resolvedQty = (lineId: string, max: number): number => {
+    const raw = rawValues[lineId];
+    if (raw === undefined || raw === "") return max;
+    const n = parseInt(raw, 10);
+    return isNaN(n) ? max : Math.min(max, Math.max(1, n));
+  };
+
   const toggleLine = (lineId: string, max: number) => {
     setSelectedLines((prev) => {
       const next = { ...prev, [lineId]: !prev[lineId] };
-      if (next[lineId] && !quantities[lineId]) {
-        setQuantities((q) => ({ ...q, [lineId]: max }));   // default: return all
+      // Pre-fill raw value with max when first selected
+      if (next[lineId] && rawValues[lineId] === undefined) {
+        setRawValues((r) => ({ ...r, [lineId]: String(max) }));
       }
       return next;
     });
   };
 
-  const setQty = (lineId: string, val: number, max: number) => {
-    setQuantities((prev) => ({ ...prev, [lineId]: Math.min(max, Math.max(1, val)) }));
+  // Called on every keystroke — just store the raw string, no clamping yet
+  const handleRawChange = (lineId: string, val: string) => {
+    // Allow only digits
+    if (/^\d*$/.test(val)) {
+      setRawValues((prev) => ({ ...prev, [lineId]: val }));
+    }
   };
 
-  const returnableLines = order.orderLines.filter((l) => maxReturnable(l) > 0);
+  // Called on blur — clamp and normalise the value
+  const handleBlur = (lineId: string, max: number) => {
+    const raw = rawValues[lineId];
+    const n   = parseInt(raw ?? "", 10);
+    const clamped = isNaN(n) || n < 1 ? 1 : Math.min(n, max);
+    setRawValues((prev) => ({ ...prev, [lineId]: String(clamped) }));
+  };
+
+  const stepQty = (lineId: string, delta: number, max: number) => {
+    const current = resolvedQty(lineId, max);
+    const next    = Math.min(max, Math.max(1, current + delta));
+    setRawValues((prev) => ({ ...prev, [lineId]: String(next) }));
+  };
 
   const anySelected = returnableLines.some((l) => selectedLines[l.id]);
   const canSubmit   = anySelected && !!reason && !submitting;
@@ -125,9 +152,9 @@ function ReturnFormModal({
     try {
       const items: ReturnItem[] = returnableLines
         .filter((l) => selectedLines[l.id])
-        .map((l)   => ({
+        .map((l) => ({
           orderLineId: l.id,
-          returnQty:   quantities[l.id] ?? maxReturnable(l),
+          returnQty:   resolvedQty(l.id, maxReturnable(l)),
         }));
 
       const data = await api.submitReturnRequest({
@@ -192,12 +219,13 @@ function ReturnFormModal({
             )}
 
             {returnableLines.map((line) => {
-              const max      = maxReturnable(line);
-              const checked  = !!selectedLines[line.id];
-              const qty      = quantities[line.id] ?? max;
+              const max     = maxReturnable(line);
+              const checked = !!selectedLines[line.id];
+              const raw     = rawValues[line.id] ?? String(max);
 
               return (
                 <div key={line.id} style={{ marginBottom: 8 }}>
+                  {/* Line toggle */}
                   <div
                     onClick={() => toggleLine(line.id, max)}
                     style={{
@@ -239,22 +267,27 @@ function ReturnFormModal({
                       background: "#fff8fb",
                     }}>
                       <span style={{ fontSize: 12, color: "#888", flex: 1 }}>Pieces to return:</span>
+
                       <button
-                        onClick={(e) => { e.stopPropagation(); setQty(line.id, qty - 1, max); }}
+                        onClick={(e) => { e.stopPropagation(); stepQty(line.id, -1, max); }}
                         style={{ width: 28, height: 28, borderRadius: "50%", border: "1.5px solid #e91e8c", background: "#fff", color: "#e91e8c", fontWeight: 700, fontSize: 16, cursor: "pointer", lineHeight: 1 }}
                       >−</button>
+
                       <input
-                        type="number"
-                        min={1} max={max}
-                        value={qty}
+                        type="text"
+                        inputMode="numeric"
+                        value={raw}
                         onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => setQty(line.id, Number(e.target.value), max)}
+                        onChange={(e) => handleRawChange(line.id, e.target.value)}
+                        onBlur={() => handleBlur(line.id, max)}
                         style={{ width: 52, textAlign: "center", padding: "4px 8px", borderRadius: 8, border: "1.5px solid #f0c0cc", fontSize: 13, fontWeight: 700, color: "#c2185b" }}
                       />
+
                       <button
-                        onClick={(e) => { e.stopPropagation(); setQty(line.id, qty + 1, max); }}
+                        onClick={(e) => { e.stopPropagation(); stepQty(line.id, 1, max); }}
                         style={{ width: 28, height: 28, borderRadius: "50%", border: "1.5px solid #e91e8c", background: "#fff", color: "#e91e8c", fontWeight: 700, fontSize: 16, cursor: "pointer", lineHeight: 1 }}
                       >+</button>
+
                       <span style={{ fontSize: 11, color: "#bbb" }}>/ {max} max</span>
                     </div>
                   )}
@@ -304,11 +337,11 @@ function ReturnFormModal({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ReturnOrderPage() {
-  const [orders,     setOrders]     = useState<Order[]>([]);
-  const [loading,    setLoading]    = useState(true);
-  const [error,      setError]      = useState<string | null>(null);
-  const [selected,   setSelected]   = useState<Order | null>(null);
-  const [successId,  setSuccessId]  = useState<string | null>(null);
+  const [orders,    setOrders]    = useState<Order[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState<string | null>(null);
+  const [selected,  setSelected]  = useState<Order | null>(null);
+  const [successId, setSuccessId] = useState<string | null>(null);
 
   const getCustomerId = () =>
     JSON.parse(localStorage.getItem("user") || "{}")?.id ?? "";
@@ -445,7 +478,6 @@ export default function ReturnOrderPage() {
                 className="tx-row"
                 style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr 1fr auto", gap: 12, padding: "16px 20px", borderBottom: "1px solid #fdf0f5", alignItems: "center", background: "#fff", transition: "background 0.15s" }}
               >
-                {/* Order ID */}
                 <div>
                   <p style={{ fontSize: 13, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>#{order.id.slice(0, 8)}</p>
                   <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: badge.bg, color: badge.color }}>
@@ -453,10 +485,8 @@ export default function ReturnOrderPage() {
                   </span>
                 </div>
 
-                {/* Date */}
                 <p style={{ fontSize: 12, color: "#555", margin: 0 }}>{order.date}</p>
 
-                {/* Items Summary */}
                 <div>
                   {order.orderLines.slice(0, 2).map((line, i) => (
                     <p key={i} style={{ fontSize: 12, color: "#555", margin: "0 0 1px" }}>
@@ -468,12 +498,10 @@ export default function ReturnOrderPage() {
                   )}
                 </div>
 
-                {/* Total */}
                 <p style={{ fontSize: 14, fontWeight: 800, color: "#c2185b", margin: 0 }}>
                   ₱{order.total.toLocaleString()}.00
                 </p>
 
-                {/* Action */}
                 <button
                   onClick={() => setSelected(order)}
                   style={{ background: "linear-gradient(135deg,#ff6b8a,#e91e8c)", color: "#fff", border: "none", borderRadius: 20, padding: "8px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxShadow: "0 4px 12px rgba(233,30,140,0.3)" }}
