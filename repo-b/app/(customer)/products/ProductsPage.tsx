@@ -94,7 +94,7 @@ function SkeletonPill({ width }: { width: number }) {
 function SkeletonCard() {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-      <div className="w-full h-56 animate-pulse bg-gray-100" />
+      <div className="w-full h-44 animate-pulse bg-gray-100" />
       <div className="p-5 flex flex-col gap-3">
         <div className="h-4 rounded-lg bg-gray-100 animate-pulse w-3/4" />
         <div className="h-3 rounded-lg bg-gray-100 animate-pulse w-1/3" />
@@ -157,11 +157,7 @@ function FlyingItem({ flight, onDone }: { flight: Flight; onDone: (id: number) =
     >
       {flight.image ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={flight.image}
-          alt=""
-          className="w-full h-full object-contain p-1.5 mix-blend-multiply"
-        />
+        <img src={flight.image} alt="" className="w-full h-full object-cover" />
       ) : (
         flight.emoji
       )}
@@ -337,17 +333,15 @@ function ProductCard({ product, onAddToCart, addingId, addedId, inCartQty }: Pro
   return (
     <div
       className={[
-        "group bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm",
+        "bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm",
         "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:border-gray-200",
+        outOfStock ? "opacity-60" : "",
       ].join(" ")}
     >
-      {/* ── Image / thumbnail ──
-          object-contain keeps the WHOLE bottle visible (object-cover was cropping it).
-          Padding gives the bottle breathing room; extra bottom padding clears the category chip. */}
+      {/* ── Image / thumbnail ── */}
       <div
         ref={imageRef}
-        className="relative w-full h-56 flex items-center justify-center overflow-hidden
-                   px-6 pt-5 pb-11"
+        className="relative w-full h-44 flex items-center justify-center"
         style={{ background: getCategoryBg(product.category) }}
       >
         {product.image ? (
@@ -355,19 +349,10 @@ function ProductCard({ product, onAddToCart, addingId, addedId, inCartQty }: Pro
           <img
             src={product.image}
             alt={product.productName}
-            loading="lazy"
-            className={[
-              "w-full h-full object-contain mix-blend-multiply drop-shadow-md",
-              "transition-transform duration-300 ease-out",
-              outOfStock
-                ? "opacity-60 grayscale"
-                : "group-hover:scale-105",
-            ].join(" ")}
+            className="w-full h-full object-cover"
           />
         ) : (
-          <span className={`text-7xl select-none drop-shadow-sm ${outOfStock ? "opacity-60 grayscale" : ""}`}>
-            {meta.emoji}
-          </span>
+          <span className="text-7xl select-none drop-shadow-sm">{meta.emoji}</span>
         )}
 
         {/* Category chip */}
@@ -397,7 +382,7 @@ function ProductCard({ product, onAddToCart, addingId, addedId, inCartQty }: Pro
       </div>
 
       {/* ── Body ── */}
-      <div className={`p-5 ${outOfStock ? "opacity-70" : ""}`}>
+      <div className="p-5">
         {/* Name + size */}
         <div className="mb-1">
           <h3 className="text-sm font-semibold text-gray-900 leading-snug line-clamp-1">
