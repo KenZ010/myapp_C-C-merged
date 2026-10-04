@@ -3,6 +3,12 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { useSocket } from "@/app/providers";
 
+// ── Theme (matches the green layout) ──
+const GREEN       = "#2e7d3e";
+const GREEN_DARK  = "#1f5f2d";
+const GREEN_LIGHT = "#e8f5ea";
+const AMBER       = "#e68a00"; // "Out for Delivery" action button
+
 type OrderStatus =
   | "Pending"
   | "Processing"
@@ -209,16 +215,16 @@ export default function PendingPage() {
       <div style={{ padding: "28px" }}>
 
         {/* Banner */}
-        <div style={{ background: "linear-gradient(135deg, #6366f1, #3c3eb1fb)", borderRadius: "16px", padding: "24px 32px", marginBottom: "24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "16px" }}>
+        <div style={{ background: `linear-gradient(135deg, ${GREEN}, ${GREEN_DARK})`, borderRadius: "16px", padding: "24px 32px", marginBottom: "24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "16px", boxShadow: "0 6px 20px rgba(46,125,62,0.25)" }}>
           <div>
             <h1 style={{ fontSize: "26px", fontWeight: 800, color: "#fff", marginBottom: "6px" }}>Active Orders</h1>
-            <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.65)" }}>Monitor and update the status of incoming customer orders</p>
+            <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.75)" }}>Monitor and update the status of incoming customer orders</p>
           </div>
           <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", justifyContent: "flex-end" }}>
             {[
-              { label: "Pending",    status: "Pending"           as OrderStatus, bg: "rgba(255,193,7,0.2)",  color: "#f5c842" },
-              { label: "Processing", status: "Processing"        as OrderStatus, bg: "rgba(33,150,243,0.2)", color: "#90caf9" },
-              { label: "In Transit", status: "Out for Delivery"  as OrderStatus, bg: "rgba(255,152,0,0.2)",  color: "#ffcc80" },
+              { label: "Pending",    status: "Pending"           as OrderStatus, bg: "rgba(250,204,21,0.22)", color: "#fde68a" },
+              { label: "Processing", status: "Processing"        as OrderStatus, bg: "rgba(255,255,255,0.18)", color: "#ffffff" },
+              { label: "In Transit", status: "Out for Delivery"  as OrderStatus, bg: "rgba(255,152,0,0.25)",  color: "#ffcc80" },
             ].map((s) => (
               <div key={s.label} style={{ background: s.bg, borderRadius: "12px", padding: "10px 16px", textAlign: "center", minWidth: "70px" }}>
                 <p style={{ fontSize: "22px", fontWeight: 800, color: s.color, margin: 0 }}>
@@ -234,9 +240,9 @@ export default function PendingPage() {
         <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap", alignItems: "center" }}>
           {filterTabs.map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
-              style={{ padding: "8px 18px", borderRadius: "20px", fontSize: "13px", fontWeight: activeTab === tab ? 600 : 400, cursor: "pointer", border: activeTab === tab ? "none" : "1px solid #e0e0e0", background: activeTab === tab ? "#3c3eb1fb" : "#fff", color: activeTab === tab ? "#fff" : "#555", display: "flex", alignItems: "center", gap: "6px" }}>
+              style={{ padding: "8px 18px", borderRadius: "20px", fontSize: "13px", fontWeight: activeTab === tab ? 600 : 400, cursor: "pointer", border: activeTab === tab ? "none" : "1px solid #e0e0e0", background: activeTab === tab ? GREEN : "#fff", color: activeTab === tab ? "#fff" : "#555", display: "flex", alignItems: "center", gap: "6px" }}>
               {tab}
-              <span style={{ background: activeTab === tab ? "rgba(255,255,255,0.2)" : "#f0f0f0", color: activeTab === tab ? "#fff" : "#888", padding: "1px 7px", borderRadius: "10px", fontSize: "11px", fontWeight: 700 }}>
+              <span style={{ background: activeTab === tab ? "rgba(255,255,255,0.22)" : GREEN_LIGHT, color: activeTab === tab ? "#fff" : GREEN, padding: "1px 7px", borderRadius: "10px", fontSize: "11px", fontWeight: 700 }}>
                 {loading ? "…" : tabCount(tab)}
               </span>
             </button>
@@ -247,7 +253,7 @@ export default function PendingPage() {
                 Updated {lastUpdated.toLocaleTimeString("en-PH", { timeStyle: "short" })}
               </span>
             )}
-            <button onClick={() => fetchOrders()} style={{ padding: "8px 16px", borderRadius: "20px", fontSize: "13px", fontWeight: 600, cursor: "pointer", border: "1px solid #e0e0e0", background: "#fff", color: "#555", display: "flex", alignItems: "center", gap: "6px" }}>
+            <button onClick={() => fetchOrders()} style={{ padding: "8px 16px", borderRadius: "20px", fontSize: "13px", fontWeight: 600, cursor: "pointer", border: `1px solid ${GREEN}`, background: "#fff", color: GREEN, display: "flex", alignItems: "center", gap: "6px" }}>
               🔄 Refresh
             </button>
           </div>
@@ -301,7 +307,7 @@ export default function PendingPage() {
                     </div>
                     <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                       {order.isOnline && (
-                        <span style={{ padding: "2px 8px", borderRadius: "20px", fontSize: "10px", fontWeight: 700, background: "#e8f5e9", color: "#2e7d32" }}>Online</span>
+                        <span style={{ padding: "2px 8px", borderRadius: "20px", fontSize: "10px", fontWeight: 700, background: GREEN_LIGHT, color: GREEN }}>Online</span>
                       )}
                       <span style={{ padding: "2px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 600, background: s.bg, color: s.color }}>
                         {statusIcon[order.status]} {order.status}
@@ -335,7 +341,7 @@ export default function PendingPage() {
                             <span>VAT (12%):</span>
                             <span>₱{vat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "16px", fontWeight: 800, color: "#3c3eb1fb", marginTop: "2px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "16px", fontWeight: 800, color: GREEN, marginTop: "2px" }}>
                             <span>Total:</span>
                             <span>₱{(sub + vat).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           </div>
@@ -357,12 +363,12 @@ export default function PendingPage() {
                     </div>
 
                     <button onClick={() => setExpandedId(isExpanded ? null : order.id)}
-                      style={{ background: "none", border: "none", color: "#3c3eb1fb", fontSize: "13px", fontWeight: 600, cursor: "pointer", padding: "0", marginBottom: "10px" }}>
+                      style={{ background: "none", border: "none", color: GREEN, fontSize: "13px", fontWeight: 600, cursor: "pointer", padding: "0", marginBottom: "10px" }}>
                       {isExpanded ? "Hide Items ▲" : "View Items ▼"}
                     </button>
 
                     {isExpanded && (
-                      <div style={{ background: "#f9f9f9", borderRadius: "10px", padding: "12px 14px", marginBottom: "12px" }}>
+                      <div style={{ background: "#f6faf6", borderRadius: "10px", padding: "12px 14px", marginBottom: "12px" }}>
                         {order.items.map((item, i) => (
                           <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: i < order.items.length - 1 ? "6px" : 0 }}>
                             <span style={{ fontSize: "13px", color: "#555" }}>{item.name} x {item.qty}</span>
@@ -376,7 +382,7 @@ export default function PendingPage() {
                       {order.status === "Pending" && (
                         <div style={{ display: "flex", gap: "8px" }}>
                           <button onClick={() => updateStatus(order.id, "Processing")} disabled={isUpdating}
-                            style={{ flex: 1, padding: "10px", borderRadius: "10px", border: "none", background: "#2d7a3a", color: "#fff", fontSize: "13px", fontWeight: 700, cursor: "pointer", opacity: isUpdating ? 0.6 : 1 }}>
+                            style={{ flex: 1, padding: "10px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "13px", fontWeight: 700, cursor: "pointer", opacity: isUpdating ? 0.6 : 1, boxShadow: "0 4px 12px rgba(46,125,62,0.25)" }}>
                             ✅ Approve
                           </button>
                           <button onClick={() => updateStatus(order.id, "Cancelled")} disabled={isUpdating}
@@ -387,7 +393,7 @@ export default function PendingPage() {
                       )}
                       {order.status === "Processing" && (
                         <button onClick={() => updateStatus(order.id, "Out for Delivery")} disabled={isUpdating}
-                          style={{ width: "100%", padding: "10px", borderRadius: "10px", border: "none", background: "#7c3aed", color: "#fff", fontSize: "13px", fontWeight: 700, cursor: "pointer", opacity: isUpdating ? 0.6 : 1 }}>
+                          style={{ width: "100%", padding: "10px", borderRadius: "10px", border: "none", background: AMBER, color: "#fff", fontSize: "13px", fontWeight: 700, cursor: "pointer", opacity: isUpdating ? 0.6 : 1, boxShadow: "0 4px 12px rgba(230,138,0,0.25)" }}>
                           🚚 Out for Delivery
                         </button>
                       )}
