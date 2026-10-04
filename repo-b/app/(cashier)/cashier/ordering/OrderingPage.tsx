@@ -10,6 +10,7 @@ type Product = {
   category?: string;
   stock?: number;
   status?: string;
+  image?: string | null; // ← product photo (same field used on the customer Products page)
 };
 
 type Promo = {
@@ -43,6 +44,52 @@ const BG_MAP: Record<string, string> = {
 
 const getEmoji = (category?: string) => EMOJI_MAP[category || ""] || "🥤";
 const getBg    = (category?: string) => BG_MAP[category || ""]   || "#424242";
+
+// ── Product image (shows the real photo, falls back to the emoji) ───────────
+function ProductImage({
+  image,
+  emoji,
+  alt,
+  fit = "cover",
+}: {
+  image?: string | null;
+  emoji: string;
+  alt: string;
+  fit?: "cover" | "contain";
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (image && !failed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={image}
+        alt={alt}
+        onError={() => setFailed(true)}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: fit, display: "block" }}
+      />
+    );
+  }
+  return <>{emoji}</>;
+}
+
+// Small round thumbnail used in the bottom bar
+function MiniThumb({ image, emoji }: { image?: string | null; emoji: string }) {
+  const [failed, setFailed] = useState(false);
+
+  if (image && !failed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={image}
+        alt=""
+        onError={() => setFailed(true)}
+        style={{ width: "24px", height: "24px", borderRadius: "50%", objectFit: "cover", display: "block", flexShrink: 0 }}
+      />
+    );
+  }
+  return <span style={{ fontSize: "14px" }}>{emoji}</span>;
+}
 
 export default function OrderingPage() {
   const router = useRouter();
@@ -209,8 +256,8 @@ export default function OrderingPage() {
                   onMouseEnter={(e) => { if (!inCart && !outOfStock) (e.currentTarget as HTMLDivElement).style.boxShadow = "0 6px 20px rgba(0,0,0,0.1)"; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; }}>
                   <div onClick={() => addToCart(p)}
-                    style={{ height: "140px", background: getBg(p.category), display: "flex", alignItems: "center", justifyContent: "center", fontSize: "56px", position: "relative" }}>
-                    {getEmoji(p.category)}
+                    style={{ height: "140px", background: getBg(p.category), display: "flex", alignItems: "center", justifyContent: "center", fontSize: "56px", position: "relative", overflow: "hidden" }}>
+                    <ProductImage image={p.image} emoji={getEmoji(p.category)} alt={p.productName} />
                     {outOfStock && (
                       <span style={{ position: "absolute", top: "8px", left: "8px", background: "#e53935", color: "#fff", fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "20px" }}>Out of Stock</span>
                     )}
@@ -283,7 +330,7 @@ export default function OrderingPage() {
             <div style={{ display: "flex", gap: "10px", overflowX: "auto", maxWidth: "100%" }}>
               {cart.slice(0, 4).map((item) => (
                 <div key={item.id} style={{ display: "flex", alignItems: "center", gap: "6px", background: "#f5f5f5", padding: "5px 12px", borderRadius: "20px" }}>
-                  <span style={{ fontSize: "14px" }}>{getEmoji(item.category)}</span>
+                  <MiniThumb image={item.image} emoji={getEmoji(item.category)} />
                   <span style={{ fontSize: "12px", color: "#555", fontWeight: 500 }}>{item.productName} x{item.qty}</span>
                   {promoMap[item.id] && <span style={{ fontSize: "10px", color: "#e53935", fontWeight: 700 }}>PROMO</span>}
                 </div>
