@@ -29,6 +29,7 @@ type Product = {
   supplierId:    string;
   supplierName:  string;
   createdAt:     string;
+  updatedAt:     string;
 };
 
 const PIECES_PER_CASE_DEFAULT = 24;
@@ -51,6 +52,16 @@ function deriveStockStatus(stock: number): "In Stock" | "Low Stock" | "Out of St
 function fmtDate(str: string | null): string {
   if (!str) return "—";
   return new Date(str).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" });
+}
+
+function fmtDateTime(str: string | null): { date: string; time: string } {
+  if (!str) return { date: "—", time: "" };
+  const d = new Date(str);
+  if (isNaN(d.getTime())) return { date: "—", time: "" };
+  return {
+    date: d.toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }),
+    time: d.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" }),
+  };
 }
 
 function fmtPrice(n: number): string {
@@ -182,6 +193,7 @@ export default function InventoryAdjustmentPage() {
         supplierId:    String(p.supplierId ?? ""),
         supplierName:  supplierMap[p.supplierId] || p.supplier?.supplierName || "—",
         createdAt:     String(p.createdAt ?? ""),
+        updatedAt:     String(p.updatedAt ?? p.createdAt ?? ""),
       })));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load products");
@@ -317,7 +329,7 @@ export default function InventoryAdjustmentPage() {
       await api.updateProduct(expProd.id, { expiryDate: newExpiry });
 
       // Update the list right away (no full reload, so the page doesn't flash)
-      setProducts((prev) => prev.map((p) => (p.id === expProd.id ? { ...p, expiryDate: newExpiry } : p)));
+      setProducts((prev) => prev.map((p) => (p.id === expProd.id ? { ...p, expiryDate: newExpiry, updatedAt: new Date().toISOString() } : p)));
       closeExpiry();
     } catch (e) {
       setExpError(e instanceof Error ? e.message : "Failed to save expiration date");
@@ -600,10 +612,10 @@ export default function InventoryAdjustmentPage() {
           {/* ── Expiration Table ── */}
           <div style={{ background: "#fff", borderRadius: "16px", border: "0.5px solid #e8e8e8", overflow: "hidden", boxShadow: "0 1px 6px rgba(0,0,0,0.05)" }}>
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "820px" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
                 <thead>
                   <tr style={{ background: GREEN }}>
-                    {["Product", "Category", "Stock (cases)", "Expiry Date", "Time Left", "Status", "Action"].map((h) => (
+                    {["Date & Time", "Product", "Category", "Unit Type", "Total Bottles", "Expiration Date", "Action"].map((h) => (
                       <th key={h} style={{ padding: "13px 16px", textAlign: "left", fontSize: "11px", color: "rgba(255,255,255,0.9)", fontWeight: 700, whiteSpace: "nowrap", letterSpacing: "0.4px", textTransform: "uppercase" }}>
                         {h}
                       </th>
@@ -623,11 +635,19 @@ export default function InventoryAdjustmentPage() {
                     const est  = expiryStyle[es];
                     const days = daysUntilExpiry(p.expiryDate);
                     const hasDate = !!p.expiryDate;
+                    const dt = fmtDateTime(p.updatedAt || p.createdAt);
                     return (
                       <tr key={p.id} style={{ borderBottom: "0.5px solid #f0f0f0", background: idx % 2 === 0 ? "#fff" : "#fafafa", transition: "background 0.15s" }}
                         onMouseEnter={(e) => (e.currentTarget.style.background = "#f0faf2")}
                         onMouseLeave={(e) => (e.currentTarget.style.background = idx % 2 === 0 ? "#fff" : "#fafafa")}
                       >
+                        {/* Date & Time */}
+                        <td style={{ padding: "13px 16px", whiteSpace: "nowrap" }}>
+                          <p style={{ fontSize: "12.5px", fontWeight: 600, color: "#1a1a1a" }}>{dt.date}</p>
+                          <p style={{ fontSize: "11px", color: "#aaa", marginTop: "2px" }}>{dt.time}</p>
+                        </td>
+
+                        {/* Product */}
                         <td style={{ padding: "13px 16px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                             {p.image ? (
@@ -641,28 +661,43 @@ export default function InventoryAdjustmentPage() {
                             </div>
                           </div>
                         </td>
+
+                        {/* Category */}
                         <td style={{ padding: "13px 16px" }}>
                           <span style={{ background: GREEN_LIGHT, color: GREEN_DARK, padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 600 }}>
                             {categoryLabels[p.category] ?? p.category}
                           </span>
                         </td>
-                        <td style={{ padding: "13px 16px", fontSize: "14px", fontWeight: 800, color: "#1a1a1a" }}>{p.stock}</td>
-                        <td style={{ padding: "13px 16px", fontSize: "13px", fontWeight: hasDate ? 600 : 400, color: hasDate ? "#1a1a1a" : "#bbb" }}>
-                          {fmtDate(p.expiryDate)}
-                        </td>
-                        <td style={{ padding: "13px 16px", fontSize: "12px", fontWeight: 600, color: est.color }}>
-                          {daysLabel(days)}
-                        </td>
+
+                        {/* Unit Type */}
                         <td style={{ padding: "13px 16px" }}>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 12px", borderRadius: "20px", fontSize: "11px", fontWeight: 700, background: est.bg, color: est.color }}>
-                            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: est.dot }} />
-                            {es}
+                          <span style={{ background: "#f5f5f5", color: "#555", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 600, whiteSpace: "nowrap" }}>
+                            Case · {getPiecesPerCase(p)} pcs
                           </span>
                         </td>
+
+                        {/* Total Bottles */}
+                        <td style={{ padding: "13px 16px" }}>
+                          <p style={{ fontSize: "14px", fontWeight: 800, color: "#1a1a1a" }}>{totalPieces(p).toLocaleString()}</p>
+                          <p style={{ fontSize: "11px", color: "#aaa", marginTop: "2px" }}>{p.stock} case{p.stock !== 1 ? "s" : ""}</p>
+                        </td>
+
+                        {/* Expiration Date */}
+                        <td style={{ padding: "13px 16px" }}>
+                          <p style={{ fontSize: "13px", fontWeight: hasDate ? 700 : 400, color: hasDate ? "#1a1a1a" : "#bbb" }}>
+                            {fmtDate(p.expiryDate)}
+                          </p>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", marginTop: "4px", padding: "2px 9px", borderRadius: "20px", fontSize: "10.5px", fontWeight: 700, background: est.bg, color: est.color }}>
+                            <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: est.dot }} />
+                            {es}{hasDate ? ` · ${daysLabel(days)}` : ""}
+                          </span>
+                        </td>
+
+                        {/* Action */}
                         <td style={{ padding: "13px 16px" }}>
                           <button onClick={() => openExpiry(p)}
                             style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 16px", borderRadius: "20px", fontSize: "12px", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", border: hasDate ? `1.5px solid ${GREEN}` : "none", background: hasDate ? "#fff" : GREEN, color: hasDate ? GREEN : "#fff", boxShadow: hasDate ? "none" : "0 3px 8px rgba(46,125,62,0.25)" }}>
-                            {hasDate ? "✏️ Edit" : "➕ Add"}
+                            {hasDate ? "✏️ Adjust" : "➕ Add Date"}
                           </button>
                         </td>
                       </tr>
