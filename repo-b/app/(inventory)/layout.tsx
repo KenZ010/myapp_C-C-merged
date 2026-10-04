@@ -9,6 +9,7 @@ const GREEN       = "#2e7d3e";
 const GREEN_DARK  = "#1f5f2d";
 const GREEN_LIGHT = "#e8f5ea";
 const YELLOW      = "#facc15";
+const ROLE_LABEL  = "Stock Manager";
 
 // ── SVG Icons (color is passed in so each nav item can have its own tint) ──
 type IconProps = { color: string };
@@ -205,7 +206,7 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
                 {displayName}
               </p>
               <p style={{ fontSize: "11px", color: GREEN, fontWeight: 500 }}>
-                {currentUser?.role || "Inventory Manager"}
+                {ROLE_LABEL}
               </p>
             </div>
           </div>
@@ -405,9 +406,14 @@ export default function InventoryLayout({ children }: { children: React.ReactNod
               <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: YELLOW, color: GREEN_DARK, fontWeight: 700, fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 {initial}
               </div>
-              <p className="hidden sm:block" style={{ fontSize: "14px", fontWeight: 600, color: "#fff" }}>
-                {displayName}
-              </p>
+              <div className="hidden sm:block">
+                <p style={{ fontSize: "14px", fontWeight: 600, color: "#fff", lineHeight: 1.2 }}>
+                  {displayName}
+                </p>
+                <p style={{ fontSize: "11px", fontWeight: 500, color: "rgba(255,255,255,0.75)", lineHeight: 1.2, marginTop: "1px" }}>
+                  {ROLE_LABEL}
+                </p>
+              </div>
             </div>
 
           </div>
