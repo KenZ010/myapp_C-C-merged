@@ -11,6 +11,7 @@ type Product = {
   stock: number;
   supplierId?: string;
   status?: string;
+  image?: string | null; // ← product photo (same field used on the customer Products page)
   supplier?: { supplierName: string };
 };
 
@@ -75,6 +76,39 @@ const getEmoji = (name: string): string => {
   if (n.includes("juice")) return "🧃";
   return "🥤";
 };
+
+// ── Product image (shows the real photo, falls back to the emoji) ───────────
+function ProductImage({
+  image,
+  emoji,
+  alt,
+}: {
+  image?: string | null;
+  emoji: string;
+  alt: string;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (image && !failed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={image}
+        alt={alt}
+        onError={() => setFailed(true)}
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          display: "block",
+        }}
+      />
+    );
+  }
+  return <>{emoji}</>;
+}
 
 export default function InventoryMaintenancePage() {
   const [search, setSearch] = useState("");
@@ -376,9 +410,10 @@ export default function InventoryMaintenancePage() {
                     justifyContent: "center",
                     fontSize: "52px",
                     position: "relative",
+                    overflow: "hidden",
                   }}
                 >
-                  {emoji}
+                  <ProductImage image={p.image} emoji={emoji} alt={p.productName} />
                   {status === "Out of Stock" && (
                     <div
                       style={{
@@ -547,9 +582,15 @@ export default function InventoryMaintenancePage() {
                 justifyContent: "center",
                 fontSize: "72px",
                 position: "relative",
+                overflow: "hidden",
               }}
             >
-              {getEmoji(selected.productName)}
+              <ProductImage
+                key={selected.id}
+                image={selected.image}
+                emoji={getEmoji(selected.productName)}
+                alt={selected.productName}
+              />
               <button
                 onClick={() => setSelected(null)}
                 style={{
