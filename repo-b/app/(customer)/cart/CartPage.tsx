@@ -1513,9 +1513,6 @@ export default function CartPage() {
               </>
             )}
 
-            <p style={{ textAlign: "center", fontSize: "11px", color: "#bbb", marginTop: "14px" }}>
-              🔒 Secure checkout — your info is safe
-            </p>
           </div>
         </div>
       </div>
