@@ -2,6 +2,11 @@
 import { useState, useMemo, useEffect } from "react";
 import { api } from "@/lib/api";
 
+// ── Theme (matches the green layout) ──
+const GREEN       = "#2e7d3e";
+const GREEN_DARK  = "#1f5f2d";
+const GREEN_LIGHT = "#e8f5ea";
+
 type StockStatus = "In Stock" | "Low Stock" | "Out of Stock";
 
 type Product = {
@@ -190,7 +195,7 @@ export default function InventoryMaintenancePage() {
       {/* ── Header Banner ── */}
       <div
         style={{
-          background: "linear-gradient(135deg, #6366f1, #3c3eb1fb)",
+          background: `linear-gradient(135deg, ${GREEN}, ${GREEN_DARK})`,
           borderRadius: "16px",
           padding: "24px 32px",
           marginBottom: "24px",
@@ -199,6 +204,7 @@ export default function InventoryMaintenancePage() {
           justifyContent: "space-between",
           flexWrap: "wrap",
           gap: "16px",
+          boxShadow: "0 6px 20px rgba(46,125,62,0.25)",
         }}
       >
         <div>
@@ -212,7 +218,7 @@ export default function InventoryMaintenancePage() {
           >
             Product Inventory
           </h1>
-          <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.65)" }}>
+          <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.75)" }}>
             View and monitor stock levels across all brands
           </p>
         </div>
@@ -221,20 +227,20 @@ export default function InventoryMaintenancePage() {
             {
               label: "In Stock",
               value: inStock,
-              bg: "rgba(76,175,80,0.2)",
-              color: "#a5d6a7",
+              bg: "rgba(255,255,255,0.18)",
+              color: "#ffffff",
             },
             {
               label: "Low Stock",
               value: lowStock,
-              bg: "rgba(255,152,0,0.2)",
-              color: "#ffcc80",
+              bg: "rgba(250,204,21,0.22)",
+              color: "#fde68a",
             },
             {
               label: "Out of Stock",
               value: outOfStock,
-              bg: "rgba(244,67,54,0.2)",
-              color: "#ef9a9a",
+              bg: "rgba(244,67,54,0.25)",
+              color: "#ffcdd2",
             },
           ].map((s) => (
             <div
@@ -308,8 +314,8 @@ export default function InventoryMaintenancePage() {
               fontSize: "13px",
               cursor: "pointer",
               fontWeight: brand === b ? 600 : 400,
-              border: brand === b ? "1.5px solid #3c3eb1fb" : "1.5px solid #ccc",
-              background: brand === b ? "#3c3eb1fb" : "#fff",
+              border: brand === b ? `1.5px solid ${GREEN}` : "1.5px solid #ccc",
+              background: brand === b ? GREEN : "#fff",
               color: brand === b ? "#fff" : "#1a1a1a",
             }}
           >
@@ -324,12 +330,12 @@ export default function InventoryMaintenancePage() {
             style={{
               padding: "8px 16px",
               borderRadius: "20px",
-              border: "1.5px solid #ccc",
+              border: `1.5px solid ${GREEN}`,
               fontSize: "13px",
               outline: "none",
               background: "#fff",
               cursor: "pointer",
-              color: "#1a1a1a",
+              color: GREEN_DARK,
               fontWeight: 500,
             }}
           >
@@ -392,7 +398,7 @@ export default function InventoryMaintenancePage() {
                   (e.currentTarget as HTMLDivElement).style.transform =
                     "translateY(-3px)";
                   (e.currentTarget as HTMLDivElement).style.boxShadow =
-                    "0 8px 24px rgba(0,0,0,0.1)";
+                    "0 8px 24px rgba(46,125,62,0.18)";
                 }}
                 onMouseLeave={(e) => {
                   (e.currentTarget as HTMLDivElement).style.transform =
@@ -474,7 +480,7 @@ export default function InventoryMaintenancePage() {
                       style={{
                         fontSize: "16px",
                         fontWeight: 700,
-                        color: "#3c3eb1fb",
+                        color: GREEN,
                       }}
                     >
                       ₱{p.price}
@@ -567,6 +573,7 @@ export default function InventoryMaintenancePage() {
               transform: "translate(-50%,-50%)",
               zIndex: 50,
               width: "400px",
+              maxWidth: "92vw",
               background: "#fff",
               borderRadius: "20px",
               overflow: "hidden",
@@ -663,7 +670,7 @@ export default function InventoryMaintenancePage() {
                     display: "flex",
                     justifyContent: "space-between",
                     padding: "10px 0",
-                    borderBottom: "0.5px solid #f5f5f5",
+                    borderBottom: "0.5px solid #eef2ef",
                   }}
                 >
                   <span style={{ fontSize: "13px", color: "#888" }}>
@@ -728,11 +735,12 @@ export default function InventoryMaintenancePage() {
                   padding: "12px",
                   borderRadius: "20px",
                   border: "none",
-                  background: "#3c3eb1fb",
+                  background: GREEN,
                   color: "#fff",
                   fontSize: "14px",
                   fontWeight: 600,
                   cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(46,125,62,0.25)",
                 }}
               >
                 Close
