@@ -16,6 +16,7 @@ type CartItem = {
     category?: string;
     size?: string;
     stock?: number;
+    image?: string | null; // ← product photo (same field used on the Products page)
   };
 };
 
@@ -83,6 +84,51 @@ function compressImage(file: File, maxWidth = 1000, quality = 0.75): Promise<str
     };
     reader.readAsDataURL(file);
   });
+}
+
+// ── Product thumbnail (shows the real photo, falls back to the emoji) ────────
+function CartThumb({
+  image,
+  emoji,
+  bg,
+  size,
+}: {
+  image?: string | null;
+  emoji: string;
+  bg: string;
+  size: number;
+}) {
+  const [failed, setFailed] = useState(false);
+  const showImage = !!image && !failed;
+
+  return (
+    <div
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        borderRadius: "14px",
+        background: showImage ? "#f3f4f6" : bg,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "36px",
+        flexShrink: 0,
+        overflow: "hidden",
+      }}
+    >
+      {showImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={image as string}
+          alt=""
+          onError={() => setFailed(true)}
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        />
+      ) : (
+        emoji
+      )}
+    </div>
+  );
 }
 
 // ── Delete Confirmation Modal ──────────────────────────────────────────────────
@@ -979,21 +1025,13 @@ export default function CartPage() {
                     gap: "18px",
                   }}
                 >
-                  <div
-                    style={{
-                      width: isMobile ? "60px" : "80px",
-                      height: isMobile ? "60px" : "80px",
-                      borderRadius: "14px",
-                      background: bg,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: "36px",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {emoji}
-                  </div>
+                  {/* Product photo (falls back to the emoji if there's no image) */}
+                  <CartThumb
+                    image={item.product.image}
+                    emoji={emoji}
+                    bg={bg}
+                    size={isMobile ? 60 : 80}
+                  />
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: "15px", fontWeight: 600, color: "#1a1a1a", marginBottom: "3px" }}>
                       {item.product.productName}
