@@ -43,21 +43,21 @@ const authHeaders = () => ({
 
 export const api = {
   // ── AUTH ────────────────────────────────────────────────────────────────────
-  login: async (name: string, password: string) => {
+  login: async (email: string, password: string) => {
     const res = await fetch(`${API_URL}/employees/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, password }),
+      body: JSON.stringify({ email, password }),
     });
     const data = await res.json();
     if (data.token) persistSession(data.token);
     return data;
   },
-  loginCustomer: async (name: string, password: string) => {
+  loginCustomer: async (email: string, password: string) => {
     const res = await fetch(`${API_URL}/customers/login-customer`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, password }),
+      body: JSON.stringify({ email, password }),
     });
     const data = await res.json();
     if (data.token) persistSession(data.token);
