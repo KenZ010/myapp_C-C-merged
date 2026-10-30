@@ -34,7 +34,7 @@ const BUBBLES: [number, number, number, number, number, number][] = [
 const FIZZ_HEIGHTS = [8, 12, 6, 14, 9, 11, 7, 13];
 
 export default function LoginPage() {
-  const [username, setUsername]         = useState("");
+  const [email, setEmail]         = useState("");
   const [password, setPassword]         = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [userFocused, setUserFocused]   = useState(false);
@@ -46,15 +46,15 @@ export default function LoginPage() {
 
   const handleLogin = async () => {
     setError("");
-    if (!username || !password) {
+    if (!email || !password) {
       setError("Please enter username and password.");
       return;
     }
     setLoading(true);
     try {
       const [employeeRes, customerRes] = await Promise.allSettled([
-        api.login(username, password),
-        api.loginCustomer(username, password),
+        api.login(email, password),
+        api.loginCustomer(email, password),
       ]);
       const employeeData = employeeRes.status === "fulfilled" ? employeeRes.value : null;
       const customerData = customerRes.status === "fulfilled" ? customerRes.value : null;
@@ -593,8 +593,8 @@ export default function LoginPage() {
                   className="lr-input"
                   type="text"
                   placeholder="Enter your username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   onFocus={() => setUserFocused(true)}
                   onBlur={() => setUserFocused(false)}
                   onKeyDown={handleKeyDown}
