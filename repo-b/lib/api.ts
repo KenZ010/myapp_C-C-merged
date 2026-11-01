@@ -43,11 +43,11 @@ const authHeaders = () => ({
 
 export const api = {
   // ── AUTH ────────────────────────────────────────────────────────────────────
-  login: async (email: string, password: string) => {
+  login: async (name: string, password: string) => {
     const res = await fetch(`${API_URL}/employees/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ name, password }),
     });
     const data = await res.json();
     if (data.token) persistSession(data.token);
