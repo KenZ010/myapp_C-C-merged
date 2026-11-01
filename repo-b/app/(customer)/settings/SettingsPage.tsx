@@ -1,14 +1,6 @@
 "use client";
-import { useState } from "react";
-
-const defaultInfo = {
-  fullName: "Ken Masilungan",
-  storeName: "Kens Store",
-  barangay: "Barangay 175",
-  address: "#41 Buick, Quezon City, Metro Manila, Philippines",
-  phone: "09321431241",
-  email: "ken@gmail.com",
-};
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 
 const notifItems = [
   { label: "Order Confirmed", desc: "Get notified when your order is placed", default: true },
@@ -18,37 +10,26 @@ const notifItems = [
   { label: "Return Status Updates", desc: "Updates on your return requests", default: true },
 ];
 
-const BARANGAY_OPTIONS = ["Barangay 175", "Barangay 176"];
+type Profile = { fullName: string; email: string; phone: string; address: string };
+const emptyProfile: Profile = { fullName: "", email: "", phone: "", address: "" };
 
-// ── Validators ─────────────────────────────────────────────────────────────────
-function validateFullName(v: string) {
-  if (!v.trim()) return "Full name is required.";
-  if (!/^[a-zA-Z\s]+$/.test(v)) return "Only letters and spaces are allowed.";
-  return "";
-}
-
-function validatePhone(v: string) {
-  if (!v.trim()) return "Phone number is required.";
-  if (!/^\d+$/.test(v)) return "Only numbers are allowed.";
-  if (v.length < 10 || v.length > 11) return "Must be 10–11 digits.";
-  return "";
-}
-
-function validateEmail(v: string) {
-  if (!v.trim()) return "Email is required.";
-  if (!/@(gmail\.com|yahoo\.com)$/.test(v))
-    return "Email must end with @gmail.com or @yahoo.com.";
-  return "";
-}
-
-type FormKey = keyof typeof defaultInfo;
-type Errors = Partial<Record<FormKey, string>>;
+// Maps a customer record from the backend to the fields shown on this page
+const toProfile = (c: any): Profile => ({
+  fullName: c?.name ?? "",
+  email: c?.email ?? "",
+  phone: c?.phone ?? "",
+  address: c?.address ?? "",
+});
 
 export default function SettingsPage() {
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState(defaultInfo);
-  const [saved, setSaved] = useState(defaultInfo);
-  const [errors, setErrors] = useState<Errors>({});
+  const [profile, setProfile] = useState<Profile>(emptyProfile);
+  const [meta, setMeta] = useState<{ status: string; since: string; orders: number | null }>({
+    status: "",
+    since: "",
+    orders: null,
+  });
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [activeTab, setActiveTab] = useState<"profile" | "security" | "notifications">("profile");
 
   const [notif0, setNotif0] = useState(notifItems[0].default);
@@ -60,41 +41,56 @@ export default function SettingsPage() {
   const notifStates = [notif0, notif1, notif2, notif3, notif4];
   const notifSetters = [setNotif0, setNotif1, setNotif2, setNotif3, setNotif4];
 
-  // ── Field change handlers ─────────────────────────────────────────────────
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
+  // ── Load the logged-in customer's profile ─────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
 
-    // Restrict input inline
-    if (name === "fullName" && value && !/^[a-zA-Z\s]*$/.test(value)) return;
-    if (name === "phone" && value && !/^\d*$/.test(value)) return;
+    (async () => {
+      try {
+        const stored = JSON.parse(localStorage.getItem("user") || "null");
+        if (!stored?.id) {
+          setLoadError("Please log in again.");
+          return;
+        }
 
-    setForm((prev) => ({ ...prev, [name]: value }));
+        // show what we already have right away
+        setProfile(toProfile(stored));
 
-    // Live validate
-    let err = "";
-    if (name === "fullName") err = validateFullName(value);
-    if (name === "phone") err = validatePhone(value);
-    if (name === "email") err = validateEmail(value);
-    setErrors((prev) => ({ ...prev, [name]: err }));
-  };
+        // then refresh from the server
+        const res = await api.getCustomer(stored.id);
+        const c = res?.customer ?? res;
+        if (cancelled || !c?.id) return;
 
-  const handleSave = () => {
-    const newErrors: Errors = {
-      fullName: validateFullName(form.fullName),
-      phone: validatePhone(form.phone),
-      email: validateEmail(form.email),
+        setProfile(toProfile(c));
+        setMeta((m) => ({
+          ...m,
+          status: c.userStatus ?? "",
+          since: c.createdAt ? String(new Date(c.createdAt).getFullYear()) : "",
+        }));
+
+        // order count is optional: if this call fails, we just show "—"
+        try {
+          const orders = await api.getCustomerOrders(stored.id);
+          const list = Array.isArray(orders) ? orders : orders?.orders ?? orders?.data;
+          if (Array.isArray(list) && !cancelled) setMeta((m) => ({ ...m, orders: list.length }));
+        } catch {
+          /* ignore */
+        }
+      } catch {
+        if (!cancelled) setLoadError("Could not load your profile.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
     };
-    setErrors(newErrors);
-    if (Object.values(newErrors).some(Boolean)) return;
-    setSaved(form);
-    setEditing(false);
-  };
+  }, []);
 
-  const handleCancel = () => {
-    setForm(saved);
-    setErrors({});
-    setEditing(false);
-  };
+  const statusLabel = meta.status
+    ? meta.status.charAt(0) + meta.status.slice(1).toLowerCase()
+    : "—";
 
   // ── Styles ────────────────────────────────────────────────────────────────
   const inputStyle = (editable: boolean, hasError?: boolean): React.CSSProperties => ({
@@ -154,19 +150,16 @@ export default function SettingsPage() {
                     <path d="M6 46c0-11 9-18 20-18s20 7 20 18" stroke="rgba(255,255,255,0.9)" strokeWidth="3" strokeLinecap="round" fill="none" />
                   </svg>
                 </div>
-                <p style={{ fontSize: "18px", fontWeight: 700, color: "#1a1a1a", marginBottom: "4px" }}>{saved.fullName}</p>
-                <p style={{ fontSize: "13px", color: "#999", marginBottom: "20px" }}>{saved.storeName}</p>
-                <button style={{ background: "linear-gradient(135deg, #a855f7, #e91e8c)", color: "#fff", border: "none", borderRadius: "20px", padding: "9px 24px", fontSize: "13px", fontWeight: 600, cursor: "pointer", width: "100%" }}>
-                  📷 Change Photo
-                </button>
+                <p style={{ fontSize: "18px", fontWeight: 700, color: "#1a1a1a", marginBottom: "4px" }}>{profile.fullName || "—"}</p>
+                <p style={{ fontSize: "13px", color: "#999" }}>{profile.email}</p>
               </div>
 
               <div style={{ background: "#fff", borderRadius: "16px", border: "0.5px solid #f0e8f8", padding: "20px" }}>
                 <p style={{ fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.5px", color: "#bbb", fontWeight: 500, marginBottom: "14px" }}>Account Status</p>
                 {[
-                  { icon: "✅", label: "Account", value: "Active" },
-                  { icon: "📦", label: "Total Orders", value: "12" },
-                  { icon: "⭐", label: "Member Since", value: "2024" },
+                  { icon: "✅", label: "Account", value: statusLabel },
+                  { icon: "📦", label: "Total Orders", value: meta.orders ?? "—" },
+                  { icon: "⭐", label: "Member Since", value: meta.since || "—" },
                   { icon: "💳", label: "Payment", value: "COD / GCash" },
                 ].map((item) => (
                   <div key={item.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: "0.5px solid #f5f5f5" }}>
@@ -177,134 +170,34 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* Right — Form */}
+            {/* Right — Read-only info */}
             <div style={{ background: "#fff", borderRadius: "20px", border: "0.5px solid #f0e8f8", padding: "28px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-                <p style={{ fontSize: "17px", fontWeight: 700, color: "#1a1a1a" }}>Personal Information</p>
-                {!editing && (
-                  <button
-                    onClick={() => setEditing(true)}
-                    style={{ background: "linear-gradient(135deg, #a855f7, #e91e8c)", color: "#fff", border: "none", borderRadius: "20px", padding: "8px 20px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
-                  >
-                    ✏️ Edit
-                  </button>
-                )}
-              </div>
+              <p style={{ fontSize: "17px", fontWeight: 700, color: "#1a1a1a", marginBottom: "24px" }}>Personal Information</p>
+
+              {loading && <p style={{ fontSize: "13px", color: "#aaa", marginBottom: "12px" }}>Loading your profile…</p>}
+              {loadError && <p style={{ fontSize: "13px", color: "#e53935", marginBottom: "12px" }}>⚠️ {loadError}</p>}
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px" }}>
-
-                {/* Full Name */}
                 <div>
                   <label style={{ fontSize: "12px", color: "#aaa", marginBottom: "6px", display: "block" }}>👤 Full Name</label>
-                  <input
-                    name="fullName"
-                    value={form.fullName}
-                    onChange={handleChange}
-                    disabled={!editing}
-                    placeholder="Letters only"
-                    style={inputStyle(editing, !!errors.fullName)}
-                  />
-                  {editing && errors.fullName && <p style={{ fontSize: "11px", color: "#e53935", marginTop: "4px" }}>⚠️ {errors.fullName}</p>}
-                  {editing && !errors.fullName && <p style={{ fontSize: "11px", color: "#aaa", marginTop: "4px" }}>Letters and spaces only.</p>}
+                  <input value={profile.fullName} readOnly placeholder="Not set" style={inputStyle(false)} />
                 </div>
 
-                {/* Store Name */}
-                <div>
-                  <label style={{ fontSize: "12px", color: "#aaa", marginBottom: "6px", display: "block" }}>🏪 Store Name</label>
-                  <input
-                    name="storeName"
-                    value={form.storeName}
-                    onChange={handleChange}
-                    disabled={!editing}
-                    style={inputStyle(editing)}
-                  />
-                </div>
-
-                {/* Barangay — Dropdown */}
-                <div>
-                  <label style={{ fontSize: "12px", color: "#aaa", marginBottom: "6px", display: "block" }}>📍 Barangay</label>
-                  {editing ? (
-                    <select
-                      name="barangay"
-                      value={form.barangay}
-                      onChange={handleChange}
-                      style={{ ...inputStyle(true), cursor: "pointer", appearance: "auto" }}
-                    >
-                      {BARANGAY_OPTIONS.map((b) => (
-                        <option key={b} value={b}>{b}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      value={form.barangay}
-                      disabled
-                      style={inputStyle(false)}
-                    />
-                  )}
-                </div>
-
-                {/* Phone */}
                 <div>
                   <label style={{ fontSize: "12px", color: "#aaa", marginBottom: "6px", display: "block" }}>📞 Phone Number</label>
-                  <input
-                    name="phone"
-                    value={form.phone}
-                    onChange={handleChange}
-                    disabled={!editing}
-                    inputMode="numeric"
-                    maxLength={11}
-                    placeholder="Numbers only"
-                    style={inputStyle(editing, !!errors.phone)}
-                  />
-                  {editing && errors.phone && <p style={{ fontSize: "11px", color: "#e53935", marginTop: "4px" }}>⚠️ {errors.phone}</p>}
-                  {editing && !errors.phone && <p style={{ fontSize: "11px", color: "#aaa", marginTop: "4px" }}>Numbers only, 10–11 digits.</p>}
+                  <input value={profile.phone} readOnly placeholder="Not set" style={inputStyle(false)} />
                 </div>
 
-                {/* Email */}
                 <div style={{ gridColumn: "1 / -1" }}>
                   <label style={{ fontSize: "12px", color: "#aaa", marginBottom: "6px", display: "block" }}>✉️ Email Address</label>
-                  <input
-                    name="email"
-                    value={form.email}
-                    onChange={handleChange}
-                    disabled={!editing}
-                    placeholder="example@gmail.com or example@yahoo.com"
-                    style={inputStyle(editing, !!errors.email)}
-                  />
-                  {editing && errors.email && <p style={{ fontSize: "11px", color: "#e53935", marginTop: "4px" }}>⚠️ {errors.email}</p>}
-                  {editing && !errors.email && <p style={{ fontSize: "11px", color: "#aaa", marginTop: "4px" }}>Must end with @gmail.com or @yahoo.com.</p>}
+                  <input value={profile.email} readOnly placeholder="Not set" style={inputStyle(false)} />
                 </div>
 
-                {/* Address */}
                 <div style={{ gridColumn: "1 / -1" }}>
                   <label style={{ fontSize: "12px", color: "#aaa", marginBottom: "6px", display: "block" }}>🏠 Complete Address</label>
-                  <textarea
-                    name="address"
-                    value={form.address}
-                    onChange={handleChange}
-                    disabled={!editing}
-                    rows={3}
-                    style={{ ...inputStyle(editing), resize: "none" }}
-                  />
+                  <textarea value={profile.address} readOnly placeholder="Not set" rows={3} style={{ ...inputStyle(false), resize: "none" }} />
                 </div>
               </div>
-
-              {editing && (
-                <div style={{ display: "flex", gap: "12px", marginTop: "24px", justifyContent: "flex-end" }}>
-                  <button
-                    onClick={handleCancel}
-                    style={{ padding: "11px 28px", borderRadius: "20px", border: "1.5px solid #e0e0e0", background: "#f5f5f5", fontSize: "14px", fontWeight: 600, color: "#555", cursor: "pointer" }}
-                  >
-                    ✕ Cancel
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    style={{ padding: "11px 28px", borderRadius: "20px", border: "none", background: "linear-gradient(135deg, #a855f7, #e91e8c)", fontSize: "14px", fontWeight: 600, color: "#fff", cursor: "pointer", boxShadow: "0 4px 15px rgba(168,85,247,0.35)" }}
-                  >
-                    💾 Save Changes
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         )}
