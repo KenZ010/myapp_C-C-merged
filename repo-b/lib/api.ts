@@ -62,7 +62,7 @@ export const api = {
     const data = await res.json();
     if (data.token) persistSession(data.token);
     return data;
-  }, 
+  },  
 
   // ── EMPLOYEES ───────────────────────────────────────────────────────────────
   getEmployee: async (id: string) => {
