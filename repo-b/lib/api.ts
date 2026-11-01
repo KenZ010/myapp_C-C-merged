@@ -115,6 +115,16 @@ export const api = {
     const res = await fetch(`${API_URL}/products/${id}`);
     return res.json();
   },
+  updateProduct: async (id: string, data: Record<string, unknown>) => {
+  const res = await fetch(`${API_URL}/products/${id}`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || 'Failed to update product');
+  return json;
+},
 
   // ── CART ────────────────────────────────────────────────────────────────────
   getCart: async (customerId: string) => {
