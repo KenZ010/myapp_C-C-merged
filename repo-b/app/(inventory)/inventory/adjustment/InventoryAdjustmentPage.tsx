@@ -24,6 +24,7 @@ type Product = {
   piecesPerCase: number;
   reservedStock: number;
   expiryDate:    string | null;
+  batchId:       string | null; // earliest dated active batch (edited by the Expiration tab)
   image:         string | null;
   status:        ProductStatus;
   supplierId:    string;
@@ -165,14 +166,30 @@ export default function InventoryAdjustmentPage() {
   const [expLoading, setExpLoading] = useState(false);
   const [expError,   setExpError]   = useState<string | null>(null);
 
-  const fetchProducts = useCallback(async () => {
-    setLoading(true);
+  const fetchProducts = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
-      const [productsData, suppliersData] = await Promise.all([
+      const [productsData, suppliersData, batches] = await Promise.all([
         api.getProducts(),
         api.getSuppliers(),
+        // If the batches endpoint is unavailable, the page still loads (all show "No Date")
+        api.getAllStockBatches().catch(() => [] as any[]),
       ]);
+
+      // Earliest dated active batch per product → drives the expiry column
+      // (an undated batch is used only when the product has no dated one)
+      const earliest: Record<string, { id: string; expiryDate: string | null }> = {};
+      for (const b of batches || []) {
+        const cur = earliest[b.productId];
+        if (!b.expiryDate) {
+          if (!cur) earliest[b.productId] = { id: String(b.id), expiryDate: null };
+          continue;
+        }
+        if (!cur || !cur.expiryDate || b.expiryDate < cur.expiryDate) {
+          earliest[b.productId] = { id: String(b.id), expiryDate: String(b.expiryDate) };
+        }
+      }
       const supplierMap = (suppliersData || []).reduce((acc: Record<string, string>, s: any) => {
         acc[s.id] = s.supplierName;
         return acc;
@@ -187,8 +204,9 @@ export default function InventoryAdjustmentPage() {
         stock:         Number(p.stock ?? 0),
         piecesPerCase: Number(p.piecesPerCase ?? PIECES_PER_CASE_DEFAULT),
         reservedStock: Number(p.reservedStock ?? 0),
-        expiryDate:    p.expiryDate ?? null,
-        image:         p.image ?? null,
+        expiryDate:    earliest[p.id]?.expiryDate ?? null,
+        batchId:       earliest[p.id]?.id ?? null,
+        image:        p.image ?? null,
         status:        (p.status ?? "ACTIVE") as ProductStatus,
         supplierId:    String(p.supplierId ?? ""),
         supplierName:  supplierMap[p.supplierId] || p.supplier?.supplierName || "—",
@@ -325,11 +343,13 @@ export default function InventoryAdjustmentPage() {
     try {
       const newExpiry = clear ? null : new Date(`${expDate}T00:00:00.000Z`).toISOString();
 
-      // ⚠️ Adjust this call to match your api helper / backend route for updating a product.
-      await api.updateProduct(expProd.id, { expiryDate: newExpiry });
+      if (!expProd.batchId) {
+        throw new Error("This product has no stock batch yet. Receive it through a delivery first.");
+      }
+      await api.updateBatchExpiry(expProd.batchId, newExpiry);
 
-      // Update the list right away (no full reload, so the page doesn't flash)
-      setProducts((prev) => prev.map((p) => (p.id === expProd.id ? { ...p, expiryDate: newExpiry, updatedAt: new Date().toISOString() } : p)));
+      // Re-read from the server without the loading skeleton
+      await fetchProducts(true);
       closeExpiry();
     } catch (e) {
       setExpError(e instanceof Error ? e.message : "Failed to save expiration date");
@@ -351,7 +371,7 @@ export default function InventoryAdjustmentPage() {
   if (error) return (
     <div style={{ padding: "28px", fontFamily: "'Segoe UI', sans-serif", background: "#f3f6f3", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px" }}>
       <p style={{ color: "#c62828", fontWeight: 700 }}>⚠️ {error}</p>
-      <button onClick={fetchProducts} style={{ padding: "10px 24px", borderRadius: "20px", border: "none", background: GREEN, color: "#fff", fontWeight: 700, cursor: "pointer" }}>Retry</button>
+      <button onClick={() => fetchProducts()} style={{ padding: "10px 24px", borderRadius: "20px", border: "none", background: GREEN, color: "#fff", fontWeight: 700, cursor: "pointer" }}>Retry</button>
     </div>
   );
 
@@ -695,8 +715,9 @@ export default function InventoryAdjustmentPage() {
 
                         {/* Action */}
                         <td style={{ padding: "13px 16px" }}>
-                          <button onClick={() => openExpiry(p)}
-                            style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 16px", borderRadius: "20px", fontSize: "12px", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", border: hasDate ? `1.5px solid ${GREEN}` : "none", background: hasDate ? "#fff" : GREEN, color: hasDate ? GREEN : "#fff", boxShadow: hasDate ? "none" : "0 3px 8px rgba(46,125,62,0.25)" }}>
+                          <button onClick={() => openExpiry(p)} disabled={!p.batchId}
+                            title={p.batchId ? undefined : "No stock batch yet — receive this product through a delivery first"}
+                            style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 16px", borderRadius: "20px", fontSize: "12px", fontWeight: 700, cursor: p.batchId ? "pointer" : "not-allowed", opacity: p.batchId ? 1 : 0.45, whiteSpace: "nowrap", border: hasDate ? `1.5px solid ${GREEN}` : "none", background: hasDate ? "#fff" : GREEN, color: hasDate ? GREEN : "#fff", boxShadow: hasDate ? "none" : "0 3px 8px rgba(46,125,62,0.25)" }}>
                             {hasDate ? "✏️ Adjust" : "➕ Add Date"}
                           </button>
                         </td>
