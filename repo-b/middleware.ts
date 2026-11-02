@@ -25,7 +25,7 @@ const ROLE_ROUTES: Record<string, string[]> = {
 const SINGLE_SESSION_ROLES = new Set(['CUSTOMER', 'CASHIER', 'STOCK_MANAGER']);
 
 // Routes anyone can visit without a token
-const PUBLIC_ROUTES = ['/', '/login'];
+const PUBLIC_ROUTES = ['/', '/login', '/install', 'offline'];
 
 // Where each role lands after login
 const ROLE_HOME: Record<string, string> = {
