@@ -451,4 +451,20 @@ export const api = {
     if (!res.ok) throw new Error(result.message || 'Failed to adjust stock');
     return result;
   },
+  getAllStockBatches: async () => {
+  const res = await fetch(`${API_URL}/stock-batches`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Failed to fetch stock batches');
+  return res.json();
+},
+
+updateBatchExpiry: async (batchId: string, expiryDate: string | null) => {
+  const res = await fetch(`${API_URL}/stock-batches/${batchId}/expiry`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ expiryDate }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || 'Failed to update expiration date');
+  return json;
+},
 };
