@@ -3,7 +3,7 @@ import Image from "next/image";
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
-     import AlertModal from "@/components/admin/AlertModal";
+import AlertModal from "@/components/admin/components/AlertModal";
 import { 
   LayoutDashboard, ShoppingCart, Users, LineChart, 
   Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift,
@@ -28,15 +28,15 @@ type Promo = {
 };
 
 const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
-  { label: "Inventory Maintenance", icon: ShoppingCart, path: "/inventory" },
-  { label: "Supplier Maintenance", icon: Users, path: "/supplier" },
-  { label: "Sales Reports", icon: LineChart, path: "/sales" },
-  { label: "Product Management", icon: Package, path: "/product" },
-  { label: "Account Management", icon: User, path: "/account" },
-  { label: "Purchase Order", icon: ClipboardList, path: "/purchase-order" },
-  { label: "Loss Report", icon: AlertTriangle, path: "/loss-report" },
-  { label: "Promo Management", icon: Gift, path: "/promo" },
+  { label: "Dashboard", icon: LayoutDashboard, path:"/admin/dashboard" },
+  { label: "Inventory Maintenance", icon: ShoppingCart, path:"/admin/inventory" },
+  { label: "Supplier Maintenance", icon: Users, path:"/admin/supplier" },
+  { label: "Sales Reports", icon: LineChart, path:"/admin/sales" },
+  { label: "Product Management", icon: Package, path:"/admin/product" },
+  { label: "Account Management", icon: User, path:"/admin/account" },
+  { label: "Purchase Order", icon: ClipboardList, path:"/admin/purchase-order" },
+  { label: "Loss Report", icon: AlertTriangle, path:"/admin/loss-report" },
+  { label: "Promo Management", icon: Gift, path:"/admin/promo" },
 ];
 
 const PROMO_TYPES: PromoType[] = ["Discount", "Buy 1 Get 1", "Bundle Deal"];

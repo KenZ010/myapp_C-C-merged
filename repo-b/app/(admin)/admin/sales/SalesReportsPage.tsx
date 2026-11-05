@@ -31,15 +31,15 @@ type Transaction = {
 };
 
 const navItems = [
-  { label: "Dashboard",             icon: LayoutDashboard, path: "/dashboard"      },
-  { label: "Inventory Maintenance", icon: ShoppingCart, path: "/inventory"      },
-  { label: "Supplier Maintenance",  icon: Users, path: "/supplier"       },
-  { label: "Sales Reports",         icon: BarChart3, path: "/sales"          },
-  { label: "Product Management",    icon: Package, path: "/product"        },
-  { label: "Account Management",    icon: User, path: "/account"        },
-  { label: "Purchase Order",        icon: ClipboardList, path: "/purchase-order" },
-  { label: "Loss Report", icon: AlertTriangle, path: "/loss-report" },
-  { label: "Promo Management",      icon: Gift, path: "/promo" },
+  { label: "Dashboard",             icon: LayoutDashboard, path:"/admin/dashboard"      },
+  { label: "Inventory Maintenance", icon: ShoppingCart, path:"/admin/inventory"      },
+  { label: "Supplier Maintenance",  icon: Users, path:"/admin/supplier"       },
+  { label: "Sales Reports",         icon: BarChart3, path:"/admin/sales"          },
+  { label: "Product Management",    icon: Package, path:"/admin/product"        },
+  { label: "Account Management",    icon: User, path:"/admin/account"        },
+  { label: "Purchase Order",        icon: ClipboardList, path:"/admin/purchase-order" },
+  { label: "Loss Report", icon: AlertTriangle, path:"/admin/loss-report" },
+  { label: "Promo Management",      icon: Gift, path:"/admin/promo" },
 ];
 
 const CATEGORY_ICONS: Record<string, typeof Coffee> = {

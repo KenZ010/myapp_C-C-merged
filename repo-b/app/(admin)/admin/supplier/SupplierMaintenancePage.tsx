@@ -35,15 +35,15 @@ type SupplierItem = {
 };
 
 const navItems = [
-  { label: "Dashboard",             icon: LayoutDashboard, path: "/dashboard" },
-  { label: "Inventory Maintenance", icon: ShoppingCart, path: "/inventory" },
-  { label: "Supplier Maintenance",  icon: Users, path: "/supplier", active: true },
-  { label: "Sales Reports",         icon: LineChart, path: "/sales" },
-  { label: "Product Management",    icon: Package, path: "/product" },
-  { label: "Account Management",    icon: User, path: "/account" },
-  { label: "Purchase Order",        icon: ClipboardList, path: "/purchase-order" },
-  { label: "Loss Report",               icon: AlertTriangle, path: "/loss-report" },
-  { label: "Promo Management",      icon: Gift, path: "/promo" },
+  { label: "Dashboard",             icon: LayoutDashboard, path:"/admin/dashboard" },
+  { label: "Inventory Maintenance", icon: ShoppingCart, path:"/admin/inventory" },
+  { label: "Supplier Maintenance",  icon: Users, path:"/admin/supplier", active: true },
+  { label: "Sales Reports",         icon: LineChart, path:"/admin/sales" },
+  { label: "Product Management",    icon: Package, path:"/admin/product" },
+  { label: "Account Management",    icon: User, path:"/admin/account" },
+  { label: "Purchase Order",        icon: ClipboardList, path:"/admin/purchase-order" },
+  { label: "Loss Report",               icon: AlertTriangle, path:"/admin/loss-report" },
+  { label: "Promo Management",      icon: Gift, path:"/admin/promo" },
 ];
 
 const emptyForm = {
@@ -459,10 +459,10 @@ export default function SupplierMaintenancePage() {
 
   const navigate = (label: string) => {
     const routes: Record<string, string> = {
-      "Dashboard": "/dashboard", "Inventory Maintenance": "/inventory",
-      "Supplier Maintenance": "/supplier", "Sales Reports": "/sales",
-      "Account Management": "/account", "Purchase Order": "/purchase-order",
-      "Loss Report": "/loss-report", "Promo Management": "/promo",
+      "Dashboard":"/admin/dashboard", "Inventory Maintenance":"/admin/dashboard",
+      "Supplier Maintenance":"/admin/supplier", "Sales Reports":"/admin/supplier",
+      "Account Management":"/admin/account", "Purchase Order":"/admin/account",
+      "Loss Report":"/admin/loss-report", "Promo Management":"/admin/loss-report",
     };
     if (routes[label]) router.push(routes[label]);
     setShowMobileMenu(false);
