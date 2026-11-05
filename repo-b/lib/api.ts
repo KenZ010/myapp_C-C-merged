@@ -53,6 +53,8 @@ export const api = {
     if (data.token) persistSession(data.token);
     return data;
   },
+  // NOTE: repo-a sent { name, password }, repo-b sends { email, password }.
+  // Using repo-b's version. Change to match what your backend expects.
   loginCustomer: async (email: string, password: string) => {
     const res = await fetch(`${API_URL}/customers/login-customer`, {
       method: 'POST',
@@ -62,11 +64,33 @@ export const api = {
     const data = await res.json();
     if (data.token) persistSession(data.token);
     return data;
-  },   
+  },
+  loginAdmin: async (name: string, password: string) => {
+    const res = await fetch(`${API_URL}/employees/login-admin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, password }),
+    });
+    const data = await res.json();
+    if (data.token) persistSession(data.token);
+    return data;
+  },
 
   // ── EMPLOYEES ───────────────────────────────────────────────────────────────
+  getEmployees: async () => {
+    const res = await fetch(`${API_URL}/employees`, { headers: authHeaders() });
+    return res.json();
+  },
   getEmployee: async (id: string) => {
     const res = await fetch(`${API_URL}/employees/${id}`, { headers: authHeaders() });
+    return res.json();
+  },
+  createEmployee: async (data: Record<string, unknown>) => {
+    const res = await fetch(`${API_URL}/employees`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
     return res.json();
   },
   updateEmployee: async (id: string, data: Record<string, unknown>) => {
@@ -74,6 +98,13 @@ export const api = {
       method: 'PUT',
       headers: authHeaders(),
       body: JSON.stringify(data),
+    });
+    return res.json();
+  },
+  deleteEmployee: async (id: string) => {
+    const res = await fetch(`${API_URL}/employees/${id}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
     });
     return res.json();
   },
@@ -87,6 +118,29 @@ export const api = {
     const res = await fetch(`${API_URL}/suppliers/${id}`, { headers: authHeaders() });
     return res.json();
   },
+  createSupplier: async (data: Record<string, unknown>) => {
+    const res = await fetch(`${API_URL}/suppliers`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  },
+  updateSupplier: async (id: string, data: Record<string, unknown>) => {
+    const res = await fetch(`${API_URL}/suppliers/${id}`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  },
+  deleteSupplier: async (id: string) => {
+    const res = await fetch(`${API_URL}/suppliers/${id}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    return res.json();
+  },
 
   // ── CUSTOMERS ───────────────────────────────────────────────────────────────
   getCustomers: async () => {
@@ -97,11 +151,26 @@ export const api = {
     const res = await fetch(`${API_URL}/customers/${id}`, { headers: authHeaders() });
     return res.json();
   },
+  createCustomer: async (data: Record<string, unknown>) => {
+    const res = await fetch(`${API_URL}/customers`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  },
   updateCustomer: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/customers/${id}`, {
       method: 'PUT',
       headers: authHeaders(),
       body: JSON.stringify(data),
+    });
+    return res.json();
+  },
+  deleteCustomer: async (id: string) => {
+    const res = await fetch(`${API_URL}/customers/${id}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
     });
     return res.json();
   },
@@ -115,16 +184,44 @@ export const api = {
     const res = await fetch(`${API_URL}/products/${id}`);
     return res.json();
   },
+  createProduct: async (data: Record<string, unknown>) => {
+    const res = await fetch(`${API_URL}/products`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  },
+  // repo-b version (throws on error)
   updateProduct: async (id: string, data: Record<string, unknown>) => {
-  const res = await fetch(`${API_URL}/products/${id}`, {
-    method: 'PUT',
-    headers: authHeaders(),
-    body: JSON.stringify(data),
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.message || 'Failed to update product');
-  return json;
-},
+    const res = await fetch(`${API_URL}/products/${id}`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to update product');
+    return json;
+  },
+  deleteProduct: async (id: string) => {
+    const res = await fetch(`${API_URL}/products/${id}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    if (!res.ok) throw new Error('Delete failed');
+  },
+  uploadProductImage: async (productId: string, file: File) => {
+    const form = new FormData();
+    form.append('image', file);
+    const res = await fetch(`${API_URL}/upload/product/${productId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${getToken()}` }, // no Content-Type: browser sets the boundary
+      body: form,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Image upload failed');
+    return data;
+  },
 
   // ── CART ────────────────────────────────────────────────────────────────────
   getCart: async (customerId: string) => {
@@ -212,6 +309,7 @@ export const api = {
   },
 
   // ── RETURNS ─────────────────────────────────────────────────────────────────
+  // CUSTOMER: submit a return request
   submitReturnRequest: async (payload: {
     saleId:  string;
     reason:  'WRONG_ITEM_SENT' | 'DAMAGED' | 'EXPIRED' | 'OTHER';
@@ -226,6 +324,7 @@ export const api = {
     if (!res.ok) throw new Error(data.message || 'Failed to submit return request');
     return data;
   },
+  // EMPLOYEE: approve or reject a return request
   reviewReturnRequest: async (
     returnRequestId: string,
     action:          'APPROVE' | 'REJECT',
@@ -298,10 +397,10 @@ export const api = {
     const query = new URLSearchParams();
     if (params?.lossReason) query.set('lossReason', params.lossReason);
     if (params?.productId)  query.set('productId',  params.productId);
-    if (params?.from)       query.set('from',        params.from);
-    if (params?.to)         query.set('to',          params.to);
-    if (params?.page)       query.set('page',        String(params.page));
-    if (params?.limit)      query.set('limit',       String(params.limit));
+    if (params?.from)       query.set('from',       params.from);
+    if (params?.to)         query.set('to',         params.to);
+    if (params?.page)       query.set('page',       String(params.page));
+    if (params?.limit)      query.set('limit',      String(params.limit));
     const res = await fetch(`${API_URL}/loss-reports?${query.toString()}`, {
       headers: authHeaders(),
     });
@@ -336,6 +435,7 @@ export const api = {
     });
     return res.json();
   },
+  // repo-b version (throws on error)
   updateDelivery: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/deliveries/${id}`, {
       method: 'PUT',
@@ -368,25 +468,24 @@ export const api = {
     return res.json();
   },
   getExpiredItems: async () => {
-    const res = await fetch(`${API_URL}/deliveries/expired`, {
-      headers: authHeaders(),
-    });
+    const res = await fetch(`${API_URL}/deliveries/expired`, { headers: authHeaders() });
     if (!res.ok) throw new Error('Failed to fetch expired items');
     return res.json();
   },
   getProductExpiryStatus: async () => {
-    const res = await fetch(`${API_URL}/deliveries/expiry-status`, {
-      headers: authHeaders(),
-    });
+    const res = await fetch(`${API_URL}/deliveries/expiry-status`, { headers: authHeaders() });
     if (!res.ok) throw new Error('Failed to fetch expiry status');
     return res.json();
   },
 
-  // ── STOCK BATCHES ────────────────────────────────────────────────────────────
+  // ── STOCK BATCHES ───────────────────────────────────────────────────────────
+  getAllStockBatches: async () => {
+    const res = await fetch(`${API_URL}/stock-batches`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('Failed to fetch stock batches');
+    return res.json();
+  },
   getStockBatches: async (productId: string) => {
-    const res = await fetch(`${API_URL}/stock-batches/${productId}`, {
-      headers: authHeaders(),
-    });
+    const res = await fetch(`${API_URL}/stock-batches/${productId}`, { headers: authHeaders() });
     if (!res.ok) throw new Error('Failed to fetch stock batches');
     return res.json();
   },
@@ -398,9 +497,7 @@ export const api = {
     return res.json();
   },
   getExpiredBatches: async () => {
-    const res = await fetch(`${API_URL}/stock-batches/expired`, {
-      headers: authHeaders(),
-    });
+    const res = await fetch(`${API_URL}/stock-batches/expired`, { headers: authHeaders() });
     if (!res.ok) throw new Error('Failed to fetch expired batches');
     return res.json();
   },
@@ -413,10 +510,54 @@ export const api = {
     if (!res.ok) throw new Error('Failed to write off expired batches');
     return res.json();
   },
+  updateBatchExpiry: async (batchId: string, expiryDate: string | null) => {
+    const res = await fetch(`${API_URL}/stock-batches/${batchId}/expiry`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({ expiryDate }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || 'Failed to update expiration date');
+    return json;
+  },
 
   // ── PROMOS ──────────────────────────────────────────────────────────────────
   getActivePromos: async () => {
     const res = await fetch(`${API_URL}/promos/active`);
+    return res.json();
+  },
+  getPromos: async () => {
+    const res = await fetch(`${API_URL}/promos`, { headers: authHeaders() });
+    return res.json();
+  },
+  createPromo: async (data: Record<string, unknown>) => {
+    const res = await fetch(`${API_URL}/promos`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  },
+  updatePromo: async (id: string, data: Record<string, unknown>) => {
+    const res = await fetch(`${API_URL}/promos/${id}`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    return res.json();
+  },
+  deletePromo: async (id: string) => {
+    const res = await fetch(`${API_URL}/promos/${id}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    return res.json();
+  },
+  togglePromo: async (id: string) => {
+    const res = await fetch(`${API_URL}/promos/${id}/toggle`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+    });
     return res.json();
   },
 
@@ -440,7 +581,6 @@ export const api = {
     if (!res.ok) throw new Error('Failed to fetch inventory logs');
     return res.json();
   },
-
   adjustStock: async (data: { productId: string; quantity: number; reason: string; employeeId: string }) => {
     const res = await fetch(`${API_URL}/products/${data.productId}/adjust-stock`, {
       method: 'PATCH',
@@ -451,20 +591,18 @@ export const api = {
     if (!res.ok) throw new Error(result.message || 'Failed to adjust stock');
     return result;
   },
-  getAllStockBatches: async () => {
-  const res = await fetch(`${API_URL}/stock-batches`, { headers: authHeaders() });
-  if (!res.ok) throw new Error('Failed to fetch stock batches');
-  return res.json();
-},
 
-updateBatchExpiry: async (batchId: string, expiryDate: string | null) => {
-  const res = await fetch(`${API_URL}/stock-batches/${batchId}/expiry`, {
-    method: 'PATCH',
-    headers: authHeaders(),
-    body: JSON.stringify({ expiryDate }),
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.message || 'Failed to update expiration date');
-  return json;
-},
+  // ── REORDER SUGGESTIONS ─────────────────────────────────────────────────────
+  getReorderSuggestions: async (params?: { supplierId?: string; windowDays?: number; bufferDays?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.supplierId) query.set('supplierId', params.supplierId);
+    if (params?.windowDays) query.set('windowDays', String(params.windowDays));
+    if (params?.bufferDays) query.set('bufferDays', String(params.bufferDays));
+    const res = await fetch(`${API_URL}/reorder/suggestions?${query.toString()}`, {
+      headers: authHeaders(),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Failed to fetch reorder suggestions');
+    return data;
+  },
 };

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
+import { api, clearSession } from "@/lib/api";
 import Image from "next/image";
 import { useSocketActions } from "@/app/providers"; // ← added
 
@@ -33,6 +33,13 @@ const BUBBLES: [number, number, number, number, number, number][] = [
 // Fizz bar heights
 const FIZZ_HEIGHTS = [8, 12, 6, 14, 9, 11, 7, 13];
 
+const ROLE_HOME: Record<string, string> = {
+  ADMIN:         "/admin/dashboard",
+  CASHIER:       "/cashier/ordering",
+  STOCK_MANAGER: "/inventory/monitoring",
+  CUSTOMER:      "/home",
+};
+
 export default function LoginPage() {
   const [email, setEmail]         = useState("");
   const [password, setPassword]         = useState("");
@@ -45,45 +52,60 @@ export default function LoginPage() {
   const { connectSocket } = useSocketActions(); // ← added
 
   const handleLogin = async () => {
-    setError("");
-    if (!email || !password) {
-      setError("Please enter username and password.");
+  setError("");
+  if (!email || !password) {
+    setError("Please enter username and password.");
+    return;
+  }
+  setLoading(true);
+  try {
+    const [employeeRes, adminRes, customerRes] = await Promise.allSettled([
+      api.login(email, password),
+      api.loginAdmin(email, password),
+      api.loginCustomer(email, password),
+    ]);
+
+    const pick = (r: PromiseSettledResult<any>) =>
+      r.status === "fulfilled" && r.value?.token ? r.value : null;
+    const data = pick(employeeRes) ?? pick(adminRes) ?? pick(customerRes);
+
+    if (!data) {
+      setError("Invalid credentials");
       return;
     }
-    setLoading(true);
-    try {
-      const [employeeRes, customerRes] = await Promise.allSettled([
-        api.login(email, password),
-        api.loginCustomer(email, password),
-      ]);
-      const employeeData = employeeRes.status === "fulfilled" ? employeeRes.value : null;
-      const customerData = customerRes.status === "fulfilled" ? customerRes.value : null;
-      const data = employeeData?.token ? employeeData : customerData?.token ? customerData : null;
 
-      if (data?.token) {
-        const token = data.token;
-        const user  = data.employee || data.customer;
-        const role  = user?.role;
-        localStorage.setItem("token", token);
-        localStorage.setItem("user", JSON.stringify(user));
-        connectSocket(); // ← added: connect socket immediately after login
-        const isSecure   = window.location.protocol === "https:";
-        const cookieBase = `path=/; max-age=${60 * 60 * 24}; SameSite=Lax${isSecure ? "; Secure" : ""}`;
-        document.cookie = `token=${token}; ${cookieBase}`;
-        document.cookie = `active_token=${token}; ${cookieBase}`;
-        if      (role === "CASHIER")       router.push("/cashier/ordering");
-        else if (role === "STOCK_MANAGER") router.push("/inventory/monitoring");
-        else if (role === "CUSTOMER")      router.push("/home");
-        else setError("Unknown role. Contact your administrator.");
-      } else {
-        setError("Invalid credentials");
-      }
-    } catch (err: any) {
-      setError(err?.message || "Something went wrong.");
-    } finally {
-      setLoading(false);
+    const token = data.token;
+    const user  = data.employee || data.customer;
+    const role  = user?.role;
+    const home  = ROLE_HOME[role];
+
+    if (!home) {
+      clearSession();
+      setError("Unknown role. Contact your administrator.");
+      return;
     }
-  };
+
+    // Re-save the chosen token last, so it wins if more than one login call succeeded
+    localStorage.setItem("token", token);
+    localStorage.setItem("user", JSON.stringify(user));
+    if (role === "ADMIN") {
+      // repo-a's admin pages read this key
+      localStorage.setItem("employee", JSON.stringify(user));
+    }
+    connectSocket();
+
+    const isSecure   = window.location.protocol === "https:";
+    const cookieBase = `path=/; max-age=${60 * 60 * 24}; SameSite=Lax${isSecure ? "; Secure" : ""}`;
+    document.cookie = `token=${token}; ${cookieBase}`;
+    document.cookie = `active_token=${token}; ${cookieBase}`;
+
+    router.push(home);
+  } catch (err: any) {
+    setError(err?.message || "Something went wrong.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleLogin();
