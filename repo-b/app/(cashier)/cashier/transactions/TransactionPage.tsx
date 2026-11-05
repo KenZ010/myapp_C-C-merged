@@ -56,6 +56,10 @@ const CATEGORY_ICON: Record<string, React.ReactNode> = {
 const getCatIcon = (cat?: string) => CATEGORY_ICON[cat?.toUpperCase() || ""] ?? CATEGORY_ICON.OTHER;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+/** Peso amount with 2 decimals, e.g. 12493.6 -> "12,493.60" */
+const peso = (n: number) =>
+  n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 function fmt(d: Date) {
   return d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
 }
@@ -134,7 +138,7 @@ function buildPrintHTML(
       <td style="padding:8px 10px;text-align:center">
         <span style="background:${tx.payment==="CASH"?"#ecfdf5":"#eff6ff"};color:${tx.payment==="CASH"?"#059669":"#2563eb"};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${tx.payment}</span>
       </td>
-      <td style="padding:8px 10px;text-align:right;font-weight:700">₱${tx.total.toLocaleString()}.00</td>
+      <td style="padding:8px 10px;text-align:right;font-weight:700">₱${peso(tx.total)}</td>
     </tr>`).join("");
 
   const topRows = top.map((p, i) => `
@@ -142,7 +146,7 @@ function buildPrintHTML(
       <td style="padding:8px 10px;text-align:center;font-weight:700;color:${i<3?"#f59e0b":"#64748b"}">${i+1}</td>
       <td style="padding:8px 10px;font-weight:500">${p.name}</td>
       <td style="padding:8px 10px;text-align:center">${p.qty}</td>
-      <td style="padding:8px 10px;text-align:right;font-weight:700;color:#059669">₱${p.revenue.toLocaleString()}</td>
+      <td style="padding:8px 10px;text-align:right;font-weight:700;color:#059669">₱${peso(p.revenue)}</td>
     </tr>`).join("");
 
   return `<!DOCTYPE html>
@@ -185,10 +189,10 @@ function buildPrintHTML(
   </div>
 
   <div class="stats">
-    <div class="stat"><div class="stat-label">Total Sales</div><div class="stat-value">₱${total.toLocaleString()}</div></div>
+    <div class="stat"><div class="stat-label">Total Sales</div><div class="stat-value">₱${peso(total)}</div></div>
     <div class="stat"><div class="stat-label">Transactions</div><div class="stat-value">${txs.length}</div></div>
-    <div class="stat"><div class="stat-label">Cash Sales</div><div class="stat-value">₱${cash.toLocaleString()}</div></div>
-    <div class="stat"><div class="stat-label">Online Sales</div><div class="stat-value">₱${online.toLocaleString()}</div></div>
+    <div class="stat"><div class="stat-label">Cash Sales</div><div class="stat-value">₱${peso(cash)}</div></div>
+    <div class="stat"><div class="stat-label">Online Sales</div><div class="stat-value">₱${peso(online)}</div></div>
   </div>
 
   <h2>Transaction Records</h2>
@@ -575,7 +579,7 @@ export default function CashierTransactionsPage() {
   const cashSales   = periodFiltered.filter((t) => t.payment === "CASH").reduce((s, t) => s + t.total, 0);
   const onlineSales = periodFiltered.filter((t) => t.payment !== "CASH").reduce((s, t) => s + t.total, 0);
   const txCount     = periodFiltered.length;
-  const avgOrder    = txCount > 0 ? Math.round(totalSales / txCount) : 0;
+  const avgOrder    = txCount > 0 ? totalSales / txCount : 0;
 
   const productMap: Record<string, { name: string; qty: number; revenue: number; category: string }> = {};
   periodFiltered.forEach((tx) => {
@@ -589,10 +593,10 @@ export default function CashierTransactionsPage() {
   const topSelling = Object.values(productMap).sort((a, b) => b.qty - a.qty).slice(0, 8).map((p, i) => ({ ...p, rank: i + 1 }));
 
   const statCards = [
-    { label:"Total Sales",   value:`₱${totalSales.toLocaleString()}`,  icon:Icon.trendUp,    accent:"#4f46e5", light:"#eef2ff" },
+    { label:"Total Sales",   value:`₱${peso(totalSales)}`,  icon:Icon.trendUp,    accent:"#4f46e5", light:"#eef2ff" },
     { label:"Transactions",  value:String(txCount),                    icon:Icon.receipt,    accent:"#0891b2", light:"#ecfeff" },
-    { label:"Cash Sales",    value:`₱${cashSales.toLocaleString()}`,   icon:Icon.creditCard, accent:"#059669", light:"#ecfdf5" },
-    { label:"Online Sales",  value:`₱${onlineSales.toLocaleString()}`, icon:Icon.barChart,   accent:"#d97706", light:"#fffbeb" },
+    { label:"Cash Sales",    value:`₱${peso(cashSales)}`,   icon:Icon.creditCard, accent:"#059669", light:"#ecfdf5" },
+    { label:"Online Sales",  value:`₱${peso(onlineSales)}`, icon:Icon.barChart,   accent:"#d97706", light:"#fffbeb" },
   ];
 
   const thStyle: React.CSSProperties = { padding:"11px 16px", textAlign:"left", fontSize:"11px", fontWeight:700, color:"#64748b", textTransform:"uppercase", letterSpacing:"0.06em", background:"#f8fafc", borderBottom:"1px solid #eaecf4" };
@@ -685,7 +689,7 @@ export default function CashierTransactionsPage() {
                       <td style={tdStyle}><div style={{ display:"flex", alignItems:"center", gap:"6px" }}><span style={{ color:"#94a3b8" }}>{Icon.clock}</span><span style={{ fontSize:"12px" }}>{tx.date}</span></div></td>
                       <td style={tdStyle}><div style={{ display:"flex", alignItems:"center", gap:"6px" }}><span style={{ color:"#94a3b8" }}>{Icon.box}</span><span>{tx.items.length}</span></div></td>
                       <td style={tdStyle}><span style={{ padding:"3px 10px", borderRadius:"20px", fontSize:"11.5px", fontWeight:600, background:tx.payment==="CASH"?"#ecfdf5":"#eff6ff", color:tx.payment==="CASH"?"#059669":"#2563eb" }}>{tx.payment}</span></td>
-                      <td style={{ ...tdStyle, fontWeight:700, color:"#0f172a" }}>₱{tx.total.toLocaleString()}.00</td>
+                      <td style={{ ...tdStyle, fontWeight:700, color:"#0f172a" }}>₱{peso(tx.total)}</td>
                       <td style={tdStyle}><button onClick={() => setSelectedTx(tx)} style={{ padding:"6px 14px", borderRadius:"7px", fontSize:"12px", fontWeight:600, cursor:"pointer", border:"1px solid #e2e8f0", background:"#fff", color:"#374151" }}>View</button></td>
                     </tr>
                   ))}
@@ -748,7 +752,7 @@ export default function CashierTransactionsPage() {
                               <div style={{ display:"flex", alignItems:"center", gap:"6px" }}><span style={{ color:"#94a3b8" }}>{getCatIcon(item.category)}</span>{item.name}</div>
                             </td>
                             <td style={{ ...tdStyle, color:"#475569" }}>{item.qty}</td>
-                            <td style={{ ...tdStyle, fontWeight:700, color:"#059669" }}>₱{item.revenue.toLocaleString()}</td>
+                            <td style={{ ...tdStyle, fontWeight:700, color:"#059669" }}>₱{peso(item.revenue)}</td>
                           </tr>
                         );
                       })}
@@ -764,7 +768,7 @@ export default function CashierTransactionsPage() {
                 </div>
                 <div style={{ padding:"8px 20px" }}>
                   {[
-                    { label:"Avg Order Value",     value:`₱${avgOrder.toLocaleString()}` },
+                    { label:"Avg Order Value",     value:`₱${peso(avgOrder)}` },
                     { label:"Total Transactions",  value:String(txCount) },
                     { label:"Cash Transactions",   value:String(periodFiltered.filter((t) => t.payment==="CASH").length) },
                     { label:"Online Transactions", value:String(periodFiltered.filter((t) => t.payment!=="CASH").length) },
@@ -787,7 +791,7 @@ export default function CashierTransactionsPage() {
         const TAX_RATE = 0.12;
         const subtotal = selectedTx.items.reduce((s, i) => s + i.price * i.quantity, 0);
         const tax      = subtotal * TAX_RATE;
-        const totalDue = selectedTx.total || subtotal + tax;
+        const totalDue = selectedTx.total || subtotal + tax; // server total is VAT-inclusive
         return (
           <>
             <div onClick={() => setSelectedTx(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)", zIndex:40 }} />

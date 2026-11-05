@@ -64,9 +64,12 @@ const STATUS_MAP: Record<string, OrderStatus> = {
 const ACTIVE_STATUSES: OrderStatus[] = ["Waiting", "Processing", "Out For Delivery"];
 
 const VAT_RATE = 0.12;
-function withVat(subtotal: number) {
+// order.total from the server is already VAT-inclusive, so derive the
+// subtotal and VAT from the items and use order.total as the grand total.
+function withVat(order: { items: OrderItem[]; total: number }) {
+  const subtotal = order.items.reduce((s, i) => s + i.price * i.qty, 0);
   const vat = subtotal * VAT_RATE;
-  return { subtotal, vat, grandTotal: subtotal + vat };
+  return { subtotal, vat, grandTotal: order.total };
 }
 const money = (n: number) =>
   n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -108,7 +111,7 @@ function ReceiveModal({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  const { subtotal, vat, grandTotal } = withVat(order.total);
+  const { subtotal, vat, grandTotal } = withVat(order);
 
   return (
     <div
@@ -440,7 +443,7 @@ export default function OrdersPage() {
               const isSelected = selectedOrder?.id === order.id;
               const canCancel  = order.status === "Waiting" || order.status === "Processing";
               const canReceive = order.status === "Out For Delivery";
-              const { subtotal, vat, grandTotal } = withVat(order.total);
+              const { subtotal, vat, grandTotal } = withVat(order);
 
               return (
                 <div
@@ -540,7 +543,7 @@ export default function OrdersPage() {
             : -1;
           const canCancel  = selectedOrder.status === "Waiting" || selectedOrder.status === "Processing";
           const canReceive = selectedOrder.status === "Out For Delivery";
-          const { subtotal, vat, grandTotal } = withVat(selectedOrder.total);
+          const { subtotal, vat, grandTotal } = withVat(selectedOrder);
 
           return (
             <div className="bg-white rounded-2xl border border-gray-100 p-6 sticky top-5">
