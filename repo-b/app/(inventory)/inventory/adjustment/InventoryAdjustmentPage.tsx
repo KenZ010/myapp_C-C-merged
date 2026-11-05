@@ -36,6 +36,9 @@ type Product = {
 const PIECES_PER_CASE_DEFAULT = 24;
 const EXPIRING_SOON_DAYS      = 30; // products expiring within this many days are flagged
 
+// Reasons that can only DEDUCT stock (no addition allowed)
+const DEDUCT_ONLY_REASONS = ["Expired", "Damaged"];
+
 function getPiecesPerCase(p: Product): number {
   return p.piecesPerCase || PIECES_PER_CASE_DEFAULT;
 }
@@ -158,6 +161,9 @@ export default function InventoryAdjustmentPage() {
   const [adjError,   setAdjError]   = useState<string | null>(null);
   const [adjSuccess, setAdjSuccess] = useState(false);
 
+  // Expired / Damaged → deduct only (no addition)
+  const isDeductOnly = DEDUCT_ONLY_REASONS.includes(adjReason);
+
   // ── Expiration tab state ──
   const [expSearch,  setExpSearch]  = useState("");
   const [expFilter,  setExpFilter]  = useState<"All" | ExpiryStatus>("All");
@@ -278,6 +284,16 @@ export default function InventoryAdjustmentPage() {
     setAdjSuccess(false);
   };
 
+  // Change reason; Expired / Damaged can only deduct, so flip any positive qty to negative
+  const selectReason = (r: string) => {
+    setAdjReason(r);
+    setAdjSuccess(false);
+    setAdjError(null);
+    if (DEDUCT_ONLY_REASONS.includes(r)) {
+      setAdjQty((v) => (v > 0 ? -v : v));
+    }
+  };
+
   const caseDelta = detailProd
     ? adjUnit === "cases" ? adjQty : adjQty / getPiecesPerCase(detailProd)
     : 0;
@@ -293,6 +309,13 @@ export default function InventoryAdjustmentPage() {
 
   const applyAdjustment = async () => {
     if (!detailProd || adjQty === 0) return;
+
+    // Safety net: Expired / Damaged must never add stock
+    if (isDeductOnly && adjQty > 0) {
+      setAdjError(`"${adjReason}" can only deduct stock.`);
+      return;
+    }
+
     setAdjLoading(true);
     setAdjError(null);
     setAdjSuccess(false);
@@ -906,13 +929,17 @@ export default function InventoryAdjustmentPage() {
               {/* Adjustment Panel */}
               <div style={{ background: GREEN_LIGHT, borderRadius: "16px", border: "1.5px solid #a5d6a7", padding: "20px", marginBottom: "16px" }}>
                 <p style={{ fontSize: "14px", fontWeight: 800, color: GREEN_DARK, marginBottom: "4px" }}>📦 Adjust Stock</p>
-                <p style={{ fontSize: "12px", color: "#888", marginBottom: "16px" }}>Positive = add stock · Negative = deduct stock</p>
+                <p style={{ fontSize: "12px", color: isDeductOnly ? "#c62828" : "#888", fontWeight: isDeductOnly ? 600 : 400, marginBottom: "16px" }}>
+                  {isDeductOnly
+                    ? `"${adjReason}" can only deduct stock — addition is disabled.`
+                    : "Positive = add stock · Negative = deduct stock"}
+                </p>
 
                 <div style={{ marginBottom: "14px" }}>
                   <label style={{ fontSize: "11px", fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", display: "block", marginBottom: "6px" }}>Reason</label>
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                     {["Received", "Expired", "Damaged", "Audit Correction"].map((r) => (
-                      <button key={r} onClick={() => setAdjReason(r)}
+                      <button key={r} onClick={() => selectReason(r)}
                         style={{ padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, border: adjReason === r ? "none" : "1.5px solid #ddd", background: adjReason === r ? GREEN : "#fff", color: adjReason === r ? "#fff" : "#555", cursor: "pointer", transition: "all 0.15s" }}>
                         {r}
                       </button>
@@ -942,11 +969,19 @@ export default function InventoryAdjustmentPage() {
                     <input
                       type="number"
                       value={adjQty}
-                      onChange={(e) => setAdjQty(Number(e.target.value))}
+                      max={isDeductOnly ? 0 : undefined}
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        // Expired / Damaged: always store as a negative (deduction)
+                        setAdjQty(isDeductOnly ? (n === 0 ? 0 : -Math.abs(n)) : n);
+                      }}
                       style={{ width: "90px", textAlign: "center", padding: "8px", borderRadius: "10px", border: `1.5px solid ${GREEN}`, fontSize: "18px", fontWeight: 800, outline: "none", color: adjQty < 0 ? "#c62828" : adjQty > 0 ? "#2e7d32" : "#1a1a1a" }}
                     />
-                    <button onClick={() => setAdjQty(v => v + 1)}
-                      style={{ width: "36px", height: "36px", borderRadius: "50%", border: "none", background: GREEN, fontSize: "18px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff", flexShrink: 0 }}>+</button>
+                    <button
+                      onClick={() => setAdjQty(v => isDeductOnly ? Math.min(0, v + 1) : v + 1)}
+                      disabled={isDeductOnly && adjQty >= 0}
+                      title={isDeductOnly ? `"${adjReason}" can only deduct stock` : undefined}
+                      style={{ width: "36px", height: "36px", borderRadius: "50%", border: "none", background: isDeductOnly && adjQty >= 0 ? "#e0e0e0" : GREEN, fontSize: "18px", cursor: isDeductOnly && adjQty >= 0 ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: isDeductOnly && adjQty >= 0 ? "#bbb" : "#fff", flexShrink: 0 }}>+</button>
                     <div style={{ fontSize: "13px", color: "#888" }}>
                       → New stock: <strong style={{ color: GREEN_DARK, fontSize: "15px" }}>{Math.round(previewCases)}</strong> cases
                       <span style={{ fontSize: "11px", color: "#aaa" }}> ({previewPieces} pcs)</span>
