@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ReturnRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
-type ReturnReason = "DIRTY_INTERIOR" | "REDUCED_SOFT_DRINK_CONTENT" | "DAMAGED" | "OTHER_ISSUES";
+type ReturnReason = "DIRTY_INTERIOR" | "REDUCED_SOFT_DRINK_CONTENT" | "DAMAGED";
 
 type ReturnRequestItem = {
   id: string;
@@ -181,7 +181,6 @@ const REASON_LABELS: Record<ReturnReason, string> = {
   DIRTY_INTERIOR:              "Dirty Interior",
   REDUCED_SOFT_DRINK_CONTENT: "Reduced Soft Drink Content",
   DAMAGED:                     "Damaged",
-  OTHER_ISSUES:                "Other Issues",
 };
 
 // ── Tailwind colour helpers ───────────────────────────────────────────────────
@@ -189,8 +188,11 @@ const reasonClasses: Record<ReturnReason, string> = {
   DIRTY_INTERIOR:              "bg-blue-50 text-blue-700",
   REDUCED_SOFT_DRINK_CONTENT: "bg-yellow-50 text-yellow-800",
   DAMAGED:                     "bg-orange-50 text-orange-700",
-  OTHER_ISSUES:                "bg-violet-50 text-violet-700",
 };
+
+// Safe lookups: older records in the database may still carry a reason that no longer exists here
+const reasonLabel = (r: string) => REASON_LABELS[r as ReturnReason] ?? r;
+const reasonClass = (r: string) => reasonClasses[r as ReturnReason] ?? "bg-slate-100 text-slate-600";
 
 const statusClasses: Record<ReturnRequestStatus, { badge: string; dot: string }> = {
   PENDING:  { badge: "bg-orange-50 text-orange-700",  dot: "bg-orange-500"  },
@@ -396,7 +398,7 @@ export default function ReturnPage() {
 
           {/* Reason filter */}
           <div className="flex gap-0.5 bg-slate-100 rounded-lg p-0.5">
-            {(["ALL", "DIRTY_INTERIOR", "REDUCED_SOFT_DRINK_CONTENT", "DAMAGED", "OTHER_ISSUES"] as const).map((r) => (
+            {(["ALL", "DIRTY_INTERIOR", "REDUCED_SOFT_DRINK_CONTENT", "DAMAGED"] as const).map((r) => (
               <button
                 key={r}
                 onClick={() => setReasonFil(r)}
@@ -470,7 +472,7 @@ export default function ReturnPage() {
                 ) : (
                   filtered.map((r) => {
                     const sc = statusClasses[r.status];
-                    const rc = reasonClasses[r.reason];
+                    const rc = reasonClass(r.reason);
                     return (
                       <tr key={r.id} className="ret-row transition-colors">
                         {/* Request ID */}
@@ -511,7 +513,7 @@ export default function ReturnPage() {
                         {/* Reason */}
                         <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle">
                           <span className={`px-2 py-0.5 rounded text-[11.5px] font-bold ${rc}`}>
-                            {REASON_LABELS[r.reason]}
+                            {reasonLabel(r.reason)}
                           </span>
                         </td>
 
@@ -607,8 +609,8 @@ export default function ReturnPage() {
                     <span className={`px-2.5 py-0.5 rounded text-[11.5px] font-bold ${statusClasses[viewItem.status].badge}`}>
                       {viewItem.status.charAt(0) + viewItem.status.slice(1).toLowerCase()}
                     </span>
-                    <span className={`px-2.5 py-0.5 rounded text-[11.5px] font-bold ${reasonClasses[viewItem.reason]}`}>
-                      {REASON_LABELS[viewItem.reason]}
+                    <span className={`px-2.5 py-0.5 rounded text-[11.5px] font-bold ${reasonClass(viewItem.reason)}`}>
+                      {reasonLabel(viewItem.reason)}
                     </span>
                   </div>
                   <p className="text-[18px] font-extrabold text-white m-0">Return Request</p>
