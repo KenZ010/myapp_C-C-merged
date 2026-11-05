@@ -1,11 +1,5 @@
-const CACHE = "julieta-v1";
+const CACHE = "julieta-v2";
 const OFFLINE_URL = "/offline";
-
-const CUSTOMER_PATHS = [
-  "/home", "/about", "/cart", "/checkout", "/contact", "/faqs",
-  "/order-placed", "/orders", "/products", "/return-order",
-  "/settings", "/transactions", "/offline",
-];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -32,33 +26,27 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api") || url.pathname.startsWith("/socket.io")) return;
 
-  // Only handle customer pages and static assets; cashier/inventory go straight to network
-  const isCustomerPage = CUSTOMER_PATHS.some(
-    (p) => url.pathname === p || url.pathname.startsWith(p + "/")
-  );
-  const isStatic =
-    url.pathname.startsWith("/_next/static") || url.pathname.startsWith("/icons");
-
-  if (!isCustomerPage && !isStatic) return;
-
-  // Pages: network first, offline page as fallback
+  // Pages for every role: network first, offline page as fallback.
+  // Pages are never stored, so one user's screens can't show up for the next person.
   if (request.mode === "navigate") {
     event.respondWith(fetch(request).catch(() => caches.match(OFFLINE_URL)));
     return;
   }
 
   // Static build assets: cache first
-  if (isStatic) {
-    event.respondWith(
-      caches.match(request).then(
-        (hit) =>
-          hit ||
-          fetch(request).then((res) => {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(request, copy));
-            return res;
-          })
-      )
-    );
-  }
+  const isStatic =
+    url.pathname.startsWith("/_next/static") || url.pathname.startsWith("/icons");
+  if (!isStatic) return;
+
+  event.respondWith(
+    caches.match(request).then(
+      (hit) =>
+        hit ||
+        fetch(request).then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(request, copy));
+          return res;
+        })
+    )
+  );
 });
