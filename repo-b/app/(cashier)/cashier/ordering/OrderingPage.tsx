@@ -60,6 +60,9 @@ const formatExpiry = (dateStr?: string | null): string | null => {
   return d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
 };
 
+const formatMoney = (n: number): string =>
+  `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 function SkeletonCard() {
   return (
@@ -82,7 +85,7 @@ function SkeletonCard() {
   );
 }
 
-// ── Small round thumbnail used in the bottom bar ─────────────────────────────
+// ── Small round thumbnail used in the cart bar ───────────────────────────────
 function MiniThumb({ image, emoji }: { image?: string | null; emoji: string }) {
   const [failed, setFailed] = useState(false);
 
@@ -93,11 +96,11 @@ function MiniThumb({ image, emoji }: { image?: string | null; emoji: string }) {
         src={image}
         alt=""
         onError={() => setFailed(true)}
-        style={{ width: "24px", height: "24px", borderRadius: "50%", objectFit: "cover", display: "block", flexShrink: 0 }}
+        className="w-full h-full rounded-full object-cover block"
       />
     );
   }
-  return <span style={{ fontSize: "14px" }}>{emoji}</span>;
+  return <span className="text-sm leading-none">{emoji}</span>;
 }
 
 // ── Quantity Stepper ──────────────────────────────────────────────────────────
@@ -539,6 +542,7 @@ export default function OrderingPage() {
 
   const total     = cart.reduce((sum, i) => sum + i.finalPrice * i.qty, 0);
   const itemCount = cart.reduce((sum, i) => sum + i.qty, 0);
+  const hasCart   = cart.length > 0;
 
   const handleCheckout = () => {
     if (cart.length === 0) return;
@@ -557,6 +561,12 @@ export default function OrderingPage() {
           from { opacity: 0; transform: translateY(6px) scale(0.97); }
           to   { opacity: 1; transform: translateY(0) scale(1); }
         }
+        @keyframes chipIn {
+          from { opacity: 0; transform: translateY(6px) scale(0.95); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .cart-scroll::-webkit-scrollbar { height: 4px; }
+        .cart-scroll::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
       `}</style>
 
       {/* ── Active Promos Banner ── */}
@@ -583,7 +593,7 @@ export default function OrderingPage() {
       )}
 
       {/* ── Main Content ── */}
-      <div className="flex-1 overflow-y-auto bg-gray-50/60 px-7 pt-6 pb-28">
+      <div className="flex-1 overflow-y-auto bg-gray-50/60 px-7 pt-6 pb-6">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-2.5 mb-7">
           {/* Search */}
@@ -666,43 +676,122 @@ export default function OrderingPage() {
         )}
       </div>
 
-      {/* ── Fixed Bottom Bar ── */}
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#fff", borderTop: "1px solid #e8e8e8", padding: "14px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", boxShadow: "0 -4px 20px rgba(0,0,0,0.08)", zIndex: 30 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: 1, minWidth: 0 }}>
-          {cart.length > 0 ? (
-            <div style={{ display: "flex", gap: "10px", overflowX: "auto", maxWidth: "100%" }}>
-              {cart.map((item) => (
-                <div key={item.id} style={{ display: "flex", alignItems: "center", gap: "6px", background: "#f5f5f5", padding: "5px 8px 5px 12px", borderRadius: "20px", flexShrink: 0 }}>
-                  <MiniThumb image={item.image} emoji={getMeta(item.category).emoji} />
-                  <span style={{ fontSize: "12px", color: "#555", fontWeight: 500, whiteSpace: "nowrap" }}>{item.productName} x{item.qty}</span>
-                  {promoMap[item.id] && <span style={{ fontSize: "10px", color: "#e53935", fontWeight: 700 }}>PROMO</span>}
-                  <button
-                    onClick={() => removeFromCart(item.id)}
-                    aria-label={`Remove ${item.productName} from cart`}
-                    style={{ width: "20px", height: "20px", borderRadius: "50%", border: "none", background: "#e0e0e0", color: "#666", fontSize: "12px", lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
+      {/* ── Cart Bar (docked at the bottom of the page, so it never overlaps the sidebar) ── */}
+      <div className="flex-shrink-0 bg-white border-t border-gray-200 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] z-30">
+        <div className="px-7 py-3.5 flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-6">
+
+          {/* Left: cart icon + item chips */}
+          <div className="flex items-center gap-3.5 min-w-0 flex-1">
+            <div
+              className={[
+                "relative w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 transition-colors",
+                hasCart ? "bg-green-50 text-green-800" : "bg-gray-100 text-gray-400",
+              ].join(" ")}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="9" cy="21" r="1" />
+                <circle cx="20" cy="21" r="1" />
+                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+              </svg>
+              {hasCart && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1.5 rounded-full bg-violet-600 text-white
+                                 text-[11px] font-bold flex items-center justify-center border-2 border-white tabular-nums">
+                  {itemCount}
+                </span>
+              )}
             </div>
-          ) : (
-            <p style={{ fontSize: "13px", color: "#aaa" }}>No items in cart yet</p>
-          )}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <div style={{ textAlign: "right" }}>
-            <p style={{ fontSize: "12px", color: "#aaa" }}>{itemCount} item{itemCount !== 1 ? "s" : ""}</p>
-            <p style={{ fontSize: "22px", fontWeight: 800, color: "#1a3c2e" }}>Total: ₱{total.toLocaleString()}.00</p>
+
+            {hasCart ? (
+              <div className="cart-scroll flex gap-2 overflow-x-auto py-1 min-w-0 flex-1">
+                {cart.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full
+                               pl-1.5 pr-1.5 py-1 flex-shrink-0 hover:border-gray-300 transition-colors"
+                    style={{ animation: "chipIn 0.18s ease-out" }}
+                  >
+                    <span className="w-7 h-7 rounded-full bg-white border border-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      <MiniThumb image={item.image} emoji={getMeta(item.category).emoji} />
+                    </span>
+                    <span className="text-xs font-semibold text-gray-700 max-w-[140px] truncate">
+                      {item.productName}
+                    </span>
+                    <span className="text-[11px] font-bold text-violet-700 bg-violet-50 rounded-full px-2 py-0.5 tabular-nums">
+                      ×{item.qty}
+                    </span>
+                    {promoMap[item.id] && (
+                      <span className="text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-1.5 py-0.5">
+                        PROMO
+                      </span>
+                    )}
+                    <button
+                      onClick={() => removeFromCart(item.id)}
+                      aria-label={`Remove ${item.productName} from cart`}
+                      className="w-5 h-5 rounded-full bg-gray-200 text-gray-500 hover:bg-red-100 hover:text-red-600
+                                 flex items-center justify-center text-xs leading-none transition-colors flex-shrink-0"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-700">Your cart is empty</p>
+                <p className="text-xs text-gray-400 mt-0.5">Add products from the list to start an order</p>
+              </div>
+            )}
           </div>
-          <button onClick={() => setShowClearConfirm(true)} disabled={cart.length === 0}
-            style={{ padding: "11px 24px", borderRadius: "20px", border: "1.5px solid #e0e0e0", background: "#fff", color: cart.length === 0 ? "#ccc" : "#e53935", fontSize: "13px", fontWeight: 600, cursor: cart.length === 0 ? "not-allowed" : "pointer" }}>
-            Clear Cart
-          </button>
-          <button onClick={handleCheckout} disabled={cart.length === 0}
-            style={{ padding: "11px 28px", borderRadius: "20px", border: "none", background: cart.length === 0 ? "#ccc" : "#1a3c2e", color: "#fff", fontSize: "14px", fontWeight: 700, cursor: cart.length === 0 ? "not-allowed" : "pointer", boxShadow: cart.length > 0 ? "0 4px 14px rgba(26,60,46,0.3)" : "none" }}>
-            Checkout & Pay →
-          </button>
+
+          {/* Right: total + actions */}
+          <div className="flex items-center justify-between lg:justify-end gap-4 flex-shrink-0">
+            <div className="text-right">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                Total · {itemCount} case{itemCount !== 1 ? "s" : ""}
+              </p>
+              <p className={`text-2xl font-extrabold leading-tight tabular-nums ${hasCart ? "text-[#1a3c2e]" : "text-gray-300"}`}>
+                {formatMoney(total)}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowClearConfirm(true)}
+                disabled={!hasCart}
+                aria-label="Clear cart"
+                className="h-11 px-4 rounded-full border border-gray-200 bg-white text-sm font-semibold
+                           inline-flex items-center gap-1.5 transition-colors
+                           text-red-500 hover:bg-red-50 hover:border-red-200
+                           disabled:text-gray-300 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:cursor-not-allowed"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  <path d="M10 11v6M14 11v6" />
+                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                </svg>
+                Clear
+              </button>
+
+              <button
+                onClick={handleCheckout}
+                disabled={!hasCart}
+                className={[
+                  "h-11 px-7 rounded-full text-sm font-bold text-white inline-flex items-center gap-2",
+                  "transition-all duration-150 active:scale-95",
+                  hasCart
+                    ? "bg-[#1a3c2e] hover:bg-[#14301f] shadow-[0_6px_16px_rgba(26,60,46,0.3)]"
+                    : "bg-gray-300 cursor-not-allowed",
+                ].join(" ")}
+              >
+                Checkout & Pay
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <polyline points="12 5 19 12 12 19" />
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
