@@ -262,11 +262,16 @@ export default function OrdersPage() {
 
   useEffect(() => {
     if (!socket) return;
-    socket.on("order:completed", () => fetchOrders());
-    socket.on("order:status",    () => fetchOrders());
+    // Named handler so cleanup removes ONLY this page's listener.
+    // socket.off("event") with no handler would also remove the dashboard
+    // shell's toast listeners.
+    const refresh = () => fetchOrders();
+
+    socket.on("order:completed", refresh);
+    socket.on("order:status",    refresh);
     return () => {
-      socket.off("order:completed");
-      socket.off("order:status");
+      socket.off("order:completed", refresh);
+      socket.off("order:status",    refresh);
     };
   }, [socket, fetchOrders]);
 

@@ -177,14 +177,19 @@ export default function PendingPage() {
     // Fetch immediately when socket connects (catches missed events during refresh)
     fetchOrders(true);
 
-    socket.on("order:new",       () => fetchOrders(true));
-    socket.on("order:completed", () => fetchOrders(true));
-    socket.on("order:status",    () => fetchOrders(true));
+    // Use a named handler so cleanup removes ONLY this page's listener.
+    // socket.off("event") with no handler removes every listener for that event,
+    // including the cashier layout's toast listener.
+    const refresh = () => fetchOrders(true);
+
+    socket.on("order:new",       refresh);
+    socket.on("order:completed", refresh);
+    socket.on("order:status",    refresh);
 
     return () => {
-      socket.off("order:new");
-      socket.off("order:completed");
-      socket.off("order:status");
+      socket.off("order:new",       refresh);
+      socket.off("order:completed", refresh);
+      socket.off("order:status",    refresh);
     };
   }, [socket, fetchOrders]);
 

@@ -4,7 +4,8 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Drawer from "@/components/Drawer";
 import { CartProvider } from "@/context/CartContext";
-import { useSocketActions } from "@/app/providers";
+import { toast } from "sonner";
+import { useSocket, useSocketActions } from "@/app/providers";
 
 const pageTitles: Record<string, { title: string; sub: string }> = {
   "/home":          { title: "Dashboard",           sub: "Welcome back" },
@@ -29,27 +30,60 @@ type NotificationItem = {
   read: boolean;
 };
 
-const sampleNotifications: NotificationItem[] = [
-  { id: "1", title: "Order shipped",   message: "Your order #1042 is on its way.",  time: "10m ago", read: false },
-  { id: "2", title: "Order confirmed", message: "Order #1039 has been confirmed.",   time: "1h ago",  read: false },
-  { id: "3", title: "Return approved", message: "Your return request was approved.", time: "1d ago",  read: true  },
-];
+const statusTitles: Record<string, string> = {
+  PROCESSING:       "Order is being processed",
+  OUT_FOR_DELIVERY: "Order out for delivery",
+  CANCELLED:        "Order cancelled",
+  COMPLETED:        "Order completed",
+};
 
 function DashboardInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const socket = useSocket();
   const { connectSocket } = useSocketActions();
 
   const [drawerOpen,    setDrawerOpen]    = useState(false);
   const [mounted,       setMounted]       = useState(false);
   const [isMobile,      setIsMobile]      = useState(false);
   const [notifOpen,     setNotifOpen]     = useState(false);
-  const [notifications, setNotifications] = useState<NotificationItem[]>(sampleNotifications);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => { connectSocket(); }, []);
+
+  // Toast + bell entry whenever the cashier updates one of this customer's orders
+  useEffect(() => {
+    if (!socket) return;
+
+    const addNotification = (orderId: string, title: string, message: string) => {
+      setNotifications((prev) => [
+        { id: `${orderId}-${Date.now()}`, title, message, time: "Just now", read: false },
+        ...prev,
+      ]);
+    };
+
+    const onStatus = (d: { orderId: string; status: string; message: string }) => {
+      if (d.status === "CANCELLED") toast.error(d.message, { duration: 8000 });
+      else toast.success(d.message, { duration: 8000 });
+      addNotification(d.orderId, statusTitles[d.status] ?? "Order update", d.message);
+    };
+
+    const onCompleted = (d: { orderId: string; message: string }) => {
+      toast.success(d.message, { duration: 8000 });
+      addNotification(d.orderId, statusTitles.COMPLETED, d.message);
+    };
+
+    // Named handlers: cleanup removes only these, not other components' listeners
+    socket.on("order:status", onStatus);
+    socket.on("order:completed", onCompleted);
+    return () => {
+      socket.off("order:status", onStatus);
+      socket.off("order:completed", onCompleted);
+    };
+  }, [socket]);
 
   // Track viewport width
   useEffect(() => {

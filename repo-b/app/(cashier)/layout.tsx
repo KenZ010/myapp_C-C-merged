@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import { toast } from "sonner";
 import { useSocket, useSocketActions } from "@/app/providers";
 
 // ── Theme (matches customer design) ──
@@ -82,12 +83,6 @@ type NotificationItem = {
   read: boolean;
 };
 
-const sampleNotifications: NotificationItem[] = [
-  { id: "1", title: "New order received", message: "Order #1042 was placed for pickup.", time: "2m ago", read: false },
-  { id: "2", title: "Low stock alert", message: "Coke 1.5L is running low (3 left).", time: "18m ago", read: false },
-  { id: "3", title: "Payment completed", message: "Order #1039 payment was confirmed.", time: "1h ago", read: true },
-];
-
 export default function CashierLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router   = useRouter();
@@ -100,7 +95,7 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   const [notifOpen, setNotifOpen] = useState(false);
-  const [notifications, setNotifications] = useState<NotificationItem[]>(sampleNotifications);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -115,6 +110,34 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
   useEffect(() => {
     connectSocket();
   }, []);
+
+  // Toast + bell entry whenever a customer places a new order
+  useEffect(() => {
+    if (!socket) return;
+
+    const onNewOrder = (d: { orderId: string; message: string }) => {
+      toast.success(d.message, {
+        duration: 8000,
+        action: { label: "View", onClick: () => router.push("/cashier/pending") },
+      });
+
+      setNotifications((prev) => [
+        {
+          id: `${d.orderId}-${Date.now()}`,
+          title: "New order received",
+          message: d.message,
+          time: "Just now",
+          read: false,
+        },
+        ...prev,
+      ]);
+    };
+
+    socket.on("order:new", onNewOrder);
+    return () => {
+      socket.off("order:new", onNewOrder);
+    };
+  }, [socket, router]);
 
   // Close the notification dropdown when clicking outside of it
   useEffect(() => {
