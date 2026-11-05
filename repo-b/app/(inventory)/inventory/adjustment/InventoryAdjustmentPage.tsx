@@ -161,6 +161,10 @@ export default function InventoryAdjustmentPage() {
   const [adjError,   setAdjError]   = useState<string | null>(null);
   const [adjSuccess, setAdjSuccess] = useState(false);
 
+  // Confirmation dialogs (shown before anything is saved)
+  const [showAdjConfirm, setShowAdjConfirm] = useState(false);
+  const [expConfirm,     setExpConfirm]     = useState<null | "save" | "clear">(null);
+
   // Expired / Damaged → deduct only (no addition)
   const isDeductOnly = DEDUCT_ONLY_REASONS.includes(adjReason);
 
@@ -307,7 +311,8 @@ export default function InventoryAdjustmentPage() {
       : Math.abs(adjQty)
     : 0;
 
-  const applyAdjustment = async () => {
+  // Step 1: validate, then ask the user to confirm
+  const requestAdjustment = () => {
     if (!detailProd || adjQty === 0) return;
 
     // Safety net: Expired / Damaged must never add stock
@@ -315,6 +320,16 @@ export default function InventoryAdjustmentPage() {
       setAdjError(`"${adjReason}" can only deduct stock.`);
       return;
     }
+    setAdjError(null);
+    setAdjSuccess(false);
+    setShowAdjConfirm(true);
+  };
+
+  // Step 2: runs only after the user presses "Confirm"
+  const applyAdjustment = async () => {
+    setShowAdjConfirm(false);
+    if (!detailProd || adjQty === 0) return;
+    if (isDeductOnly && adjQty > 0) return;
 
     setAdjLoading(true);
     setAdjError(null);
@@ -357,7 +372,17 @@ export default function InventoryAdjustmentPage() {
     setExpError(null);
   };
 
+  // Step 1: validate, then ask the user to confirm
+  const requestExpiry = (clear = false) => {
+    if (!expProd) return;
+    if (!clear && !expDate) { setExpError("Please choose an expiration date."); return; }
+    setExpError(null);
+    setExpConfirm(clear ? "clear" : "save");
+  };
+
+  // Step 2: runs only after the user presses "Confirm"
   const saveExpiry = async (clear = false) => {
+    setExpConfirm(null);
     if (!expProd) return;
     if (!clear && !expDate) { setExpError("Please choose an expiration date."); return; }
 
@@ -837,14 +862,14 @@ export default function InventoryAdjustmentPage() {
                   style={{ flex: 1, padding: "12px", borderRadius: "14px", border: "1.5px solid #e0e0e0", background: "#fff", color: "#555", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
                   Cancel
                 </button>
-                <button onClick={() => saveExpiry(false)} disabled={expLoading || !expDate}
+                <button onClick={() => requestExpiry(false)} disabled={expLoading || !expDate}
                   style={{ flex: 1.4, padding: "12px", borderRadius: "14px", border: "none", background: expLoading || !expDate ? "#e0e0e0" : GREEN, color: expLoading || !expDate ? "#bbb" : "#fff", fontSize: "14px", fontWeight: 700, cursor: expLoading || !expDate ? "not-allowed" : "pointer", boxShadow: expLoading || !expDate ? "none" : "0 6px 16px rgba(46,125,62,0.3)" }}>
                   {expLoading ? "Saving…" : expProd.expiryDate ? "Save Changes" : "Save Expiration"}
                 </button>
               </div>
 
               {expProd.expiryDate && (
-                <button onClick={() => saveExpiry(true)} disabled={expLoading}
+                <button onClick={() => requestExpiry(true)} disabled={expLoading}
                   style={{ width: "100%", marginTop: "10px", padding: "10px", borderRadius: "14px", border: "none", background: "#fff1f2", color: "#e11d48", fontSize: "12.5px", fontWeight: 600, cursor: "pointer" }}>
                   Remove expiration date
                 </button>
@@ -1016,7 +1041,7 @@ export default function InventoryAdjustmentPage() {
                 )}
 
                 <button
-                  onClick={applyAdjustment}
+                  onClick={requestAdjustment}
                   disabled={adjQty === 0 || adjLoading}
                   style={{ width: "100%", padding: "13px", borderRadius: "14px", border: "none", background: adjQty === 0 || adjLoading ? "#e0e0e0" : GREEN, color: adjQty === 0 || adjLoading ? "#bbb" : "#fff", fontSize: "14px", fontWeight: 700, cursor: adjQty === 0 || adjLoading ? "not-allowed" : "pointer", transition: "all 0.2s", boxShadow: adjQty === 0 || adjLoading ? "none" : "0 6px 16px rgba(46,125,62,0.3)" }}
                 >
@@ -1036,6 +1061,110 @@ export default function InventoryAdjustmentPage() {
           </div>
         </>
       )}
+      {/* ── Confirm: Expiration change ── */}
+      {expProd && expConfirm && (
+        <>
+          <div onClick={() => setExpConfirm(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 60, backdropFilter: "blur(2px)" }} />
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 70, background: "#fff", borderRadius: "20px", width: "min(92vw, 400px)", padding: "26px", boxShadow: "0 32px 100px rgba(0,0,0,0.3)" }}>
+            <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: expConfirm === "clear" ? "#ffebee" : GREEN_LIGHT, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", margin: "0 auto 14px" }}>
+              {expConfirm === "clear" ? "🗑️" : "📅"}
+            </div>
+            <p style={{ fontSize: "17px", fontWeight: 800, color: "#1a1a1a", textAlign: "center", marginBottom: "6px" }}>
+              {expConfirm === "clear" ? "Remove expiration date?" : "Save expiration date?"}
+            </p>
+            <p style={{ fontSize: "13px", color: "#777", textAlign: "center", marginBottom: "16px" }}>
+              {expProd.productName}{expProd.size ? ` · ${expProd.size}` : ""}
+            </p>
+            <div style={{ background: "#f6faf6", borderRadius: "12px", padding: "12px 14px", marginBottom: "18px", fontSize: "13px", color: "#444", display: "grid", gap: "6px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: "#9aa5a0" }}>Current</span>
+                <strong>{fmtDate(expProd.expiryDate)}</strong>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: "#9aa5a0" }}>New</span>
+                <strong style={{ color: expConfirm === "clear" ? "#c62828" : GREEN_DARK }}>
+                  {expConfirm === "clear" ? "No date" : fmtDate(new Date(`${expDate}T00:00:00.000Z`).toISOString())}
+                </strong>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button onClick={() => setExpConfirm(null)}
+                style={{ flex: 1, padding: "12px", borderRadius: "14px", border: "1.5px solid #e0e0e0", background: "#fff", color: "#555", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button onClick={() => saveExpiry(expConfirm === "clear")}
+                style={{ flex: 1.3, padding: "12px", borderRadius: "14px", border: "none", background: expConfirm === "clear" ? "#e11d48" : GREEN, color: "#fff", fontSize: "14px", fontWeight: 700, cursor: "pointer" }}>
+                Confirm
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Confirm: Stock adjustment ── */}
+      {detailProd && showAdjConfirm && (() => {
+        const isDeduct   = adjQty < 0;
+        const rawNew     = detailProd.stock + caseDelta;
+        const overDeduct = rawNew < 0;
+        return (
+          <>
+            <div onClick={() => setShowAdjConfirm(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 60, backdropFilter: "blur(2px)" }} />
+            <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 70, background: "#fff", borderRadius: "20px", width: "min(92vw, 420px)", padding: "26px", boxShadow: "0 32px 100px rgba(0,0,0,0.3)" }}>
+              <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: isDeduct ? "#ffebee" : GREEN_LIGHT, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", margin: "0 auto 14px" }}>
+                {isDeduct ? "➖" : "➕"}
+              </div>
+              <p style={{ fontSize: "17px", fontWeight: 800, color: "#1a1a1a", textAlign: "center", marginBottom: "6px" }}>
+                Confirm stock adjustment?
+              </p>
+              <p style={{ fontSize: "13px", color: "#777", textAlign: "center", marginBottom: "16px" }}>
+                {detailProd.productName}{detailProd.size ? ` · ${detailProd.size}` : ""}
+              </p>
+
+              <div style={{ background: "#f6faf6", borderRadius: "12px", padding: "14px", marginBottom: "14px", fontSize: "13px", color: "#444", display: "grid", gap: "8px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#9aa5a0" }}>Reason</span>
+                  <strong>{adjReason}</strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#9aa5a0" }}>{isDeduct ? "Deduct" : "Add"}</span>
+                  <strong style={{ color: isDeduct ? "#c62828" : "#2e7d32" }}>
+                    {Math.abs(adjQty)} {adjUnit} ({adjPiecesAbs} pcs)
+                  </strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "#9aa5a0" }}>Stock</span>
+                  <strong>
+                    {detailProd.stock} → <span style={{ color: GREEN_DARK }}>{Math.round(previewCases)}</span> cases
+                  </strong>
+                </div>
+                {adjNote && (
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                    <span style={{ color: "#9aa5a0" }}>Note</span>
+                    <strong style={{ textAlign: "right", wordBreak: "break-word" }}>{adjNote}</strong>
+                  </div>
+                )}
+              </div>
+
+              {overDeduct && (
+                <div style={{ background: "#fff8e1", border: "1px solid #ffe082", borderRadius: "10px", padding: "10px 14px", marginBottom: "14px", fontSize: "12px", color: "#e65100" }}>
+                  ⚠️ This deducts more than the current stock. The result will be 0 cases.
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button onClick={() => setShowAdjConfirm(false)}
+                  style={{ flex: 1, padding: "12px", borderRadius: "14px", border: "1.5px solid #e0e0e0", background: "#fff", color: "#555", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+                  Cancel
+                </button>
+                <button onClick={applyAdjustment}
+                  style={{ flex: 1.3, padding: "12px", borderRadius: "14px", border: "none", background: isDeduct ? "#e11d48" : GREEN, color: "#fff", fontSize: "14px", fontWeight: 700, cursor: "pointer" }}>
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }
