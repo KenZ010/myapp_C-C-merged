@@ -145,6 +145,7 @@ export default function CheckoutPage() {
       const res = await api.placeOrder({
         customerId,
         paymentMethod: pay.method,
+        ...(pay.method === "cod" && cashProvided && { cashGiven: cashAmount }),
         ...(pay.method === "gcash" && { gcashRef: pay.gcashRef }),
         ...(note.trim() && { note: note.trim() }),
         items: items.map((i) => ({
