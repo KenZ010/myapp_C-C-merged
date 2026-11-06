@@ -12,7 +12,7 @@ type LossRecord = {
   category: string;
   size?: string;
   image?: string;
-  quantity: number;
+  quantity: number; // always positive (bottles / pieces lost)
   lossReason: LossReason;
   reason?: string;
   createdAt: string;
@@ -26,7 +26,22 @@ type SummaryItem = {
   _sum: { quantity: number };
 };
 
+// Loss quantities are recorded in bottles/pieces, but product.price is the price of
+// one stock unit (e.g. a whole 24-bottle case). Divide by this to get a per-bottle price.
+const BOTTLES_PER_UNIT: Record<string, number> = {
+  case_24: 24, case_12: 12, case_6: 6, btl: 1, pcs: 1,
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** YYYY-MM-DD in the viewer's LOCAL time zone (not UTC), so late-night/early-morning
+ *  records land on the correct local day. */
+const toLocalDateStr = (d: Date) =>
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+const localDay = (iso: string) => toLocalDateStr(new Date(iso));
+
 const fmtDate = (d: string) =>
   new Date(d).toLocaleDateString("en-PH", {
     year: "numeric", month: "short", day: "numeric",
@@ -37,6 +52,9 @@ const fmtShort = (d: Date) =>
 
 const fmtFull = (d: Date) =>
   d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+
+const fmtPeso = (n: number) =>
+  `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /** Returns Monday of the week containing `d` */
 function getMonday(d: Date): Date {
@@ -56,13 +74,9 @@ function getSunday(d: Date): Date {
   return sun;
 }
 
+/** Week key = local date of that week's Monday (sorts correctly, never splits a week) */
 function getWeekKey(dateStr: string) {
-  const d   = new Date(dateStr);
-  const jan1 = new Date(d.getFullYear(), 0, 1);
-  const week = Math.ceil(
-    ((d.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7,
-  );
-  return `${d.getFullYear()}-W${String(week).padStart(2, "0")}`;
+  return toLocalDateStr(getMonday(new Date(dateStr)));
 }
 
 function getWeekRange(dateStr: string) {
@@ -90,15 +104,30 @@ function normalizeLossRecord(raw: Record<string, unknown>): LossRecord {
     productId:    String(raw.productId ?? ""),
     productName:  String(product?.productName ?? "Unknown Product"),
     category:     String(product?.category ?? ""),
-    size:         undefined,
-    image:        undefined,
-    quantity:     Number(raw.quantity ?? 0),
+    size:         product?.size ? String(product.size) : undefined,
+    image:        product?.image ? String(product.image) : undefined,
+    // The API stores losses as negative numbers (e.g. -2). Always work with the positive amount here.
+    quantity:     Math.abs(Number(raw.quantity ?? 0)),
     lossReason:   String(raw.lossReason ?? "OTHER") as LossReason,
     reason:       raw.reason ? String(raw.reason) : undefined,
     createdAt:    String(raw.createdAt ?? ""),
     employeeId:   String(raw.employeeId ?? ""),
     employeeName: employee?.name ? String(employee.name) : undefined,
   };
+}
+
+/** The API caps each page at 50 rows, so fetch every page (up to a safety limit). */
+async function fetchAllLossReports(): Promise<Record<string, unknown>[]> {
+  const all: Record<string, unknown>[] = [];
+  let page = 1;
+  let totalPages = 1;
+  do {
+    const res = await api.getLossReports({ page, limit: 50 });
+    if (Array.isArray(res?.logs)) all.push(...res.logs);
+    totalPages = Number(res?.totalPages ?? 1);
+    page++;
+  } while (page <= totalPages && page <= 20);
+  return all;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -139,10 +168,11 @@ const Icons = {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function LossReportPage() {
   const today    = new Date();
-  const todayStr = today.toISOString().split("T")[0];
+  const todayStr = toLocalDateStr(today);
 
   const [records,     setRecords]     = useState<LossRecord[]>([]);
   const [summary,     setSummary]     = useState<SummaryItem[]>([]);
+  const [priceMap,    setPriceMap]    = useState<Record<string, number>>({}); // price PER BOTTLE
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState<string | null>(null);
 
@@ -157,32 +187,46 @@ export default function LossReportPage() {
   const weekStart = useMemo(() => getMonday(today), []);
   const weekEnd   = useMemo(() => getSunday(today), []);
 
+  // Estimated value of a loss record = bottles lost × price per bottle
+  const valueOf = useCallback(
+    (r: LossRecord) => r.quantity * (priceMap[r.productId] || 0),
+    [priceMap],
+  );
+
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [rawReports, rawSummary] = await Promise.allSettled([
-        api.getLossReports({ limit: 50 }),
+      const [reportsRes, summaryRes, productsRes] = await Promise.allSettled([
+        fetchAllLossReports(),
         api.getLossReportSummary(),
-      ]).then(([r1, r2]) => [
-        r1.status === "fulfilled" ? r1.value : null,
-        r2.status === "fulfilled" ? r2.value : null,
+        api.getProducts(),
       ]);
 
-      const arr: Record<string, unknown>[] = Array.isArray(rawReports?.logs)
-        ? rawReports.logs
-        : [];
-      setRecords(arr.map(normalizeLossRecord));
+      if (reportsRes.status === "rejected") throw reportsRes.reason;
+      setRecords(reportsRes.value.map(normalizeLossRecord));
 
+      const rawSummary = summaryRes.status === "fulfilled" ? summaryRes.value : null;
       const rawSum: Array<{ lossReason: LossReason; totalIncidents: number; totalPiecesLost: number }> =
         Array.isArray(rawSummary?.summary) ? rawSummary.summary : [];
-
       setSummary(rawSum.map((s) => ({
         lossReason: s.lossReason,
         _count:     { id: s.totalIncidents },
         _sum:       { quantity: s.totalPiecesLost },
       })));
+
+      // Price per bottle = product price (per stock unit) ÷ bottles in that unit
+      const products = productsRes.status === "fulfilled" && Array.isArray(productsRes.value)
+        ? productsRes.value
+        : [];
+      const map: Record<string, number> = {};
+      products.forEach((p: { id?: string; price?: number; stockUnit?: string }) => {
+        if (!p.id) return;
+        const perUnit = BOTTLES_PER_UNIT[p.stockUnit ?? "case_24"] ?? 1; // default matches the purchase-order page
+        map[p.id] = (Number(p.price) || 0) / perUnit;
+      });
+      setPriceMap(map);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load loss reports");
     } finally {
@@ -221,10 +265,10 @@ export default function LossReportPage() {
     );
   }, [records, search, reasonFil]);
 
-  // ── Period filter ─────────────────────────────────────────────────────────
+  // ── Period filter (all comparisons use LOCAL dates) ──────────────────────
   const periodData = useMemo(() => {
     if (activeTab === "daily") {
-      return baseFiltered.filter((r) => r.createdAt.startsWith(todayStr));
+      return baseFiltered.filter((r) => localDay(r.createdAt) === todayStr);
     }
     if (activeTab === "weekly") {
       return baseFiltered.filter((r) => {
@@ -233,12 +277,12 @@ export default function LossReportPage() {
       });
     }
     if (activeTab === "monthly") {
-      const month = today.toISOString().slice(0, 7);
-      return baseFiltered.filter((r) => r.createdAt.startsWith(month));
+      const month = todayStr.slice(0, 7);
+      return baseFiltered.filter((r) => localDay(r.createdAt).startsWith(month));
     }
     if (activeTab === "yearly") {
-      const year = String(today.getFullYear());
-      return baseFiltered.filter((r) => r.createdAt.startsWith(year));
+      const year = todayStr.slice(0, 4);
+      return baseFiltered.filter((r) => localDay(r.createdAt).startsWith(year));
     }
     // custom
     const start = customFrom ? new Date(customFrom + "T00:00:00") : new Date(0);
@@ -254,24 +298,25 @@ export default function LossReportPage() {
   const totalQty     = summary.reduce((s, i) => s + (i._sum?.quantity ?? 0), 0);
   const bySummary    = (reason: LossReason) => summary.find((s) => s.lossReason === reason);
   const periodQty    = periodData.reduce((s, r) => s + r.quantity, 0);
+  const periodValue  = periodData.reduce((s, r) => s + valueOf(r), 0);
 
   // ── Grouped table data ────────────────────────────────────────────────────
   const groupedData = useMemo(() => {
     let keyFn:   (r: LossRecord) => string;
     let labelFn: (k: string, rows: LossRecord[]) => string;
 
-    if (activeTab === "daily") {
-      keyFn   = (r) => r.createdAt.slice(0, 10);
-      labelFn = (k) => new Date(k).toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    const dayLabel = (k: string) =>
+      new Date(k + "T00:00:00").toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+    if (activeTab === "daily" || activeTab === "custom") {
+      keyFn   = (r) => localDay(r.createdAt);
+      labelFn = (k) => dayLabel(k);
     } else if (activeTab === "weekly") {
       keyFn   = (r) => getWeekKey(r.createdAt);
       labelFn = (_k, rows) => getWeekRange(rows[0].createdAt);
-    } else if (activeTab === "custom") {
-      keyFn   = (r) => r.createdAt.slice(0, 10);
-      labelFn = (k) => new Date(k).toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
     } else {
       // monthly / yearly: group by YYYY-MM
-      keyFn   = (r) => r.createdAt.slice(0, 7);
+      keyFn   = (r) => localDay(r.createdAt).slice(0, 7);
       labelFn = (_k, rows) => new Date(rows[0].createdAt).toLocaleDateString("en-PH", { month: "long", year: "numeric" });
     }
 
@@ -427,7 +472,7 @@ export default function LossReportPage() {
           {[
             { label:"Records This Period", value:String(periodData.length) },
             { label:"Units Lost",          value:String(periodQty)         },
-            { label:"Period Entries",      value:`${periodData.length} records` },
+            { label:"Est. Loss Value",     value:fmtPeso(periodValue)      },
           ].map((s) => (
             <div key={s.label} className="bg-white rounded-xl border border-slate-100 px-4 py-3">
               <p className="text-[11px] text-slate-400 m-0">{s.label}</p>
@@ -482,8 +527,9 @@ export default function LossReportPage() {
           </div>
         ) : (
           groupedData.map(({ key, label, rows }) => {
-            const groupQty = rows.reduce((s, r) => s + r.quantity, 0);
-            const byReason = (reason: LossReason) => rows.filter((r) => r.lossReason === reason).length;
+            const groupQty   = rows.reduce((s, r) => s + r.quantity, 0);
+            const groupValue = rows.reduce((s, r) => s + valueOf(r), 0);
+            const byReason   = (reason: LossReason) => rows.filter((r) => r.lossReason === reason).length;
 
             return (
               <div key={key} className="bg-white rounded-xl border border-slate-100 overflow-hidden mb-4" style={{ animation:"fadeUp 0.4s ease" }}>
@@ -510,7 +556,7 @@ export default function LossReportPage() {
                   <table className="w-full border-collapse" style={{ minWidth:760 }}>
                     <thead>
                       <tr>
-                        {["Report ID","Product","Qty Lost","Reason","Note","Reported By","Date",""].map((h) => (
+                        {["Report ID","Product","Qty Lost","Est. Value","Reason","Note","Reported By","Date",""].map((h) => (
                           <th key={h} className="px-3.5 py-[11px] text-left text-[10.5px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 border-b border-slate-200 whitespace-nowrap">
                             {h}
                           </th>
@@ -528,6 +574,7 @@ export default function LossReportPage() {
                           <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle">
                             <div className="flex items-center gap-2">
                               {r.image ? (
+                                // eslint-disable-next-line @next/next/no-img-element
                                 <img src={r.image} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
                               ) : (
                                 <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">{Icons.box}</div>
@@ -541,6 +588,9 @@ export default function LossReportPage() {
                           <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle text-center">
                             <span className="text-[15px] font-extrabold text-red-600">{r.quantity}</span>
                             <p className="text-[10px] text-slate-400 m-0">pcs</p>
+                          </td>
+                          <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle text-[13px] font-semibold text-slate-700 whitespace-nowrap">
+                            {fmtPeso(valueOf(r))}
                           </td>
                           <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle">
                             <span className={`px-2 py-0.5 rounded text-[11.5px] font-bold ${REASON_CLASSES[r.lossReason]?.badge ?? "bg-slate-50 text-slate-600"}`}>
@@ -578,7 +628,9 @@ export default function LossReportPage() {
                   <p className="text-[12px] text-slate-400 m-0">
                     <strong className="text-slate-900">{rows.length}</strong> record{rows.length !== 1 ? "s" : ""}
                   </p>
-                  <p className="text-[12px] font-bold text-red-600 m-0">{groupQty} units lost</p>
+                  <p className="text-[12px] font-bold text-red-600 m-0">
+                    {groupQty} units lost · {fmtPeso(groupValue)}
+                  </p>
                 </div>
               </div>
             );
@@ -619,7 +671,7 @@ export default function LossReportPage() {
                 <div>
                   <p className="text-[10.5px] text-white/45 uppercase tracking-wide m-0">Units Lost</p>
                   <p className="text-[28px] font-black text-white m-0 mt-1 tracking-tight">{viewItem.quantity}</p>
-                  <p className="text-[11px] text-white/35 m-0">pieces</p>
+                  <p className="text-[11px] text-white/35 m-0">pieces · {fmtPeso(valueOf(viewItem))}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-[10.5px] text-white/45 uppercase tracking-wide m-0">Reported</p>
@@ -640,6 +692,7 @@ export default function LossReportPage() {
                     ["Category",    viewItem.category || "—"],
                     ["Size",        viewItem.size || "—"],
                     ["Qty Lost",    `${viewItem.quantity} pcs`],
+                    ["Est. Value",  fmtPeso(valueOf(viewItem))],
                     ["Loss Reason", REASON_LABELS[viewItem.lossReason] ?? viewItem.lossReason],
                     ["Date",        fmtDate(viewItem.createdAt)],
                     ["Reported By", viewItem.employeeName ?? "—"],
