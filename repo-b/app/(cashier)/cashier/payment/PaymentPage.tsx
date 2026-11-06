@@ -146,7 +146,7 @@ export default function PaymentPage() {
       ? selectedCustomer !== null
       : newCustomerValid) &&
     (paymentMethod === "GCash"
-      ? gcashRef.trim() !== "" && gcashImage !== null
+      ? /^\d+$/.test(gcashRef.trim()) && gcashImage !== null
       : paid >= total);
 
   const lettersOnlyRegex = /^[a-zA-ZÀ-ÖØ-öø-ÿ\s.\-']*$/;
@@ -172,6 +172,11 @@ export default function PaymentPage() {
   const handlePhoneChange = (val: string) => {
     const digits = val.replace(/\D/g, "").slice(0, 10);
     setNewPhone(digits);
+  };
+
+  // GCash reference number: digits only (also strips letters/symbols from pasted text)
+  const handleGcashRefChange = (val: string) => {
+    setGcashRef(val.replace(/\D/g, ""));
   };
 
   const handleSelectCustomer = (c: Customer) => {
@@ -1096,11 +1101,16 @@ export default function PaymentPage() {
                     <span style={{ color: "#e53935" }}>*</span>
                   </label>
                   <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    autoComplete="off"
                     value={gcashRef}
-                    onChange={(e) => setGcashRef(e.target.value)}
-                    placeholder="Enter GCash reference number"
+                    onChange={(e) => handleGcashRefChange(e.target.value)}
+                    placeholder="Enter GCash reference number (numbers only)"
                     style={{
                       ...inputStyle,
+                      letterSpacing: "1px",
                       border: gcashRef
                         ? "1.5px solid #6a1b9a"
                         : "1px solid #e0c8ff",
