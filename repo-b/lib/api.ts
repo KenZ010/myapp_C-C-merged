@@ -41,6 +41,14 @@ const authHeaders = () => ({
   Authorization: `Bearer ${getToken()}`,
 });
 
+// Parses a JSON response and throws a readable Error when the request failed,
+// so callers' catch blocks actually fire (and can show the server's message).
+async function parseJson(res: Response, fallback: string) {
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.message || `${fallback} (HTTP ${res.status})`);
+  return data;
+}
+
 export const api = {
   // ── AUTH ────────────────────────────────────────────────────────────────────
   login: async (name: string, password: string) => {
@@ -536,7 +544,7 @@ export const api = {
       headers: authHeaders(),
       body: JSON.stringify(data),
     });
-    return res.json();
+    return parseJson(res, 'Failed to create promo');
   },
   updatePromo: async (id: string, data: Record<string, unknown>) => {
     const res = await fetch(`${API_URL}/promos/${id}`, {
@@ -544,21 +552,21 @@ export const api = {
       headers: authHeaders(),
       body: JSON.stringify(data),
     });
-    return res.json();
+    return parseJson(res, 'Failed to update promo');
   },
   deletePromo: async (id: string) => {
     const res = await fetch(`${API_URL}/promos/${id}`, {
       method: 'DELETE',
       headers: authHeaders(),
     });
-    return res.json();
+    return parseJson(res, 'Failed to delete promo');
   },
   togglePromo: async (id: string) => {
     const res = await fetch(`${API_URL}/promos/${id}/toggle`, {
       method: 'PATCH',
       headers: authHeaders(),
     });
-    return res.json();
+    return parseJson(res, 'Failed to toggle promo');
   },
 
   // ── INVENTORY LOGS ──────────────────────────────────────────────────────────
