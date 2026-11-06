@@ -85,7 +85,7 @@ function SkeletonCard() {
   );
 }
 
-// ── Small round thumbnail used in the cart bar ───────────────────────────────
+// ── Small round thumbnail used in the cart panel ─────────────────────────────
 function MiniThumb({ image, emoji }: { image?: string | null; emoji: string }) {
   const [failed, setFailed] = useState(false);
 
@@ -96,11 +96,11 @@ function MiniThumb({ image, emoji }: { image?: string | null; emoji: string }) {
         src={image}
         alt=""
         onError={() => setFailed(true)}
-        className="w-full h-full rounded-full object-cover block"
+        className="w-full h-full object-cover block"
       />
     );
   }
-  return <span className="text-sm leading-none">{emoji}</span>;
+  return <span className="text-xl leading-none">{emoji}</span>;
 }
 
 // ── Quantity Stepper ──────────────────────────────────────────────────────────
@@ -536,6 +536,17 @@ export default function OrderingPage() {
     addedTimer.current = setTimeout(() => setAddedId(null), 1200);
   }, [getFinalPrice]);
 
+  // Change a cart line's quantity by +1 / -1 (kept between 1 and the stock available)
+  const changeCartQty = (id: string, delta: number) => {
+    setCart((prev) =>
+      prev.map((i) => {
+        if (i.id !== id) return i;
+        const max = i.stock ?? i.qty;
+        return { ...i, qty: Math.max(1, Math.min(i.qty + delta, max)) };
+      }),
+    );
+  };
+
   const removeFromCart = (id: string) => {
     setCart((prev) => prev.filter((i) => i.id !== id));
   };
@@ -554,7 +565,7 @@ export default function OrderingPage() {
   const handleClear = () => { setCart([]); setShowClearConfirm(false); };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 56px)", overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "row", height: "calc(100vh - 56px)", overflow: "hidden" }}>
       {/* Animations */}
       <style>{`
         @keyframes maxPopIn {
@@ -565,235 +576,286 @@ export default function OrderingPage() {
           from { opacity: 0; transform: translateY(6px) scale(0.95); }
           to   { opacity: 1; transform: translateY(0) scale(1); }
         }
-        .cart-scroll::-webkit-scrollbar { height: 4px; }
+        @keyframes cartSlideIn {
+          from { opacity: 0; transform: translateX(40px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+        .cart-scroll::-webkit-scrollbar { width: 4px; }
         .cart-scroll::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
       `}</style>
 
-      {/* ── Active Promos Banner ── */}
-      {promos.length > 0 && (
-        <div style={{ background: "linear-gradient(90deg, #e53935, #c62828)", padding: "10px 28px", display: "flex", alignItems: "center", gap: "12px", overflowX: "auto", flexShrink: 0 }}>
-          <span style={{ fontSize: "13px", fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>🎁 Active Promos:</span>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "nowrap" }}>
-            {promos.map((promo) => {
-              const product = products.find((p) => p.id === promo.productId);
-              return (
-                <div key={promo.id} style={{ background: "rgba(255,255,255,0.15)", borderRadius: "20px", padding: "4px 14px", display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}>
-                  <span style={{ fontSize: "12px", color: "#fff", fontWeight: 600 }}>{product?.productName ?? "Product"}</span>
-                  {promo.discountPercent && (
-                    <span style={{ fontSize: "11px", background: "#fff", color: "#e53935", borderRadius: "20px", padding: "1px 8px", fontWeight: 700 }}>
-                      -{promo.discountPercent}%
-                    </span>
-                  )}
-                  <span style={{ fontSize: "12px", color: "#ffcdd2" }}>₱{promo.alteredPrice.toLocaleString()}</span>
-                </div>
-              );
-            })}
+      {/* ── Left column: promos + product list ── */}
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, overflow: "hidden" }}>
+        {/* ── Active Promos Banner ── */}
+        {promos.length > 0 && (
+          <div style={{ background: "linear-gradient(90deg, #e53935, #c62828)", padding: "10px 28px", display: "flex", alignItems: "center", gap: "12px", overflowX: "auto", flexShrink: 0 }}>
+            <span style={{ fontSize: "13px", fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>🎁 Active Promos:</span>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "nowrap" }}>
+              {promos.map((promo) => {
+                const product = products.find((p) => p.id === promo.productId);
+                return (
+                  <div key={promo.id} style={{ background: "rgba(255,255,255,0.15)", borderRadius: "20px", padding: "4px 14px", display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}>
+                    <span style={{ fontSize: "12px", color: "#fff", fontWeight: 600 }}>{product?.productName ?? "Product"}</span>
+                    {promo.discountPercent && (
+                      <span style={{ fontSize: "11px", background: "#fff", color: "#e53935", borderRadius: "20px", padding: "1px 8px", fontWeight: 700 }}>
+                        -{promo.discountPercent}%
+                      </span>
+                    )}
+                    <span style={{ fontSize: "12px", color: "#ffcdd2" }}>₱{promo.alteredPrice.toLocaleString()}</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── Main Content ── */}
-      <div className="flex-1 overflow-y-auto bg-gray-50/60 px-7 pt-6 pb-6">
-        {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-2.5 mb-7">
-          {/* Search */}
-          <div className="relative">
-            <svg
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
-              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
-            >
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search products…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10 pr-4 py-2.5 rounded-full border border-gray-200 text-sm
-                         bg-white text-gray-900 w-60 outline-none shadow-sm
-                         focus:border-violet-400 focus:ring-2 focus:ring-violet-100
-                         transition-all placeholder:text-gray-400"
-            />
+        {/* ── Main Content ── */}
+        <div className="flex-1 overflow-y-auto bg-gray-50/60 px-7 pt-6 pb-6">
+          {/* Toolbar */}
+          <div className="flex flex-wrap items-center gap-2.5 mb-7">
+            {/* Search */}
+            <div className="relative">
+              <svg
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search products…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10 pr-4 py-2.5 rounded-full border border-gray-200 text-sm
+                           bg-white text-gray-900 w-60 outline-none shadow-sm
+                           focus:border-violet-400 focus:ring-2 focus:ring-violet-100
+                           transition-all placeholder:text-gray-400"
+              />
+            </div>
+
+            <div className="w-px h-7 bg-gray-200" />
+
+            {/* Category pills */}
+            {categories.map((c) => (
+              <button
+                key={c}
+                onClick={() => setBrand(c)}
+                className={[
+                  "px-4 py-2 rounded-full text-[13px] font-medium transition-all duration-150",
+                  brand === c
+                    ? "bg-violet-600 text-white shadow-sm shadow-violet-200"
+                    : "border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:border-gray-300",
+                ].join(" ")}
+              >
+                {c === "All" ? "All" : getMeta(c).label}
+              </button>
+            ))}
+
+            {!loading && (
+              <span className="ml-auto text-xs text-gray-400 whitespace-nowrap">
+                {filtered.length} product{filtered.length !== 1 ? "s" : ""}
+              </span>
+            )}
           </div>
 
-          <div className="w-px h-7 bg-gray-200" />
+          {/* Loading skeletons */}
+          {loading && (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
+              {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
+            </div>
+          )}
 
-          {/* Category pills */}
-          {categories.map((c) => (
-            <button
-              key={c}
-              onClick={() => setBrand(c)}
-              className={[
-                "px-4 py-2 rounded-full text-[13px] font-medium transition-all duration-150",
-                brand === c
-                  ? "bg-violet-600 text-white shadow-sm shadow-violet-200"
-                  : "border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:border-gray-300",
-              ].join(" ")}
-            >
-              {c === "All" ? "All" : getMeta(c).label}
-            </button>
-          ))}
+          {/* Empty state */}
+          {!loading && filtered.length === 0 && (
+            <div className="text-center py-24">
+              <p className="text-5xl mb-4">🔍</p>
+              <p className="text-base font-semibold text-gray-800 mb-2">No products found</p>
+              <p className="text-sm text-gray-400">Try a different search or category</p>
+            </div>
+          )}
 
-          {!loading && (
-            <span className="ml-auto text-xs text-gray-400 whitespace-nowrap">
-              {filtered.length} product{filtered.length !== 1 ? "s" : ""}
-            </span>
+          {/* Grid */}
+          {!loading && filtered.length > 0 && (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
+              {filtered.map((p) => (
+                <ProductCard
+                  key={p.id}
+                  product={p}
+                  unitPrice={getFinalPrice(p)}
+                  promo={promoMap[p.id]}
+                  inCartQty={cart.find((i) => i.id === p.id)?.qty ?? 0}
+                  justAdded={addedId === p.id}
+                  onAdd={addToCart}
+                />
+              ))}
+            </div>
           )}
         </div>
-
-        {/* Loading skeletons */}
-        {loading && (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
-            {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
-          </div>
-        )}
-
-        {/* Empty state */}
-        {!loading && filtered.length === 0 && (
-          <div className="text-center py-24">
-            <p className="text-5xl mb-4">🔍</p>
-            <p className="text-base font-semibold text-gray-800 mb-2">No products found</p>
-            <p className="text-sm text-gray-400">Try a different search or category</p>
-          </div>
-        )}
-
-        {/* Grid */}
-        {!loading && filtered.length > 0 && (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
-            {filtered.map((p) => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                unitPrice={getFinalPrice(p)}
-                promo={promoMap[p.id]}
-                inCartQty={cart.find((i) => i.id === p.id)?.qty ?? 0}
-                justAdded={addedId === p.id}
-                onAdd={addToCart}
-              />
-            ))}
-          </div>
-        )}
       </div>
 
-      {/* ── Cart Bar (docked at the bottom of the page, so it never overlaps the sidebar) ── */}
-      <div className="flex-shrink-0 bg-white border-t border-gray-200 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] z-30">
-        <div className="px-7 py-3.5 flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-6">
-
-          {/* Left: cart icon + item chips */}
-          <div className="flex items-center gap-3.5 min-w-0 flex-1">
-            <div
-              className={[
-                "relative w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 transition-colors",
-                hasCart ? "bg-green-50 text-green-800" : "bg-gray-100 text-gray-400",
-              ].join(" ")}
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="9" cy="21" r="1" />
-                <circle cx="20" cy="21" r="1" />
-                <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
-              </svg>
-              {hasCart && (
+      {/* ── Cart Panel (right side — only appears once something is in the cart) ── */}
+      {hasCart && (
+        <aside
+          className="flex-shrink-0 flex flex-col bg-white border-l border-gray-200
+                     shadow-[-8px_0_24px_rgba(0,0,0,0.06)] z-30
+                     w-[360px] max-w-[88vw]
+                     max-lg:fixed max-lg:right-0 max-lg:top-14 max-lg:bottom-0"
+          style={{ animation: "cartSlideIn 0.22s ease-out" }}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-100">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="relative w-10 h-10 rounded-xl bg-green-50 text-green-800 flex items-center justify-center flex-shrink-0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="9" cy="21" r="1" />
+                  <circle cx="20" cy="21" r="1" />
+                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+                </svg>
                 <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1.5 rounded-full bg-violet-600 text-white
                                  text-[11px] font-bold flex items-center justify-center border-2 border-white tabular-nums">
                   {itemCount}
                 </span>
-              )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-gray-900 leading-tight">Your Order</p>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  {cart.length} product{cart.length !== 1 ? "s" : ""} · {itemCount} case{itemCount !== 1 ? "s" : ""}
+                </p>
+              </div>
             </div>
 
-            {hasCart ? (
-              <div className="cart-scroll flex gap-2 overflow-x-auto py-1 min-w-0 flex-1">
-                {cart.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full
-                               pl-1.5 pr-1.5 py-1 flex-shrink-0 hover:border-gray-300 transition-colors"
-                    style={{ animation: "chipIn 0.18s ease-out" }}
-                  >
-                    <span className="w-7 h-7 rounded-full bg-white border border-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                      <MiniThumb image={item.image} emoji={getMeta(item.category).emoji} />
+            <button
+              onClick={() => setShowClearConfirm(true)}
+              aria-label="Clear cart"
+              className="h-9 px-3 rounded-full border border-gray-200 bg-white text-xs font-semibold
+                         inline-flex items-center gap-1.5 transition-colors flex-shrink-0
+                         text-red-500 hover:bg-red-50 hover:border-red-200"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6M14 11v6" />
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+              </svg>
+              Clear
+            </button>
+          </div>
+
+          {/* Items list */}
+          <div className="cart-scroll flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2.5 bg-gray-50/60">
+            {cart.map((item) => {
+              const meta     = getMeta(item.category);
+              const atMax    = item.qty >= (item.stock ?? item.qty);
+              const lineTotal = item.finalPrice * item.qty;
+              return (
+                <div
+                  key={item.id}
+                  className="bg-white border border-gray-200 rounded-2xl p-3 hover:border-gray-300 transition-colors"
+                  style={{ animation: "chipIn 0.18s ease-out" }}
+                >
+                  <div className="flex items-start gap-3">
+                    {/* Thumbnail */}
+                    <span
+                      className="w-12 h-12 rounded-xl border border-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden"
+                      style={{ background: getCategoryBg(item.category) }}
+                    >
+                      <MiniThumb image={item.image} emoji={meta.emoji} />
                     </span>
-                    <span className="text-xs font-semibold text-gray-700 max-w-[140px] truncate">
-                      {item.productName}
-                    </span>
-                    <span className="text-[11px] font-bold text-violet-700 bg-violet-50 rounded-full px-2 py-0.5 tabular-nums">
-                      ×{item.qty}
-                    </span>
-                    {promoMap[item.id] && (
-                      <span className="text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-1.5 py-0.5">
-                        PROMO
-                      </span>
-                    )}
+
+                    {/* Name + price */}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-semibold text-gray-900 leading-snug line-clamp-2">
+                        {item.productName}
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        {item.size && <span className="text-[11px] text-gray-400">{item.size}</span>}
+                        {promoMap[item.id] && (
+                          <span className="text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-1.5 py-0.5">
+                            PROMO
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-gray-500 mt-1 tabular-nums">
+                        {formatMoney(item.finalPrice)} <span className="text-gray-400">/ case</span>
+                      </p>
+                    </div>
+
+                    {/* Remove */}
                     <button
                       onClick={() => removeFromCart(item.id)}
                       aria-label={`Remove ${item.productName} from cart`}
-                      className="w-5 h-5 rounded-full bg-gray-200 text-gray-500 hover:bg-red-100 hover:text-red-600
-                                 flex items-center justify-center text-xs leading-none transition-colors flex-shrink-0"
+                      className="w-6 h-6 rounded-full bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-600
+                                 flex items-center justify-center text-sm leading-none transition-colors flex-shrink-0"
                     >
                       ×
                     </button>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-gray-700">Your cart is empty</p>
-                <p className="text-xs text-gray-400 mt-0.5">Add products from the list to start an order</p>
-              </div>
-            )}
+
+                  {/* Qty controls + line total */}
+                  <div className="flex items-center justify-between mt-2.5">
+                    <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-lg px-0.5 py-0.5">
+                      <button
+                        onClick={() => changeCartQty(item.id, -1)}
+                        disabled={item.qty <= 1}
+                        aria-label="Decrease quantity"
+                        className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500
+                                   hover:bg-white hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed
+                                   transition-all font-bold"
+                      >
+                        −
+                      </button>
+                      <span className="w-7 text-center text-sm font-semibold text-gray-800 tabular-nums">
+                        {item.qty}
+                      </span>
+                      <button
+                        onClick={() => changeCartQty(item.id, 1)}
+                        disabled={atMax}
+                        aria-label="Increase quantity"
+                        className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500
+                                   hover:bg-white hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed
+                                   transition-all font-bold"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <p className="text-sm font-bold text-gray-900 tabular-nums">{formatMoney(lineTotal)}</p>
+                  </div>
+
+                  {atMax && (
+                    <p className="text-[10px] text-amber-600 font-medium mt-1.5">Max stock reached</p>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
-          {/* Right: total + actions */}
-          <div className="flex items-center justify-between lg:justify-end gap-4 flex-shrink-0">
-            <div className="text-right">
+          {/* Footer: total + checkout */}
+          <div className="border-t border-gray-200 px-5 py-4 bg-white">
+            <div className="flex items-end justify-between mb-3.5">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                 Total · {itemCount} case{itemCount !== 1 ? "s" : ""}
               </p>
-              <p className={`text-2xl font-extrabold leading-tight tabular-nums ${hasCart ? "text-[#1a3c2e]" : "text-gray-300"}`}>
+              <p className="text-2xl font-extrabold leading-tight tabular-nums text-[#1a3c2e]">
                 {formatMoney(total)}
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowClearConfirm(true)}
-                disabled={!hasCart}
-                aria-label="Clear cart"
-                className="h-11 px-4 rounded-full border border-gray-200 bg-white text-sm font-semibold
-                           inline-flex items-center gap-1.5 transition-colors
-                           text-red-500 hover:bg-red-50 hover:border-red-200
-                           disabled:text-gray-300 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:cursor-not-allowed"
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                  <path d="M10 11v6M14 11v6" />
-                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                </svg>
-                Clear
-              </button>
-
-              <button
-                onClick={handleCheckout}
-                disabled={!hasCart}
-                className={[
-                  "h-11 px-7 rounded-full text-sm font-bold text-white inline-flex items-center gap-2",
-                  "transition-all duration-150 active:scale-95",
-                  hasCart
-                    ? "bg-[#1a3c2e] hover:bg-[#14301f] shadow-[0_6px_16px_rgba(26,60,46,0.3)]"
-                    : "bg-gray-300 cursor-not-allowed",
-                ].join(" ")}
-              >
-                Checkout & Pay
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                  <polyline points="12 5 19 12 12 19" />
-                </svg>
-              </button>
-            </div>
+            <button
+              onClick={handleCheckout}
+              className="w-full h-12 rounded-full text-sm font-bold text-white inline-flex items-center justify-center gap-2
+                         transition-all duration-150 active:scale-95
+                         bg-[#1a3c2e] hover:bg-[#14301f] shadow-[0_6px_16px_rgba(26,60,46,0.3)]"
+            >
+              Checkout & Pay
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12" />
+                <polyline points="12 5 19 12 12 19" />
+              </svg>
+            </button>
           </div>
-        </div>
-      </div>
+        </aside>
+      )}
 
       {/* ── Clear Confirm Modal ── */}
       {showClearConfirm && (
