@@ -98,6 +98,7 @@ export default function PaymentPage() {
   const [gcashImage, setGcashImage] = useState<string | null>(null);
   const [amountPaid, setAmountPaid] = useState("");
   const [completed, setCompleted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const filteredCustomers = useMemo(
@@ -149,6 +150,22 @@ export default function PaymentPage() {
       ? /^\d+$/.test(gcashRef.trim()) && gcashImage !== null
       : paid >= total);
 
+  // What's still missing — shown under the Complete Order button
+  const missingSteps: string[] = [];
+  if (cartItems.length === 0) missingSteps.push("Add items to the cart");
+  if (customerType === "Existing Customer") {
+    if (!selectedCustomer) missingSteps.push("Select a customer");
+  } else if (!newCustomerValid) {
+    missingSteps.push("Fill in the new customer's name and phone");
+  }
+  if (paymentMethod === "GCash") {
+    if (!/^\d+$/.test(gcashRef.trim()))
+      missingSteps.push("Enter the GCash reference no.");
+    if (!gcashImage) missingSteps.push("Upload the GCash receipt");
+  } else if (paid < total) {
+    missingSteps.push("Enter the amount received");
+  }
+
   const lettersOnlyRegex = /^[a-zA-ZÀ-ÖØ-öø-ÿ\s.\-']*$/;
 
   const handleNameChange = (val: string) => {
@@ -194,8 +211,9 @@ export default function PaymentPage() {
   };
 
   const handleComplete = async () => {
-    if (!canComplete) return;
+    if (!canComplete || submitting) return;
     try {
+      setSubmitting(true);
       const method: "cod" | "gcash" =
         paymentMethod === "Cash" ? "cod" : "gcash";
       const payload = {
@@ -217,6 +235,8 @@ export default function PaymentPage() {
       setCompleted(true);
     } catch (err) {
       console.error("Failed to complete order:", err);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -1405,7 +1425,7 @@ export default function PaymentPage() {
               </div>
             )}
 
-            {/* ── On narrow: Order Summary inline after form ── */}
+            {/* ── On narrow: Order Summary (with action buttons) inline after form ── */}
             {isNarrow && (
               <div style={{ marginTop: "20px" }}>
                 <OrderSummaryCard
@@ -1414,15 +1434,27 @@ export default function PaymentPage() {
                   vat={vat}
                   total={total}
                   activeCustomer={activeCustomer}
+                  canComplete={canComplete}
+                  submitting={submitting}
+                  missingSteps={missingSteps}
+                  onComplete={handleComplete}
+                  onOrderMore={() => router.back()}
                 />
               </div>
             )}
           </div>
 
-          {/* ── RIGHT: Summary (desktop only) ── */}
+          {/* ── RIGHT: Summary + actions (desktop only, stays in view while scrolling) ── */}
           {!isNarrow && (
             <div
-              style={{ display: "flex", flexDirection: "column", gap: "16px" }}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "16px",
+                position: "sticky",
+                top: 0,
+                alignSelf: "start",
+              }}
             >
               <OrderSummaryCard
                 cartItems={cartItems}
@@ -1430,59 +1462,15 @@ export default function PaymentPage() {
                 vat={vat}
                 total={total}
                 activeCustomer={activeCustomer}
+                canComplete={canComplete}
+                submitting={submitting}
+                missingSteps={missingSteps}
+                onComplete={handleComplete}
+                onOrderMore={() => router.back()}
               />
             </div>
           )}
         </div>
-      </div>
-
-      {/* ── Bottom Bar ── */}
-      <div
-        style={{
-          background: "#fff",
-          borderTop: "1px solid #e8e8e8",
-          padding: isNarrow ? "12px 16px" : "14px 28px",
-          display: "flex",
-          gap: "10px",
-          justifyContent: "flex-end",
-          boxShadow: "0 -4px 16px rgba(0,0,0,0.06)",
-          flexWrap: "wrap",
-        }}
-      >
-        <button
-          onClick={() => router.back()}
-          style={{
-            padding: "12px 24px",
-            borderRadius: "20px",
-            border: "1.5px solid #e0e0e0",
-            background: "#fff",
-            fontSize: "13px",
-            fontWeight: 600,
-            cursor: "pointer",
-            color: "#555",
-            whiteSpace: "nowrap",
-          }}
-        >
-          ← Order More
-        </button>
-        <button
-          onClick={handleComplete}
-          disabled={!canComplete}
-          style={{
-            padding: "12px 32px",
-            borderRadius: "20px",
-            border: "none",
-            background: canComplete ? "#1a3c2e" : "#ccc",
-            color: "#fff",
-            fontSize: "13px",
-            fontWeight: 700,
-            cursor: canComplete ? "pointer" : "not-allowed",
-            boxShadow: canComplete ? "0 4px 14px rgba(26,60,46,0.3)" : "none",
-            whiteSpace: "nowrap",
-          }}
-        >
-          Complete Order →
-        </button>
       </div>
     </div>
   );
@@ -1495,6 +1483,11 @@ function OrderSummaryCard({
   vat,
   total,
   activeCustomer,
+  canComplete,
+  submitting,
+  missingSteps,
+  onComplete,
+  onOrderMore,
 }: {
   cartItems: CartItem[];
   subtotal: number;
@@ -1506,7 +1499,14 @@ function OrderSummaryCard({
     storeName?: string;
     contactNumber?: string;
   } | null;
+  canComplete: boolean;
+  submitting: boolean;
+  missingSteps: string[];
+  onComplete: () => void;
+  onOrderMore: () => void;
 }) {
+  const completeDisabled = !canComplete || submitting;
+
   return (
     <>
       <div
@@ -1621,6 +1621,130 @@ function OrderSummaryCard({
               maximumFractionDigits: 2,
             })}
           </span>
+        </div>
+
+        {/* ── Actions ── */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+            marginTop: "18px",
+          }}
+        >
+          <button
+            onClick={onComplete}
+            disabled={completeDisabled}
+            style={{
+              width: "100%",
+              height: "50px",
+              borderRadius: "14px",
+              border: "none",
+              background: completeDisabled
+                ? "#d9d9d9"
+                : "linear-gradient(135deg, #1a3c2e 0%, #2d7a3a 100%)",
+              color: "#fff",
+              fontSize: "14px",
+              fontWeight: 700,
+              cursor: completeDisabled ? "not-allowed" : "pointer",
+              boxShadow: completeDisabled
+                ? "none"
+                : "0 8px 20px rgba(26,60,46,0.28)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              transition: "all 0.15s ease",
+            }}
+          >
+            {submitting ? (
+              "Processing…"
+            ) : (
+              <>
+                Complete Order
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <polyline points="12 5 19 12 12 19" />
+                </svg>
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={onOrderMore}
+            disabled={submitting}
+            style={{
+              width: "100%",
+              height: "44px",
+              borderRadius: "14px",
+              border: "1.5px solid #d6e4da",
+              background: "#f6fbf7",
+              color: "#1a3c2e",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: submitting ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="19" y1="12" x2="5" y2="12" />
+              <polyline points="12 19 5 12 12 5" />
+            </svg>
+            Order More
+          </button>
+
+          {/* What's still needed before the order can be completed */}
+          {!canComplete && missingSteps.length > 0 && (
+            <div
+              style={{
+                background: "#fff8e1",
+                border: "1px solid #ffe082",
+                borderRadius: "10px",
+                padding: "10px 12px",
+              }}
+            >
+              <p
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  color: "#8d6e00",
+                  marginBottom: "4px",
+                }}
+              >
+                Before you can complete:
+              </p>
+              {missingSteps.map((step) => (
+                <p
+                  key={step}
+                  style={{ fontSize: "11px", color: "#8d6e00", lineHeight: 1.5 }}
+                >
+                  • {step}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
