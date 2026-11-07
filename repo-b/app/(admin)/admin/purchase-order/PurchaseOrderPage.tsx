@@ -42,17 +42,25 @@ function UnitPill({ unit, qty }: { unit?: string; qty?: number }) {
 
 // ─── CUSTOM SUPPLIER DROPDOWN ─────────────────────────────────────────────────
 function SupplierSelect({
-  value, onChange, suppliers, hint, lowStockCount,
+  value, onChange, suppliers, hint, lowStockCount, search = "",
 }: {
   value: string;
   onChange: (id: string) => void;
   suppliers: { id: string; supplierName: string }[];
   hint?: string;
   lowStockCount?: number;
+  search?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const selected = suppliers.find((s) => s.id === value);
+  const filteredSuppliers = suppliers.filter((s) =>
+    s.supplierName.toLowerCase().includes(search.trim().toLowerCase())
+  );
+
+  useEffect(() => {
+    if (search) setOpen(true);
+  }, [search]);
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -89,8 +97,10 @@ function SupplierSelect({
         <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] overflow-hidden">
           {suppliers.length === 0 ? (
             <div className="px-4 py-3 text-sm text-gray-400 text-center">No suppliers found</div>
+          ) : filteredSuppliers.length === 0 ? (
+            <div className="px-4 py-3 text-sm text-gray-400 text-center">No suppliers match your search</div>
           ) : (
-            suppliers.map((s) => (
+            filteredSuppliers.map((s) => (
               <button
                 key={s.id}
                 type="button"
@@ -438,6 +448,7 @@ export default function PurchaseOrderPage() {
   const [deliveries,     setDeliveries]     = useState<Delivery[]>([]);
   const [loading,        setLoading]        = useState(true);
   const [suppliers,      setSuppliers]      = useState<Supplier[]>([]);
+  const [supplierSearch, setSupplierSearch] = useState("");
   const [allProducts,    setAllProducts]    = useState<Product[]>([]);
   const [productSales,   setProductSales]   = useState<Record<string, number>>({});
   const [form,           setForm]           = useState<DeliveryForm>(makeEmptyForm());
@@ -472,6 +483,13 @@ export default function PurchaseOrderPage() {
     : [];
   const outOfStockProducts = form.supplierId
     ? supplierProducts.filter((p) => (p.stockQuantity ?? 0) === 0)
+    : [];
+
+  const productQuery = supplierSearch.trim().toLowerCase();
+  const filteredProductResults = form.supplierId && productQuery
+    ? supplierProducts.filter((p) =>
+        `${p.productName} ${p.size ?? ""}`.toLowerCase().includes(productQuery)
+      )
     : [];
 
   useEffect(() => {
@@ -550,6 +568,7 @@ export default function PurchaseOrderPage() {
 
   const handleSupplierChange = (supplierId: string) => {
     setForm({ ...form, supplierId, lineItems: [emptyLineItem()] });
+    setSupplierSearch("");
   };
 
   const calculateTotal = (items: LineItem[]) =>
@@ -601,6 +620,11 @@ export default function PurchaseOrderPage() {
         { productId, productName: p.productName, size: p.size, quantity: 1, unitPrice: p.costPrice ?? 0, unit: (p.stockUnit as CaseUnit) || "case_24" },
       ],
     });
+  };
+
+  const addProductFromSearch = (productId: string) => {
+    addRecommendedItem(productId);
+    setSupplierSearch("");
   };
 
   // Add a reorder-suggested item to the order, prefilled with the suggested case quantity
@@ -1038,6 +1062,7 @@ export default function PurchaseOrderPage() {
                         value={form.supplierId}
                         onChange={handleSupplierChange}
                         suppliers={suppliers}
+                        search={form.supplierId ? "" : supplierSearch}
                         lowStockCount={lowStockProducts.length}
                         hint={form.supplierId
                           ? supplierProducts.length > 0
@@ -1045,6 +1070,59 @@ export default function PurchaseOrderPage() {
                             : `⚠️ No active products found for ${selectedSupplierName}`
                           : undefined}
                       />
+                    </div>
+
+                    <div className="relative">
+                      <label className="text-xs font-medium text-gray-500 mb-1.5 block">
+                        {form.supplierId ? "Search Product" : "Search Supplier"}
+                      </label>
+                      <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-4 py-3 focus-within:border-indigo-400 bg-white">
+                        <Search className="w-4 h-4 text-gray-400 shrink-0" />
+                        <input
+                          type="text"
+                          value={supplierSearch}
+                          onChange={(e) => setSupplierSearch(e.target.value)}
+                          placeholder={form.supplierId ? `Search ${selectedSupplierName}'s products...` : "Type to search suppliers..."}
+                          className="outline-none text-sm text-gray-700 w-full bg-transparent"
+                        />
+                        {supplierSearch && (
+                          <button type="button" onClick={() => setSupplierSearch("")} className="text-gray-300 hover:text-gray-500 text-xs leading-none shrink-0">✕</button>
+                        )}
+                      </div>
+
+                      {form.supplierId && productQuery && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] max-h-64 overflow-y-auto">
+                          {filteredProductResults.length === 0 ? (
+                            <div className="px-4 py-3 text-sm text-gray-400 text-center">No products match your search</div>
+                          ) : (
+                            filteredProductResults.map((p) => {
+                              const inCart = form.lineItems.some((i) => i.productId === p.id);
+                              return (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  disabled={inCart}
+                                  onClick={() => addProductFromSearch(p.id)}
+                                  className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors ${inCart ? "opacity-60 cursor-default" : "hover:bg-indigo-50"}`}
+                                >
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium text-gray-800 truncate">
+                                      {p.productName}{p.size ? ` ${p.size}` : ""}
+                                    </p>
+                                    <p className="text-xs text-gray-400 mt-0.5">
+                                      {p.stockQuantity != null ? `${p.stockQuantity} ${getUnitShort(p.stockUnit)} left` : ""}
+                                      {p.costPrice != null ? ` · ₱${p.costPrice}` : ""}
+                                    </p>
+                                  </div>
+                                  <span className={`text-xs font-semibold shrink-0 ${inCart ? "text-green-600" : "text-indigo-600"}`}>
+                                    {inCart ? "Added ✓" : "Add +"}
+                                  </span>
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Delivery date is set automatically to current date */}
