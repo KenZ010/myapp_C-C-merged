@@ -21,6 +21,13 @@ const toProfile = (c: any): Profile => ({
   address: c?.address ?? "",
 });
 
+// jo***@gmail.com
+const maskEmail = (e: string) => {
+  const [user, domain] = e.split("@");
+  if (!domain) return e;
+  return `${user.slice(0, 2)}${"*".repeat(Math.max(user.length - 2, 1))}@${domain}`;
+};
+
 export default function SettingsPage() {
   const [profile, setProfile] = useState<Profile>(emptyProfile);
   const [meta, setMeta] = useState<{ status: string; since: string; orders: number | null }>({
@@ -40,6 +47,76 @@ export default function SettingsPage() {
 
   const notifStates = [notif0, notif1, notif2, notif3, notif4];
   const notifSetters = [setNotif0, setNotif1, setNotif2, setNotif3, setNotif4];
+
+  // ── Change password (OTP) state ───────────────────────────────────────────
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpCooldown, setOtpCooldown] = useState(0);
+  const [otp, setOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [secMsg, setSecMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
+
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const t = setTimeout(() => setOtpCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [otpCooldown]);
+
+  const sendPasswordCode = async () => {
+    setSecMsg(null);
+    setOtpSending(true);
+    try {
+      const res = await api.requestPasswordOtp();
+      if (!res.ok) {
+        setSecMsg({ type: "error", text: res.message || "Could not send the code." });
+        return;
+      }
+      setOtpSent(true);
+      setOtpCooldown(60);
+      setSecMsg({ type: "success", text: res.message || "Verification code sent." });
+    } catch {
+      setSecMsg({ type: "error", text: "Could not send the code. Please try again." });
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const updatePassword = async () => {
+    setSecMsg(null);
+    if (otp.length !== 6) {
+      setSecMsg({ type: "error", text: "Enter the 6-digit code we emailed you." });
+      return;
+    }
+    if (newPassword.length < 8) {
+      setSecMsg({ type: "error", text: "New password must be at least 8 characters." });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setSecMsg({ type: "error", text: "Passwords do not match." });
+      return;
+    }
+
+    setSavingPassword(true);
+    try {
+      const res = await api.changePassword(otp, newPassword);
+      if (!res.ok) {
+        setSecMsg({ type: "error", text: res.message || "Could not change password." });
+        return;
+      }
+      setOtpSent(false);
+      setOtpCooldown(0);
+      setOtp("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setSecMsg({ type: "success", text: res.message || "Password changed successfully." });
+    } catch {
+      setSecMsg({ type: "error", text: "Something went wrong. Please try again." });
+    } finally {
+      setSavingPassword(false);
+    }
+  };
 
   // ── Load the logged-in customer's profile ─────────────────────────────────
   useEffect(() => {
@@ -112,6 +189,8 @@ export default function SettingsPage() {
     { key: "security", label: "Security", icon: "🔒" },
     { key: "notifications", label: "Notifications", icon: "🔔" },
   ] as const;
+
+  const sendBtnDisabled = otpSending || otpCooldown > 0 || !profile.email;
 
   return (
     <div style={{ minHeight: "calc(100vh - 56px)", background: "linear-gradient(160deg, #fdf4ff 0%, #fce4ec 100%)", padding: "clamp(14px, 3vw, 28px)" }}>
@@ -206,23 +285,122 @@ export default function SettingsPage() {
         {activeTab === "security" && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "24px" }}>
             <div style={{ background: "#fff", borderRadius: "20px", border: "0.5px solid #f0e8f8", padding: "28px" }}>
-              <p style={{ fontSize: "17px", fontWeight: 700, color: "#1a1a1a", marginBottom: "20px" }}>🔒 Change Password</p>
-              {["Current Password", "New Password", "Confirm New Password"].map((label) => (
-                <div key={label} style={{ marginBottom: "16px" }}>
-                  <label style={{ fontSize: "12px", color: "#aaa", marginBottom: "6px", display: "block" }}>{label}</label>
-                  <input type="password" placeholder="••••••••" style={inputStyle(true)} />
+              <p style={{ fontSize: "17px", fontWeight: 700, color: "#1a1a1a", marginBottom: "8px" }}>🔒 Change Password</p>
+
+              {profile.email ? (
+                <p style={{ fontSize: "13px", color: "#777", marginBottom: "16px", lineHeight: 1.5 }}>
+                  To confirm it&apos;s you, we&apos;ll email a 6-digit code to <strong>{maskEmail(profile.email)}</strong>.
+                </p>
+              ) : (
+                <p style={{ fontSize: "13px", color: "#e53935", marginBottom: "16px", lineHeight: 1.5 }}>
+                  ⚠️ No email is saved on your account. Please ask the store admin to add one so you can change your password.
+                </p>
+              )}
+
+              {secMsg && (
+                <div
+                  style={{
+                    marginBottom: "16px",
+                    padding: "10px 12px",
+                    borderRadius: "10px",
+                    fontSize: "13px",
+                    background: secMsg.type === "error" ? "#fdecea" : "#e8f5e9",
+                    color: secMsg.type === "error" ? "#c62828" : "#2e7d32",
+                  }}
+                >
+                  {secMsg.type === "error" ? "⚠️" : "✅"} {secMsg.text}
                 </div>
-              ))}
-              <button style={{ width: "100%", padding: "12px", borderRadius: "20px", border: "none", background: "linear-gradient(135deg, #a855f7, #e91e8c)", color: "#fff", fontSize: "14px", fontWeight: 600, cursor: "pointer", marginTop: "8px" }}>
-                Update Password
+              )}
+
+              {/* Step 1: send code */}
+              <button
+                onClick={sendPasswordCode}
+                disabled={sendBtnDisabled}
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  borderRadius: "20px",
+                  border: otpSent ? "1.5px solid #a855f7" : "none",
+                  background: otpSent ? "#fff" : "linear-gradient(135deg, #a855f7, #e91e8c)",
+                  color: otpSent ? "#a855f7" : "#fff",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  cursor: sendBtnDisabled ? "not-allowed" : "pointer",
+                  opacity: sendBtnDisabled ? 0.5 : 1,
+                  marginBottom: otpSent ? "20px" : 0,
+                }}
+              >
+                {otpSending
+                  ? "Sending..."
+                  : otpCooldown > 0
+                  ? `Resend code (${otpCooldown}s)`
+                  : otpSent
+                  ? "Resend code"
+                  : "Send verification code"}
               </button>
+
+              {/* Step 2: enter code + new password */}
+              {otpSent && (
+                <>
+                  <div style={{ marginBottom: "16px" }}>
+                    <label style={{ fontSize: "12px", color: "#aaa", marginBottom: "6px", display: "block" }}>Verification Code</label>
+                    <input
+                      inputMode="numeric"
+                      maxLength={6}
+                      placeholder="6-digit code"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      style={{ ...inputStyle(true), letterSpacing: "4px" }}
+                    />
+                  </div>
+                  <div style={{ marginBottom: "16px" }}>
+                    <label style={{ fontSize: "12px", color: "#aaa", marginBottom: "6px", display: "block" }}>New Password</label>
+                    <input
+                      type="password"
+                      placeholder="At least 8 characters"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      style={inputStyle(true)}
+                    />
+                  </div>
+                  <div style={{ marginBottom: "16px" }}>
+                    <label style={{ fontSize: "12px", color: "#aaa", marginBottom: "6px", display: "block" }}>Confirm New Password</label>
+                    <input
+                      type="password"
+                      placeholder="••••••••"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      style={inputStyle(true, confirmPassword.length > 0 && confirmPassword !== newPassword)}
+                    />
+                  </div>
+                  <button
+                    onClick={updatePassword}
+                    disabled={savingPassword}
+                    style={{
+                      width: "100%",
+                      padding: "12px",
+                      borderRadius: "20px",
+                      border: "none",
+                      background: "linear-gradient(135deg, #a855f7, #e91e8c)",
+                      color: "#fff",
+                      fontSize: "14px",
+                      fontWeight: 600,
+                      cursor: savingPassword ? "not-allowed" : "pointer",
+                      opacity: savingPassword ? 0.6 : 1,
+                      marginTop: "8px",
+                    }}
+                  >
+                    {savingPassword ? "Updating..." : "Update Password"}
+                  </button>
+                </>
+              )}
             </div>
             <div style={{ background: "#fff", borderRadius: "20px", border: "0.5px solid #f0e8f8", padding: "28px" }}>
               <p style={{ fontSize: "17px", fontWeight: 700, color: "#1a1a1a", marginBottom: "20px" }}>🛡️ Security Tips</p>
               {[
                 { icon: "✅", tip: "Use at least 8 characters in your password" },
                 { icon: "✅", tip: "Mix uppercase, lowercase, numbers and symbols" },
-                { icon: "✅", tip: "Don't share your password with anyone" },
+                { icon: "✅", tip: "Don't share your password or verification codes with anyone" },
                 { icon: "✅", tip: "Change your password regularly" },
                 { icon: "⚠️", tip: "Log out when using shared devices" },
               ].map((item, i) => (
