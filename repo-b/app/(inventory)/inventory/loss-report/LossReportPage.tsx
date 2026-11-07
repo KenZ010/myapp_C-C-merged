@@ -140,7 +140,6 @@ const REASON_LABELS: Record<LossReason, string> = {
   DAMAGED:     "Damaged",
   THEFT:       "Theft",
   COUNT_ERROR: "Count Error",
-  OTHER:       "Other",
 };
 
 // Green family — reasons are told apart by shade. Theft stays red on purpose.
