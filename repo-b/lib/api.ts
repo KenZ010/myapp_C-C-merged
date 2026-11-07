@@ -335,7 +335,7 @@ export const api = {
     cashGiven?: number;
     gcashRef?: string;
     customerId?: string;
-    walkInName: string;
+    walkInName: string; 
     walkInPhone?: string;
     walkInAddress: string;
   }) => {
