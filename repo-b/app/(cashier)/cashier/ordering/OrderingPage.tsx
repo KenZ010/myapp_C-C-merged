@@ -673,12 +673,13 @@ export default function OrderingPage() {
         {/* ── Main Content ── */}
         <div className="flex-1 overflow-y-auto bg-gray-50/60 px-7 pt-6 pb-6">
           {/* Toolbar */}
-          <div className="flex flex-wrap items-center gap-2.5 mb-7">
+          <div className="flex flex-wrap items-center gap-3 mb-7">
             {/* Search */}
             <div className="relative">
               <svg
-                className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
-                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 w-[15px] h-[15px] text-[#8fa596] pointer-events-none"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                strokeLinecap="round" strokeLinejoin="round"
               >
                 <circle cx="11" cy="11" r="8" />
                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -688,33 +689,52 @@ export default function OrderingPage() {
                 placeholder="Search products…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-10 pr-4 py-2.5 rounded-full border border-gray-200 text-sm
-                           bg-white text-gray-900 w-60 outline-none shadow-sm
-                           focus:border-violet-400 focus:ring-2 focus:ring-violet-100
-                           transition-all placeholder:text-gray-400"
+                className="pl-10 pr-9 py-2.5 rounded-[10px] border border-[#d6e8d9] text-[13px]
+                           bg-white text-[#14301b] w-64 max-w-full outline-none
+                           placeholder:text-[#8fa596] transition-all
+                           focus:border-[#2e7d3e] focus:ring-[3px] focus:ring-[rgba(46,125,62,0.14)]"
               />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full
+                             bg-[#e8f5ea] text-[#2e7d3e] hover:bg-[#2e7d3e] hover:text-white
+                             flex items-center justify-center transition-colors"
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              )}
             </div>
 
-            <div className="w-px h-7 bg-gray-200" />
-
-            {/* Category pills */}
-            {categories.map((c) => (
-              <button
-                key={c}
-                onClick={() => setBrand(c)}
-                className={[
-                  "px-4 py-2 rounded-full text-[13px] font-medium transition-all duration-150",
-                  brand === c
-                    ? "bg-violet-600 text-white shadow-sm shadow-violet-200"
-                    : "border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:border-gray-300",
-                ].join(" ")}
-              >
-                {c === "All" ? "All" : getMeta(c).label}
-              </button>
-            ))}
+            {/* Category tabs */}
+            <div className="flex flex-wrap gap-0.5 bg-[#e8f5ea] rounded-xl p-1 max-w-full">
+              {categories.map((c) => {
+                const isActive = brand === c;
+                return (
+                  <button
+                    key={c}
+                    onClick={() => setBrand(c)}
+                    className={[
+                      "px-4 py-[7px] rounded-[9px] text-[13px] font-semibold transition-all duration-150",
+                      "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2e7d3e]",
+                      isActive
+                        ? "bg-[#2e7d3e] text-white shadow-[0_2px_8px_rgba(46,125,62,0.3)]"
+                        : "bg-transparent text-[#5f7a66] hover:text-[#1f5f2d]",
+                    ].join(" ")}
+                  >
+                    {c === "All" ? "All" : getMeta(c).label}
+                  </button>
+                );
+              })}
+            </div>
 
             {!loading && (
-              <span className="ml-auto text-xs text-gray-400 whitespace-nowrap">
+              <span className="ml-auto text-xs font-medium text-[#5f7a66] whitespace-nowrap">
                 {filtered.length} product{filtered.length !== 1 ? "s" : ""}
               </span>
             )}
