@@ -70,6 +70,12 @@ const REASON_STYLES: Record<string, { label: string; bg: string; color: string }
   OTHER:       { label: "Other",       bg: "#e8eaf6", color: "#3949ab" },
 };
 
+// Loss quantities are recorded in bottles/pieces, but product.price is the price
+// of one stock unit (e.g. a whole 24-bottle case). Divide by this to get a per-bottle price.
+const BOTTLES_PER_UNIT: Record<string, number> = {
+  case_24: 24, case_12: 12, case_6: 6, btl: 1, pcs: 1,
+};
+
 const ITEMS_PER_PAGE = 10;
 
 function fmtDate(str: string) {
@@ -97,7 +103,7 @@ export default function LossReportPage() {
 
   // File report form
   const [products, setProducts] = useState<Product[]>([]);
-  const [priceMap, setPriceMap] = useState<Record<string, number>>({});
+  const [priceMap, setPriceMap] = useState<Record<string, number>>({}); // price PER BOTTLE
   const [formProductId, setFormProductId] = useState("");
   const [formQuantity, setFormQuantity] = useState("");
   const [formLossReason, setFormLossReason] = useState<LossReason>("DAMAGED");
@@ -131,7 +137,11 @@ export default function LossReportPage() {
       const list = Array.isArray(data) ? data : [];
       setProducts(list);
       const map: Record<string, number> = {};
-      list.forEach((p: any) => { if (p.id) map[p.id] = p.price ?? 0; });
+      list.forEach((p: any) => {
+        if (!p.id) return;
+        const perUnit = BOTTLES_PER_UNIT[p.stockUnit ?? "case_24"] ?? 1; // default matches the purchase-order page
+        map[p.id] = (p.price ?? 0) / perUnit; // price per bottle
+      });
       setPriceMap(map);
     } catch (err) { console.error("Failed to fetch products", err); }
   };
@@ -247,6 +257,7 @@ export default function LossReportPage() {
             <div className="relative">
               <button onClick={() => setShowUserMenu(!showUserMenu)}
                 className={`flex items-center gap-2 px-2 py-1.5 rounded-xl transition-colors ${showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"}`}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="https://i.pravatar.cc/40?img=8" alt="User" className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover" />
                 <div className="hidden md:block text-left">
                   <p className="text-sm font-semibold text-gray-800">Ray Teodoro</p>
@@ -418,8 +429,8 @@ export default function LossReportPage() {
                             <div className="flex items-center gap-1.5">
                               <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600 shrink-0">
                                 {r.employee?.name?.charAt(0)?.toUpperCase() || "?"}
-                            </div>
-                            <span className="text-xs text-gray-600">{r.employee?.name || "—"}</span>
+                              </div>
+                              <span className="text-xs text-gray-600">{r.employee?.name || "—"}</span>
                             </div>
                           </td>
                           <td className="p-3">

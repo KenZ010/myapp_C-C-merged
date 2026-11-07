@@ -21,6 +21,7 @@ type Promo = {
   discount?: number;
   bundleQty?: number;
   product: string;
+  productPrice?: number;
   image: string;
   status: PromoStatus;
   startDate: string;
@@ -75,6 +76,11 @@ const getPromoLabel = (promo: Promo) => {
   if (promo.type === "Bundle Deal") return promo.bundleQty != null ? `${promo.bundleQty} for 2` : "Bundle";
   return "";
 };
+
+// Promo price for a product price and a discount percent (always above 0, because the
+// API validation rejects 0). The server works out the final price again on its own.
+const promoPrice = (price: number | undefined, pct: number) =>
+  Math.max(0.01, Math.round((price ?? 0) * (1 - pct / 100) * 100) / 100);
 
 // ✅ Helper to parse year/month from a date string safely
 const parseYear = (val: string) => val ? parseInt(val.split("-")[0]) : new Date().getFullYear();
@@ -269,6 +275,7 @@ export default function PromoManagementPage() {
 
   const [salesData, setSalesData] = useState<Record<string, unknown>[]>([]);
   const [salesLoading, setSalesLoading] = useState(true);
+  const [products, setProducts] = useState<{ id: string; productName: string; price?: number; size?: string | null; status?: string }[]>([]);
 
   useEffect(() => {
     const fetchSales = async () => {
@@ -357,6 +364,7 @@ export default function PromoManagementPage() {
         ? String(item.product?.name ?? item.product?.productName ?? "")
         : String(item.product ?? ""),                               // ← product is a populated object
       image: String(item.image ?? item.product?.image ?? ""),       // ← try product image
+      productPrice: item.product && typeof item.product === "object" ? Number(item.product.price ?? 0) : undefined,
       status: item.isActive === true ? "Active" : "Inactive",      // ← isActive boolean
       startDate: item.dateEffective
         ? String(item.dateEffective).split("T")[0]
@@ -376,6 +384,18 @@ export default function PromoManagementPage() {
 };
 
   useEffect(() => { fetchPromos(); }, []);
+
+  // Products for the "Product" dropdown (the server needs a product ID, not a name)
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await api.getProducts();
+        setProducts(Array.isArray(data) ? data : (data?.products ?? []));
+      } catch {
+        setProducts([]);
+      }
+    })();
+  }, []);
 
   const showToast = (msg: string, isError = false) => {
     if (isError) { setError(msg); setTimeout(() => setError(""), 3000); }
@@ -427,7 +447,7 @@ export default function PromoManagementPage() {
       await api.updatePromo(selectedPromo!.id, {
         promoName:       editForm.title,
         discountPercent: editForm.discount ? Number(editForm.discount) : null,
-        alteredPrice:    0,
+        alteredPrice:    promoPrice(selectedPromo?.productPrice, Number(editForm.discount) || 0),
         dateEffective:   editForm.startDate,
         lastDate:        editForm.endDate,
         isActive:        editForm.status === "Active",
@@ -437,7 +457,7 @@ export default function PromoManagementPage() {
       setShowPromoModal(false);
       showToast("Promo updated successfully!");
     } catch (err) {
-      showToast("Failed to update promo.", true);
+      showToast((err as Error)?.message || "Failed to update promo.", true);
     } finally {
       setEditLoading(false);
     }
@@ -475,8 +495,9 @@ export default function PromoManagementPage() {
 
   const handleAddPromo = async () => {
   if (!addForm.title) { showAlert("Promo title is required.", "Missing Field"); return; }
-  if (!addForm.product) { showAlert("Product ID is required.", "Missing Field"); return; }
+  if (!addForm.product) { showAlert("Please select a product.", "Missing Field"); return; }
   if (!addForm.startDate || !addForm.endDate) { showAlert("Start and End dates are required.", "Missing Field"); return; }
+  if (!addForm.discount || Number(addForm.discount) < 1 || Number(addForm.discount) > 99) { showAlert("Please enter a discount between 1 and 99 percent.", "Invalid Discount"); return; }
   if (new Date(addForm.startDate) > new Date(addForm.endDate)) { showAlert("Start date must be before end date.", "Invalid Date"); return; }
   try {
     setAddLoading(true);
@@ -484,7 +505,7 @@ export default function PromoManagementPage() {
       promoName:       addForm.title,                              // ← title → promoName
       productId:       addForm.product,                            // ← product is productId for create
       discountPercent: addForm.discount ? Number(addForm.discount) : null,
-      alteredPrice:    0,                                          // ← required by backend
+      alteredPrice:    promoPrice(products.find((p) => p.id === addForm.product)?.price, Number(addForm.discount) || 0),
       dateEffective:   addForm.startDate,                          // ← startDate → dateEffective
       lastDate:        addForm.endDate,                            // ← endDate → lastDate
       isActive:        addForm.status === "Active",                // ← status → isActive boolean
@@ -495,7 +516,7 @@ export default function PromoManagementPage() {
     setIsDirty(false);
     showToast("Promo added successfully!");
   } catch (err) {
-    showToast("Failed to add promo.", true);
+    showToast((err as Error)?.message || "Failed to add promo.", true);
   } finally {
     setAddLoading(false);
   }
@@ -740,7 +761,7 @@ export default function PromoManagementPage() {
                   <>
                     <div><p className="text-xs text-gray-400">Promo Title</p><input value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
                     <div><p className="text-xs text-gray-400">Description</p><textarea value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900 resize-none" rows={2} /></div>
-                    <div><p className="text-xs text-gray-400">Product</p><input value={editForm.product} onChange={(e) => setEditForm({ ...editForm, product: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>
+                    <div><p className="text-xs text-gray-400">Product</p><input value={editForm.product} readOnly className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none text-gray-500 bg-gray-50 cursor-not-allowed" /></div>
                     <div><p className="text-xs text-gray-400">Promo Type</p><select value={editForm.type} onChange={(e) => setEditForm({ ...editForm, type: e.target.value as PromoType })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">{PROMO_TYPES.map((t) => <option key={t}>{t}</option>)}</select></div>
                     {editForm.type === "Discount" && <div><p className="text-xs text-gray-400">Discount (%)</p><input type="number" min="1" max="100" value={editForm.discount ?? ""} onChange={(e) => setEditForm({ ...editForm, discount: e.target.value === "" ? undefined : Number(e.target.value) })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>}
                     {editForm.type === "Bundle Deal" && <div><p className="text-xs text-gray-400">Bundle Qty</p><input type="number" min="3" value={editForm.bundleQty ?? ""} onChange={(e) => setEditForm({ ...editForm, bundleQty: e.target.value === "" ? undefined : Number(e.target.value) })} className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" /></div>}
@@ -799,7 +820,13 @@ export default function PromoManagementPage() {
             <div className="flex flex-col gap-3">
               <div><label className="text-xs font-medium text-gray-600">Promo Title</label><input value={addForm.title} onChange={(e) => { setAddForm({ ...addForm, title: e.target.value }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="e.g. Summer Sale" /></div>
               <div><label className="text-xs font-medium text-gray-600">Description</label><textarea value={addForm.description} onChange={(e) => { setAddForm({ ...addForm, description: e.target.value }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900 resize-none" rows={2} placeholder="Describe the promo..." /></div>
-              <div><label className="text-xs font-medium text-gray-600">Product</label><input value={addForm.product} onChange={(e) => { setAddForm({ ...addForm, product: e.target.value }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="e.g. Coca Cola 1.5L" /></div>
+              <div><label className="text-xs font-medium text-gray-600">Product</label>
+                <select value={addForm.product} onChange={(e) => { setAddForm({ ...addForm, product: e.target.value }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                  <option value="">Select a product...</option>
+                  {products.filter((p) => p.status !== "INACTIVE").map((p) => (
+                    <option key={p.id} value={p.id}>{p.productName}{p.size ? ` ${p.size}` : ""}</option>
+                  ))}
+                </select></div>
               <div><label className="text-xs font-medium text-gray-600">Promo Type</label><select value={addForm.type} onChange={(e) => { setAddForm({ ...addForm, type: e.target.value as PromoType }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">{PROMO_TYPES.map((t) => <option key={t}>{t}</option>)}</select></div>
               {addForm.type === "Discount" && <div><label className="text-xs font-medium text-gray-600">Discount Percentage (%)</label><input type="number" min="1" max="100" value={addForm.discount ?? ""} onChange={(e) => { setAddForm({ ...addForm, discount: e.target.value === "" ? undefined : Number(e.target.value) }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="e.g. 20" /></div>}
               {addForm.type === "Bundle Deal" && <div><label className="text-xs font-medium text-gray-600">Buy how many? (pay for 2)</label><input type="number" min="3" value={addForm.bundleQty ?? ""} onChange={(e) => { setAddForm({ ...addForm, bundleQty: e.target.value === "" ? undefined : Number(e.target.value) }); setIsDirty(true); }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="e.g. 3" /></div>}
