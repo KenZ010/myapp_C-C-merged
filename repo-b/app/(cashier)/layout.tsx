@@ -12,9 +12,8 @@ const GREEN_DARK  = "#1f5f2d";
 const GREEN_LIGHT = "#e8f5ea";
 const YELLOW      = "#facc15";
 
-// Orders with these statuses are considered finished — everything else counts as "pending".
-// Adjust these to match the status values your backend uses.
-const FINISHED_STATUSES = ["COMPLETED", "CANCELLED", "CANCELED", "REJECTED", "DONE"];
+// Same statuses the Pending page treats as "not completed yet"
+const ACTIVE_STATUSES = ["PENDING", "PROCESSING", "OUT_FOR_DELIVERY"];
 
 // How often to re-check the pending count as a safety net (ms)
 const PENDING_REFRESH_MS = 30_000;
@@ -125,10 +124,10 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
   // Load all orders and count the ones that are not completed yet
   const refreshPendingCount = useCallback(async () => {
     try {
-      const res: any = await api.getOrders();
-      const list: any[] = Array.isArray(res) ? res : res?.orders ?? res?.data ?? [];
-      const count = list.filter(
-        (o) => !FINISHED_STATUSES.includes(String(o?.status ?? "").toUpperCase()),
+      const res: any = await api.getActiveOrders();
+      const list: any[] = Array.isArray(res) ? res : [];
+      const count = list.filter((o) =>
+        ACTIVE_STATUSES.includes(String(o?.status ?? "PENDING").toUpperCase()),
       ).length;
       setPendingCount(count);
     } catch (err) {
@@ -173,14 +172,16 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
       refreshPendingCount();
     };
 
-    // Optional: keep the badge in sync if your backend emits this when an order's status changes
-    const onOrderUpdated = () => { refreshPendingCount(); };
+    // Keep the badge in sync when an order is completed or its status changes
+    const onOrderChanged = () => { refreshPendingCount(); };
 
     socket.on("order:new", onNewOrder);
-    socket.on("order:updated", onOrderUpdated);
+    socket.on("order:completed", onOrderChanged);
+    socket.on("order:status", onOrderChanged);
     return () => {
       socket.off("order:new", onNewOrder);
-      socket.off("order:updated", onOrderUpdated);
+      socket.off("order:completed", onOrderChanged);
+      socket.off("order:status", onOrderChanged);
     };
   }, [socket, router, refreshPendingCount]);
 
