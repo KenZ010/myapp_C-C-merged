@@ -1,15 +1,23 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useSocket, useSocketActions } from "@/app/providers";
+import { api } from "@/lib/api";
 
 // ── Theme (matches customer design) ──
 const GREEN       = "#2e7d3e";
 const GREEN_DARK  = "#1f5f2d";
 const GREEN_LIGHT = "#e8f5ea";
 const YELLOW      = "#facc15";
+
+// Orders with these statuses are considered finished — everything else counts as "pending".
+// Adjust these to match the status values your backend uses.
+const FINISHED_STATUSES = ["COMPLETED", "CANCELLED", "CANCELED", "REJECTED", "DONE"];
+
+// How often to re-check the pending count as a safety net (ms)
+const PENDING_REFRESH_MS = 30_000;
 
 const navLinks = [
   {
@@ -69,7 +77,7 @@ const navLinks = [
 const pageTitles: Record<string, { title: string; sub: string }> = {
   "/cashier/inventory":    { title: "Inventory",           sub: "View products & stock levels" },
   "/cashier/ordering":     { title: "Ordering",            sub: "Create order for customer" },
-  "/cashier/pending":      { title: "Pending",             sub: "Orders waiting for action" },
+  "/cashier/pending":      { title: "Transactions Status",             sub: "Orders waiting for action" },
   "/cashier/transactions": { title: "Transaction History", sub: "Sales reports & records" },
   "/cashier/payment":      { title: "Payment",             sub: "Complete the customer order" },
 };
@@ -98,6 +106,9 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
 
+  // Number of orders that are not finished yet (shown next to "Pending")
+  const [pendingCount, setPendingCount] = useState(0);
+
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   useEffect(() => { setMounted(true); }, []);
@@ -110,6 +121,31 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
   useEffect(() => {
     connectSocket();
   }, []);
+
+  // Load all orders and count the ones that are not completed yet
+  const refreshPendingCount = useCallback(async () => {
+    try {
+      const res: any = await api.getOrders();
+      const list: any[] = Array.isArray(res) ? res : res?.orders ?? res?.data ?? [];
+      const count = list.filter(
+        (o) => !FINISHED_STATUSES.includes(String(o?.status ?? "").toUpperCase()),
+      ).length;
+      setPendingCount(count);
+    } catch (err) {
+      console.error("Failed to load pending orders count:", err);
+    }
+  }, []);
+
+  // Initial load + safety-net refresh, and re-check whenever the cashier changes page
+  // (e.g. after finishing an order on the Pending / Payment pages)
+  useEffect(() => {
+    refreshPendingCount();
+  }, [pathname, refreshPendingCount]);
+
+  useEffect(() => {
+    const id = setInterval(refreshPendingCount, PENDING_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [refreshPendingCount]);
 
   // Toast + bell entry whenever a customer places a new order
   useEffect(() => {
@@ -131,13 +167,22 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
         },
         ...prev,
       ]);
+
+      // A new order is now waiting — update the badge right away
+      setPendingCount((c) => c + 1);
+      refreshPendingCount();
     };
 
+    // Optional: keep the badge in sync if your backend emits this when an order's status changes
+    const onOrderUpdated = () => { refreshPendingCount(); };
+
     socket.on("order:new", onNewOrder);
+    socket.on("order:updated", onOrderUpdated);
     return () => {
       socket.off("order:new", onNewOrder);
+      socket.off("order:updated", onOrderUpdated);
     };
-  }, [socket, router]);
+  }, [socket, router, refreshPendingCount]);
 
   // Close the notification dropdown when clicking outside of it
   useEffect(() => {
@@ -238,7 +283,8 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
           {/* Nav Links */}
           <nav style={{ padding: "0 14px 12px" }}>
             {navLinks.map((link) => {
-              const isActive = pathname === link.href;
+              const isActive  = pathname === link.href;
+              const showBadge = link.href === "/cashier/pending" && pendingCount > 0;
               return (
                 <Link
                   key={link.href}
@@ -259,6 +305,25 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
                     {link.icon}
                   </span>
                   {link.label}
+
+                  {/* Count of customers' orders still waiting */}
+                  {showBadge && (
+                    <span
+                      key={pendingCount}
+                      title={`${pendingCount} order${pendingCount !== 1 ? "s" : ""} not completed yet`}
+                      style={{
+                        minWidth: "22px", height: "22px", padding: "0 7px",
+                        borderRadius: "999px", background: "#e53935", color: "#fff",
+                        fontSize: "12px", fontWeight: 700, lineHeight: 1,
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        boxShadow: "0 2px 6px rgba(229,57,53,0.35)",
+                        animation: "badgePop 0.28s ease-out",
+                      }}
+                    >
+                      {pendingCount > 99 ? "99+" : pendingCount}
+                    </span>
+                  )}
+
                   {isActive && (
                     <span style={{ position: "absolute", right: "14px", top: "50%", transform: "translateY(-50%)", width: "7px", height: "7px", borderRadius: "50%", background: GREEN }} />
                   )}
@@ -307,13 +372,17 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
             <button
               onClick={(e) => { e.stopPropagation(); setSidebarOpen(true); }}
               className="lg:hidden"
-              style={{ background: "transparent", border: "2px solid #fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: "7px", borderRadius: "10px", color: "#fff", flexShrink: 0 }}
+              style={{ position: "relative", background: "transparent", border: "2px solid #fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: "7px", borderRadius: "10px", color: "#fff", flexShrink: 0 }}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="3" y1="6"  x2="21" y2="6"  />
                 <line x1="3" y1="12" x2="21" y2="12" />
                 <line x1="3" y1="18" x2="21" y2="18" />
               </svg>
+              {/* On small screens the sidebar is hidden, so hint that orders are waiting */}
+              {pendingCount > 0 && (
+                <span style={{ position: "absolute", top: "-5px", right: "-5px", width: "11px", height: "11px", borderRadius: "50%", background: "#e53935", border: `2px solid ${GREEN}` }} />
+              )}
             </button>
             <div>
               <p style={{ color: "#fff", fontSize: "17px", fontWeight: 600, lineHeight: 1.2 }}>{page.title}</p>
@@ -422,6 +491,11 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
                 @keyframes notifFadeIn {
                   from { opacity: 0; transform: translateY(-6px) scale(0.98); }
                   to   { opacity: 1; transform: translateY(0) scale(1); }
+                }
+                @keyframes badgePop {
+                  0%   { transform: scale(0.6); }
+                  60%  { transform: scale(1.2); }
+                  100% { transform: scale(1); }
                 }
               `}</style>
             </div>
