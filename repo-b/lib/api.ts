@@ -334,8 +334,10 @@ export const api = {
     paymentMethod: 'cash' | 'gcash';
     cashGiven?: number;
     gcashRef?: string;
+    receiptImage?: string;          // ← ADDED (Cloudinary URL from uploadReceipt)
     customerId?: string;
-    walkInName: string; 
+    walkInName: string;
+    walkInStoreName?: string;       // ← ADDED
     walkInPhone?: string;
     walkInAddress: string;
   }) => {
@@ -347,6 +349,27 @@ export const api = {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.message || 'Failed to place walk-in order');
     return data as { saleId: string; totalAmount: number; change: number | null };
+  },
+
+  // ← ADDED: GET /api/payments/gcash-ref  ->  { valid: boolean, exists: boolean }
+  checkGcashRef: async (ref: string) => {
+    const res = await fetch(
+      `${API_URL}/payments/gcash-ref?ref=${encodeURIComponent(ref)}`,
+      { headers: authHeaders() },
+    );
+    return parseJson(res, 'Failed to check the reference number');
+  },
+
+  // ← ADDED: POST /api/upload/receipt (field name must be "image")  ->  { receiptImage: string }
+  uploadReceipt: async (file: File) => {
+    const form = new FormData();
+    form.append('image', file);
+    const res = await fetch(`${API_URL}/upload/receipt`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getToken()}` }, // no Content-Type: browser sets the boundary
+      body: form,
+    });
+    return parseJson(res, 'Failed to upload receipt');
   },
 
   getActiveOrders: async () => {

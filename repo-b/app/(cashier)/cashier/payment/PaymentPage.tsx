@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 
 type PaymentMethod = "Cash" | "GCash";
 type CustomerType = "New Customer" | "Existing Customer";
+type RefStatus = "idle" | "checking" | "ok" | "used" | "error";
 
 type CartItem = {
   id: string;
@@ -24,20 +25,33 @@ type Customer = {
   email?: string;
 };
 
+type ActiveCustomer = {
+  customerName: string;
+  address?: string;
+  storeName?: string;
+  contactNumber?: string;
+  email?: string;
+};
+
 // ── VAT (12%), added on top of the item subtotal ─────────────────────────────
 const VAT_RATE = 0.12;
 const round2 = (n: number) => Math.round(n * 100) / 100;
+const money = (n: number) =>
+  `₱${n.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+const lettersOnlyRegex = /^[a-zA-ZÀ-ÖØ-öø-ÿ\s.\-']*$/;
+
+// Shared input styling (border colour/width is added per field so classes never conflict)
+const inputBase =
+  "w-full box-border rounded-lg bg-white px-3.5 py-2.5 text-[13px] text-[#1a1a1a] outline-none font-sans";
+const labelCls = "mb-1.5 block text-xs font-medium text-[#555]";
+const errorCls = "mt-1 text-[11px] text-[#e53935]";
 
 export default function PaymentPage() {
   const router = useRouter();
-  const [isNarrow, setIsNarrow] = useState(false);
-
-  useEffect(() => {
-    const check = () => setIsNarrow(window.innerWidth < 900);
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, []);
 
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
@@ -70,6 +84,7 @@ export default function PaymentPage() {
             ...c,
             customerName: c.customerName || c.name,
             contactNumber: c.contactNumber || c.phone,
+            email: c.email || undefined,
           })),
         );
       } catch (err) {
@@ -85,9 +100,7 @@ export default function PaymentPage() {
   const [customerType, setCustomerType] =
     useState<CustomerType>("Existing Customer");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
-    null,
-  );
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [existingAddress, setExistingAddress] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   const [newName, setNewName] = useState("");
@@ -98,34 +111,62 @@ export default function PaymentPage() {
   const [nameError, setNameError] = useState("");
   const [storeError, setStoreError] = useState("");
 
+  // GCash
   const [gcashRef, setGcashRef] = useState("");
-  const [gcashImage, setGcashImage] = useState<string | null>(null);
+  const [refStatus, setRefStatus] = useState<RefStatus>("idle");
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
+
   const [amountPaid, setAmountPaid] = useState("");
   const [completed, setCompleted] = useState(false);
   const [orderId, setOrderId] = useState("");
+  const [placedAsExisting, setPlacedAsExisting] = useState(false);
+  const [placedName, setPlacedName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Live duplicate check: runs once the reference number reaches 13 digits
+  useEffect(() => {
+    if (gcashRef.length !== 13) {
+      setRefStatus("idle");
+      return;
+    }
+    let cancelled = false;
+    setRefStatus("checking");
+    api
+      .checkGcashRef(gcashRef)
+      .then((r: any) => {
+        if (!cancelled) setRefStatus(r?.exists ? "used" : "ok");
+      })
+      .catch(() => {
+        // Network problem: don't block; the server still rejects duplicates
+        if (!cancelled) setRefStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [gcashRef]);
 
   const filteredCustomers = useMemo(
     () =>
       searchQuery.trim() === ""
         ? []
         : customers.filter((c) => {
-            const name = c.customerName?.toLowerCase() || "";
-            const store = c.storeName?.toLowerCase() || "";
-            const phone = c.contactNumber || "";
             const query = searchQuery.toLowerCase();
             return (
-              name.includes(query) ||
-              store.includes(query) ||
-              phone.includes(query)
+              (c.customerName?.toLowerCase() || "").includes(query) ||
+              (c.storeName?.toLowerCase() || "").includes(query) ||
+              (c.email?.toLowerCase() || "").includes(query) ||
+              (c.contactNumber || "").includes(searchQuery)
             );
           }),
     [searchQuery, customers],
   );
 
-  const activeCustomer =
+  const activeCustomer: ActiveCustomer | null =
     customerType === "Existing Customer"
       ? selectedCustomer
         ? {
@@ -145,22 +186,29 @@ export default function PaymentPage() {
   const paid = parseFloat(amountPaid) || 0;
   const change = paid - total;
 
-  const phoneValid = newPhone.trim().length === 10 && /^\d{10}$/.test(newPhone);
+  const phoneValid = /^\d{10}$/.test(newPhone);
   const newCustomerValid =
     newName.trim() !== "" &&
     nameError === "" &&
     storeError === "" &&
     phoneValid &&
     newAddress.trim() !== "";
+  const selectedHasEmail = !!selectedCustomer?.email;
   const existingValid =
-    selectedCustomer !== null && existingAddress.trim() !== "";
-  const gcashRefValid = /^\d{13}$/.test(gcashRef.trim());
+    selectedCustomer !== null &&
+    selectedHasEmail &&
+    existingAddress.trim() !== "";
+
+  const gcashRefValid = /^\d{13}$/.test(gcashRef);
+  const gcashRefOk =
+    gcashRefValid && refStatus !== "used" && refStatus !== "checking";
+  const receiptReady = receiptUrl !== null && !uploadingReceipt;
 
   const canComplete =
     cartItems.length > 0 &&
     (customerType === "Existing Customer" ? existingValid : newCustomerValid) &&
     (paymentMethod === "GCash"
-      ? gcashRefValid && gcashImage !== null
+      ? gcashRefOk && receiptReady
       : paid + 0.005 >= total);
 
   // What's still missing — shown under the Place Order button
@@ -168,23 +216,24 @@ export default function PaymentPage() {
   if (cartItems.length === 0) missingSteps.push("Add items to the cart");
   if (customerType === "Existing Customer") {
     if (!selectedCustomer) missingSteps.push("Select a customer");
+    else if (!selectedHasEmail)
+      missingSteps.push("This customer has no email on file. Add one first");
     else if (existingAddress.trim() === "")
       missingSteps.push("Enter the delivery address");
-  } else {
-    if (!newCustomerValid)
-      missingSteps.push(
-        "Fill in the customer's name, phone and delivery address",
-      );
+  } else if (!newCustomerValid) {
+    missingSteps.push("Fill in the customer's name, phone and delivery address");
   }
   if (paymentMethod === "GCash") {
-    if (!gcashRefValid)
-      missingSteps.push("Enter the 13-digit GCash reference no.");
-    if (!gcashImage) missingSteps.push("Upload the GCash receipt");
+    if (!gcashRefValid) missingSteps.push("Enter the 13-digit GCash reference no.");
+    else if (refStatus === "used")
+      missingSteps.push("That reference no. was already used");
+    else if (refStatus === "checking")
+      missingSteps.push("Checking the reference no.…");
+    if (uploadingReceipt) missingSteps.push("Wait for the receipt to finish uploading");
+    else if (!receiptUrl) missingSteps.push("Upload the GCash receipt");
   } else if (paid + 0.005 < total) {
     missingSteps.push("Enter the amount received");
   }
-
-  const lettersOnlyRegex = /^[a-zA-ZÀ-ÖØ-öø-ÿ\s.\-']*$/;
 
   const handleNameChange = (val: string) => {
     setNameError(
@@ -205,8 +254,7 @@ export default function PaymentPage() {
   };
 
   const handlePhoneChange = (val: string) => {
-    const digits = val.replace(/\D/g, "").slice(0, 10);
-    setNewPhone(digits);
+    setNewPhone(val.replace(/\D/g, "").slice(0, 10));
   };
 
   // GCash reference number: exactly 13 digits (also strips letters/symbols from pasted text)
@@ -221,12 +269,54 @@ export default function PaymentPage() {
     setShowDropdown(false);
   };
 
-  const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const clearReceipt = () => {
+    if (receiptPreview) URL.revokeObjectURL(receiptPreview);
+    setReceiptPreview(null);
+    setReceiptUrl(null);
+    setReceiptError(null);
+  };
+
+  // Upload the screenshot right away; Place Order sends the returned URL
+  const handleImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = ""; // allow picking the same file again
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => setGcashImage(ev.target?.result as string);
-    reader.readAsDataURL(file);
+
+    if (!["image/jpeg", "image/png"].includes(file.type)) {
+      setReceiptError("Only JPG or PNG images are allowed.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setReceiptError("Receipt must be 5MB or smaller.");
+      return;
+    }
+
+    clearReceipt();
+    setReceiptPreview(URL.createObjectURL(file));
+    setUploadingReceipt(true);
+    try {
+      const res = await api.uploadReceipt(file);
+      if (!res?.receiptImage) throw new Error("Upload failed.");
+      setReceiptUrl(res.receiptImage);
+    } catch (err: any) {
+      setReceiptPreview(null);
+      setReceiptUrl(null);
+      setReceiptError(err?.message || "Failed to upload receipt. Please try again.");
+    } finally {
+      setUploadingReceipt(false);
+    }
+  };
+
+  const resetCustomerFields = () => {
+    setSelectedCustomer(null);
+    setExistingAddress("");
+    setSearchQuery("");
+    setNewName("");
+    setNewAddress("");
+    setNewStore("");
+    setNewPhone("");
+    setNameError("");
+    setStoreError("");
   };
 
   const handleComplete = async () => {
@@ -237,7 +327,7 @@ export default function PaymentPage() {
 
       const isExisting = customerType === "Existing Customer";
 
-      // The server recalculates prices; we only send what was bought.
+      // The server recalculates prices and re-checks everything; we only send what was bought.
       // New customer = no account (guest). Existing = linked to their account.
       const res = await api.placeWalkInOrder({
         items: cartItems.map((item) => ({
@@ -246,17 +336,17 @@ export default function PaymentPage() {
         })),
         paymentMethod: paymentMethod === "Cash" ? "cash" : "gcash",
         cashGiven: paymentMethod === "Cash" ? paid : undefined,
-        gcashRef: paymentMethod === "GCash" ? gcashRef.trim() : undefined,
+        gcashRef: paymentMethod === "GCash" ? gcashRef : undefined,
+        receiptImage: paymentMethod === "GCash" ? (receiptUrl ?? undefined) : undefined,
         customerId: isExisting ? selectedCustomer!.id : undefined,
-        walkInName: isExisting
-          ? selectedCustomer!.customerName
-          : newStore.trim()
-            ? `${newName.trim()} (${newStore.trim()})`
-            : newName.trim(),
+        walkInName: isExisting ? selectedCustomer!.customerName : newName.trim(),
+        walkInStoreName: isExisting ? undefined : newStore.trim() || undefined,
         walkInPhone: isExisting ? undefined : "+63" + newPhone,
         walkInAddress: isExisting ? existingAddress.trim() : newAddress.trim(),
       });
 
+      setPlacedAsExisting(isExisting);
+      setPlacedName(isExisting ? selectedCustomer!.customerName : newName.trim());
       setOrderId(res?.saleId ?? "");
       sessionStorage.removeItem("pendingCart");
       setCompleted(true);
@@ -272,167 +362,60 @@ export default function PaymentPage() {
     setCompleted(false);
     setOrderId("");
     setSubmitError(null);
-    setSelectedCustomer(null);
-    setExistingAddress("");
-    setSearchQuery("");
-    setNewName("");
-    setNewAddress("");
-    setNewStore("");
-    setNewPhone("");
-    setNameError("");
-    setStoreError("");
+    resetCustomerFields();
     setGcashRef("");
-    setGcashImage(null);
+    setRefStatus("idle");
+    clearReceipt();
     setAmountPaid("");
     router.push("/cashier");
   };
 
-  const inputStyle: React.CSSProperties = {
-    width: "100%",
-    padding: "10px 14px",
-    borderRadius: "8px",
-    border: "1px solid #e0e0e0",
-    fontSize: "13px",
-    outline: "none",
-    background: "#fff",
-    boxSizing: "border-box",
-    color: "#1a1a1a",
-    fontFamily: "sans-serif",
-  };
-
-  const errorStyle: React.CSSProperties = {
-    fontSize: "11px",
-    color: "#e53935",
-    marginTop: "4px",
-  };
-
   /* ── Order Placed Screen ── */
   if (completed) {
+    const summaryRow = "mb-1.5 text-sm text-[#888]";
     return (
-      <div
-        style={{
-          minHeight: "calc(100vh - 56px)",
-          background: "linear-gradient(160deg, #f0faf2, #e8f5e9)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "20px",
-        }}
-      >
-        <div
-          style={{
-            textAlign: "center",
-            padding: "40px",
-            maxWidth: "400px",
-            width: "100%",
-          }}
-        >
-          <div
-            style={{
-              width: "90px",
-              height: "90px",
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, #1a3c2e, #2d7a3a)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 20px",
-              fontSize: "40px",
-            }}
-          >
+      <div className="flex min-h-[calc(100vh-56px)] items-center justify-center bg-gradient-to-b from-[#f0faf2] to-[#e8f5e9] p-5">
+        <div className="w-full max-w-[400px] p-10 text-center">
+          <div className="mx-auto mb-5 flex h-[90px] w-[90px] items-center justify-center rounded-full bg-gradient-to-br from-[#1a3c2e] to-[#2d7a3a] text-[40px]">
             ✅
           </div>
-          <h2
-            style={{
-              fontSize: "24px",
-              fontWeight: 800,
-              color: "#1a1a1a",
-              marginBottom: "8px",
-            }}
-          >
+          <h2 className="mb-2 text-2xl font-extrabold text-[#1a1a1a]">
             Order Placed!
           </h2>
           {orderId && (
-            <p style={{ fontSize: "13px", color: "#888", marginBottom: "6px" }}>
-              Order No: <strong style={{ color: "#1a3c2e" }}>{orderId}</strong>
+            <p className="mb-1.5 text-[13px] text-[#888]">
+              Order No: <strong className="text-[#1a3c2e]">{orderId}</strong>
             </p>
           )}
-          <p style={{ fontSize: "14px", color: "#888", marginBottom: "6px" }}>
-            Payment received from{" "}
-            <strong>{activeCustomer?.customerName}</strong>.
+          <p className={summaryRow}>
+            Payment received from <strong>{placedName}</strong>.
           </p>
-          <p style={{ fontSize: "14px", color: "#888", marginBottom: "6px" }}>
-            Subtotal:{" "}
-            <strong style={{ color: "#1a3c2e" }}>
-              ₱
-              {subtotal.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            </strong>
+          <p className={summaryRow}>
+            Subtotal: <strong className="text-[#1a3c2e]">{money(subtotal)}</strong>
           </p>
-          <p style={{ fontSize: "14px", color: "#888", marginBottom: "6px" }}>
-            VAT (12%):{" "}
-            <strong style={{ color: "#1a3c2e" }}>
-              ₱
-              {vat.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            </strong>
+          <p className={summaryRow}>
+            VAT (12%): <strong className="text-[#1a3c2e]">{money(vat)}</strong>
           </p>
-          <p style={{ fontSize: "14px", color: "#888", marginBottom: "6px" }}>
-            Total:{" "}
-            <strong style={{ color: "#1a3c2e" }}>
-              ₱
-              {total.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            </strong>
+          <p className={summaryRow}>
+            Total: <strong className="text-[#1a3c2e]">{money(total)}</strong>
           </p>
           {paymentMethod === "Cash" && change > 0 && (
-            <p style={{ fontSize: "14px", color: "#888", marginBottom: "6px" }}>
-              Change:{" "}
-              <strong style={{ color: "#1a3c2e" }}>
-                ₱
-                {change.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </strong>
+            <p className={summaryRow}>
+              Change: <strong className="text-[#1a3c2e]">{money(change)}</strong>
             </p>
           )}
-          <p style={{ fontSize: "14px", color: "#888", marginBottom: "6px" }}>
+          <p className={summaryRow}>
             Payment Method: <strong>{paymentMethod}</strong>
           </p>
-          <p
-            style={{
-              fontSize: "12px",
-              color: "#666",
-              background: "#fff",
-              border: "1px solid #c8e6c9",
-              borderRadius: "10px",
-              padding: "10px 12px",
-              margin: "14px 0 24px",
-              lineHeight: 1.5,
-            }}
-          >
-            Status: <strong>Pending</strong>. Track it under Active Orders, move
-            it to Out for Delivery, then mark it Completed once it arrives.
+          <p className="mb-6 mt-3.5 rounded-[10px] border border-[#c8e6c9] bg-white px-3 py-2.5 text-xs leading-normal text-[#666]">
+            Status: <strong>Pending</strong>.{" "}
+            {placedAsExisting
+              ? "Move it to Processing, then Out for Delivery. The customer confirms receipt in their account (or it completes automatically 24 hours after dispatch)."
+              : "Move it to Processing, then Out for Delivery, then mark it Completed once it arrives."}
           </p>
           <button
             onClick={resetAll}
-            style={{
-              background: "#1a3c2e",
-              color: "#fff",
-              border: "none",
-              borderRadius: "30px",
-              padding: "13px 40px",
-              fontSize: "14px",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
+            className="cursor-pointer rounded-full border-none bg-[#1a3c2e] px-10 py-[13px] text-sm font-bold text-white"
           >
             + New Order
           </button>
@@ -441,76 +424,31 @@ export default function PaymentPage() {
     );
   }
 
+  const choiceBtn = (active: boolean) =>
+    `flex-1 cursor-pointer rounded-lg px-2 py-2.5 text-[11px] font-semibold min-[900px]:text-[13px] ${
+      active
+        ? "border-2 border-[#1a3c2e] bg-[#f0faf2] text-[#1a3c2e]"
+        : "border border-[#e0e0e0] bg-white text-[#555]"
+    }`;
+
   /* ── Main Page ── */
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "calc(100vh - 56px)",
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: isNarrow ? "16px" : "28px",
-        }}
-      >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: isNarrow ? "1fr" : "1fr 340px",
-            gap: isNarrow ? "16px" : "24px",
-            maxWidth: "960px",
-            margin: "0 auto",
-          }}
-        >
+    <div className="flex h-[calc(100vh-56px)] flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto p-4 min-[900px]:p-7">
+        <div className="mx-auto grid max-w-[960px] grid-cols-1 gap-4 min-[900px]:grid-cols-[1fr_340px] min-[900px]:gap-6">
           {/* ── LEFT: Form ── */}
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: "16px",
-              border: "0.5px solid #e8e8e8",
-              padding: isNarrow ? "18px" : "28px",
-            }}
-          >
+          <div className="rounded-2xl border border-[#e8e8e8] bg-white p-[18px] min-[900px]:p-7">
             {/* Payment Method */}
-            <div style={{ marginBottom: "20px" }}>
-              <p
-                style={{
-                  fontSize: "13px",
-                  fontWeight: 700,
-                  color: "#1a1a1a",
-                  marginBottom: "10px",
-                }}
-              >
+            <div className="mb-5">
+              <p className="mb-2.5 text-[13px] font-bold text-[#1a1a1a]">
                 Payment Method
               </p>
-              <div style={{ display: "flex", gap: "10px" }}>
+              <div className="flex gap-2.5">
                 {(["Cash", "GCash"] as PaymentMethod[]).map((m) => (
                   <button
                     key={m}
                     onClick={() => setPaymentMethod(m)}
-                    style={{
-                      flex: 1,
-                      padding: "10px 8px",
-                      borderRadius: "8px",
-                      fontSize: "13px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      border:
-                        paymentMethod === m
-                          ? "2px solid #1a3c2e"
-                          : "1px solid #e0e0e0",
-                      background: paymentMethod === m ? "#f0faf2" : "#fff",
-                      color: paymentMethod === m ? "#1a3c2e" : "#555",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "6px",
-                    }}
+                    className={`${choiceBtn(paymentMethod === m)} flex items-center justify-center gap-1.5 !text-[13px]`}
                   >
                     {m === "Cash" ? "💵" : "📱"} {m}
                   </button>
@@ -519,59 +457,25 @@ export default function PaymentPage() {
             </div>
 
             {/* Customer Type */}
-            <div style={{ marginBottom: "20px" }}>
-              <p
-                style={{
-                  fontSize: "13px",
-                  fontWeight: 700,
-                  color: "#1a1a1a",
-                  marginBottom: "4px",
-                }}
-              >
+            <div className="mb-5">
+              <p className="mb-1 text-[13px] font-bold text-[#1a1a1a]">
                 Customer Type
               </p>
-              <p
-                style={{
-                  fontSize: "11px",
-                  color: "#888",
-                  marginBottom: "10px",
-                }}
-              >
+              <p className="mb-2.5 text-[11px] text-[#888]">
                 New Customer = no account yet. Existing Customer = already has
                 an account.
               </p>
-              <div style={{ display: "flex", gap: "10px" }}>
+              <div className="flex gap-2.5">
                 {(["New Customer", "Existing Customer"] as CustomerType[]).map(
                   (t) => (
                     <button
                       key={t}
                       onClick={() => {
                         setCustomerType(t);
-                        setSelectedCustomer(null);
-                        setExistingAddress("");
-                        setSearchQuery("");
-                        setNewName("");
-                        setNewAddress("");
-                        setNewStore("");
-                        setNewPhone("");
-                        setNameError("");
-                        setStoreError("");
+                        resetCustomerFields();
                         setSubmitError(null);
                       }}
-                      style={{
-                        flex: 1,
-                        padding: "10px 8px",
-                        borderRadius: "8px",
-                        fontSize: isNarrow ? "11px" : "13px",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        border:
-                          customerType === t
-                            ? "2px solid #1a3c2e"
-                            : "1px solid #e0e0e0",
-                        background: customerType === t ? "#f0faf2" : "#fff",
-                        color: customerType === t ? "#1a3c2e" : "#555",
-                      }}
+                      className={choiceBtn(customerType === t)}
                     >
                       {t === "New Customer" ? "🆕" : "👥"} {t}
                     </button>
@@ -582,18 +486,11 @@ export default function PaymentPage() {
 
             {/* ── EXISTING CUSTOMER ── */}
             {customerType === "Existing Customer" && (
-              <div style={{ marginBottom: "20px" }}>
-                <p
-                  style={{
-                    fontSize: "12px",
-                    color: "#555",
-                    fontWeight: 600,
-                    marginBottom: "8px",
-                  }}
-                >
+              <div className="mb-5">
+                <p className="mb-2 text-xs font-semibold text-[#555]">
                   🔍 Search Existing Customer
                 </p>
-                <div style={{ position: "relative" }}>
+                <div className="relative">
                   <input
                     value={searchQuery}
                     onChange={(e) => {
@@ -606,90 +503,39 @@ export default function PaymentPage() {
                     placeholder={
                       loadingCust
                         ? "Loading customers…"
-                        : "Type name, store, or phone..."
+                        : "Type name, email, store, or phone..."
                     }
                     disabled={loadingCust}
-                    style={{ ...inputStyle, paddingLeft: "36px" }}
+                    className={`${inputBase} border border-[#e0e0e0] pl-9`}
                   />
-                  <span
-                    style={{
-                      position: "absolute",
-                      left: "12px",
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      fontSize: "14px",
-                    }}
-                  >
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm">
                     🔍
                   </span>
 
                   {showDropdown && filteredCustomers.length > 0 && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: "44px",
-                        left: 0,
-                        right: 0,
-                        background: "#fff",
-                        borderRadius: "12px",
-                        border: "1px solid #e0e0e0",
-                        boxShadow: "0 8px 24px rgba(0,0,0,0.1)",
-                        zIndex: 20,
-                        overflow: "hidden",
-                      }}
-                    >
+                    <div className="absolute inset-x-0 top-11 z-20 max-h-72 overflow-y-auto rounded-xl border border-[#e0e0e0] bg-white shadow-[0_8px_24px_rgba(0,0,0,0.1)]">
                       {filteredCustomers.map((c) => (
                         <div
                           key={c.id}
                           onClick={() => handleSelectCustomer(c)}
-                          style={{
-                            padding: "12px 16px",
-                            cursor: "pointer",
-                            borderBottom: "0.5px solid #f5f5f5",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "12px",
-                          }}
-                          onMouseEnter={(e) =>
-                            ((
-                              e.currentTarget as HTMLDivElement
-                            ).style.background = "#f0faf2")
-                          }
-                          onMouseLeave={(e) =>
-                            ((
-                              e.currentTarget as HTMLDivElement
-                            ).style.background = "#fff")
-                          }
+                          className="flex cursor-pointer items-center gap-3 border-b border-[#f5f5f5] bg-white px-4 py-3 hover:bg-[#f0faf2]"
                         >
-                          <div
-                            style={{
-                              width: "36px",
-                              height: "36px",
-                              borderRadius: "50%",
-                              background: "#1a3c2e",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              color: "#fff",
-                              fontWeight: 700,
-                              fontSize: "14px",
-                              flexShrink: 0,
-                            }}
-                          >
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#1a3c2e] text-sm font-bold text-white">
                             {c.customerName.charAt(0)}
                           </div>
-                          <div>
-                            <p
-                              style={{
-                                fontSize: "13px",
-                                fontWeight: 600,
-                                color: "#1a1a1a",
-                              }}
-                            >
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-semibold text-[#1a1a1a]">
                               {c.customerName}
                             </p>
-                            <p style={{ fontSize: "11px", color: "#aaa" }}>
+                            <p className="truncate text-[11px] text-[#aaa]">
                               {c.storeName || "—"} • {c.contactNumber || "—"}
+                            </p>
+                            <p
+                              className={`truncate text-[11px] ${
+                                c.email ? "text-[#aaa]" : "font-semibold text-[#e53935]"
+                              }`}
+                            >
+                              {c.email ? `✉️ ${c.email}` : "⚠️ No email on file"}
                             </p>
                           </div>
                         </div>
@@ -701,21 +547,8 @@ export default function PaymentPage() {
                     searchQuery.trim() !== "" &&
                     filteredCustomers.length === 0 &&
                     !loadingCust && (
-                      <div
-                        style={{
-                          position: "absolute",
-                          top: "44px",
-                          left: 0,
-                          right: 0,
-                          background: "#fff",
-                          borderRadius: "12px",
-                          border: "1px solid #e0e0e0",
-                          padding: "16px",
-                          textAlign: "center",
-                          zIndex: 20,
-                        }}
-                      >
-                        <p style={{ fontSize: "13px", color: "#aaa" }}>
+                      <div className="absolute inset-x-0 top-11 z-20 rounded-xl border border-[#e0e0e0] bg-white p-4 text-center">
+                        <p className="text-[13px] text-[#aaa]">
                           No customer found for &quot;{searchQuery}&quot;
                         </p>
                       </div>
@@ -723,61 +556,28 @@ export default function PaymentPage() {
                 </div>
 
                 {selectedCustomer && (
-                  <div
-                    style={{
-                      marginTop: "14px",
-                      background: "#f0faf2",
-                      borderRadius: "12px",
-                      padding: "14px 16px",
-                      border: "1.5px solid #a5d6a7",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "12px",
-                        alignItems: "flex-start",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: "40px",
-                          height: "40px",
-                          borderRadius: "50%",
-                          background: "#1a3c2e",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "#fff",
-                          fontWeight: 700,
-                          fontSize: "16px",
-                          flexShrink: 0,
-                        }}
-                      >
+                  <div className="mt-3.5 flex items-start justify-between rounded-xl border-[1.5px] border-[#a5d6a7] bg-[#f0faf2] px-4 py-3.5">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1a3c2e] text-base font-bold text-white">
                         {selectedCustomer.customerName.charAt(0)}
                       </div>
                       <div>
-                        <p
-                          style={{
-                            fontSize: "14px",
-                            fontWeight: 700,
-                            color: "#1a1a1a",
-                            marginBottom: "4px",
-                          }}
-                        >
+                        <p className="mb-1 text-sm font-bold text-[#1a1a1a]">
                           {selectedCustomer.customerName}
                         </p>
                         {selectedCustomer.storeName && (
-                          <p style={{ fontSize: "12px", color: "#666" }}>
+                          <p className="text-xs text-[#666]">
                             🏪 {selectedCustomer.storeName}
                           </p>
                         )}
                         {selectedCustomer.contactNumber && (
-                          <p style={{ fontSize: "12px", color: "#666" }}>
+                          <p className="text-xs text-[#666]">
                             📞 {selectedCustomer.contactNumber}
+                          </p>
+                        )}
+                        {selectedCustomer.email && (
+                          <p className="text-xs text-[#666]">
+                            ✉️ {selectedCustomer.email}
                           </p>
                         )}
                       </div>
@@ -788,51 +588,42 @@ export default function PaymentPage() {
                         setExistingAddress("");
                         setSearchQuery("");
                       }}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        color: "#aaa",
-                        cursor: "pointer",
-                        fontSize: "16px",
-                      }}
+                      className="cursor-pointer border-none bg-transparent text-base text-[#aaa]"
                     >
                       ✕
                     </button>
                   </div>
                 )}
 
+                {/* An account without an email can't log in to confirm delivery */}
+                {selectedCustomer && !selectedHasEmail && (
+                  <div className="mt-3 rounded-[10px] border border-[#ef9a9a] bg-[#ffebee] px-3 py-2.5 text-xs leading-normal text-[#c62828]">
+                    ⚠️ This customer has no email on file, so they can&apos;t log
+                    in to confirm delivery. Please add an email to their account
+                    first.
+                  </div>
+                )}
+
                 {/* Delivery address (prefilled from the account, editable) */}
                 {selectedCustomer && (
-                  <div style={{ marginTop: "14px" }}>
-                    <label
-                      style={{
-                        fontSize: "12px",
-                        color: "#555",
-                        fontWeight: 500,
-                        marginBottom: "6px",
-                        display: "block",
-                      }}
-                    >
+                  <div className="mt-3.5">
+                    <label className={labelCls}>
                       📍 Delivery Address{" "}
-                      <span style={{ color: "#e53935" }}>*</span>
+                      <span className="text-[#e53935]">*</span>
                     </label>
                     <input
                       value={existingAddress}
                       onChange={(e) => setExistingAddress(e.target.value)}
                       placeholder="Enter delivery address"
                       maxLength={200}
-                      style={{
-                        ...inputStyle,
-                        border:
-                          existingAddress.trim() === ""
-                            ? "1.5px solid #e53935"
-                            : "1px solid #e0e0e0",
-                      }}
+                      className={`${inputBase} ${
+                        existingAddress.trim() === ""
+                          ? "border-[1.5px] border-[#e53935]"
+                          : "border border-[#e0e0e0]"
+                      }`}
                     />
                     {existingAddress.trim() === "" && (
-                      <p style={errorStyle}>
-                        ⚠️ Delivery address is required.
-                      </p>
+                      <p className={errorCls}>⚠️ Delivery address is required.</p>
                     )}
                   </div>
                 )}
@@ -841,137 +632,64 @@ export default function PaymentPage() {
 
             {/* ── NEW CUSTOMER ── */}
             {customerType === "New Customer" && (
-              <div style={{ marginBottom: "20px" }}>
-                <p
-                  style={{
-                    fontSize: "12px",
-                    color: "#555",
-                    fontWeight: 600,
-                    marginBottom: "12px",
-                  }}
-                >
+              <div className="mb-5">
+                <p className="mb-3 text-xs font-semibold text-[#555]">
                   🆕 New Customer Information
                 </p>
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "14px",
-                  }}
-                >
-                  {/* Customer Name + Store Name — stack on very narrow */}
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: isNarrow ? "1fr" : "1fr 1fr",
-                      gap: "12px",
-                    }}
-                  >
+                <div className="flex flex-col gap-3.5">
+                  <div className="grid grid-cols-1 gap-3 min-[900px]:grid-cols-2">
                     <div>
-                      <label
-                        style={{
-                          fontSize: "12px",
-                          color: "#555",
-                          fontWeight: 500,
-                          marginBottom: "6px",
-                          display: "block",
-                        }}
-                      >
-                        👤 Customer Name{" "}
-                        <span style={{ color: "#e53935" }}>*</span>
+                      <label className={labelCls}>
+                        👤 Customer Name <span className="text-[#e53935]">*</span>
                       </label>
                       <input
                         value={newName}
                         onChange={(e) => handleNameChange(e.target.value)}
                         placeholder="Enter customer name"
-                        style={{
-                          ...inputStyle,
-                          border: nameError
-                            ? "1.5px solid #e53935"
-                            : "1px solid #e0e0e0",
-                        }}
+                        className={`${inputBase} ${
+                          nameError
+                            ? "border-[1.5px] border-[#e53935]"
+                            : "border border-[#e0e0e0]"
+                        }`}
                       />
-                      {nameError && <p style={errorStyle}>⚠️ {nameError}</p>}
+                      {nameError && <p className={errorCls}>⚠️ {nameError}</p>}
                     </div>
                     <div>
-                      <label
-                        style={{
-                          fontSize: "12px",
-                          color: "#555",
-                          fontWeight: 500,
-                          marginBottom: "6px",
-                          display: "block",
-                        }}
-                      >
-                        🏪 Store Name
-                      </label>
+                      <label className={labelCls}>🏪 Store Name</label>
                       <input
                         value={newStore}
                         onChange={(e) => handleStoreChange(e.target.value)}
                         placeholder="Enter store name"
-                        style={{
-                          ...inputStyle,
-                          border: storeError
-                            ? "1.5px solid #e53935"
-                            : "1px solid #e0e0e0",
-                        }}
+                        className={`${inputBase} ${
+                          storeError
+                            ? "border-[1.5px] border-[#e53935]"
+                            : "border border-[#e0e0e0]"
+                        }`}
                       />
-                      {storeError && <p style={errorStyle}>⚠️ {storeError}</p>}
+                      {storeError && <p className={errorCls}>⚠️ {storeError}</p>}
                     </div>
                   </div>
 
-                  {/* Address */}
                   <div>
-                    <label
-                      style={{
-                        fontSize: "12px",
-                        color: "#555",
-                        fontWeight: 500,
-                        marginBottom: "6px",
-                        display: "block",
-                      }}
-                    >
+                    <label className={labelCls}>
                       📍 Delivery Address{" "}
-                      <span style={{ color: "#e53935" }}>*</span>
+                      <span className="text-[#e53935]">*</span>
                     </label>
                     <input
                       value={newAddress}
                       onChange={(e) => setNewAddress(e.target.value)}
                       placeholder="Enter delivery address"
                       maxLength={200}
-                      style={inputStyle}
+                      className={`${inputBase} border border-[#e0e0e0]`}
                     />
                   </div>
 
-                  {/* Phone */}
                   <div>
-                    <label
-                      style={{
-                        fontSize: "12px",
-                        color: "#555",
-                        fontWeight: 500,
-                        marginBottom: "6px",
-                        display: "block",
-                      }}
-                    >
-                      📞 Phone Number{" "}
-                      <span style={{ color: "#e53935" }}>*</span>
+                    <label className={labelCls}>
+                      📞 Phone Number <span className="text-[#e53935]">*</span>
                     </label>
-                    <div style={{ display: "flex" }}>
-                      <div
-                        style={{
-                          padding: "10px 12px",
-                          borderRadius: "8px 0 0 8px",
-                          border: "1px solid #e0e0e0",
-                          borderRight: "none",
-                          background: "#f5f5f5",
-                          fontSize: "13px",
-                          fontWeight: 700,
-                          color: "#1a1a1a",
-                          flexShrink: 0,
-                          userSelect: "none",
-                        }}
-                      >
+                    <div className="flex">
+                      <div className="shrink-0 select-none rounded-l-lg border border-r-0 border-[#e0e0e0] bg-[#f5f5f5] px-3 py-2.5 text-[13px] font-bold text-[#1a1a1a]">
                         +63
                       </div>
                       <input
@@ -981,34 +699,28 @@ export default function PaymentPage() {
                         onChange={(e) => handlePhoneChange(e.target.value)}
                         placeholder="9XX XXX XXXX"
                         maxLength={10}
-                        style={{
-                          ...inputStyle,
-                          borderRadius: "0 8px 8px 0",
-                          border:
-                            newPhone.length > 0 && newPhone.length < 10
-                              ? "1.5px solid #e53935"
-                              : newPhone.length === 10
-                                ? "1.5px solid #2e7d32"
-                                : "1px solid #e0e0e0",
-                          borderLeft: "none",
-                          flex: 1,
-                          letterSpacing: "1px",
-                        }}
+                        className={`${inputBase} min-w-0 flex-1 rounded-l-none border border-l-0 tracking-[1px] ${
+                          newPhone.length > 0 && newPhone.length < 10
+                            ? "border-[#e53935]"
+                            : newPhone.length === 10
+                              ? "border-[#2e7d32]"
+                              : "border-[#e0e0e0]"
+                        }`}
                       />
                     </div>
                     {newPhone.length === 0 && (
-                      <p style={{ ...errorStyle, color: "#aaa" }}>
+                      <p className={`${errorCls} !text-[#aaa]`}>
                         Phone number is required (10 digits after +63)
                       </p>
                     )}
                     {newPhone.length > 0 && newPhone.length < 10 && (
-                      <p style={errorStyle}>
+                      <p className={errorCls}>
                         ⚠️ {10 - newPhone.length} more digit
                         {10 - newPhone.length > 1 ? "s" : ""} needed
                       </p>
                     )}
                     {newPhone.length === 10 && (
-                      <p style={{ ...errorStyle, color: "#2e7d32" }}>
+                      <p className={`${errorCls} !text-[#2e7d32]`}>
                         ✅ +63 {newPhone.slice(0, 3)} {newPhone.slice(3, 6)}{" "}
                         {newPhone.slice(6)}
                       </p>
@@ -1020,207 +732,50 @@ export default function PaymentPage() {
 
             {/* ── GCASH ── */}
             {paymentMethod === "GCash" && (
-              <div
-                style={{
-                  background: "#f8f0ff",
-                  borderRadius: "12px",
-                  padding: "18px",
-                  border: "1px solid #e0c8ff",
-                }}
-              >
-                <p
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    color: "#6a1b9a",
-                    marginBottom: "14px",
-                  }}
-                >
+              <div className="rounded-xl border border-[#e0c8ff] bg-[#f8f0ff] p-[18px]">
+                <p className="mb-3.5 text-[13px] font-bold text-[#6a1b9a]">
                   📱 GCash Payment Details
                 </p>
-                <div
-                  style={{
-                    background: "#fff",
-                    borderRadius: "12px",
-                    padding: "14px",
-                    textAlign: "center",
-                    marginBottom: "14px",
-                    border: "1px solid #e0c8ff",
-                  }}
-                >
+                <div className="mb-3.5 rounded-xl border border-[#e0c8ff] bg-white p-3.5 text-center">
                   <svg
                     width="100"
                     height="100"
                     viewBox="0 0 120 120"
-                    style={{ margin: "0 auto", display: "block" }}
+                    className="mx-auto block"
                   >
-                    <rect
-                      x="2"
-                      y="2"
-                      width="116"
-                      height="116"
-                      rx="8"
-                      fill="white"
-                      stroke="#6a1b9a"
-                      strokeWidth="3"
-                    />
-                    <rect
-                      x="10"
-                      y="10"
-                      width="30"
-                      height="30"
-                      rx="3"
-                      fill="#6a1b9a"
-                    />
-                    <rect
-                      x="15"
-                      y="15"
-                      width="20"
-                      height="20"
-                      rx="2"
-                      fill="white"
-                    />
-                    <rect
-                      x="19"
-                      y="19"
-                      width="12"
-                      height="12"
-                      rx="1"
-                      fill="#6a1b9a"
-                    />
-                    <rect
-                      x="80"
-                      y="10"
-                      width="30"
-                      height="30"
-                      rx="3"
-                      fill="#6a1b9a"
-                    />
-                    <rect
-                      x="85"
-                      y="15"
-                      width="20"
-                      height="20"
-                      rx="2"
-                      fill="white"
-                    />
-                    <rect
-                      x="89"
-                      y="19"
-                      width="12"
-                      height="12"
-                      rx="1"
-                      fill="#6a1b9a"
-                    />
-                    <rect
-                      x="10"
-                      y="80"
-                      width="30"
-                      height="30"
-                      rx="3"
-                      fill="#6a1b9a"
-                    />
-                    <rect
-                      x="15"
-                      y="85"
-                      width="20"
-                      height="20"
-                      rx="2"
-                      fill="white"
-                    />
-                    <rect
-                      x="19"
-                      y="89"
-                      width="12"
-                      height="12"
-                      rx="1"
-                      fill="#6a1b9a"
-                    />
+                    <rect x="2" y="2" width="116" height="116" rx="8" fill="white" stroke="#6a1b9a" strokeWidth="3" />
+                    <rect x="10" y="10" width="30" height="30" rx="3" fill="#6a1b9a" />
+                    <rect x="15" y="15" width="20" height="20" rx="2" fill="white" />
+                    <rect x="19" y="19" width="12" height="12" rx="1" fill="#6a1b9a" />
+                    <rect x="80" y="10" width="30" height="30" rx="3" fill="#6a1b9a" />
+                    <rect x="85" y="15" width="20" height="20" rx="2" fill="white" />
+                    <rect x="89" y="19" width="12" height="12" rx="1" fill="#6a1b9a" />
+                    <rect x="10" y="80" width="30" height="30" rx="3" fill="#6a1b9a" />
+                    <rect x="15" y="85" width="20" height="20" rx="2" fill="white" />
+                    <rect x="19" y="89" width="12" height="12" rx="1" fill="#6a1b9a" />
                     {[
-                      [50, 10],
-                      [56, 10],
-                      [62, 10],
-                      [50, 16],
-                      [62, 16],
-                      [50, 22],
-                      [58, 22],
-                      [62, 22],
-                      [10, 50],
-                      [16, 50],
-                      [22, 50],
-                      [28, 50],
-                      [10, 62],
-                      [28, 62],
-                      [50, 50],
-                      [58, 50],
-                      [66, 50],
-                      [50, 58],
-                      [62, 58],
-                      [50, 66],
-                      [58, 66],
-                      [80, 50],
-                      [96, 50],
-                      [80, 58],
-                      [96, 58],
-                      [80, 66],
-                      [96, 66],
-                      [50, 80],
-                      [58, 80],
-                      [50, 88],
-                      [62, 88],
-                      [54, 96],
-                      [66, 96],
+                      [50, 10], [56, 10], [62, 10], [50, 16], [62, 16], [50, 22], [58, 22], [62, 22],
+                      [10, 50], [16, 50], [22, 50], [28, 50], [10, 62], [28, 62],
+                      [50, 50], [58, 50], [66, 50], [50, 58], [62, 58], [50, 66], [58, 66],
+                      [80, 50], [96, 50], [80, 58], [96, 58], [80, 66], [96, 66],
+                      [50, 80], [58, 80], [50, 88], [62, 88], [54, 96], [66, 96],
                     ].map(([x, y], i) => (
-                      <rect
-                        key={i}
-                        x={x}
-                        y={y}
-                        width="5"
-                        height="5"
-                        fill="#6a1b9a"
-                      />
+                      <rect key={i} x={x} y={y} width="5" height="5" fill="#6a1b9a" />
                     ))}
                   </svg>
-                  <p
-                    style={{
-                      fontSize: "12px",
-                      fontWeight: 700,
-                      color: "#6a1b9a",
-                      marginTop: "8px",
-                    }}
-                  >
+                  <p className="mt-2 text-xs font-bold text-[#6a1b9a]">
                     Julieta Soft Drinks
                   </p>
-                  <p style={{ fontSize: "11px", color: "#aaa" }}>
-                    GCash: 0912 345 6789
-                  </p>
-                  <p
-                    style={{
-                      fontSize: "16px",
-                      fontWeight: 700,
-                      color: "#1a3c2e",
-                      marginTop: "6px",
-                    }}
-                  >
-                    Amount to Pay: ₱
-                    {total.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                  <p className="text-[11px] text-[#aaa]">GCash: 0912 345 6789</p>
+                  <p className="mt-1.5 text-base font-bold text-[#1a3c2e]">
+                    Amount to Pay: {money(total)}
                   </p>
                 </div>
-                <div style={{ marginBottom: "12px" }}>
-                  <label
-                    style={{
-                      fontSize: "12px",
-                      color: "#6a1b9a",
-                      fontWeight: 600,
-                      marginBottom: "6px",
-                      display: "block",
-                    }}
-                  >
-                    🔢 GCash Reference No.{" "}
-                    <span style={{ color: "#e53935" }}>*</span>
+
+                {/* Reference number */}
+                <div className="mb-3">
+                  <label className="mb-1.5 block text-xs font-semibold text-[#6a1b9a]">
+                    🔢 GCash Reference No. <span className="text-[#e53935]">*</span>
                   </label>
                   <input
                     type="text"
@@ -1230,137 +785,92 @@ export default function PaymentPage() {
                     value={gcashRef}
                     onChange={(e) => handleGcashRefChange(e.target.value)}
                     placeholder="13-digit reference number"
-                    style={{
-                      ...inputStyle,
-                      letterSpacing: "1px",
-                      border: gcashRefValid
-                        ? "1.5px solid #2e7d32"
-                        : gcashRef
-                          ? "1.5px solid #6a1b9a"
-                          : "1px solid #e0c8ff",
-                    }}
+                    className={`${inputBase} tracking-[1px] ${
+                      refStatus === "used"
+                        ? "border-[1.5px] border-[#e53935]"
+                        : gcashRefValid
+                          ? "border-[1.5px] border-[#2e7d32]"
+                          : gcashRef
+                            ? "border-[1.5px] border-[#6a1b9a]"
+                            : "border border-[#e0c8ff]"
+                    }`}
                   />
                   <p
-                    style={{
-                      fontSize: "11px",
-                      marginTop: "4px",
-                      color: gcashRefValid ? "#2e7d32" : "#888",
-                    }}
+                    className={`mt-1 text-[11px] ${
+                      refStatus === "used"
+                        ? "font-semibold text-[#e53935]"
+                        : gcashRefValid
+                          ? "text-[#2e7d32]"
+                          : "text-[#888]"
+                    }`}
                   >
-                    {gcashRef.length}/13 digits
+                    {refStatus === "used"
+                      ? "⚠️ This reference no. was already used."
+                      : refStatus === "checking"
+                        ? "Checking…"
+                        : refStatus === "ok"
+                          ? "✅ 13/13 digits, reference no. is available"
+                          : `${gcashRef.length}/13 digits`}
                   </p>
                 </div>
+
+                {/* Receipt */}
                 <div>
-                  <label
-                    style={{
-                      fontSize: "12px",
-                      color: "#6a1b9a",
-                      fontWeight: 600,
-                      marginBottom: "6px",
-                      display: "block",
-                    }}
-                  >
-                    📸 GCash Receipt Image{" "}
-                    <span style={{ color: "#e53935" }}>*</span>
+                  <label className="mb-1.5 block text-xs font-semibold text-[#6a1b9a]">
+                    📸 GCash Receipt Image <span className="text-[#e53935]">*</span>
                   </label>
-                  {gcashImage ? (
-                    <div
-                      style={{
-                        position: "relative",
-                        borderRadius: "10px",
-                        overflow: "hidden",
-                        border: "1.5px solid #6a1b9a",
-                      }}
-                    >
+                  {receiptPreview ? (
+                    <div className="relative overflow-hidden rounded-[10px] border-[1.5px] border-[#6a1b9a]">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={gcashImage}
+                        src={receiptPreview}
                         alt="receipt"
-                        style={{
-                          width: "100%",
-                          height: "90px",
-                          objectFit: "cover",
-                          display: "block",
-                        }}
+                        className="block h-[90px] w-full object-cover"
                       />
                       <button
-                        onClick={() => setGcashImage(null)}
-                        style={{
-                          position: "absolute",
-                          top: "6px",
-                          right: "6px",
-                          background: "rgba(0,0,0,0.55)",
-                          border: "none",
-                          color: "#fff",
-                          borderRadius: "50%",
-                          width: "24px",
-                          height: "24px",
-                          cursor: "pointer",
-                          fontSize: "12px",
-                        }}
+                        onClick={clearReceipt}
+                        disabled={uploadingReceipt}
+                        className="absolute right-1.5 top-1.5 h-6 w-6 cursor-pointer rounded-full border-none bg-black/55 text-xs text-white disabled:cursor-not-allowed"
                       >
                         ✕
                       </button>
                       <div
-                        style={{
-                          background: "#e8f5e9",
-                          padding: "5px",
-                          textAlign: "center",
-                        }}
+                        className={`p-[5px] text-center ${
+                          uploadingReceipt ? "bg-[#fff8e1]" : "bg-[#e8f5e9]"
+                        }`}
                       >
                         <span
-                          style={{
-                            fontSize: "11px",
-                            color: "#2e7d32",
-                            fontWeight: 600,
-                          }}
+                          className={`text-[11px] font-semibold ${
+                            uploadingReceipt ? "text-[#8d6e00]" : "text-[#2e7d32]"
+                          }`}
                         >
-                          ✅ Receipt uploaded
+                          {uploadingReceipt ? "⏳ Uploading…" : "✅ Receipt uploaded"}
                         </span>
                       </div>
                     </div>
                   ) : (
                     <div
                       onClick={() => fileRef.current?.click()}
-                      style={{
-                        border: "2px dashed #c084fc",
-                        borderRadius: "10px",
-                        padding: "14px",
-                        textAlign: "center",
-                        cursor: "pointer",
-                        background: "#fff",
-                      }}
+                      className="cursor-pointer rounded-[10px] border-2 border-dashed border-[#c084fc] bg-white p-3.5 text-center"
                     >
-                      <p
-                        style={{
-                          fontSize: "13px",
-                          color: "#6a1b9a",
-                          fontWeight: 500,
-                        }}
-                      >
+                      <p className="text-[13px] font-medium text-[#6a1b9a]">
                         🖼️ Click to upload screenshot
                       </p>
-                      <p style={{ fontSize: "11px", color: "#bbb" }}>
-                        JPG, PNG supported
-                      </p>
+                      <p className="text-[11px] text-[#bbb]">JPG, PNG supported</p>
                     </div>
                   )}
                   <input
                     ref={fileRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png"
                     onChange={handleImage}
-                    style={{ display: "none" }}
+                    className="hidden"
                   />
+                  {receiptError && <p className={errorCls}>⚠️ {receiptError}</p>}
                 </div>
-                {(!gcashRefValid || !gcashImage) && (
-                  <p
-                    style={{
-                      fontSize: "11px",
-                      color: "#e53935",
-                      marginTop: "10px",
-                    }}
-                  >
+
+                {(!gcashRefValid || !receiptUrl) && (
+                  <p className="mt-2.5 text-[11px] text-[#e53935]">
                     ⚠️ A 13-digit reference number and the receipt image are
                     required.
                   </p>
@@ -1370,49 +880,17 @@ export default function PaymentPage() {
 
             {/* ── CASH ── */}
             {paymentMethod === "Cash" && (
-              <div
-                style={{
-                  background: "#f0faf2",
-                  borderRadius: "12px",
-                  padding: "18px",
-                  border: "1px solid #a5d6a7",
-                }}
-              >
-                <p
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: 700,
-                    color: "#2e7d32",
-                    marginBottom: "14px",
-                  }}
-                >
+              <div className="rounded-xl border border-[#a5d6a7] bg-[#f0faf2] p-[18px]">
+                <p className="mb-3.5 text-[13px] font-bold text-[#2e7d32]">
                   💵 Cash Payment
                 </p>
-                <div style={{ marginBottom: "14px" }}>
-                  <label
-                    style={{
-                      fontSize: "12px",
-                      color: "#555",
-                      fontWeight: 600,
-                      marginBottom: "6px",
-                      display: "block",
-                    }}
-                  >
+                <div className="mb-3.5">
+                  <label className="mb-1.5 block text-xs font-semibold text-[#555]">
                     Amount Received from Customer{" "}
-                    <span style={{ color: "#e53935" }}>*</span>
+                    <span className="text-[#e53935]">*</span>
                   </label>
-                  <div style={{ position: "relative" }}>
-                    <span
-                      style={{
-                        position: "absolute",
-                        left: "14px",
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        fontWeight: 700,
-                        color: "#2e7d32",
-                        fontSize: "14px",
-                      }}
-                    >
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-[#2e7d32]">
                       ₱
                     </span>
                     <input
@@ -1421,187 +899,72 @@ export default function PaymentPage() {
                       onChange={(e) => setAmountPaid(e.target.value)}
                       placeholder="0.00"
                       min={0}
-                      style={{
-                        ...inputStyle,
-                        paddingLeft: "30px",
-                        fontSize: "18px",
-                        fontWeight: 700,
-                        border:
-                          paid + 0.005 >= total
-                            ? "1.5px solid #2e7d32"
-                            : "1.5px solid #e0e0e0",
-                      }}
+                      className={`${inputBase} pl-[30px] text-lg font-bold ${
+                        paid + 0.005 >= total
+                          ? "border-[1.5px] border-[#2e7d32]"
+                          : "border-[1.5px] border-[#e0e0e0]"
+                      }`}
                     />
                   </div>
                 </div>
-                <div
-                  style={{
-                    background: "#fff",
-                    borderRadius: "10px",
-                    padding: "12px 16px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "8px",
-                  }}
-                >
+                <div className="flex flex-col gap-2 rounded-[10px] bg-white px-4 py-3">
                   {[
-                    [
-                      "Subtotal",
-                      `₱${subtotal.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}`,
-                    ],
-                    [
-                      "VAT (12%)",
-                      `₱${vat.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}`,
-                    ],
-                    [
-                      "Total Amount Due",
-                      `₱${total.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}`,
-                    ],
-                    [
-                      "Amount Paid",
-                      `₱${paid.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}`,
-                    ],
+                    ["Subtotal", money(subtotal)],
+                    ["VAT (12%)", money(vat)],
+                    ["Total Amount Due", money(total)],
+                    ["Amount Paid", money(paid)],
                   ].map(([label, value]) => (
-                    <div
-                      key={String(label)}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <span style={{ fontSize: "13px", color: "#888" }}>
-                        {label}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "13px",
-                          fontWeight: 600,
-                          color: "#1a1a1a",
-                        }}
-                      >
+                    <div key={label} className="flex justify-between">
+                      <span className="text-[13px] text-[#888]">{label}</span>
+                      <span className="text-[13px] font-semibold text-[#1a1a1a]">
                         {value}
                       </span>
                     </div>
                   ))}
-                  <div style={{ height: "1px", background: "#f0f0f0" }} />
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
+                  <div className="h-px bg-[#f0f0f0]" />
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold text-[#1a1a1a]">Change</span>
                     <span
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: 700,
-                        color: "#1a1a1a",
-                      }}
+                      className={`text-[22px] font-extrabold ${
+                        change >= 0 ? "text-[#2e7d32]" : "text-[#e53935]"
+                      }`}
                     >
-                      Change
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "22px",
-                        fontWeight: 800,
-                        color: change >= 0 ? "#2e7d32" : "#e53935",
-                      }}
-                    >
-                      ₱
-                      {change >= 0
-                        ? change.toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })
-                        : "0.00"}
+                      {change >= 0 ? money(change) : "₱0.00"}
                     </span>
                   </div>
                   {paid > 0 && paid + 0.005 < total && (
-                    <p
-                      style={{
-                        fontSize: "11px",
-                        color: "#e53935",
-                        textAlign: "center",
-                      }}
-                    >
-                      ⚠️ Amount is ₱
-                      {(total - paid).toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}{" "}
-                      short
+                    <p className="text-center text-[11px] text-[#e53935]">
+                      ⚠️ Amount is {money(total - paid)} short
                     </p>
                   )}
                 </div>
               </div>
             )}
-
-            {/* ── On narrow: Order Summary (with action buttons) inline after form ── */}
-            {isNarrow && (
-              <div style={{ marginTop: "20px" }}>
-                <OrderSummaryCard
-                  cartItems={cartItems}
-                  subtotal={subtotal}
-                  vat={vat}
-                  total={total}
-                  activeCustomer={activeCustomer}
-                  canComplete={canComplete}
-                  submitting={submitting}
-                  submitError={submitError}
-                  missingSteps={missingSteps}
-                  onComplete={handleComplete}
-                  onOrderMore={() => router.back()}
-                />
-              </div>
-            )}
           </div>
 
-          {/* ── RIGHT: Summary + actions (desktop only, stays in view while scrolling) ── */}
-          {!isNarrow && (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "16px",
-                position: "sticky",
-                top: 0,
-                alignSelf: "start",
-              }}
-            >
-              <OrderSummaryCard
-                cartItems={cartItems}
-                subtotal={subtotal}
-                vat={vat}
-                total={total}
-                activeCustomer={activeCustomer}
-                canComplete={canComplete}
-                submitting={submitting}
-                submitError={submitError}
-                missingSteps={missingSteps}
-                onComplete={handleComplete}
-                onOrderMore={() => router.back()}
-              />
-            </div>
-          )}
+          {/* ── RIGHT (below the form on narrow screens): Summary + actions ── */}
+          <div className="flex flex-col gap-4 min-[900px]:sticky min-[900px]:top-0 min-[900px]:self-start">
+            <OrderSummaryCard
+              cartItems={cartItems}
+              subtotal={subtotal}
+              vat={vat}
+              total={total}
+              activeCustomer={activeCustomer}
+              canComplete={canComplete}
+              submitting={submitting}
+              submitError={submitError}
+              missingSteps={missingSteps}
+              onComplete={handleComplete}
+              onOrderMore={() => router.back()}
+            />
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-/* ── Extracted Order Summary Card (reused in both layouts) ── */
+/* ── Order Summary Card ── */
 function OrderSummaryCard({
   cartItems,
   subtotal,
@@ -1619,12 +982,7 @@ function OrderSummaryCard({
   subtotal: number;
   vat: number;
   total: number;
-  activeCustomer: {
-    customerName: string;
-    address?: string;
-    storeName?: string;
-    contactNumber?: string;
-  } | null;
+  activeCustomer: ActiveCustomer | null;
   canComplete: boolean;
   submitting: boolean;
   submitError: string | null;
@@ -1633,142 +991,67 @@ function OrderSummaryCard({
   onOrderMore: () => void;
 }) {
   const completeDisabled = !canComplete || submitting;
-  const money = (n: number) =>
-    `₱${n.toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
+
+  const infoRows = (
+    [
+      ["Name", activeCustomer?.customerName],
+      ["Address", activeCustomer?.address],
+      ["Store", activeCustomer?.storeName],
+      ["Phone", activeCustomer?.contactNumber],
+      ["Email", activeCustomer?.email],
+    ] as [string, string | undefined][]
+  ).filter((r): r is [string, string] => !!r[1]);
 
   return (
     <>
-      <div
-        style={{
-          background: "#fff",
-          borderRadius: "16px",
-          border: "0.5px solid #e8e8e8",
-          padding: "20px",
-        }}
-      >
-        <p
-          style={{
-            fontSize: "15px",
-            fontWeight: 700,
-            color: "#1a1a1a",
-            marginBottom: "16px",
-          }}
-        >
-          🛒 Order Summary
-        </p>
+      <div className="rounded-2xl border border-[#e8e8e8] bg-white p-5">
+        <p className="mb-4 text-[15px] font-bold text-[#1a1a1a]">🛒 Order Summary</p>
+
         {cartItems.length === 0 ? (
-          <p
-            style={{
-              fontSize: "13px",
-              color: "#aaa",
-              textAlign: "center",
-              padding: "20px 0",
-            }}
-          >
+          <p className="py-5 text-center text-[13px] text-[#aaa]">
             No items in cart.
           </p>
         ) : (
           cartItems.map((item) => (
             <div
               key={item.id}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                padding: "10px 0",
-                borderBottom: "0.5px solid #f5f5f5",
-              }}
+              className="flex justify-between border-b border-[#f5f5f5] py-2.5"
             >
               <div>
-                <p
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: 500,
-                    color: "#1a1a1a",
-                  }}
-                >
+                <p className="text-[13px] font-medium text-[#1a1a1a]">
                   {item.productName}
                 </p>
-                <p style={{ fontSize: "11px", color: "#aaa" }}>
+                <p className="text-[11px] text-[#aaa]">
                   x{item.qty} × {money(item.finalPrice)}
                 </p>
               </div>
-              <p
-                style={{ fontSize: "13px", fontWeight: 600, color: "#1a3c2e" }}
-              >
+              <p className="text-[13px] font-semibold text-[#1a3c2e]">
                 {money(item.finalPrice * item.qty)}
               </p>
             </div>
           ))
         )}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            marginTop: "12px",
-            paddingTop: "10px",
-            borderTop: "0.5px solid #f0f0f0",
-          }}
-        >
-          <span style={{ fontSize: "13px", color: "#888" }}>Sub Total</span>
-          <span style={{ fontSize: "13px", color: "#1a1a1a" }}>
-            {money(subtotal)}
-          </span>
+
+        <div className="mt-3 flex justify-between border-t border-[#f0f0f0] pt-2.5">
+          <span className="text-[13px] text-[#888]">Sub Total</span>
+          <span className="text-[13px] text-[#1a1a1a]">{money(subtotal)}</span>
         </div>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            marginTop: "6px",
-          }}
-        >
-          <span style={{ fontSize: "13px", color: "#888" }}>VAT (12%)</span>
-          <span style={{ fontSize: "13px", color: "#1a1a1a" }}>
-            {money(vat)}
-          </span>
+        <div className="mt-1.5 flex justify-between">
+          <span className="text-[13px] text-[#888]">VAT (12%)</span>
+          <span className="text-[13px] text-[#1a1a1a]">{money(vat)}</span>
         </div>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginTop: "10px",
-            paddingTop: "10px",
-            borderTop: "0.5px solid #f0f0f0",
-          }}
-        >
-          <span style={{ fontSize: "18px", fontWeight: 700, color: "#1a1a1a" }}>
-            Total
-          </span>
-          <span style={{ fontSize: "28px", fontWeight: 800, color: "#1a3c2e" }}>
+        <div className="mt-2.5 flex items-center justify-between border-t border-[#f0f0f0] pt-2.5">
+          <span className="text-lg font-bold text-[#1a1a1a]">Total</span>
+          <span className="text-[28px] font-extrabold text-[#1a3c2e]">
             {money(total)}
           </span>
         </div>
 
         {/* ── Actions ── */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "10px",
-            marginTop: "18px",
-          }}
-        >
+        <div className="mt-[18px] flex flex-col gap-2.5">
           {/* Server error (out of stock, GCash ref already used, etc.) */}
           {submitError && (
-            <div
-              style={{
-                background: "#ffebee",
-                border: "1px solid #ef9a9a",
-                borderRadius: "10px",
-                padding: "10px 12px",
-                fontSize: "12px",
-                color: "#c62828",
-                lineHeight: 1.5,
-              }}
-            >
+            <div className="rounded-[10px] border border-[#ef9a9a] bg-[#ffebee] px-3 py-2.5 text-xs leading-normal text-[#c62828]">
               ⚠️ {submitError}
             </div>
           )}
@@ -1776,43 +1059,18 @@ function OrderSummaryCard({
           <button
             onClick={onComplete}
             disabled={completeDisabled}
-            style={{
-              width: "100%",
-              height: "50px",
-              borderRadius: "14px",
-              border: "none",
-              background: completeDisabled
-                ? "#d9d9d9"
-                : "linear-gradient(135deg, #1a3c2e 0%, #2d7a3a 100%)",
-              color: "#fff",
-              fontSize: "14px",
-              fontWeight: 700,
-              cursor: completeDisabled ? "not-allowed" : "pointer",
-              boxShadow: completeDisabled
-                ? "none"
-                : "0 8px 20px rgba(26,60,46,0.28)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "8px",
-              transition: "all 0.15s ease",
-            }}
+            className={`flex h-[50px] w-full items-center justify-center gap-2 rounded-[14px] border-none text-sm font-bold text-white transition-all duration-150 ${
+              completeDisabled
+                ? "cursor-not-allowed bg-[#d9d9d9]"
+                : "cursor-pointer bg-gradient-to-br from-[#1a3c2e] to-[#2d7a3a] shadow-[0_8px_20px_rgba(26,60,46,0.28)]"
+            }`}
           >
             {submitting ? (
               "Placing order…"
             ) : (
               <>
                 Place Order
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="5" y1="12" x2="19" y2="12" />
                   <polyline points="12 5 19 12 12 19" />
                 </svg>
@@ -1823,33 +1081,11 @@ function OrderSummaryCard({
           <button
             onClick={onOrderMore}
             disabled={submitting}
-            style={{
-              width: "100%",
-              height: "44px",
-              borderRadius: "14px",
-              border: "1.5px solid #d6e4da",
-              background: "#f6fbf7",
-              color: "#1a3c2e",
-              fontSize: "13px",
-              fontWeight: 600,
-              cursor: submitting ? "not-allowed" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "8px",
-              transition: "all 0.15s ease",
-            }}
+            className={`flex h-11 w-full items-center justify-center gap-2 rounded-[14px] border-[1.5px] border-[#d6e4da] bg-[#f6fbf7] text-[13px] font-semibold text-[#1a3c2e] transition-all duration-150 ${
+              submitting ? "cursor-not-allowed" : "cursor-pointer"
+            }`}
           >
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="19" y1="12" x2="5" y2="12" />
               <polyline points="12 19 5 12 12 5" />
             </svg>
@@ -1858,29 +1094,12 @@ function OrderSummaryCard({
 
           {/* What's still needed before the order can be placed */}
           {!canComplete && missingSteps.length > 0 && (
-            <div
-              style={{
-                background: "#fff8e1",
-                border: "1px solid #ffe082",
-                borderRadius: "10px",
-                padding: "10px 12px",
-              }}
-            >
-              <p
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 700,
-                  color: "#8d6e00",
-                  marginBottom: "4px",
-                }}
-              >
+            <div className="rounded-[10px] border border-[#ffe082] bg-[#fff8e1] px-3 py-2.5">
+              <p className="mb-1 text-[11px] font-bold text-[#8d6e00]">
                 Before you can place the order:
               </p>
               {missingSteps.map((step) => (
-                <p
-                  key={step}
-                  style={{ fontSize: "11px", color: "#8d6e00", lineHeight: 1.5 }}
-                >
+                <p key={step} className="text-[11px] leading-normal text-[#8d6e00]">
                   • {step}
                 </p>
               ))}
@@ -1889,67 +1108,20 @@ function OrderSummaryCard({
         </div>
       </div>
 
-      {activeCustomer && (
-        <div
-          style={{
-            background: "#fff",
-            borderRadius: "16px",
-            border: "0.5px solid #e8e8e8",
-            padding: "20px",
-            marginTop: "16px",
-          }}
-        >
-          <p
-            style={{
-              fontSize: "13px",
-              fontWeight: 700,
-              color: "#1a1a1a",
-              marginBottom: "12px",
-            }}
-          >
-            👤 Customer Info
-          </p>
-          {(
-            [
-              ["Name", activeCustomer.customerName],
-              activeCustomer.address
-                ? ["Address", activeCustomer.address]
-                : null,
-              activeCustomer.storeName
-                ? ["Store", activeCustomer.storeName]
-                : null,
-              activeCustomer.contactNumber
-                ? ["Phone", activeCustomer.contactNumber]
-                : null,
-            ] as ([string, string] | null)[]
-          )
-            .filter((r): r is [string, string] => r !== null)
-            .map((row) => (
-              <div
-                key={row[0]}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  padding: "7px 0",
-                  borderBottom: "0.5px solid #f5f5f5",
-                }}
-              >
-                <span style={{ fontSize: "12px", color: "#aaa" }}>
-                  {row[0]}
-                </span>
-                <span
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    color: "#333",
-                    textAlign: "right",
-                    maxWidth: "60%",
-                  }}
-                >
-                  {row[1]}
-                </span>
-              </div>
-            ))}
+      {infoRows.length > 0 && (
+        <div className="rounded-2xl border border-[#e8e8e8] bg-white p-5">
+          <p className="mb-3 text-[13px] font-bold text-[#1a1a1a]">👤 Customer Info</p>
+          {infoRows.map(([label, value]) => (
+            <div
+              key={label}
+              className="flex justify-between border-b border-[#f5f5f5] py-[7px]"
+            >
+              <span className="text-xs text-[#aaa]">{label}</span>
+              <span className="max-w-[60%] break-words text-right text-xs font-semibold text-[#333]">
+                {value}
+              </span>
+            </div>
+          ))}
         </div>
       )}
     </>
