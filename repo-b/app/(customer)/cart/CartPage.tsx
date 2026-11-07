@@ -508,7 +508,7 @@ export default function CartPage() {
             role="dialog"
             aria-modal="true"
             aria-label="GCash payment"
-            className="flex max-h-[94vh] w-full max-w-[480px] flex-col overflow-hidden rounded-[20px] bg-white shadow-[0_24px_70px_rgba(0,0,0,0.3)] min-[900px]:max-w-[920px]"
+            className="flex max-h-[94vh] w-full max-w-[480px] flex-col overflow-hidden rounded-[20px] bg-white text-[#1a1a1a] shadow-[0_24px_70px_rgba(0,0,0,0.3)] [color-scheme:light] min-[900px]:max-w-[920px]"
           >
             {/* Header + countdown */}
             <div className="shrink-0 bg-[#6a1b9a] text-white">
@@ -585,10 +585,10 @@ export default function CartPage() {
               <div>
                 <p className="mb-2.5 text-sm font-bold text-[#1a1a1a]">🧾 Order Review</p>
                 <div className="mb-[18px] rounded-xl border border-[#eee] px-3.5 py-3">
-                  <div className="flex max-h-[150px] flex-col gap-2 overflow-y-auto">
+                  <div className="flex max-h-[200px] flex-col gap-2 overflow-y-auto pr-1">
                     {items.map((item) => (
                       <div key={item.id} className="flex justify-between gap-2.5 text-[12.5px]">
-                        <span className="text-[#555]">
+                        <span className="text-[#444]">
                           {item.product.productName} × {item.quantity}
                         </span>
                         <span className="whitespace-nowrap font-semibold text-[#2d7a3a]">
@@ -600,14 +600,14 @@ export default function CartPage() {
                   <div className="my-2.5 h-px bg-[#f0f0f0]" />
                   <div className="mb-1.5 flex justify-between text-[12.5px]">
                     <span className="text-[#888]">Subtotal</span>
-                    <span>{peso(subtotal)}</span>
+                    <span className="font-semibold text-[#1a1a1a]">{peso(subtotal)}</span>
                   </div>
                   <div className="mb-1.5 flex justify-between text-[12.5px]">
                     <span className="text-[#888]">VAT (12%)</span>
-                    <span>{peso(vat)}</span>
+                    <span className="font-semibold text-[#1a1a1a]">{peso(vat)}</span>
                   </div>
                   <div className="mt-1 flex items-center justify-between border-t border-[#f0f0f0] pt-2.5">
-                    <span className="text-sm font-bold">Total (incl. VAT)</span>
+                    <span className="text-sm font-bold text-[#1a1a1a]">Total (incl. VAT)</span>
                     <span className="text-lg font-extrabold text-[#2d7a3a]">{peso(total)}</span>
                   </div>
                 </div>
@@ -620,12 +620,13 @@ export default function CartPage() {
                   <input
                     type="text"
                     inputMode="numeric"
+                    autoComplete="off"
                     value={gcashRef}
                     onChange={(e) =>
                       setGcashRef(e.target.value.replace(/\D/g, "").slice(0, GCASH_REF_LENGTH))
                     }
                     placeholder="e.g. 1234567890123"
-                    className={`box-border w-full rounded-[10px] border-[1.5px] bg-white px-3.5 py-2.5 text-sm outline-none ${
+                    className={`box-border w-full rounded-[10px] border-[1.5px] bg-white px-3.5 py-3 font-mono text-base font-semibold tracking-[0.12em] text-[#1a1a1a] caret-[#6a1b9a] outline-none placeholder:font-sans placeholder:text-sm placeholder:font-normal placeholder:tracking-normal placeholder:text-[#bbb] ${
                       refValid
                         ? "border-[#2d7a3a]"
                         : gcashRef
