@@ -32,6 +32,7 @@ type Order = {
   total: number;
   status: OrderStatus;
   isOnline: boolean;
+  isWalkIn: boolean;
   items: OrderItem[];
   cashReceived?: number;
   changeDue?: number;
@@ -116,6 +117,10 @@ function normalizeOrder(o: Record<string, unknown>): Order {
   const customer = o.customer as Record<string, unknown> | null;
   const rawLines = (o.orderLines ?? []) as Record<string, unknown>[];
 
+  // Cashier-placed orders carry the name/address typed at checkout
+  const walkInName    = o.walkInName ? String(o.walkInName) : "";
+  const walkInAddress = o.walkInAddress ? String(o.walkInAddress) : "";
+
   const payment = o.payment as Record<string, unknown> | null;
   const cashReceived = payment?.cashReceived ?? payment?.amountReceived ?? payment?.tendered;
   const changeRaw    = payment?.change ?? payment?.changeAmount ?? payment?.changeDue;
@@ -125,11 +130,14 @@ function normalizeOrder(o: Record<string, unknown>): Order {
     date: o.createdAt
       ? new Date(String(o.createdAt)).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" })
       : "—",
-    customer: customer ? String(customer.name ?? "Walk-in") : "Walk-in",
-    address:  customer ? String((customer.address as string) ?? "—") : "—",
+    customer: customer
+      ? String(customer.name ?? (walkInName || "Walk-in"))
+      : (walkInName || "Walk-in"),
+    address:  walkInAddress || (customer ? String((customer.address as string) ?? "—") : "—"),
     total:    Number(o.totalAmount ?? 0),
     status,
-    isOnline: !!customer,
+    isWalkIn: !!walkInName,
+    isOnline: !!customer && !walkInName,
     items: rawLines.map((l) => {
       const product = l.product as Record<string, unknown> | null;
       return {
@@ -251,6 +259,7 @@ export default function PendingPage() {
   }, [socket, fetchOrders]);
 
   const updateStatus = async (id: string, status: OrderStatus) => {
+    const previous = orders.find((o) => o.id === id)?.status;
     setUpdatingId(id);
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
     try {
@@ -258,8 +267,12 @@ export default function PendingPage() {
       if (status === "Completed" || status === "Cancelled") {
         setTimeout(() => setOrders((prev) => prev.filter((o) => o.id !== id)), 1500);
       }
-    } catch {
-      // keep optimistic state
+    } catch (err) {
+      // Roll back the optimistic update and show the server's message
+      if (previous) {
+        setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: previous } : o)));
+      }
+      setError((err as Error).message || "Failed to update order status.");
     } finally {
       setUpdatingId(null);
     }
@@ -521,9 +534,16 @@ export default function PendingPage() {
                         </button>
                       )}
                       {order.status === "Out for Delivery" && (
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", background: "#fff7ed", border: "1px solid #fed7aa", fontSize: "13px", fontWeight: 600, color: "#c2410c" }}>
-                          {Icon.truck} Awaiting customer confirmation
-                        </div>
+                        order.isWalkIn ? (
+                          <button className="act-green" onClick={() => updateStatus(order.id, "Completed")} disabled={isUpdating}
+                            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "13px", fontWeight: 700, cursor: isUpdating ? "not-allowed" : "pointer", opacity: isUpdating ? 0.6 : 1, boxShadow: "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
+                            {Icon.check} Mark as Completed
+                          </button>
+                        ) : (
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", background: "#fff7ed", border: "1px solid #fed7aa", fontSize: "13px", fontWeight: 600, color: "#c2410c" }}>
+                            {Icon.truck} Awaiting customer confirmation
+                          </div>
+                        )
                       )}
                     </div>
                   </div>
