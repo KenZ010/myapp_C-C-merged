@@ -539,8 +539,7 @@ export default function ProductManagementPage() {
             <div className="relative">
               <button onClick={() => setShowUserMenu(!showUserMenu)}
                 className={`flex items-center gap-2 px-2 py-2 rounded-xl transition-colors ${showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"}`}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="https://i.pravatar.cc/40?img=8" alt="User" className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover" />
+                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-semibold text-sm md:text-base">R</div>
                 <div className="hidden md:block text-left">
                   <p className="text-sm font-semibold text-gray-800">Ray Teodoro</p>
                   <p className="text-xs text-green-500">Admin</p>
