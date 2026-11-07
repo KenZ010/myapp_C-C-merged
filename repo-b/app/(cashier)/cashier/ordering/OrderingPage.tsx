@@ -2,7 +2,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import WalkInCheckoutModal from "@/components/Walkincheckoutmodal"; // ← NEW
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Product = {
@@ -512,7 +511,6 @@ export default function OrderingPage() {
   const [brand,            setBrand]            = useState("All");
   const [cart,             setCart]             = useState<CartItem[]>([]);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [showWalkIn,       setShowWalkIn]       = useState(false); // ← NEW
   const [products,         setProducts]         = useState<Product[]>([]);
   const [promos,           setPromos]           = useState<Promo[]>([]);
   const [loading,          setLoading]          = useState(true);
@@ -618,23 +616,11 @@ export default function OrderingPage() {
   const itemCount = cart.reduce((sum, i) => sum + i.qty, 0);
   const hasCart   = cart.length > 0;
 
-  // ← CHANGED: "Checkout & Pay" now opens the walk-in checkout on this page
   const handleCheckout = () => {
     if (cart.length === 0) return;
-    setShowWalkIn(true);
-  };
-
-  // Customer HAS an account → keep the original flow via the payment page
-  const handleAccountCheckout = () => {
-    if (cart.length === 0) return;
+    // Pass cart to payment page via sessionStorage
     sessionStorage.setItem("pendingCart", JSON.stringify(cart));
     router.push("/cashier/payment");
-  };
-
-  // Walk-in order placed → empty the cart and close the modal
-  const handleWalkInComplete = () => {
-    setCart([]);
-    setShowWalkIn(false);
   };
 
   const handleClear = () => { setCart([]); setShowClearConfirm(false); };
@@ -928,14 +914,6 @@ export default function OrderingPage() {
                 <polyline points="12 5 19 12 12 19" />
               </svg>
             </button>
-
-            {/* Customer with an account → original payment page */}
-            <button
-              onClick={handleAccountCheckout}
-              className="w-full mt-2.5 text-[11px] font-medium text-gray-400 hover:text-violet-600 transition-colors"
-            >
-              Customer has an account? Use account checkout →
-            </button>
           </div>
         </aside>
       )}
@@ -960,15 +938,6 @@ export default function OrderingPage() {
             </div>
           </div>
         </>
-      )}
-
-      {/* ── Walk-in checkout (customer without an account) ── */}
-      {showWalkIn && hasCart && (
-        <WalkInCheckoutModal
-          cart={cart}
-          onClose={() => setShowWalkIn(false)}
-          onComplete={handleWalkInComplete}
-        />
       )}
     </div>
   );
