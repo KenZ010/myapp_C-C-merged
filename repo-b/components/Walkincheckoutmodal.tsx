@@ -23,8 +23,9 @@ const formatMoney = (n: number) =>
   `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const inputCls =
-  "w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm outline-none " +
-  "focus:border-violet-400 focus:ring-2 focus:ring-violet-100";
+  "w-full px-4 py-2.5 rounded-xl border border-gray-300 text-sm outline-none " +
+  "bg-white text-gray-900 placeholder:text-gray-500 " +
+  "focus:border-violet-500 focus:ring-2 focus:ring-violet-100";
 
 export default function WalkInCheckoutModal({ cart, onClose, onComplete }: Props) {
   const [method, setMethod]               = useState<"cash" | "gcash">("cash");
@@ -139,7 +140,7 @@ export default function WalkInCheckoutModal({ cart, onClose, onComplete }: Props
             <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b border-gray-100">
               <div>
                 <h1 className="text-lg font-bold text-gray-900">Walk-in order</h1>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-gray-500 mt-0.5">
                   For customers without an account. They pay here, then wait for the order to arrive.
                 </p>
               </div>
@@ -159,7 +160,7 @@ export default function WalkInCheckoutModal({ cart, onClose, onComplete }: Props
               <div className="space-y-5">
                 <section>
                   <h2 className="text-sm font-bold text-gray-900 mb-1">Customer details</h2>
-                  <p className="text-[11px] text-gray-400 mb-3">So staff know whose order this is and where it goes.</p>
+                  <p className="text-[11px] text-gray-500 mb-3">So staff know whose order this is and where it goes.</p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <input
                       value={walkInName}
@@ -213,8 +214,9 @@ export default function WalkInCheckoutModal({ cart, onClose, onComplete }: Props
                         onChange={(e) => setCashGiven(e.target.value.replace(/[^\d.]/g, ""))}
                         inputMode="decimal"
                         placeholder="0.00"
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 text-lg font-semibold tabular-nums
-                                   outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-300 text-lg font-semibold tabular-nums
+                                   bg-white text-gray-900 placeholder:text-gray-500
+                                   outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
                       />
                       <div className="flex flex-wrap gap-2 mt-2">
                         <button
@@ -257,8 +259,9 @@ export default function WalkInCheckoutModal({ cart, onClose, onComplete }: Props
                         onChange={(e) => setGcashRef(e.target.value.replace(/[^\d\s-]/g, ""))}
                         inputMode="numeric"
                         placeholder="13-digit reference no."
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base font-semibold tabular-nums
-                                   tracking-wide outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-300 text-base font-semibold tabular-nums
+                                   tracking-wide bg-white text-gray-900 placeholder:text-gray-500
+                                   outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
                       />
                       <p className={`text-[11px] mt-1.5 ${refDigits.length === 13 ? "text-green-600" : "text-gray-400"}`}>
                         {refDigits.length}/13 digits · Confirm the payment of{" "}
