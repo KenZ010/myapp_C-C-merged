@@ -46,7 +46,7 @@ const navLinks = [
   },
   {
     href: "/cashier/pending",
-    label: "Pending",
+    label: "Transactions Status",
     tile: "#fff4dc",
     color: "#d98a00",
     icon: (
