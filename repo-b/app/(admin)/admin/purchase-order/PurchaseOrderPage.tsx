@@ -279,8 +279,6 @@ type Product     = {
   supplierId?: string; supplier?: { id: string; supplierName: string } | string; 
   status?: string; stockUnit?: string; stockQuantity?: number; size?: string | null 
 };
-type ReceiveQty  = { deliveryItemId: string; receivedQty: number; expiryDate: string };
-
 // Reorder suggestion shape returned by GET /api/reorder/suggestions
 type ReorderSuggestion = {
   productId: string;
@@ -328,7 +326,7 @@ const makeEmptyForm  = (): DeliveryForm => ({
   deliveryDate: new Date().toISOString().split("T")[0],
 });
 
-type Tab = "create" | "receiving" | "history";
+type Tab = "create" | "history";
 
 // Helper to get product name from allProducts
 const getProductName = (productId: string, allProducts: Product[], deliveryItems?: DeliveryItem[]) => {
@@ -453,7 +451,6 @@ export default function PurchaseOrderPage() {
   const [previewModal,   setPreviewModal]   = useState(false);
   const [createError,   setCreateError]   = useState("");
   const [createSuccess, setCreateSuccess] = useState("");
-  const [receiveError,  setReceiveError]  = useState("");
 
   const showConfirm = (msg: string, fn: () => void) => setConfirmModal({ show: true, message: msg, onConfirm: fn });
 
@@ -463,12 +460,6 @@ export default function PurchaseOrderPage() {
   const [viewDelivery,          setViewDelivery]          = useState<Delivery | null>(null);
   const [showHistoryStatusDrop, setShowHistoryStatusDrop] = useState(false);
   const historyStatusRef = useRef<HTMLDivElement>(null);
-
-  const [receivingSearch,   setReceivingSearch]   = useState("");
-  const [receivePage,       setReceivePage]       = useState(1);
-  const [receivingDelivery, setReceivingDelivery] = useState<Delivery | null>(null);
-  const [receiveQtys,       setReceiveQtys]       = useState<ReceiveQty[]>([]);
-  const [receiving,         setReceiving]         = useState(false);
 
   const supplierProducts = form.supplierId
     ? allProducts
@@ -644,33 +635,6 @@ export default function PurchaseOrderPage() {
       items[idx] = { ...items[idx], [field]: value };
     }
     setForm({ ...form, lineItems: items });
-  };
-
-  const pendingDeliveries  = deliveries.filter((d) => d.status === "PENDING" || d.status === "PARTIALLY_RECEIVED");
-  const filteredReceiving  = pendingDeliveries.filter((d) =>
-    d.id.toLowerCase().includes(receivingSearch.toLowerCase()) ||
-    (d.supplier?.supplierName || "").toLowerCase().includes(receivingSearch.toLowerCase())
-  );
-  const receiveTotalPages  = Math.ceil(filteredReceiving.length / ITEMS_PER_PAGE);
-  const paginatedReceiving = filteredReceiving.slice((receivePage - 1) * ITEMS_PER_PAGE, receivePage * ITEMS_PER_PAGE);
-
-  const openReceiveModal = (delivery: Delivery) => {
-    setReceivingDelivery(delivery); setReceiveError("");
-    setReceiveQtys(delivery.items.map((item) => ({ deliveryItemId: item.id, receivedQty: item.orderedQty - item.receivedQty, expiryDate: "" })));
-  };
-
-  const handleReceive = async () => {
-    if (!receivingDelivery) return;
-    const employee = JSON.parse(localStorage.getItem("employee") || "{}");
-    if (!employee?.id) { setReceiveError("Employee not found. Please log in again."); return; }
-    try {
-      setReceiving(true); setReceiveError("");
-      await api.receiveDelivery(receivingDelivery.id, employee.id, receiveQtys.filter((r) => r.receivedQty > 0));
-      setReceivingDelivery(null); await fetchAll();
-      setCreateSuccess("Items received and stock updated!");
-      setTimeout(() => setCreateSuccess(""), 3000);
-    } catch (e: unknown) { setReceiveError((e as Error).message || "Failed to receive items."); }
-    finally { setReceiving(false); }
   };
 
   const handleCancel = (id: string) => showConfirm("Cancel this delivery?", async () => {
@@ -951,7 +915,6 @@ export default function PurchaseOrderPage() {
           <div className="flex">
             {([
               { key: "create",    label: "Create Order", icon: ClipboardList },
-              { key: "receiving", label: "Receiving",    icon: Box },
               { key: "history",   label: "PO History",   icon: Clock },
             ] as { key: Tab; label: string; icon: typeof ClipboardList }[]).map((tab) => (
               <button key={tab.key} onClick={() => setActiveTab(tab.key)}
@@ -959,9 +922,6 @@ export default function PurchaseOrderPage() {
                   activeTab === tab.key ? "border-indigo-600 text-indigo-700 bg-indigo-50" : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
                 }`}>
                 <tab.icon className="w-4 h-4" /><span>{tab.label}</span>
-                {tab.key === "receiving" && pendingDeliveries.length > 0 && (
-                  <span className="bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none ml-1">{pendingDeliveries.length}</span>
-                )}
               </button>
             ))}
           </div>
@@ -1508,136 +1468,6 @@ export default function PurchaseOrderPage() {
                     className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2">
                     {saving ? <><span className="animate-spin inline-block">⏳</span> Submitting...</> : <><span>📤</span> Review & Submit</>}
                   </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* RECEIVING */}
-          {activeTab === "receiving" && (
-            <div className="flex flex-col lg:flex-row gap-4">
-              <div className="flex-1">
-                <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm">
-                  <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                    <h2 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-                    <Box className="w-4 h-4 text-blue-600" />
-                    Pending Deliveries — Ready to Receive</h2>
-                    <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-44">
-                      <Search className="w-4 h-4 text-gray-400" />
-                      <input type="text" placeholder="Search..." value={receivingSearch}
-                        onChange={(e) => { setReceivingSearch(e.target.value); setReceivePage(1); }}
-                        className="outline-none text-sm text-gray-700 w-full bg-transparent" />
-                    </div>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm min-w-max">
-                      <thead>
-                        <tr className="bg-indigo-900 text-white text-xs">
-                          <th className="p-3 text-left">Delivery ID</th>
-                          <th className="p-3 text-left">Supplier</th>
-                          <th className="p-3 text-left">Delivery Date Created</th>
-                          <th className="p-3 text-left">Products</th>
-                          <th className="p-3 text-left">Status</th>
-                          <th className="p-3 text-left">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {loading ? (
-                          <tr><td colSpan={6} className="p-6 text-center text-gray-400">Loading...</td></tr>
-                        ) : paginatedReceiving.length === 0 ? (
-                          <tr><td colSpan={6} className="p-10 text-center"><div className="flex flex-col items-center gap-2"><Inbox className="w-8 h-8 text-gray-300" /><p className="text-gray-400 text-sm">No pending deliveries.</p></div></td></tr>
-                        ) : paginatedReceiving.map((row) => (
-                          <tr key={row.id} className={`border-b border-gray-100 hover:bg-gray-50 ${receivingDelivery?.id === row.id ? "bg-indigo-50" : ""}`}>
-                            <td className="p-3"><span className="bg-gray-700 text-white px-3 py-1 rounded-full text-xs font-mono">{row.id.slice(0, 8)}...</span></td>
-                            <td className="p-3 text-gray-700">{row.supplier?.supplierName || row.supplierId}</td>
-                            <td className="p-3 text-gray-500 text-xs">{new Date(row.createdAt || row.deliveryDate).toLocaleDateString()}</td>
-                            <td className="p-3 text-gray-600 text-xs max-w-xs">
-                              <div className="space-y-1">
-                                {row.items?.slice(0, 2).map((item, idx) => (
-                                  <div key={idx} className="truncate">{item.product?.productName || allProducts.find(p => p.id === item.productId)?.productName || item.productId}</div>
-                                ))}
-                                {(row.items?.length || 0) > 2 && <p className="text-gray-400 text-xs">+{(row.items?.length || 0) - 2} more</p>}
-                              </div>
-                            </td>
-                            <td className="p-3"><span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_CONFIG[row.status]?.bg} ${STATUS_CONFIG[row.status]?.text}`}>{row.status}</span></td>
-                            <td className="p-3">
-                              <div className="flex gap-1">
-                                <button onClick={() => setViewDelivery(row)} className="border border-indigo-300 text-indigo-600 hover:bg-indigo-50 rounded-lg px-2 py-1 text-xs font-medium">View</button>
-                                <button onClick={() => openReceiveModal(row)} className="border border-green-300 text-green-600 hover:bg-green-50 rounded-lg px-2 py-1 text-xs font-medium">✓ Receive</button>
-                                <button onClick={() => handleCancel(row.id)} className="border border-red-200 text-red-500 hover:bg-red-50 rounded-lg px-2 py-1 text-xs font-medium">Cancel</button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <PaginationBar page={receivePage} totalPages={receiveTotalPages} setPage={setReceivePage} total={filteredReceiving.length} label="deliveries" />
-                </div>
-              </div>
-
-              <div className="w-full lg:w-80 shrink-0">
-                <div className="bg-white rounded-2xl p-5 shadow-sm sticky top-4">
-                  <h2 className="text-sm font-bold text-gray-700 mb-4">Receive Items</h2>
-                  {!receivingDelivery ? (
-                    <div className="flex flex-col items-center justify-center py-10 text-center">
-                      <span className="text-3xl mb-2">👆</span>
-                      <p className="text-xs text-gray-400">Click Receive on a delivery to confirm quantities</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {receiveError && (
-                        <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-2">
-                          <span>⚠️</span><span>{receiveError}</span>
-                        </div>
-                      )}
-                      <div className="bg-gray-50 rounded-xl p-3">
-                        <p className="text-xs text-gray-400">Supplier</p>
-                        <p className="text-sm font-medium text-gray-800">{receivingDelivery.supplier?.supplierName}</p>
-                      </div>
-                      <div className="bg-gray-50 rounded-xl p-3">
-                        <p className="text-xs text-gray-400 mb-2">Items — enter received quantities</p>
-                        <div className="space-y-3">
-                          {receivingDelivery.items.map((item, i) => {
-                            const rq        = receiveQtys.find((r) => r.deliveryItemId === item.id);
-                            const remaining = item.orderedQty - item.receivedQty;
-                            const unitInfo  = getUnit(item.unit || item.product?.stockUnit);
-                            const receivedBtl = rq?.receivedQty && unitInfo.bottlesPerCase
-                              ? rq.receivedQty * unitInfo.bottlesPerCase : null;
-                            return (
-                              <div key={i} className="py-1.5 border-b border-gray-100 last:border-0">
-                                <p className="text-xs font-medium text-gray-700 mb-1">
-                                  {item.product?.productName || item.productId}
-                                  {item.product?.size && <span className="text-gray-400 ml-1">{item.product.size}</span>}
-                                </p>
-                                <p className="text-xs text-gray-400 mb-1.5">
-                                  Ordered: <span className="font-medium">{item.orderedQty} {unitInfo.short}</span> ·
-                                  Received: <span className="font-medium">{item.receivedQty} {unitInfo.short}</span> ·
-                                  Remaining: <span className="font-medium text-indigo-600">{remaining} {unitInfo.short}</span>
-                                </p>
-                                <div className="flex items-center gap-2">
-                                  <input type="number" min="0" max={remaining} value={rq?.receivedQty ?? 0}
-                                    onChange={(e) => setReceiveQtys((prev) =>
-                                      prev.map((r) => r.deliveryItemId === item.id ? { ...r, receivedQty: Math.min(Number(e.target.value), remaining) } : r)
-                                    )}
-                                    className="w-16 border border-gray-200 rounded-lg px-1.5 py-1 text-sm text-center outline-none focus:border-indigo-400" />
-                                  <span className="text-xs text-gray-500 font-medium">{unitInfo.short}</span>
-                                  {receivedBtl !== null && receivedBtl > 0 && (
-                                    <span className="text-xs text-indigo-500 font-medium">= {receivedBtl} btl</span>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      <button onClick={handleReceive} disabled={receiving}
-                        className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2">
-                        {receiving ? <><span className="animate-spin">⏳</span> Processing...</> : "✓ Confirm Receipt"}
-                      </button>
-                      <button onClick={() => setReceivingDelivery(null)} className="w-full border border-gray-200 text-gray-600 rounded-xl py-2 text-sm hover:bg-gray-50">Close</button>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>

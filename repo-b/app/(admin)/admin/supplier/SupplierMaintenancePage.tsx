@@ -459,10 +459,11 @@ export default function SupplierMaintenancePage() {
 
   const navigate = (label: string) => {
     const routes: Record<string, string> = {
-      "Dashboard":"/admin/dashboard", "Inventory Maintenance":"/admin/dashboard",
-      "Supplier Maintenance":"/admin/supplier", "Sales Reports":"/admin/supplier",
-      "Account Management":"/admin/account", "Purchase Order":"/admin/account",
-      "Loss Report":"/admin/loss-report", "Promo Management":"/admin/loss-report",
+      "Dashboard":"/admin/dashboard", "Inventory Maintenance":"/admin/inventory",
+      "Supplier Maintenance":"/admin/supplier", "Sales Reports":"/admin/sales",
+      "Product Management":"/admin/product",
+      "Account Management":"/admin/account", "Purchase Order":"/admin/purchase-order",
+      "Loss Report":"/admin/loss-report", "Promo Management":"/admin/promo",
     };
     if (routes[label]) router.push(routes[label]);
     setShowMobileMenu(false);
