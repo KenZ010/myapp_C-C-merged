@@ -321,13 +321,12 @@ export default function ReturnPage() {
   const itemValue    = (item: ReturnRequestItem) => item.returnQty * (item.orderLine?.price ?? 0);
   const requestTotal = (r: ReturnRequest) => r.items.reduce((s, i) => s + itemValue(i), 0);
 
-  const summary = [
-    { label: "Total Requests", value: total,       icon: Icons.boxLg,   bar: "",                  tile: "",                       color: "",                highlight: true  },
-    { label: "Pending",        value: pendingCnt,  icon: Icons.clock,   bar: "bg-[#f59e0b]",      tile: "bg-[#fffbeb]",           color: "text-[#d97706]",  highlight: false },
-    { label: "Approved",       value: approvedCnt, icon: Icons.checkLg, bar: "bg-[#3f9a52]",      tile: "bg-[#e8f5ea]",           color: "text-[#2e7d3e]",  highlight: false },
-    { label: "Rejected",       value: rejectedCnt, icon: Icons.xLg,     bar: "bg-[#ef4444]",      tile: "bg-[#fef2f2]",           color: "text-[#dc2626]",  highlight: false },
-  ];
-
+ const summary = [
+  { label: "Total Requests", value: total,       icon: Icons.boxLg,   tile: "bg-[#e8f5ea]", color: "text-[#2e7d3e]" },
+  { label: "Pending",        value: pendingCnt,  icon: Icons.clock,   tile: "bg-[#fffbeb]", color: "text-[#d97706]" },
+  { label: "Approved",       value: approvedCnt, icon: Icons.checkLg, tile: "bg-[#e0f2ee]", color: "text-[#0f6b5e]" },
+  { label: "Rejected",       value: rejectedCnt, icon: Icons.xLg,     tile: "bg-[#fef2f2]", color: "text-[#dc2626]" },
+];
   return (
     <>
       <style>{`
@@ -368,25 +367,30 @@ export default function ReturnPage() {
           </button>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid gap-3.5 mb-6" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", animation: "fadeUp 0.45s ease" }}>
-          {summary.map((s) => (
-            <div
-              key={s.label}
-              className={`relative overflow-hidden rounded-[14px] px-[22px] py-5 ${s.highlight ? "" : "bg-white border border-[#d6e8d9]"}`}
-              style={s.highlight ? { background: "linear-gradient(135deg,#2e7d3e,#1f5f2d)", boxShadow: "0 6px 18px rgba(46,125,62,0.25)" } : undefined}
-            >
-              {!s.highlight && <div className={`absolute left-0 top-0 bottom-0 w-1 ${s.bar}`} />}
-              <div className="flex items-center justify-between mb-3.5">
-                <p className={`text-[12px] font-semibold m-0 uppercase tracking-wider ${s.highlight ? "text-white/80" : "text-[#5f7a66]"}`}>{s.label}</p>
-                <div className={`w-[34px] h-[34px] rounded-[10px] flex items-center justify-center ${s.highlight ? "bg-white/20 text-white" : `${s.tile} ${s.color}`}`}>
-                  {s.icon}
-                </div>
-              </div>
-              <p className={`text-[28px] font-extrabold m-0 leading-none tracking-tight ${s.highlight ? "text-white" : "text-[#14301b]"}`}>{s.value}</p>
-            </div>
-          ))}
-        </div>
+{/* Summary Cards */}
+<div
+  className="grid gap-4 mb-6"
+  style={{ gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", animation: "fadeUp 0.45s ease" }}
+>
+  {summary.map((s) => (
+    <div
+      key={s.label}
+      className="flex items-center gap-3.5 bg-white rounded-2xl px-5 py-4 border border-[#e6efe8] shadow-[0_1px_4px_rgba(20,48,27,0.06)]"
+    >
+      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${s.tile} ${s.color}`}>
+        {s.icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#8fa596] m-0">
+          {s.label}
+        </p>
+        <p className="text-[26px] font-extrabold text-[#14301b] m-0 leading-tight tracking-tight">
+          {s.value}
+        </p>
+      </div>
+    </div>
+  ))}
+</div>
 
         {/* Filter Bar */}
         <div className="bg-white rounded-[14px] border border-[#d6e8d9] px-[18px] py-3.5 mb-4 flex flex-wrap items-center gap-3">
