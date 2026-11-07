@@ -63,6 +63,23 @@ const formatExpiry = (dateStr?: string | null): string | null => {
 const formatMoney = (n: number): string =>
   `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+// Short "ends in" label for a promo's last date
+const getPromoEndLabel = (lastDate?: string): { text: string; urgent: boolean } | null => {
+  if (!lastDate) return null;
+  const end = new Date(lastDate);
+  if (isNaN(end.getTime())) return null;
+  end.setHours(23, 59, 59, 999);
+  const days = Math.ceil((end.getTime() - Date.now()) / 86_400_000);
+  if (days < 0)  return null;
+  if (days === 0) return { text: "Ends today", urgent: true };
+  if (days === 1) return { text: "1 day left", urgent: true };
+  if (days <= 7)  return { text: `${days} days left`, urgent: true };
+  return {
+    text: `Until ${end.toLocaleDateString("en-PH", { month: "short", day: "numeric" })}`,
+    urgent: false,
+  };
+};
+
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 function SkeletonCard() {
   return (
@@ -101,6 +118,187 @@ function MiniThumb({ image, emoji }: { image?: string | null; emoji: string }) {
     );
   }
   return <span className="text-xl leading-none">{emoji}</span>;
+}
+
+// ── Active Promos Banner ──────────────────────────────────────────────────────
+type PromoBannerProps = {
+  promos:   Promo[];
+  products: Product[];
+  onPick:   (productName: string) => void;
+};
+
+function PromoBanner({ promos, products, onPick }: PromoBannerProps) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [canLeft,  setCanLeft]  = useState(false);
+  const [canRight, setCanRight] = useState(false);
+
+  const productMap = useMemo(() => {
+    const map: Record<string, Product> = {};
+    products.forEach((p) => { map[p.id] = p; });
+    return map;
+  }, [products]);
+
+  const updateArrows = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanLeft(el.scrollLeft > 4);
+    setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    updateArrows();
+    const el = scrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(updateArrows);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [promos, products, updateArrows]);
+
+  const scrollByCards = (dir: 1 | -1) => {
+    scrollRef.current?.scrollBy({ left: dir * 340, behavior: "smooth" });
+  };
+
+  return (
+    <div className="promo-banner relative flex-shrink-0 overflow-hidden text-white">
+      {/* Soft decorative glow + dotted texture */}
+      <div className="promo-banner-glow" aria-hidden="true" />
+
+      <div className="relative flex items-center gap-4 px-7 py-3.5">
+        {/* Label block */}
+        <div className="flex items-center gap-3 flex-shrink-0 pr-4 border-r border-white/20">
+          <div className="relative w-10 h-10 rounded-xl bg-white/15 border border-white/25 flex items-center justify-center text-xl">
+            🎁
+            <span className="absolute -top-1 -right-1 flex h-3 w-3">
+              <span className="promo-ping absolute inline-flex h-full w-full rounded-full bg-amber-300 opacity-75" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-400 border-2 border-red-700" />
+            </span>
+          </div>
+          <div className="leading-tight">
+            <p className="text-sm font-extrabold tracking-tight">Active Promos</p>
+            <p className="text-[11px] text-red-100/90 mt-0.5">
+              {promos.length} deal{promos.length !== 1 ? "s" : ""} running now
+            </p>
+          </div>
+        </div>
+
+        {/* Scroll area */}
+        <div className="relative flex-1 min-w-0">
+          {canLeft && (
+            <button
+              onClick={() => scrollByCards(-1)}
+              aria-label="Scroll promos left"
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white text-red-700
+                         shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+          )}
+          {canRight && (
+            <button
+              onClick={() => scrollByCards(1)}
+              aria-label="Scroll promos right"
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white text-red-700
+                         shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+          )}
+
+          <div
+            ref={scrollRef}
+            onScroll={updateArrows}
+            className="promo-scroll flex gap-3 overflow-x-auto py-0.5"
+            style={{
+              scrollSnapType: "x proximity",
+              WebkitMaskImage: `linear-gradient(to right, ${canLeft ? "transparent 0, #000 40px" : "#000 0"}, ${canRight ? "#000 calc(100% - 40px), transparent 100%" : "#000 100%"})`,
+              maskImage:       `linear-gradient(to right, ${canLeft ? "transparent 0, #000 40px" : "#000 0"}, ${canRight ? "#000 calc(100% - 40px), transparent 100%" : "#000 100%"})`,
+            }}
+          >
+            {promos.map((promo) => {
+              const product  = productMap[promo.productId];
+              const meta     = getMeta(product?.category);
+              const endInfo  = getPromoEndLabel(promo.lastDate);
+              const original = product?.price;
+              const percent  =
+                promo.discountPercent ??
+                (original && original > promo.alteredPrice
+                  ? Math.round(((original - promo.alteredPrice) / original) * 100)
+                  : null);
+
+              return (
+                <button
+                  key={promo.id}
+                  type="button"
+                  onClick={() => product && onPick(product.productName)}
+                  title={product ? `Show ${product.productName}` : promo.promoName}
+                  className="promo-ticket group flex items-stretch flex-shrink-0 text-left bg-white text-gray-900
+                             rounded-2xl overflow-hidden shadow-[0_6px_18px_rgba(127,29,29,0.35)]
+                             hover:-translate-y-0.5 hover:shadow-[0_10px_24px_rgba(127,29,29,0.45)]
+                             active:scale-[0.98] transition-all duration-150"
+                  style={{ scrollSnapAlign: "start", minWidth: 270 }}
+                >
+                  {/* Thumbnail */}
+                  <span
+                    className="w-[68px] flex-shrink-0 flex items-center justify-center overflow-hidden"
+                    style={{ background: getCategoryBg(product?.category) }}
+                  >
+                    <MiniThumb image={product?.image} emoji={meta.emoji} />
+                  </span>
+
+                  {/* Info */}
+                  <span className="flex flex-col justify-center min-w-0 flex-1 px-3 py-2.5">
+                    <span className="text-[13px] font-bold leading-snug line-clamp-1 max-w-[150px]">
+                      {product?.productName ?? "Product"}
+                    </span>
+                    <span className="text-[11px] text-gray-400 line-clamp-1 max-w-[150px]">
+                      {promo.promoName}
+                    </span>
+                    <span className="flex items-baseline gap-1.5 mt-1">
+                      <span className="text-base font-extrabold text-red-600 tabular-nums leading-none">
+                        ₱{promo.alteredPrice.toLocaleString()}
+                      </span>
+                      {original && original > promo.alteredPrice && (
+                        <span className="text-[11px] text-gray-400 line-through tabular-nums">
+                          ₱{original.toLocaleString()}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-gray-400">/ case</span>
+                    </span>
+                  </span>
+
+                  {/* Ticket stub */}
+                  <span className="promo-stub relative flex flex-col items-center justify-center gap-1 px-3.5 flex-shrink-0 bg-red-50">
+                    {percent && percent > 0 ? (
+                      <span className="text-center leading-none">
+                        <span className="block text-xl font-black text-red-600 tabular-nums">{percent}%</span>
+                        <span className="block text-[9px] font-bold text-red-400 mt-0.5">OFF</span>
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-black text-red-600">PROMO</span>
+                    )}
+                    {endInfo && (
+                      <span
+                        className={[
+                          "text-[9px] font-bold rounded-full px-1.5 py-0.5 whitespace-nowrap",
+                          endInfo.urgent ? "bg-red-600 text-white" : "bg-white text-gray-500 border border-gray-200",
+                        ].join(" ")}
+                      >
+                        {endInfo.text}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── Quantity Stepper ──────────────────────────────────────────────────────────
@@ -564,6 +762,12 @@ export default function OrderingPage() {
 
   const handleClear = () => { setCart([]); setShowClearConfirm(false); };
 
+  // Tapping a promo ticket filters the grid down to that product
+  const handlePromoPick = (productName: string) => {
+    setBrand("All");
+    setSearch(productName);
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "row", height: "calc(100vh - 56px)", overflow: "hidden" }}>
       {/* Animations */}
@@ -580,33 +784,40 @@ export default function OrderingPage() {
           from { opacity: 0; transform: translateX(40px); }
           to   { opacity: 1; transform: translateX(0); }
         }
+        @keyframes promoPing {
+          75%, 100% { transform: scale(2.2); opacity: 0; }
+        }
         .cart-scroll::-webkit-scrollbar { width: 4px; }
         .cart-scroll::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+
+        /* Promo banner */
+        .promo-banner {
+          background: linear-gradient(100deg, #7f1d1d 0%, #b91c1c 45%, #dc2626 100%);
+          box-shadow: 0 4px 14px rgba(127, 29, 29, 0.25);
+        }
+        .promo-banner-glow {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          background:
+            radial-gradient(circle at 85% -40%, rgba(251, 191, 36, 0.35), transparent 55%),
+            radial-gradient(rgba(255, 255, 255, 0.10) 1px, transparent 1px);
+          background-size: auto, 14px 14px;
+        }
+        .promo-ping { animation: promoPing 1.6s cubic-bezier(0, 0, 0.2, 1) infinite; }
+        .promo-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+        .promo-scroll::-webkit-scrollbar { display: none; }
+        .promo-stub { border-left: 2px dashed #fecaca; }
+        @media (prefers-reduced-motion: reduce) {
+          .promo-ping { animation: none; }
+        }
       `}</style>
 
       {/* ── Left column: promos + product list ── */}
       <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, overflow: "hidden" }}>
         {/* ── Active Promos Banner ── */}
         {promos.length > 0 && (
-          <div style={{ background: "linear-gradient(90deg, #e53935, #c62828)", padding: "10px 28px", display: "flex", alignItems: "center", gap: "12px", overflowX: "auto", flexShrink: 0 }}>
-            <span style={{ fontSize: "13px", fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>🎁 Active Promos:</span>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "nowrap" }}>
-              {promos.map((promo) => {
-                const product = products.find((p) => p.id === promo.productId);
-                return (
-                  <div key={promo.id} style={{ background: "rgba(255,255,255,0.15)", borderRadius: "20px", padding: "4px 14px", display: "flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap" }}>
-                    <span style={{ fontSize: "12px", color: "#fff", fontWeight: 600 }}>{product?.productName ?? "Product"}</span>
-                    {promo.discountPercent && (
-                      <span style={{ fontSize: "11px", background: "#fff", color: "#e53935", borderRadius: "20px", padding: "1px 8px", fontWeight: 700 }}>
-                        -{promo.discountPercent}%
-                      </span>
-                    )}
-                    <span style={{ fontSize: "12px", color: "#ffcdd2" }}>₱{promo.alteredPrice.toLocaleString()}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <PromoBanner promos={promos} products={products} onPick={handlePromoPick} />
         )}
 
         {/* ── Main Content ── */}
