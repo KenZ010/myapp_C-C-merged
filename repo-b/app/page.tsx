@@ -30,9 +30,6 @@ const BUBBLES: [number, number, number, number, number, number][] = [
   [5,  82, 22, 6,  2.3,  0.50],
 ];
 
-// Fizz bar heights
-const FIZZ_HEIGHTS = [8, 12, 6, 14, 9, 11, 7, 13];
-
 const ROLE_HOME: Record<string, string> = {
   ADMIN:         "/admin/dashboard",
   CASHIER:       "/cashier/ordering",
@@ -141,12 +138,6 @@ export default function LoginPage() {
               0 0 60px   rgba(251,146,60,0.65),
               0 20px 48px rgba(0,0,0,0.38);
           }
-        }
-
-        /* ── Fizz bar pop ── */
-        @keyframes fizzPop {
-          0%, 100% { transform: scaleY(1);   opacity: 0.45; }
-          50%       { transform: scaleY(1.8); opacity: 1;    }
         }
 
         /* ── Submit button shimmer ── */
@@ -286,29 +277,6 @@ export default function LoginPage() {
           letter-spacing: 3px;
           text-transform: uppercase;
           font-weight: 700;
-        }
-
-        .lr-fizz-row {
-          display: flex;
-          align-items: flex-end;
-          gap: 5px;
-          height: 20px;
-        }
-
-        .lr-fizz-dot {
-          width: 5px;
-          background: rgba(255,255,255,0.7);
-          border-radius: 3px;
-          animation: fizzPop 1.4s ease-in-out infinite;
-        }
-
-        .lr-tagline {
-          color: rgba(255,255,255,0.5);
-          font-size: 0.7rem;
-          letter-spacing: 2px;
-          text-transform: uppercase;
-          margin-top: -6px;
-          font-weight: 500;
         }
 
         /* ════════════════ RIGHT PANEL ════════════════ */
@@ -572,18 +540,6 @@ export default function LoginPage() {
               <div className="lr-brand-name">JULIETA</div>
               <div className="lr-brand-sub">Softdrinks Store</div>
             </div>
-
-            <div className="lr-fizz-row">
-              {FIZZ_HEIGHTS.map((h, i) => (
-                <div
-                  key={i}
-                  className="lr-fizz-dot"
-                  style={{ height: `${h}px`, animationDelay: `${i * 0.18}s` }}
-                />
-              ))}
-            </div>
-
-            <p className="lr-tagline">Your favorite drinks, anytime</p>
           </div>
         </div>
 
