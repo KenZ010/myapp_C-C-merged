@@ -23,7 +23,7 @@ const formatMoney = (n: number) =>
   `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const inputCls =
-  "w-full px-4 py-2.5 rounded-xl border border-gray-300 text-sm outline-none " +
+  "wi-input w-full px-4 py-2.5 rounded-xl border border-gray-300 text-sm outline-none " +
   "bg-white text-gray-900 placeholder:text-gray-500 " +
   "focus:border-violet-500 focus:ring-2 focus:ring-violet-100";
 
@@ -102,7 +102,28 @@ export default function WalkInCheckoutModal({ cart, onClose, onComplete }: Props
         className="fixed z-[70] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
                    w-[min(920px,94vw)] max-h-[92vh] overflow-y-auto
                    bg-white rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.2)]"
+        style={{ colorScheme: "light", color: "#111827" }}
       >
+        {/* Force readable inputs even if a global/dark-theme style targets <input> */}
+        <style>{`
+          .wi-input {
+            background-color: #ffffff !important;
+            color: #111827 !important;
+            -webkit-text-fill-color: #111827 !important;
+            caret-color: #111827 !important;
+            border-color: #9ca3af !important;
+            opacity: 1 !important;
+          }
+          .wi-input::placeholder {
+            color: #6b7280 !important;
+            -webkit-text-fill-color: #6b7280 !important;
+            opacity: 1 !important;
+          }
+          .wi-input:focus {
+            border-color: #7c3aed !important;
+          }
+        `}</style>
+
         {/* ── Success view ── */}
         {done ? (
           <div className="p-8 text-center max-w-sm mx-auto">
@@ -214,7 +235,7 @@ export default function WalkInCheckoutModal({ cart, onClose, onComplete }: Props
                         onChange={(e) => setCashGiven(e.target.value.replace(/[^\d.]/g, ""))}
                         inputMode="decimal"
                         placeholder="0.00"
-                        className="w-full px-4 py-3 rounded-xl border border-gray-300 text-lg font-semibold tabular-nums
+                        className="wi-input w-full px-4 py-3 rounded-xl border border-gray-300 text-lg font-semibold tabular-nums
                                    bg-white text-gray-900 placeholder:text-gray-500
                                    outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
                       />
@@ -259,7 +280,7 @@ export default function WalkInCheckoutModal({ cart, onClose, onComplete }: Props
                         onChange={(e) => setGcashRef(e.target.value.replace(/[^\d\s-]/g, ""))}
                         inputMode="numeric"
                         placeholder="13-digit reference no."
-                        className="w-full px-4 py-3 rounded-xl border border-gray-300 text-base font-semibold tabular-nums
+                        className="wi-input w-full px-4 py-3 rounded-xl border border-gray-300 text-base font-semibold tabular-nums
                                    tracking-wide bg-white text-gray-900 placeholder:text-gray-500
                                    outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
                       />
