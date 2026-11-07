@@ -328,6 +328,26 @@ export const api = {
     if (!res.ok) throw new Error(data.message || 'Failed to place order');
     return data;
   },
+
+  placeWalkInOrder: async (payload: {
+    items: { productId: string; quantity: number }[];
+    paymentMethod: 'cash' | 'gcash';
+    cashGiven?: number;
+    gcashRef?: string;
+    walkInName: string;
+    walkInPhone?: string;
+    walkInAddress: string;
+  }) => {
+    const res = await fetch(`${API_URL}/orders/walk-in`, {
+      method:  'POST',
+      headers: authHeaders(),
+      body:    JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || 'Failed to place walk-in order');
+    return data as { saleId: string; totalAmount: number; change: number | null };
+  },
+
   getActiveOrders: async () => {
     const res = await fetch(`${API_URL}/orders/active`, { headers: authHeaders() });
     if (!res.ok) throw new Error('Failed to fetch active orders');
