@@ -21,6 +21,7 @@ type Promo = {
   discount?: number;
   bundleQty?: number;
   product: string;
+  productPrice?: number;
   image: string;
   status: PromoStatus;
   startDate: string;
@@ -75,6 +76,11 @@ const getPromoLabel = (promo: Promo) => {
   if (promo.type === "Bundle Deal") return promo.bundleQty != null ? `${promo.bundleQty} for 2` : "Bundle";
   return "";
 };
+
+// Promo price for a product price and a discount percent (always above 0, because the
+// API validation rejects 0). The server works out the final price again on its own.
+const promoPrice = (price: number | undefined, pct: number) =>
+  Math.max(0.01, Math.round((price ?? 0) * (1 - pct / 100) * 100) / 100);
 
 // ✅ Helper to parse year/month from a date string safely
 const parseYear = (val: string) => val ? parseInt(val.split("-")[0]) : new Date().getFullYear();
@@ -269,7 +275,7 @@ export default function PromoManagementPage() {
 
   const [salesData, setSalesData] = useState<Record<string, unknown>[]>([]);
   const [salesLoading, setSalesLoading] = useState(true);
-  const [products, setProducts] = useState<{ id: string; productName: string; size?: string | null; status?: string }[]>([]);
+  const [products, setProducts] = useState<{ id: string; productName: string; price?: number; size?: string | null; status?: string }[]>([]);
 
   useEffect(() => {
     const fetchSales = async () => {
@@ -358,6 +364,7 @@ export default function PromoManagementPage() {
         ? String(item.product?.name ?? item.product?.productName ?? "")
         : String(item.product ?? ""),                               // ← product is a populated object
       image: String(item.image ?? item.product?.image ?? ""),       // ← try product image
+      productPrice: item.product && typeof item.product === "object" ? Number(item.product.price ?? 0) : undefined,
       status: item.isActive === true ? "Active" : "Inactive",      // ← isActive boolean
       startDate: item.dateEffective
         ? String(item.dateEffective).split("T")[0]
@@ -440,7 +447,7 @@ export default function PromoManagementPage() {
       await api.updatePromo(selectedPromo!.id, {
         promoName:       editForm.title,
         discountPercent: editForm.discount ? Number(editForm.discount) : null,
-        alteredPrice:    0,
+        alteredPrice:    promoPrice(selectedPromo?.productPrice, Number(editForm.discount) || 0),
         dateEffective:   editForm.startDate,
         lastDate:        editForm.endDate,
         isActive:        editForm.status === "Active",
@@ -498,7 +505,7 @@ export default function PromoManagementPage() {
       promoName:       addForm.title,                              // ← title → promoName
       productId:       addForm.product,                            // ← product is productId for create
       discountPercent: addForm.discount ? Number(addForm.discount) : null,
-      alteredPrice:    0,                                          // ← required by backend
+      alteredPrice:    promoPrice(products.find((p) => p.id === addForm.product)?.price, Number(addForm.discount) || 0),
       dateEffective:   addForm.startDate,                          // ← startDate → dateEffective
       lastDate:        addForm.endDate,                            // ← endDate → lastDate
       isActive:        addForm.status === "Active",                // ← status → isActive boolean
