@@ -37,6 +37,21 @@ const statusTitles: Record<string, string> = {
   COMPLETED:        "Order completed",
 };
 
+// Pull the real customer name out of the stored user object
+function extractName(user: any): string {
+  if (!user || typeof user !== "object") return "";
+  const direct =
+    user.name ||
+    user.fullName ||
+    user.full_name ||
+    user.customerName ||
+    user.username;
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
+
+  const combined = `${user.firstName ?? user.first_name ?? ""} ${user.lastName ?? user.last_name ?? ""}`.trim();
+  return combined;
+}
+
 function DashboardInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const socket = useSocket();
@@ -55,13 +70,15 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => { connectSocket(); }, []);
 
-  // Load the customer name from localStorage (safe parse)
+  // Load the real customer name from localStorage (safe parse)
   useEffect(() => {
     const loadName = () => {
       try {
         const raw = localStorage.getItem("user");
-        const parsed = raw ? JSON.parse(raw) : {};
-        setCustomerName(parsed?.name?.trim() || "Guest");
+        const parsed = raw ? JSON.parse(raw) : null;
+        const name = extractName(parsed);
+        setCustomerName(name || "Guest");
+        if (!name) console.warn("[Layout] No name found in localStorage 'user':", parsed);
       } catch {
         setCustomerName("Guest");
       }
