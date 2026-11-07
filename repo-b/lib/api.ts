@@ -49,6 +49,16 @@ async function parseJson(res: Response, fallback: string) {
   return data;
 }
 
+// Like parseJson, but never throws on HTTP errors: returns { ok, message }
+// so UI code can show the server's message (used by the OTP endpoints).
+async function parseOk(res: Response, fallback: string) {
+  const data = await res.json().catch(() => ({}));
+  return {
+    ok: res.ok,
+    message: (data?.message as string | undefined) || (res.ok ? undefined : fallback),
+  };
+}
+
 export const api = {
   // ── AUTH ────────────────────────────────────────────────────────────────────
   login: async (name: string, password: string) => {
@@ -160,6 +170,7 @@ export const api = {
     return res.json();
   },
   createCustomer: async (data: Record<string, unknown>) => {
+    // data must include `otp` (the code emailed via requestCustomerOtp)
     const res = await fetch(`${API_URL}/customers`, {
       method: 'POST',
       headers: authHeaders(),
@@ -181,6 +192,35 @@ export const api = {
       headers: authHeaders(),
     });
     return res.json();
+  },
+
+  // ADMIN: step 1 of account creation. Emails a 6-digit code to the customer.
+  requestCustomerOtp: async (email: string) => {
+    const res = await fetch(`${API_URL}/customers/request-otp`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ email }),
+    });
+    return parseOk(res, 'Failed to send verification code');
+  },
+
+  // CUSTOMER: password change, step 1. Emails a code to the email on their account.
+  requestPasswordOtp: async () => {
+    const res = await fetch(`${API_URL}/customers/password/request-otp`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    return parseOk(res, 'Failed to send verification code');
+  },
+
+  // CUSTOMER: password change, step 2. Verifies the code and sets the new password.
+  changePassword: async (otp: string, newPassword: string) => {
+    const res = await fetch(`${API_URL}/customers/password/change`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ otp, newPassword }),
+    });
+    return parseOk(res, 'Failed to change password');
   },
 
   // ── PRODUCTS ────────────────────────────────────────────────────────────────

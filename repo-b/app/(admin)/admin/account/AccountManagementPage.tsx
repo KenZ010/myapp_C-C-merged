@@ -47,8 +47,9 @@ const statusColors: Record<string, string> = {
 };
 
 const emptyEmployee = { name: "", phone: "", password: "", role: "CASHIER", userStatus: "ACTIVE" };
-const emptyCustomer = { name: "", email: "", phone: "", address: "", password: "", userStatus: "ACTIVE" };
+const emptyCustomer = { name: "", email: "", phone: "", address: "", password: "", userStatus: "ACTIVE", otp: "" };
 const ROWS_OPTIONS = [5, 10, 20];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ✅ Phone input - numbers only, +63 prefix
 function PhoneInput({ value, onChange }: { value: string; onChange: (val: string) => void }) {
@@ -165,6 +166,25 @@ export default function AccountManagementPage() {
   const [cusEditingId, setCusEditingId] = useState<string | null>(null);
   const [showCusDelete, setShowCusDelete] = useState(false);
 
+  // ✅ OTP state (customer account creation)
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpInfo, setOtpInfo] = useState("");
+  const [otpCooldown, setOtpCooldown] = useState(0);
+
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const t = setTimeout(() => setOtpCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [otpCooldown]);
+
+  const resetOtp = () => {
+    setOtpSent(false);
+    setOtpSending(false);
+    setOtpInfo("");
+    setOtpCooldown(0);
+  };
+
   const fetchEmployees = async () => {
     try {
       setLoadingEmp(true);
@@ -277,10 +297,43 @@ export default function AccountManagementPage() {
   const toggleCus = (id: string) => setCusSelected((p) => p.includes(id) ? p.filter((i) => i !== id) : [...p, id]);
   const toggleAllCus = () => cusSelected.length === paginatedCus.length ? setCusSelected([]) : setCusSelected(paginatedCus.map((c) => c.id));
 
-  const openAddCus = () => { setCusForm(emptyCustomer); setCusEditingId(null); setCusError(""); setShowCusModal(true); };
+  const openAddCus = () => {
+    setCusForm(emptyCustomer);
+    setCusEditingId(null);
+    setCusError("");
+    resetOtp();
+    setShowCusModal(true);
+  };
   const openEditCus = (cus: Customer) => {
-    setCusForm({ name: cus.name, email: cus.email || "", phone: cus.phone || "", address: cus.address || "", password: "", userStatus: cus.userStatus });
-    setCusEditingId(cus.id); setCusError(""); setShowCusModal(true);
+    setCusForm({ name: cus.name, email: cus.email || "", phone: cus.phone || "", address: cus.address || "", password: "", userStatus: cus.userStatus, otp: "" });
+    setCusEditingId(cus.id); setCusError(""); resetOtp(); setShowCusModal(true);
+  };
+  const closeCusModal = () => {
+    setShowCusModal(false);
+    setCusError("");
+    resetOtp();
+  };
+
+  // ✅ Step 1 of account creation: email a verification code to the customer
+  const sendCusOtp = async () => {
+    const email = cusForm.email.trim();
+    if (!EMAIL_RE.test(email)) {
+      setCusError("Enter a valid customer email first.");
+      return;
+    }
+    try {
+      setOtpSending(true);
+      setCusError("");
+      const res = await api.requestCustomerOtp(email);
+      if (!res.ok) { setCusError(res.message || "Failed to send code."); return; }
+      setOtpSent(true);
+      setOtpInfo(res.message || "Code sent.");
+      setOtpCooldown(60);
+    } catch {
+      setCusError("Could not send the code. Please try again.");
+    } finally {
+      setOtpSending(false);
+    }
   };
 
   const saveCus = async () => {
@@ -288,18 +341,43 @@ export default function AccountManagementPage() {
       showAlert("Full name is required.", "Missing Field");
       return;
     }
+
+    // ✅ Extra checks for NEW customers (OTP flow)
+    if (cusEditingId === null) {
+      if (!EMAIL_RE.test(cusForm.email.trim())) {
+        showAlert("A valid email is required so we can send the verification code.", "Missing Field");
+        return;
+      }
+      if (cusForm.password.length < 8) {
+        showAlert("Password must be at least 8 characters.", "Invalid Password");
+        return;
+      }
+      if (!otpSent || cusForm.otp.length !== 6) {
+        showAlert("Send the verification code to the customer's email, then enter the 6-digit code.", "Verification Needed");
+        return;
+      }
+    }
+
     try {
       if (cusEditingId !== null) {
-        const res = await api.updateCustomer(cusEditingId, cusForm);
+        const updateData = {
+          name: cusForm.name,
+          email: cusForm.email,
+          phone: cusForm.phone,
+          address: cusForm.address,
+          userStatus: cusForm.userStatus,
+        };
+        const res = await api.updateCustomer(cusEditingId, updateData);
         if (res.message && !res.id) { setCusError(res.message || "Failed to update customer"); return; }
         setCusSuccess("Customer updated successfully!");
       } else {
-        const res = await api.createCustomer(cusForm);
+        const res = await api.createCustomer({ ...cusForm, email: cusForm.email.trim() });
         if (res.message && !res.id) { setCusError(res.message || "Failed to create customer"); return; }
         setCusSuccess("Customer created successfully!");
       }
       await fetchCustomers();
       setShowCusModal(false);
+      resetOtp();
       setCusSelected([]);
       setTimeout(() => setCusSuccess(""), 3000);
     } catch {
@@ -334,6 +412,9 @@ export default function AccountManagementPage() {
     localStorage.removeItem('employee');
     router.push('/');
   };
+
+  const isNewCustomer = cusEditingId === null;
+  const canSubmitCus = !isNewCustomer || (otpSent && cusForm.otp.length === 6);
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
@@ -620,10 +701,57 @@ export default function AccountManagementPage() {
                 <label className="text-xs font-medium text-gray-600">Full Name</label>
                 <input value={cusForm.name} onChange={(e) => setCusForm({ ...cusForm, name: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
               </div>
+
+              {/* ✅ Email + Send code (new customers only need the code) */}
               <div>
-                <label className="text-xs font-medium text-gray-600">Email</label>
-                <input value={cusForm.email} onChange={(e) => setCusForm({ ...cusForm, email: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
+                <label className="text-xs font-medium text-gray-600">
+                  Email {isNewCustomer && <span className="text-red-400">(required — a verification code will be sent here)</span>}
+                </label>
+                <div className="flex gap-2 mt-1">
+                  <input
+                    type="email"
+                    value={cusForm.email}
+                    disabled={isNewCustomer && otpSent}
+                    onChange={(e) => setCusForm({ ...cusForm, email: e.target.value })}
+                    className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-400 text-gray-900 disabled:bg-gray-50 disabled:text-gray-500"
+                  />
+                  {isNewCustomer && (
+                    <button
+                      type="button"
+                      onClick={sendCusOtp}
+                      disabled={otpSending || otpCooldown > 0}
+                      className="shrink-0 bg-gray-900 text-white rounded-lg px-3 py-2 text-xs font-medium hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {otpSending ? "Sending..." : otpCooldown > 0 ? `Resend (${otpCooldown}s)` : otpSent ? "Resend" : "Send code"}
+                    </button>
+                  )}
+                </div>
+                {isNewCustomer && otpSent && (
+                  <button
+                    type="button"
+                    onClick={() => { resetOtp(); setCusForm({ ...cusForm, otp: "" }); }}
+                    className="text-xs text-indigo-600 hover:underline mt-1"
+                  >
+                    Change email
+                  </button>
+                )}
               </div>
+
+              {isNewCustomer && otpSent && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600">Verification Code</label>
+                  <input
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="6-digit code"
+                    value={cusForm.otp}
+                    onChange={(e) => setCusForm({ ...cusForm, otp: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900 tracking-widest"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">{otpInfo} Ask the customer for the code.</p>
+                </div>
+              )}
+
               {/* ✅ Phone with +63 prefix, numbers only */}
               <div>
                 <label className="text-xs font-medium text-gray-600">Phone</label>
@@ -649,8 +777,14 @@ export default function AccountManagementPage() {
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => { setShowCusModal(false); setCusError(""); }} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={saveCus} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700">{cusEditingId !== null ? "Save Changes" : "Add Customer"}</button>
+              <button onClick={closeCusModal} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button
+                onClick={saveCus}
+                disabled={!canSubmitCus}
+                className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {cusEditingId !== null ? "Save Changes" : "Add Customer"}
+              </button>
             </div>
           </div>
         </div>
