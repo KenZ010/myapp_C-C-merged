@@ -312,6 +312,8 @@ export const api = {
     customerId:    string;
     paymentMethod: 'cod' | 'gcash';
     gcashRef?:     string;
+    receiptImage?: string;   // GCash receipt URL (from uploadReceipt)
+    cashGiven?:    number | string;
     note?:         string;
     items: {
       productId: string;

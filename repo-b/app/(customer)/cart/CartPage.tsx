@@ -306,6 +306,8 @@ export default function CartPage() {
   const [gcashImage, setGcashImage] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [qrFailed, setQrFailed] = useState(false);
+  const [gcashBusy, setGcashBusy] = useState(false);
+  const [gcashError, setGcashError] = useState<string | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -441,6 +443,7 @@ export default function CartPage() {
     setGcashRef("");
     setGcashImage(null);
     setUploadError(null);
+    setGcashError(null);
     setGcashOpen(true);
   };
 
@@ -494,19 +497,39 @@ export default function CartPage() {
   const canCheckoutCod = items.length > 0 && !hasStockIssue && isExactOrOver;
 
   const refValid = gcashRef.length === GCASH_REF_LENGTH;
-  const canProceedGcash = refValid && gcashImage !== null && secondsLeft > 0;
+  const canProceedGcash = refValid && gcashImage !== null && secondsLeft > 0 && !gcashBusy;
 
-  const handleGcashProceed = () => {
+  const dataUrlToFile = async (dataUrl: string) => {
+    const blob = await (await fetch(dataUrl)).blob();
+    return new File([blob], "gcash-receipt.jpg", { type: blob.type || "image/jpeg" });
+  };
+
+  // Verifies the typed reference, uploads the receipt, then continues to checkout
+  const handleGcashProceed = async () => {
     if (!canProceedGcash || !gcashImage) return;
-    sessionStorage.setItem("paymentMethod", "gcash");
-    sessionStorage.setItem("gcashRef", gcashRef);
-    sessionStorage.removeItem("cashGiven");
+    setGcashBusy(true);
+    setGcashError(null);
     try {
-      sessionStorage.setItem("gcashProof", gcashImage);
-    } catch {
-      sessionStorage.removeItem("gcashProof");
+      // 1. Reference must be valid and not already used on another order
+      const check = await api.checkGcashRef(gcashRef);
+      if (!check?.valid) throw new Error("That reference number isn't valid.");
+      if (check?.exists) throw new Error("That reference number was already used on another order.");
+
+      // 2. Upload the screenshot; only the returned URL is kept
+      const up = await api.uploadReceipt(await dataUrlToFile(gcashImage));
+      if (!up?.receiptImage) throw new Error("Receipt upload failed. Please try again.");
+
+      sessionStorage.setItem("paymentMethod", "gcash");
+      sessionStorage.setItem("gcashRef", gcashRef);
+      sessionStorage.setItem("gcashReceiptUrl", up.receiptImage);
+      sessionStorage.removeItem("gcashProof"); // base64 copy no longer needed
+      sessionStorage.removeItem("cashGiven");
+      router.push("/checkout");
+    } catch (err) {
+      setGcashError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setGcashBusy(false);
     }
-    router.push("/checkout");
   };
 
   const labelStyle: React.CSSProperties = {
@@ -968,12 +991,19 @@ export default function CartPage() {
                   boxShadow: canProceedGcash ? "0 6px 20px rgba(45,122,58,0.3)" : "none",
                 }}
               >
-                {!refValid
+                {gcashBusy
+                  ? "Verifying payment…"
+                  : !refValid
                   ? "Enter your GCash reference number"
                   : !gcashImage
                   ? "Upload your payment screenshot"
                   : "Proceed to Checkout →"}
               </button>
+              {gcashError && (
+                <p style={{ textAlign: "center", fontSize: "12px", color: "#e53935", fontWeight: 600, marginTop: "8px" }}>
+                  ⚠️ {gcashError}
+                </p>
+              )}
               <p style={{ textAlign: "center", fontSize: "11px", color: "#aaa", marginTop: "8px" }}>
                 You can&apos;t proceed to checkout until the reference number and screenshot are provided.
               </p>
