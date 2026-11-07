@@ -2,6 +2,10 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 
+// ── Theme (same green design as the other pages) ──────────────────────────────
+// GREEN #2e7d3e · DARK #1f5f2d · MID #3f9a52 · LIGHT #e8f5ea · TINT #f4faf5
+// BORDER #d6e8d9 · INK #14301b · MUTED #5f7a66 · FAINT #8fa596
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 type LossReason = "EXPIRED" | "DAMAGED" | "THEFT" | "COUNT_ERROR" | "OTHER";
 
@@ -139,12 +143,13 @@ const REASON_LABELS: Record<LossReason, string> = {
   OTHER:       "Other",
 };
 
+// Green family — reasons are told apart by shade. Theft stays red on purpose.
 const REASON_CLASSES: Record<LossReason, { badge: string; header: string }> = {
-  EXPIRED:     { badge: "bg-yellow-50 text-yellow-800",  header: "bg-yellow-900"  },
-  DAMAGED:     { badge: "bg-orange-50 text-orange-700",  header: "bg-orange-900"  },
-  THEFT:       { badge: "bg-red-50    text-red-700",     header: "bg-red-900"     },
-  COUNT_ERROR: { badge: "bg-purple-50 text-purple-700",  header: "bg-purple-900"  },
-  OTHER:       { badge: "bg-slate-50  text-slate-600",   header: "bg-slate-800"   },
+  EXPIRED:     { badge: "bg-[#eef6dc] text-[#476b1c]", header: "bg-[#476b1c]" },
+  DAMAGED:     { badge: "bg-[#e8f5ea] text-[#1f5f2d]", header: "bg-[#1f5f2d]" },
+  THEFT:       { badge: "bg-[#fef2f2] text-[#b91c1c]", header: "bg-[#b91c1c]" },
+  COUNT_ERROR: { badge: "bg-[#e0f2ee] text-[#0f6b5e]", header: "bg-[#0f6b5e]" },
+  OTHER:       { badge: "bg-[#f1f5f2] text-[#5f7a66]", header: "bg-[#3f5a47]" },
 };
 
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
@@ -328,12 +333,12 @@ export default function LossReportPage() {
   // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="px-8 py-7 bg-slate-50 min-h-screen">
-        <div className="h-20 rounded-2xl mb-5 animate-pulse bg-slate-200" />
+      <div className="px-8 py-7 bg-[#f6faf7] min-h-screen">
+        <div className="h-20 rounded-2xl mb-5 animate-pulse bg-[#d6e8d9]" />
         <div className="grid grid-cols-4 gap-3 mb-5">
-          {[1,2,3,4].map((i) => <div key={i} className="h-20 rounded-xl animate-pulse bg-slate-200" />)}
+          {[1,2,3,4].map((i) => <div key={i} className="h-20 rounded-xl animate-pulse bg-[#d6e8d9]" />)}
         </div>
-        {[1,2].map((i) => <div key={i} className="h-48 rounded-xl animate-pulse bg-slate-200 mb-4" />)}
+        {[1,2].map((i) => <div key={i} className="h-48 rounded-xl animate-pulse bg-[#d6e8d9] mb-4" />)}
       </div>
     );
   }
@@ -341,7 +346,7 @@ export default function LossReportPage() {
   // ── Error ─────────────────────────────────────────────────────────────────
   if (error) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
+      <div className="min-h-screen bg-[#f6faf7] flex flex-col items-center justify-center gap-3">
         <p className="text-base font-bold text-red-600">⚠️ {error}</p>
         <button onClick={fetchData} className="bg-red-600 text-white border-0 rounded-full px-6 py-2.5 text-sm font-semibold cursor-pointer hover:bg-red-700 transition-colors">
           Retry
@@ -363,27 +368,27 @@ export default function LossReportPage() {
     <>
       <style>{`
         @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
-        .loss-row:hover { background:#fafbff !important; }
-        .date-inp { font-family:inherit; font-size:12px; border:1px solid #cbd5e1; border-radius:8px; padding:6px 10px; color:#1e293b; background:#fff; outline:none; cursor:pointer; }
-        .date-inp:focus { border-color:#6366f1; box-shadow:0 0 0 2px rgba(99,102,241,0.12); }
+        .loss-row:hover { background:#f4faf5 !important; }
+        .date-inp { font-family:inherit; font-size:12px; border:1px solid #d6e8d9; border-radius:8px; padding:6px 10px; color:#14301b; background:#fff; outline:none; cursor:pointer; }
+        .date-inp:focus { border-color:#2e7d3e; box-shadow:0 0 0 2px rgba(46,125,62,0.14); }
       `}</style>
 
-      <div className="px-8 py-7 bg-slate-50 min-h-screen">
+      <div className="px-8 py-7 bg-[#f6faf7] min-h-screen">
 
         {/* Page Header */}
         <div className="flex items-start justify-between mb-7 flex-wrap gap-3" style={{ animation:"fadeUp 0.4s ease" }}>
           <div>
             <div className="flex items-center gap-2.5 mb-1">
-              <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center text-red-600">
+              <div className="w-9 h-9 rounded-xl bg-[#e8f5ea] flex items-center justify-center text-[#2e7d3e]">
                 {Icons.report}
               </div>
-              <h1 className="text-[21px] font-extrabold text-slate-900 tracking-tight m-0">Loss Report</h1>
+              <h1 className="text-[21px] font-extrabold text-[#14301b] tracking-tight m-0">Loss Report</h1>
             </div>
-            <p className="text-[13px] text-slate-400 m-0 pl-[46px]">
+            <p className="text-[13px] text-[#8fa596] m-0 pl-[46px]">
               Records of all damaged, expired, stolen, and miscounted inventory losses
             </p>
           </div>
-          <button onClick={fetchData} className="flex items-center gap-2 px-[18px] py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-semibold cursor-pointer hover:bg-slate-50 transition-colors">
+          <button onClick={fetchData} className="flex items-center gap-2 px-[18px] py-2.5 rounded-xl border border-[#d6e8d9] bg-white text-[#2e7d3e] text-[13px] font-semibold cursor-pointer hover:bg-[#f4faf5] hover:border-[#2e7d3e] transition-colors">
             {Icons.refresh} Refresh
           </button>
         </div>
@@ -391,18 +396,18 @@ export default function LossReportPage() {
         {/* Summary Cards */}
         <div className="grid gap-3.5 mb-6" style={{ gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", animation:"fadeUp 0.45s ease" }}>
           {[
-            { label:"Total Records",   value:String(totalRecords),                              icon:Icons.box,     accent:"text-indigo-600",  bg:"bg-indigo-50"  },
-            { label:"Total Qty Lost",  value:String(totalQty),                                  icon:Icons.warning, accent:"text-amber-600",   bg:"bg-amber-50"   },
-            { label:"Expired",         value:String(bySummary("EXPIRED")?._count?.id ?? 0),     icon:Icons.warning, accent:"text-yellow-700",  bg:"bg-yellow-50"  },
-            { label:"Damaged",         value:String(bySummary("DAMAGED")?._count?.id ?? 0),     icon:Icons.box,     accent:"text-orange-600",  bg:"bg-orange-50"  },
-            { label:"Theft",           value:String(bySummary("THEFT")?._count?.id ?? 0),       icon:Icons.warning, accent:"text-red-600",     bg:"bg-red-50"     },
-            { label:"Count Error",     value:String(bySummary("COUNT_ERROR")?._count?.id ?? 0), icon:Icons.box,     accent:"text-purple-600",  bg:"bg-purple-50"  },
+            { label:"Total Records",   value:String(totalRecords),                              icon:Icons.box,     accent:"text-[#2e7d3e]", bg:"bg-[#e8f5ea]" },
+            { label:"Total Qty Lost",  value:String(totalQty),                                  icon:Icons.warning, accent:"text-[#3f9a52]", bg:"bg-[#e8f5ea]" },
+            { label:"Expired",         value:String(bySummary("EXPIRED")?._count?.id ?? 0),     icon:Icons.warning, accent:"text-[#476b1c]", bg:"bg-[#eef6dc]" },
+            { label:"Damaged",         value:String(bySummary("DAMAGED")?._count?.id ?? 0),     icon:Icons.box,     accent:"text-[#1f5f2d]", bg:"bg-[#e8f5ea]" },
+            { label:"Theft",           value:String(bySummary("THEFT")?._count?.id ?? 0),       icon:Icons.warning, accent:"text-[#dc2626]", bg:"bg-[#fef2f2]" },
+            { label:"Count Error",     value:String(bySummary("COUNT_ERROR")?._count?.id ?? 0), icon:Icons.box,     accent:"text-[#0f6b5e]", bg:"bg-[#e0f2ee]" },
           ].map((s) => (
-            <div key={s.label} className="bg-white rounded-xl border border-slate-100 p-[17px] flex items-center gap-3">
+            <div key={s.label} className="bg-white rounded-xl border border-[#e3efe6] p-[17px] flex items-center gap-3">
               <div className={`w-9 h-9 rounded-xl ${s.bg} flex items-center justify-center ${s.accent} flex-shrink-0`}>{s.icon}</div>
               <div>
-                <p className="text-[10.5px] font-semibold text-slate-400 m-0 uppercase tracking-wide">{s.label}</p>
-                <p className="text-xl font-extrabold text-slate-900 m-0 mt-0.5 leading-none tracking-tight">{s.value}</p>
+                <p className="text-[10.5px] font-semibold text-[#8fa596] m-0 uppercase tracking-wide">{s.label}</p>
+                <p className="text-xl font-extrabold text-[#14301b] m-0 mt-0.5 leading-none tracking-tight">{s.value}</p>
               </div>
             </div>
           ))}
@@ -410,7 +415,7 @@ export default function LossReportPage() {
 
         {/* Period Tabs */}
         <div className="mb-4" style={{ animation:"fadeUp 0.5s ease" }}>
-          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2.5">View by Period</p>
+          <p className="text-[11px] font-bold text-[#5f7a66] uppercase tracking-wider mb-2.5">View by Period</p>
           <div className="flex gap-2 flex-wrap">
             {TABS.map((tab) => (
               <button
@@ -418,8 +423,8 @@ export default function LossReportPage() {
                 onClick={() => setActiveTab(tab.key)}
                 className={`flex items-center gap-2 px-[18px] py-2 rounded-xl text-[13px] font-semibold cursor-pointer border transition-all ${
                   activeTab === tab.key
-                    ? "bg-slate-900 text-white border-transparent"
-                    : "bg-white text-slate-500 border-slate-200 hover:text-slate-800"
+                    ? "bg-[#2e7d3e] text-white border-transparent shadow-[0_2px_8px_rgba(46,125,62,0.3)]"
+                    : "bg-white text-[#5f7a66] border-[#d6e8d9] hover:text-[#1f5f2d]"
                 }`}
               >
                 {tab.icon} {tab.label}
@@ -431,10 +436,10 @@ export default function LossReportPage() {
           {/* Custom date picker — only visible when Custom tab is active */}
           {activeTab === "custom" && (
             <div
-              className="mt-3 bg-white rounded-xl border border-slate-200 px-4 py-3 flex flex-wrap items-center gap-3"
+              className="mt-3 bg-white rounded-xl border border-[#d6e8d9] px-4 py-3 flex flex-wrap items-center gap-3"
               style={{ width:"fit-content", boxShadow:"0 1px 4px rgba(0,0,0,0.05)", animation:"fadeUp 0.2s ease" }}
             >
-              <span className="text-[12px] font-semibold text-slate-500">From</span>
+              <span className="text-[12px] font-semibold text-[#5f7a66]">From</span>
               <input
                 type="date"
                 className="date-inp"
@@ -442,7 +447,7 @@ export default function LossReportPage() {
                 max={customTo || undefined}
                 onChange={(e) => setCustomFrom(e.target.value)}
               />
-              <span className="text-[12px] font-semibold text-slate-500">To</span>
+              <span className="text-[12px] font-semibold text-[#5f7a66]">To</span>
               <input
                 type="date"
                 className="date-inp"
@@ -453,13 +458,13 @@ export default function LossReportPage() {
               {(customFrom || customTo) && (
                 <button
                   onClick={() => { setCustomFrom(""); setCustomTo(""); }}
-                  className="text-[11px] text-slate-400 border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white cursor-pointer hover:bg-slate-50 transition-colors"
+                  className="text-[11px] text-[#8fa596] border border-[#d6e8d9] rounded-lg px-2.5 py-1.5 bg-white cursor-pointer hover:bg-[#f4faf5] transition-colors"
                 >
                   Clear
                 </button>
               )}
               {customFrom && customTo && (
-                <span className="text-[12px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-full px-3 py-1">
+                <span className="text-[12px] font-semibold text-[#1f5f2d] bg-[#e8f5ea] border border-[#c3e0c8] rounded-full px-3 py-1">
                   📅 {customLabel}
                 </span>
               )}
@@ -474,34 +479,34 @@ export default function LossReportPage() {
             { label:"Units Lost",          value:String(periodQty)         },
             { label:"Est. Loss Value",     value:fmtPeso(periodValue)      },
           ].map((s) => (
-            <div key={s.label} className="bg-white rounded-xl border border-slate-100 px-4 py-3">
-              <p className="text-[11px] text-slate-400 m-0">{s.label}</p>
-              <p className="text-[18px] font-extrabold m-0 mt-0.5 text-slate-900">{s.value}</p>
+            <div key={s.label} className="bg-white rounded-xl border border-[#e3efe6] px-4 py-3">
+              <p className="text-[11px] text-[#8fa596] m-0">{s.label}</p>
+              <p className="text-[18px] font-extrabold m-0 mt-0.5 text-[#14301b]">{s.value}</p>
             </div>
           ))}
         </div>
 
         {/* Filter Bar */}
-        <div className="bg-white rounded-xl border border-slate-100 px-4 py-3 mb-4 flex flex-wrap items-center gap-2.5">
+        <div className="bg-white rounded-xl border border-[#e3efe6] px-4 py-3 mb-4 flex flex-wrap items-center gap-2.5">
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">{Icons.search}</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8fa596]">{Icons.search}</span>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search product, ID, employee..."
-              className="pl-8 pr-3 py-2 rounded-lg border border-slate-200 text-[13px] w-[240px] outline-none focus:border-indigo-400 transition-colors text-slate-900"
+              className="pl-8 pr-3 py-2 rounded-lg border border-[#d6e8d9] text-[13px] w-[240px] outline-none focus:border-[#2e7d3e] transition-colors text-[#14301b] placeholder:text-[#8fa596]"
             />
           </div>
 
-          <div className="flex gap-0.5 bg-slate-100 rounded-lg p-0.5">
+          <div className="flex gap-0.5 bg-[#e8f5ea] rounded-lg p-0.5">
             {(["ALL","EXPIRED","DAMAGED","THEFT","COUNT_ERROR","OTHER"] as const).map((r) => (
               <button
                 key={r}
                 onClick={() => setReasonFil(r)}
                 className={`px-3 py-1.5 rounded-md text-[12px] font-semibold cursor-pointer border-0 transition-all whitespace-nowrap ${
                   reasonFil === r
-                    ? "bg-white text-slate-900 shadow-sm"
-                    : "bg-transparent text-slate-500 hover:text-slate-700"
+                    ? "bg-white text-[#14301b] shadow-sm"
+                    : "bg-transparent text-[#5f7a66] hover:text-[#2f4a37]"
                 }`}
               >
                 {r === "ALL" ? "All" : REASON_LABELS[r]}
@@ -509,17 +514,17 @@ export default function LossReportPage() {
             ))}
           </div>
 
-          <span className="ml-auto text-[12px] text-slate-400 font-medium">
+          <span className="ml-auto text-[12px] text-[#8fa596] font-medium">
             {periodData.length} record{periodData.length !== 1 ? "s" : ""} in this period
           </span>
         </div>
 
         {/* Grouped Tables */}
         {groupedData.length === 0 ? (
-          <div className="bg-white rounded-xl border border-slate-100 py-16 text-center">
-            <div className="flex justify-center text-slate-300 mb-3">{Icons.report}</div>
-            <p className="text-[15px] font-semibold text-slate-500 m-0">No records for this period</p>
-            <p className="text-[13px] text-slate-400 m-0 mt-1.5">
+          <div className="bg-white rounded-xl border border-[#e3efe6] py-16 text-center">
+            <div className="flex justify-center text-[#b7cfbd] mb-3">{Icons.report}</div>
+            <p className="text-[15px] font-semibold text-[#5f7a66] m-0">No records for this period</p>
+            <p className="text-[13px] text-[#8fa596] m-0 mt-1.5">
               {activeTab === "custom" && !customFrom
                 ? "Select a date range above to get started."
                 : "Try switching to a different period or adjusting your filters."}
@@ -532,11 +537,11 @@ export default function LossReportPage() {
             const byReason   = (reason: LossReason) => rows.filter((r) => r.lossReason === reason).length;
 
             return (
-              <div key={key} className="bg-white rounded-xl border border-slate-100 overflow-hidden mb-4" style={{ animation:"fadeUp 0.4s ease" }}>
+              <div key={key} className="bg-white rounded-xl border border-[#e3efe6] overflow-hidden mb-4" style={{ animation:"fadeUp 0.4s ease" }}>
 
                 {/* Group Header */}
-                <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex justify-between items-center flex-wrap gap-2">
-                  <span className="flex items-center gap-1.5 text-[13px] font-bold text-slate-900">
+                <div className="px-4 py-2.5 bg-[#f4faf5] border-b border-[#e3efe6] flex justify-between items-center flex-wrap gap-2">
+                  <span className="flex items-center gap-1.5 text-[13px] font-bold text-[#14301b]">
                     {Icons.calendar} {label}
                   </span>
                   <span className="flex gap-4 items-center">
@@ -547,7 +552,7 @@ export default function LossReportPage() {
                           {byReason(r)} {REASON_LABELS[r]}
                         </span>
                       ))}
-                    <span className="text-[12px] font-bold text-slate-700">{groupQty} units</span>
+                    <span className="text-[12px] font-bold text-[#2f4a37]">{groupQty} units</span>
                   </span>
                 </div>
 
@@ -557,7 +562,7 @@ export default function LossReportPage() {
                     <thead>
                       <tr>
                         {["Report ID","Product","Qty Lost","Est. Value","Reason","Note","Reported By","Date",""].map((h) => (
-                          <th key={h} className="px-3.5 py-[11px] text-left text-[10.5px] font-bold text-slate-500 uppercase tracking-wider bg-slate-50 border-b border-slate-200 whitespace-nowrap">
+                          <th key={h} className="px-3.5 py-[11px] text-left text-[10.5px] font-bold text-[#1f5f2d] uppercase tracking-wider bg-[#f4faf5] border-b border-[#d6e8d9] whitespace-nowrap">
                             {h}
                           </th>
                         ))}
@@ -566,53 +571,53 @@ export default function LossReportPage() {
                     <tbody>
                       {rows.map((r) => (
                         <tr key={r.id} className="loss-row transition-colors">
-                          <td className="px-3.5 py-[13px] text-[13px] text-slate-700 border-b border-slate-50 align-middle">
-                            <span className="font-mono text-[11.5px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+                          <td className="px-3.5 py-[13px] text-[13px] text-[#2f4a37] border-b border-[#f4faf5] align-middle">
+                            <span className="font-mono text-[11.5px] font-bold text-[#1f5f2d] bg-[#e8f5ea] px-2 py-0.5 rounded">
                               {r.id.slice(0,8).toUpperCase()}…
                             </span>
                           </td>
-                          <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle">
+                          <td className="px-3.5 py-[13px] border-b border-[#f4faf5] align-middle">
                             <div className="flex items-center gap-2">
                               {r.image ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img src={r.image} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
                               ) : (
-                                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400 flex-shrink-0">{Icons.box}</div>
+                                <div className="w-8 h-8 rounded-lg bg-[#e8f5ea] flex items-center justify-center text-[#8fa596] flex-shrink-0">{Icons.box}</div>
                               )}
                               <div>
-                                <p className="text-[13px] font-semibold text-slate-900 m-0">{r.productName}</p>
-                                <p className="text-[11px] text-slate-400 m-0">{[r.size, r.category].filter(Boolean).join(" · ") || "—"}</p>
+                                <p className="text-[13px] font-semibold text-[#14301b] m-0">{r.productName}</p>
+                                <p className="text-[11px] text-[#8fa596] m-0">{[r.size, r.category].filter(Boolean).join(" · ") || "—"}</p>
                               </div>
                             </div>
                           </td>
-                          <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle text-center">
+                          <td className="px-3.5 py-[13px] border-b border-[#f4faf5] align-middle text-center">
                             <span className="text-[15px] font-extrabold text-red-600">{r.quantity}</span>
-                            <p className="text-[10px] text-slate-400 m-0">pcs</p>
+                            <p className="text-[10px] text-[#8fa596] m-0">pcs</p>
                           </td>
-                          <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle text-[13px] font-semibold text-slate-700 whitespace-nowrap">
+                          <td className="px-3.5 py-[13px] border-b border-[#f4faf5] align-middle text-[13px] font-semibold text-[#2f4a37] whitespace-nowrap">
                             {fmtPeso(valueOf(r))}
                           </td>
-                          <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle">
-                            <span className={`px-2 py-0.5 rounded text-[11.5px] font-bold ${REASON_CLASSES[r.lossReason]?.badge ?? "bg-slate-50 text-slate-600"}`}>
+                          <td className="px-3.5 py-[13px] border-b border-[#f4faf5] align-middle">
+                            <span className={`px-2 py-0.5 rounded text-[11.5px] font-bold ${REASON_CLASSES[r.lossReason]?.badge ?? "bg-[#f1f5f2] text-[#4a6652]"}`}>
                               {REASON_LABELS[r.lossReason] ?? r.lossReason}
                             </span>
                           </td>
-                          <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle max-w-[180px]">
-                            <p className="text-[12px] text-slate-500 m-0 truncate">{r.reason || "—"}</p>
+                          <td className="px-3.5 py-[13px] border-b border-[#f4faf5] align-middle max-w-[180px]">
+                            <p className="text-[12px] text-[#5f7a66] m-0 truncate">{r.reason || "—"}</p>
                           </td>
-                          <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle">
-                            <div className="flex items-center gap-1.5 text-[12px] text-slate-500">
-                              <span className="text-slate-300">{Icons.user}</span>
+                          <td className="px-3.5 py-[13px] border-b border-[#f4faf5] align-middle">
+                            <div className="flex items-center gap-1.5 text-[12px] text-[#5f7a66]">
+                              <span className="text-[#b7cfbd]">{Icons.user}</span>
                               {r.employeeName ?? "—"}
                             </div>
                           </td>
-                          <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle text-[12px] text-slate-500">
+                          <td className="px-3.5 py-[13px] border-b border-[#f4faf5] align-middle text-[12px] text-[#5f7a66]">
                             {fmtDate(r.createdAt)}
                           </td>
-                          <td className="px-3.5 py-[13px] border-b border-slate-50 align-middle">
+                          <td className="px-3.5 py-[13px] border-b border-[#f4faf5] align-middle">
                             <button
                               onClick={() => setViewItem(r)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-[12px] font-semibold cursor-pointer hover:bg-slate-50 transition-colors"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#d6e8d9] bg-white text-[#2e7d3e] text-[12px] font-semibold cursor-pointer hover:bg-[#2e7d3e] hover:text-white hover:border-[#2e7d3e] transition-all"
                             >
                               {Icons.eye} View
                             </button>
@@ -624,9 +629,9 @@ export default function LossReportPage() {
                 </div>
 
                 {/* Group Footer */}
-                <div className="px-4 py-2.5 border-t border-slate-100 flex justify-between items-center">
-                  <p className="text-[12px] text-slate-400 m-0">
-                    <strong className="text-slate-900">{rows.length}</strong> record{rows.length !== 1 ? "s" : ""}
+                <div className="px-4 py-2.5 border-t border-[#e3efe6] flex justify-between items-center">
+                  <p className="text-[12px] text-[#8fa596] m-0">
+                    <strong className="text-[#14301b]">{rows.length}</strong> record{rows.length !== 1 ? "s" : ""}
                   </p>
                   <p className="text-[12px] font-bold text-red-600 m-0">
                     {groupQty} units lost · {fmtPeso(groupValue)}
@@ -641,12 +646,12 @@ export default function LossReportPage() {
       {/* View Details Modal */}
       {viewItem && (
         <>
-          <div onClick={() => setViewItem(null)} className="fixed inset-0 bg-slate-900/55 z-40 backdrop-blur-sm" />
+          <div onClick={() => setViewItem(null)} className="fixed inset-0 bg-[rgba(10,30,15,0.55)] z-40 backdrop-blur-sm" />
           <div
             className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-white rounded-2xl overflow-hidden shadow-2xl overflow-y-auto"
             style={{ width:"min(96vw,500px)", maxHeight:"92vh", animation:"fadeUp 0.25s ease" }}
           >
-            <div className={`${REASON_CLASSES[viewItem.lossReason]?.header ?? "bg-slate-800"} px-6 py-[22px]`}>
+            <div className={`${REASON_CLASSES[viewItem.lossReason]?.header ?? "bg-[#3f5a47]"} px-6 py-[22px]`}>
               <div className="flex justify-between items-start">
                 <div>
                   <div className="flex items-center gap-2 mb-2.5">
@@ -685,8 +690,8 @@ export default function LossReportPage() {
 
             <div className="px-6 py-[22px] flex flex-col gap-[18px]">
               <div>
-                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Record Details</p>
-                <div className="bg-slate-50 rounded-xl overflow-hidden border border-slate-100">
+                <p className="text-[11px] font-bold text-[#5f7a66] uppercase tracking-wider mb-1.5">Record Details</p>
+                <div className="bg-[#f4faf5] rounded-xl overflow-hidden border border-[#e3efe6]">
                   {[
                     ["Product",     viewItem.productName],
                     ["Category",    viewItem.category || "—"],
@@ -697,9 +702,9 @@ export default function LossReportPage() {
                     ["Date",        fmtDate(viewItem.createdAt)],
                     ["Reported By", viewItem.employeeName ?? "—"],
                   ].map(([l, v], i, arr) => (
-                    <div key={l} className={`flex justify-between items-center px-3.5 py-2.5 ${i < arr.length - 1 ? "border-b border-slate-100" : ""}`}>
-                      <span className="text-[12px] text-slate-400">{l}</span>
-                      <span className={`text-[13px] font-semibold text-slate-900 ${l === "Qty Lost" ? "text-red-600" : ""}`}>{v}</span>
+                    <div key={l} className={`flex justify-between items-center px-3.5 py-2.5 ${i < arr.length - 1 ? "border-b border-[#e3efe6]" : ""}`}>
+                      <span className="text-[12px] text-[#8fa596]">{l}</span>
+                      <span className={`text-[13px] font-semibold text-[#14301b] ${l === "Qty Lost" ? "text-red-600" : ""}`}>{v}</span>
                     </div>
                   ))}
                 </div>
@@ -708,11 +713,11 @@ export default function LossReportPage() {
               {viewItem.reason && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3.5">
                   <p className="text-[11px] font-bold text-amber-700 uppercase tracking-wide m-0 mb-1.5">Note</p>
-                  <p className="text-[13px] text-slate-600 m-0 leading-relaxed">{viewItem.reason}</p>
+                  <p className="text-[13px] text-[#4a6652] m-0 leading-relaxed">{viewItem.reason}</p>
                 </div>
               )}
 
-              <button onClick={() => setViewItem(null)} className="w-full py-[11px] rounded-lg border border-slate-200 bg-white text-slate-600 text-[13px] font-semibold cursor-pointer hover:bg-slate-50 transition-colors">
+              <button onClick={() => setViewItem(null)} className="w-full py-[11px] rounded-lg border border-[#d6e8d9] bg-white text-[#4a6652] text-[13px] font-semibold cursor-pointer hover:bg-[#f4faf5] hover:border-[#2e7d3e] hover:text-[#1f5f2d] transition-colors">
                 Close
               </button>
             </div>
