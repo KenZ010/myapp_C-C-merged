@@ -36,16 +36,17 @@ const EMOJI_MAP: Record<string, string> = {
   WATER: "💧",
   OTHER: "🛒",
 };
+// Full class names (Tailwind can't see classes built from string pieces)
 const BG_MAP: Record<string, string> = {
-  SOFTDRINKS: "#b71c1c",
-  ENERGY_DRINK: "#1a237e",
-  BEER: "#f57f17",
-  JUICE: "#2e7d32",
-  WATER: "#0288d1",
-  OTHER: "#424242",
+  SOFTDRINKS: "bg-[#b71c1c]",
+  ENERGY_DRINK: "bg-[#1a237e]",
+  BEER: "bg-[#f57f17]",
+  JUICE: "bg-[#2e7d32]",
+  WATER: "bg-[#0288d1]",
+  OTHER: "bg-[#424242]",
 };
 const getEmoji = (cat?: string) => EMOJI_MAP[cat?.toUpperCase() || ""] || "🥤";
-const getBg = (cat?: string) => BG_MAP[cat?.toUpperCase() || ""] || "#424242";
+const getBg = (cat?: string) => BG_MAP[cat?.toUpperCase() || ""] || "bg-[#424242]";
 
 const peso = (n: number) =>
   "₱" +
@@ -60,7 +61,7 @@ const formatTime = (secs: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-// Shrinks the screenshot so it can be safely kept in sessionStorage
+// Shrinks the screenshot before it is uploaded
 function compressImage(file: File, maxWidth = 1000, quality = 0.75): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -90,31 +91,22 @@ function compressImage(file: File, maxWidth = 1000, quality = 0.75): Promise<str
 function CartThumb({
   image,
   emoji,
-  bg,
-  size,
+  bgClass,
+  sizeClass,
 }: {
   image?: string | null;
   emoji: string;
-  bg: string;
-  size: number;
+  bgClass: string;
+  sizeClass: string;
 }) {
   const [failed, setFailed] = useState(false);
   const showImage = !!image && !failed;
 
   return (
     <div
-      style={{
-        width: `${size}px`,
-        height: `${size}px`,
-        borderRadius: "14px",
-        background: showImage ? "#f3f4f6" : bg,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: "36px",
-        flexShrink: 0,
-        overflow: "hidden",
-      }}
+      className={`${sizeClass} flex shrink-0 items-center justify-center overflow-hidden rounded-[14px] text-4xl ${
+        showImage ? "bg-gray-100" : bgClass
+      }`}
     >
       {showImage ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -122,7 +114,7 @@ function CartThumb({
           src={image as string}
           alt=""
           onError={() => setFailed(true)}
-          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          className="block h-full w-full object-cover"
         />
       ) : (
         emoji
@@ -143,72 +135,27 @@ function DeleteModal({
 }) {
   return (
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.45)",
-        zIndex: 1000,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "20px",
-        backdropFilter: "blur(3px)",
-      }}
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/45 p-5 backdrop-blur-[3px]"
       onClick={onCancel}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{
-          background: "#fff",
-          borderRadius: "20px",
-          padding: "28px 24px",
-          maxWidth: "360px",
-          width: "100%",
-          textAlign: "center",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
-        }}
+        className="w-full max-w-[360px] rounded-[20px] bg-white px-6 py-7 text-center shadow-[0_20px_60px_rgba(0,0,0,0.2)]"
       >
-        <div style={{ fontSize: "48px", marginBottom: "12px" }}>🗑️</div>
-        <h3 style={{ fontSize: "17px", fontWeight: 700, color: "#1a1a1a", marginBottom: "8px" }}>
-          Remove Item?
-        </h3>
-        <p style={{ fontSize: "13px", color: "#888", marginBottom: "6px" }}>
-          Are you sure you want to remove
-        </p>
-        <p style={{ fontSize: "14px", fontWeight: 600, color: "#2d7a3a", marginBottom: "24px" }}>
-          {item.product.productName}
-        </p>
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div className="mb-3 text-5xl">🗑️</div>
+        <h3 className="mb-2 text-[17px] font-bold text-[#1a1a1a]">Remove Item?</h3>
+        <p className="mb-1.5 text-[13px] text-[#888]">Are you sure you want to remove</p>
+        <p className="mb-6 text-sm font-semibold text-[#2d7a3a]">{item.product.productName}</p>
+        <div className="flex gap-2.5">
           <button
             onClick={onCancel}
-            style={{
-              flex: 1,
-              padding: "12px",
-              borderRadius: "30px",
-              border: "1.5px solid #e0e0e0",
-              background: "#fff",
-              fontSize: "14px",
-              fontWeight: 600,
-              color: "#888",
-              cursor: "pointer",
-            }}
+            className="flex-1 cursor-pointer rounded-[30px] border-[1.5px] border-[#e0e0e0] bg-white p-3 text-sm font-semibold text-[#888]"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            style={{
-              flex: 1,
-              padding: "12px",
-              borderRadius: "30px",
-              border: "none",
-              background: "#e53935",
-              fontSize: "14px",
-              fontWeight: 700,
-              color: "#fff",
-              cursor: "pointer",
-              boxShadow: "0 4px 14px rgba(229,57,53,0.35)",
-            }}
+            className="flex-1 cursor-pointer rounded-[30px] border-none bg-[#e53935] p-3 text-sm font-bold text-white shadow-[0_4px_14px_rgba(229,57,53,0.35)]"
           >
             Yes, Remove
           </button>
@@ -221,37 +168,21 @@ function DeleteModal({
 // ── Max Stock Toast ─────────────────────────────────────────────────────────
 function MaxStockToast({ productName, stock }: { productName: string; stock: number }) {
   return (
-    <div
-      style={{
-        position: "fixed",
-        top: "20px",
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 2000,
-        background: "#1a1a1a",
-        color: "#fff",
-        borderRadius: "14px",
-        padding: "14px 20px",
-        display: "flex",
-        alignItems: "center",
-        gap: "12px",
-        boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
-        maxWidth: "min(92vw, 420px)",
-        animation: "toastSlideDown 0.25s ease-out",
-      }}
-    >
+    <div className="pointer-events-none fixed inset-x-0 top-5 z-[2000] flex justify-center px-4">
       <style>{`
         @keyframes toastSlideDown {
-          from { opacity: 0; transform: translate(-50%, -12px); }
-          to   { opacity: 1; transform: translate(-50%, 0); }
+          from { opacity: 0; transform: translateY(-12px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
-      <span style={{ fontSize: "22px", flexShrink: 0 }}>⚠️</span>
-      <div>
-        <p style={{ fontSize: "13px", fontWeight: 700, margin: 0 }}>Max stock reached</p>
-        <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.75)", margin: "2px 0 0" }}>
-          {productName} — only {stock} case{stock !== 1 ? "s" : ""} in stock.
-        </p>
+      <div className="pointer-events-auto flex max-w-[min(92vw,420px)] animate-[toastSlideDown_0.25s_ease-out] items-center gap-3 rounded-[14px] bg-[#1a1a1a] px-5 py-3.5 text-white shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
+        <span className="shrink-0 text-[22px]">⚠️</span>
+        <div>
+          <p className="m-0 text-[13px] font-bold">Max stock reached</p>
+          <p className="mx-0 mb-0 mt-0.5 text-xs text-white/75">
+            {productName} — only {stock} case{stock !== 1 ? "s" : ""} in stock.
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -260,7 +191,7 @@ function MaxStockToast({ productName, stock }: { productName: string; stock: num
 // ── Placeholder QR (shown only if /public/gcash-qr.png is missing) ───────────
 function PlaceholderQr() {
   return (
-    <svg width="180" height="180" viewBox="0 0 120 120" style={{ display: "block", margin: "0 auto" }}>
+    <svg width="180" height="180" viewBox="0 0 120 120" className="mx-auto block">
       <rect x="2" y="2" width="116" height="116" rx="8" fill="white" stroke="#6a1b9a" strokeWidth="3" />
       {[[10, 10], [80, 10], [10, 80]].map(([x, y], i) => (
         <g key={i}>
@@ -283,10 +214,13 @@ function PlaceholderQr() {
   );
 }
 
+// Shared class strings
+const LABEL = "mb-1.5 block text-xs font-semibold text-[#6a1b9a]";
+const THUMB_SIZE = "h-[60px] w-[60px] min-[900px]:h-20 min-[900px]:w-20";
+
 export default function CartPage() {
   const router = useRouter();
 
-  const [isMobile, setIsMobile] = useState(false);
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [stockWarning, setStockWarning] = useState<string | null>(null);
@@ -312,13 +246,6 @@ export default function CartPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const warningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 900);
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
 
   // Clear pending timers on unmount
   useEffect(() => {
@@ -532,60 +459,23 @@ export default function CartPage() {
     }
   };
 
-  const labelStyle: React.CSSProperties = {
-    fontSize: "12px",
-    fontWeight: 600,
-    color: "#6a1b9a",
-    marginBottom: "6px",
-    display: "block",
-  };
-
   if (loading) {
     return (
-      <div
-        style={{
-          minHeight: "calc(100vh - 56px)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <p style={{ color: "#aaa", fontSize: "14px" }}>Loading cart...</p>
+      <div className="flex min-h-[calc(100vh-56px)] items-center justify-center">
+        <p className="text-sm text-[#aaa]">Loading cart...</p>
       </div>
     );
   }
 
   if (items.length === 0) {
     return (
-      <div
-        style={{
-          minHeight: "calc(100vh - 56px)",
-          background: "linear-gradient(160deg, #f0faf2, #e8f5e9)",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <div style={{ fontSize: "72px", marginBottom: "20px" }}>🛒</div>
-        <h2 style={{ fontSize: "22px", fontWeight: 700, color: "#1a1a1a", marginBottom: "10px" }}>
-          Your cart is empty
-        </h2>
-        <p style={{ fontSize: "14px", color: "#888", marginBottom: "28px" }}>
-          Add some products to get started!
-        </p>
+      <div className="flex min-h-[calc(100vh-56px)] flex-col items-center justify-center bg-[linear-gradient(160deg,#f0faf2,#e8f5e9)]">
+        <div className="mb-5 text-[72px]">🛒</div>
+        <h2 className="mb-2.5 text-[22px] font-bold text-[#1a1a1a]">Your cart is empty</h2>
+        <p className="mb-7 text-sm text-[#888]">Add some products to get started!</p>
         <Link
           href="/products"
-          style={{
-            background: "#2d7a3a",
-            color: "#fff",
-            textDecoration: "none",
-            padding: "13px 40px",
-            borderRadius: "30px",
-            fontSize: "15px",
-            fontWeight: 600,
-            boxShadow: "0 6px 20px rgba(45,122,58,0.3)",
-          }}
+          className="rounded-[30px] bg-[#2d7a3a] px-10 py-[13px] text-[15px] font-semibold text-white no-underline shadow-[0_6px_20px_rgba(45,122,58,0.3)]"
         >
           Browse Products
         </Link>
@@ -613,132 +503,56 @@ export default function CartPage() {
 
       {/* ── GCash Payment Form (timed) ── */}
       {gcashOpen && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.55)",
-            zIndex: 1100,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: isMobile ? "10px" : "20px",
-            backdropFilter: "blur(3px)",
-          }}
-        >
+        <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/55 p-2.5 backdrop-blur-[3px] min-[900px]:p-5">
           <div
             role="dialog"
             aria-modal="true"
             aria-label="GCash payment"
-            style={{
-              background: "#fff",
-              borderRadius: "20px",
-              width: "100%",
-              maxWidth: isMobile ? "480px" : "920px",
-              maxHeight: "94vh",
-              display: "flex",
-              flexDirection: "column",
-              overflow: "hidden",
-              boxShadow: "0 24px 70px rgba(0,0,0,0.3)",
-            }}
+            className="flex max-h-[94vh] w-full max-w-[480px] flex-col overflow-hidden rounded-[20px] bg-white text-[#1a1a1a] shadow-[0_24px_70px_rgba(0,0,0,0.3)] [color-scheme:light] min-[900px]:max-w-[920px]"
           >
             {/* Header + countdown */}
-            <div style={{ background: "#6a1b9a", color: "#fff", flexShrink: 0 }}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "12px",
-                  padding: "16px 20px",
-                }}
-              >
+            <div className="shrink-0 bg-[#6a1b9a] text-white">
+              <div className="flex items-center justify-between gap-3 px-5 py-4">
                 <div>
-                  <p style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>📲 GCash Payment</p>
-                  <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.75)", margin: "2px 0 0" }}>
+                  <p className="m-0 text-base font-bold">📲 GCash Payment</p>
+                  <p className="mx-0 mb-0 mt-0.5 text-xs text-white/75">
                     Complete this form before the timer runs out
                   </p>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div className="flex items-center gap-2.5">
                   <div
-                    style={{
-                      background: timeLow ? "#e53935" : "rgba(255,255,255,0.18)",
-                      borderRadius: "20px",
-                      padding: "6px 14px",
-                      fontSize: "15px",
-                      fontWeight: 700,
-                      fontVariantNumeric: "tabular-nums",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                    }}
+                    className={`flex items-center gap-1.5 rounded-[20px] px-3.5 py-1.5 text-[15px] font-bold tabular-nums ${
+                      timeLow ? "bg-[#e53935]" : "bg-white/20"
+                    }`}
                   >
                     ⏱️ {formatTime(secondsLeft)}
                   </div>
                   <button
                     onClick={() => setGcashOpen(false)}
                     aria-label="Close"
-                    style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "50%",
-                      border: "none",
-                      background: "rgba(255,255,255,0.2)",
-                      color: "#fff",
-                      cursor: "pointer",
-                      fontSize: "14px",
-                    }}
+                    className="h-8 w-8 cursor-pointer rounded-full border-none bg-white/20 text-sm text-white"
                   >
                     ✕
                   </button>
                 </div>
               </div>
-              <div style={{ height: "4px", background: "rgba(255,255,255,0.2)" }}>
+              <div className="h-1 bg-white/20">
                 <div
-                  style={{
-                    height: "100%",
-                    width: `${(secondsLeft / GCASH_TIME_LIMIT_SECONDS) * 100}%`,
-                    background: timeLow ? "#ffcdd2" : "#f5c842",
-                    transition: "width 1s linear",
-                  }}
+                  className={`h-full transition-[width] duration-1000 ease-linear ${
+                    timeLow ? "bg-[#ffcdd2]" : "bg-[#f5c842]"
+                  }`}
+                  style={{ width: `${(secondsLeft / GCASH_TIME_LIMIT_SECONDS) * 100}%` }}
                 />
               </div>
             </div>
 
             {/* Body */}
-            <div
-              style={{
-                padding: isMobile ? "16px" : "22px",
-                overflowY: "auto",
-                display: "grid",
-                gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-                gap: "22px",
-                alignItems: "start",
-              }}
-            >
+            <div className="grid grid-cols-1 items-start gap-[22px] overflow-y-auto p-4 min-[900px]:grid-cols-2 min-[900px]:p-[22px]">
               {/* LEFT: QR + amount */}
               <div>
-                <div
-                  style={{
-                    background: "#f8f0ff",
-                    border: "1px solid #e0c8ff",
-                    borderRadius: "16px",
-                    padding: "18px",
-                    textAlign: "center",
-                  }}
-                >
-                  <p style={{ fontSize: "13px", fontWeight: 600, color: "#6a1b9a", marginBottom: "12px" }}>
-                    Scan to pay via GCash
-                  </p>
-                  <div
-                    style={{
-                      background: "#fff",
-                      borderRadius: "12px",
-                      padding: "12px",
-                      border: "1px solid #e0c8ff",
-                      display: "inline-block",
-                    }}
-                  >
+                <div className="rounded-2xl border border-[#e0c8ff] bg-[#f8f0ff] p-[18px] text-center">
+                  <p className="mb-3 text-[13px] font-semibold text-[#6a1b9a]">Scan to pay via GCash</p>
+                  <div className="inline-block rounded-xl border border-[#e0c8ff] bg-white p-3">
                     {qrFailed ? (
                       <PlaceholderQr />
                     ) : (
@@ -747,39 +561,19 @@ export default function CartPage() {
                         src={GCASH_QR_SRC}
                         alt="GCash QR code"
                         onError={() => setQrFailed(true)}
-                        style={{ width: "200px", height: "200px", objectFit: "contain", display: "block" }}
+                        className="block h-[200px] w-[200px] object-contain"
                       />
                     )}
                   </div>
-                  <p style={{ fontSize: "13px", fontWeight: 700, color: "#6a1b9a", marginTop: "10px" }}>
-                    {GCASH_NAME}
-                  </p>
-                  <p style={{ fontSize: "12px", color: "#888" }}>GCash: {GCASH_NUMBER}</p>
-                  <div
-                    style={{
-                      marginTop: "12px",
-                      background: "#fff",
-                      borderRadius: "12px",
-                      border: "1.5px dashed #c084fc",
-                      padding: "10px",
-                    }}
-                  >
-                    <p style={{ fontSize: "11px", color: "#888", margin: 0 }}>Amount to pay</p>
-                    <p style={{ fontSize: "24px", fontWeight: 800, color: "#2d7a3a", margin: "2px 0 0" }}>
-                      {peso(total)}
-                    </p>
+                  <p className="mt-2.5 text-[13px] font-bold text-[#6a1b9a]">{GCASH_NAME}</p>
+                  <p className="text-xs text-[#888]">GCash: {GCASH_NUMBER}</p>
+                  <div className="mt-3 rounded-xl border-[1.5px] border-dashed border-[#c084fc] bg-white p-2.5">
+                    <p className="m-0 text-[11px] text-[#888]">Amount to pay</p>
+                    <p className="mx-0 mb-0 mt-0.5 text-2xl font-extrabold text-[#2d7a3a]">{peso(total)}</p>
                   </div>
                 </div>
 
-                <ol
-                  style={{
-                    fontSize: "12px",
-                    color: "#666",
-                    lineHeight: 1.7,
-                    paddingLeft: "18px",
-                    marginTop: "14px",
-                  }}
-                >
+                <ol className="mt-3.5 list-decimal pl-[18px] text-xs leading-[1.7] text-[#666]">
                   <li>Scan the QR code with your GCash app.</li>
                   <li>Pay the exact amount shown above.</li>
                   <li>Enter the reference number from your receipt.</li>
@@ -789,99 +583,58 @@ export default function CartPage() {
 
               {/* RIGHT: order review + inputs */}
               <div>
-                <p style={{ fontSize: "14px", fontWeight: 700, color: "#1a1a1a", marginBottom: "10px" }}>
-                  🧾 Order Review
-                </p>
-                <div
-                  style={{
-                    border: "1px solid #eee",
-                    borderRadius: "12px",
-                    padding: "12px 14px",
-                    marginBottom: "18px",
-                  }}
-                >
-                  <div
-                    style={{
-                      maxHeight: "150px",
-                      overflowY: "auto",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "8px",
-                    }}
-                  >
+                <p className="mb-2.5 text-sm font-bold text-[#1a1a1a]">🧾 Order Review</p>
+                <div className="mb-[18px] rounded-xl border border-[#eee] px-3.5 py-3">
+                  <div className="flex max-h-[200px] flex-col gap-2 overflow-y-auto pr-1">
                     {items.map((item) => (
-                      <div
-                        key={item.id}
-                        style={{ display: "flex", justifyContent: "space-between", gap: "10px", fontSize: "12.5px" }}
-                      >
-                        <span style={{ color: "#555" }}>
+                      <div key={item.id} className="flex justify-between gap-2.5 text-[12.5px]">
+                        <span className="text-[#444]">
                           {item.product.productName} × {item.quantity}
                         </span>
-                        <span style={{ fontWeight: 600, color: "#2d7a3a", whiteSpace: "nowrap" }}>
+                        <span className="whitespace-nowrap font-semibold text-[#2d7a3a]">
                           {peso(getEffectivePrice(item) * item.quantity)}
                         </span>
                       </div>
                     ))}
                   </div>
-                  <div style={{ height: "1px", background: "#f0f0f0", margin: "10px 0" }} />
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12.5px", marginBottom: "6px" }}>
-                    <span style={{ color: "#888" }}>Subtotal</span>
-                    <span>{peso(subtotal)}</span>
+                  <div className="my-2.5 h-px bg-[#f0f0f0]" />
+                  <div className="mb-1.5 flex justify-between text-[12.5px]">
+                    <span className="text-[#888]">Subtotal</span>
+                    <span className="font-semibold text-[#1a1a1a]">{peso(subtotal)}</span>
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12.5px", marginBottom: "6px" }}>
-                    <span style={{ color: "#888" }}>VAT (12%)</span>
-                    <span>{peso(vat)}</span>
+                  <div className="mb-1.5 flex justify-between text-[12.5px]">
+                    <span className="text-[#888]">VAT (12%)</span>
+                    <span className="font-semibold text-[#1a1a1a]">{peso(vat)}</span>
                   </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      borderTop: "1px solid #f0f0f0",
-                      paddingTop: "10px",
-                      marginTop: "4px",
-                    }}
-                  >
-                    <span style={{ fontSize: "14px", fontWeight: 700 }}>Total (incl. VAT)</span>
-                    <span style={{ fontSize: "18px", fontWeight: 800, color: "#2d7a3a" }}>{peso(total)}</span>
+                  <div className="mt-1 flex items-center justify-between border-t border-[#f0f0f0] pt-2.5">
+                    <span className="text-sm font-bold text-[#1a1a1a]">Total (incl. VAT)</span>
+                    <span className="text-lg font-extrabold text-[#2d7a3a]">{peso(total)}</span>
                   </div>
                 </div>
 
                 {/* Reference number */}
-                <div style={{ marginBottom: "16px" }}>
-                  <label style={labelStyle}>
-                    🔢 GCash Reference Number <span style={{ color: "#e53935" }}>*</span>
+                <div className="mb-4">
+                  <label className={LABEL}>
+                    🔢 GCash Reference Number <span className="text-[#e53935]">*</span>
                   </label>
                   <input
                     type="text"
                     inputMode="numeric"
+                    autoComplete="off"
                     value={gcashRef}
                     onChange={(e) =>
                       setGcashRef(e.target.value.replace(/\D/g, "").slice(0, GCASH_REF_LENGTH))
                     }
                     placeholder="e.g. 1234567890123"
-                    style={{
-                      width: "100%",
-                      padding: "10px 14px",
-                      borderRadius: "10px",
-                      border: refValid
-                        ? "1.5px solid #2d7a3a"
+                    className={`box-border w-full rounded-[10px] border-[1.5px] bg-white px-3.5 py-3 font-mono text-base font-semibold tracking-[0.12em] text-[#1a1a1a] caret-[#6a1b9a] outline-none placeholder:font-sans placeholder:text-sm placeholder:font-normal placeholder:tracking-normal placeholder:text-[#bbb] ${
+                      refValid
+                        ? "border-[#2d7a3a]"
                         : gcashRef
-                        ? "1.5px solid #e53935"
-                        : "1.5px solid #e0c8ff",
-                      fontSize: "14px",
-                      outline: "none",
-                      background: "#fff",
-                      boxSizing: "border-box",
-                    }}
+                        ? "border-[#e53935]"
+                        : "border-[#e0c8ff]"
+                    }`}
                   />
-                  <p
-                    style={{
-                      fontSize: "11px",
-                      marginTop: "4px",
-                      color: refValid ? "#2e7d32" : "#999",
-                    }}
-                  >
+                  <p className={`mt-1 text-[11px] ${refValid ? "text-[#2e7d32]" : "text-[#999]"}`}>
                     {refValid
                       ? "✅ Looks good"
                       : `${gcashRef.length}/${GCASH_REF_LENGTH} digits — found on your GCash receipt`}
@@ -890,66 +643,38 @@ export default function CartPage() {
 
                 {/* Screenshot upload */}
                 <div>
-                  <label style={labelStyle}>
-                    📸 Upload Payment Screenshot <span style={{ color: "#e53935" }}>*</span>
+                  <label className={LABEL}>
+                    📸 Upload Payment Screenshot <span className="text-[#e53935]">*</span>
                   </label>
                   {gcashImage ? (
-                    <div
-                      style={{
-                        position: "relative",
-                        borderRadius: "10px",
-                        overflow: "hidden",
-                        border: "1.5px solid #6a1b9a",
-                      }}
-                    >
+                    <div className="relative overflow-hidden rounded-[10px] border-[1.5px] border-[#6a1b9a]">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={gcashImage}
                         alt="Payment screenshot"
-                        style={{ width: "100%", height: "140px", objectFit: "cover", display: "block" }}
+                        className="block h-[140px] w-full object-cover"
                       />
                       <button
                         onClick={() => setGcashImage(null)}
                         aria-label="Remove screenshot"
-                        style={{
-                          position: "absolute",
-                          top: "6px",
-                          right: "6px",
-                          background: "rgba(0,0,0,0.55)",
-                          border: "none",
-                          color: "#fff",
-                          borderRadius: "50%",
-                          width: "24px",
-                          height: "24px",
-                          cursor: "pointer",
-                          fontSize: "12px",
-                        }}
+                        className="absolute right-1.5 top-1.5 h-6 w-6 cursor-pointer rounded-full border-none bg-black/55 text-xs text-white"
                       >
                         ✕
                       </button>
-                      <div style={{ background: "#e8f5e9", padding: "6px", textAlign: "center" }}>
-                        <span style={{ fontSize: "11px", color: "#2e7d32", fontWeight: 600 }}>
-                          ✅ Screenshot uploaded
+                      <div className="bg-[#e8f5e9] p-1.5 text-center">
+                        <span className="text-[11px] font-semibold text-[#2e7d32]">
+                          ✅ Screenshot ready
                         </span>
                       </div>
                     </div>
                   ) : (
                     <div
                       onClick={() => fileRef.current?.click()}
-                      style={{
-                        border: "2px dashed #c084fc",
-                        borderRadius: "10px",
-                        padding: "20px",
-                        textAlign: "center",
-                        cursor: "pointer",
-                        background: "#fff",
-                      }}
+                      className="cursor-pointer rounded-[10px] border-2 border-dashed border-[#c084fc] bg-white p-5 text-center"
                     >
-                      <div style={{ fontSize: "26px", marginBottom: "4px" }}>🖼️</div>
-                      <p style={{ fontSize: "12px", fontWeight: 500, color: "#6a1b9a" }}>
-                        Click to upload screenshot
-                      </p>
-                      <p style={{ fontSize: "11px", color: "#bbb" }}>JPG, PNG supported</p>
+                      <div className="mb-1 text-[26px]">🖼️</div>
+                      <p className="text-xs font-medium text-[#6a1b9a]">Click to upload screenshot</p>
+                      <p className="text-[11px] text-[#bbb]">JPG, PNG supported</p>
                     </div>
                   )}
                   <input
@@ -957,39 +682,25 @@ export default function CartPage() {
                     type="file"
                     accept="image/*"
                     onChange={handleImageUpload}
-                    style={{ display: "none" }}
+                    className="hidden"
                   />
                   {uploadError && (
-                    <p style={{ fontSize: "11px", color: "#e53935", marginTop: "6px" }}>⚠️ {uploadError}</p>
+                    <p className="mt-1.5 text-[11px] text-[#e53935]">⚠️ {uploadError}</p>
                   )}
                 </div>
               </div>
             </div>
 
             {/* Footer */}
-            <div
-              style={{
-                padding: isMobile ? "12px 16px" : "14px 22px",
-                borderTop: "1px solid #f0f0f0",
-                flexShrink: 0,
-                background: "#fff",
-              }}
-            >
+            <div className="shrink-0 border-t border-[#f0f0f0] bg-white px-4 py-3 min-[900px]:px-[22px] min-[900px]:py-3.5">
               <button
                 onClick={handleGcashProceed}
                 disabled={!canProceedGcash}
-                style={{
-                  width: "100%",
-                  padding: "14px",
-                  borderRadius: "30px",
-                  border: "none",
-                  fontSize: "15px",
-                  fontWeight: 700,
-                  color: "#fff",
-                  background: canProceedGcash ? "#2d7a3a" : "#ccc",
-                  cursor: canProceedGcash ? "pointer" : "not-allowed",
-                  boxShadow: canProceedGcash ? "0 6px 20px rgba(45,122,58,0.3)" : "none",
-                }}
+                className={`w-full rounded-[30px] border-none p-3.5 text-[15px] font-bold text-white ${
+                  canProceedGcash
+                    ? "cursor-pointer bg-[#2d7a3a] shadow-[0_6px_20px_rgba(45,122,58,0.3)]"
+                    : "cursor-not-allowed bg-[#ccc]"
+                }`}
               >
                 {gcashBusy
                   ? "Verifying payment…"
@@ -1000,11 +711,9 @@ export default function CartPage() {
                   : "Proceed to Checkout →"}
               </button>
               {gcashError && (
-                <p style={{ textAlign: "center", fontSize: "12px", color: "#e53935", fontWeight: 600, marginTop: "8px" }}>
-                  ⚠️ {gcashError}
-                </p>
+                <p className="mt-2 text-center text-xs font-semibold text-[#e53935]">⚠️ {gcashError}</p>
               )}
-              <p style={{ textAlign: "center", fontSize: "11px", color: "#aaa", marginTop: "8px" }}>
+              <p className="mt-2 text-center text-[11px] text-[#aaa]">
                 You can&apos;t proceed to checkout until the reference number and screenshot are provided.
               </p>
             </div>
@@ -1012,30 +721,17 @@ export default function CartPage() {
         </div>
       )}
 
-      <div
-        style={{
-          padding: isMobile ? "16px" : "28px",
-          background: "#f5f5f5",
-          minHeight: "calc(100vh - 56px)",
-        }}
-      >
-        <p style={{ fontSize: "13px", color: "#888", marginBottom: "20px" }}>
+      <div className="min-h-[calc(100vh-56px)] bg-[#f5f5f5] p-4 min-[900px]:p-7">
+        <p className="mb-5 text-[13px] text-[#888]">
           🛒 {items.length} item{items.length !== 1 ? "s" : ""} in your cart
         </p>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "1fr" : "1fr 400px",
-            gap: "24px",
-            alignItems: "start",
-          }}
-        >
+        <div className="grid grid-cols-1 items-start gap-6 min-[900px]:grid-cols-[1fr_400px]">
           {/* ── LEFT: Cart Items ── */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          <div className="flex flex-col gap-3.5">
             {items.map((item) => {
               const emoji = getEmoji(item.product.category);
-              const bg = getBg(item.product.category);
+              const bgClass = getBg(item.product.category);
               const effectivePrice = getEffectivePrice(item);
               const hasDiscount =
                 item.product.finalPrice != null && item.product.finalPrice < item.product.price;
@@ -1044,121 +740,65 @@ export default function CartPage() {
               return (
                 <div
                   key={item.id}
-                  style={{
-                    background: "#fff",
-                    borderRadius: "16px",
-                    border: "0.5px solid #e8e8e8",
-                    padding: "18px 22px",
-                    display: "flex",
-                    flexDirection: isMobile ? "column" : "row",
-                    alignItems: isMobile ? "flex-start" : "center",
-                    gap: "18px",
-                  }}
+                  className="flex flex-col items-start gap-[18px] rounded-2xl border-[0.5px] border-[#e8e8e8] bg-white px-[22px] py-[18px] min-[900px]:flex-row min-[900px]:items-center"
                 >
                   {/* Product photo (falls back to the emoji if there's no image) */}
                   <CartThumb
                     image={item.product.image}
                     emoji={emoji}
-                    bg={bg}
-                    size={isMobile ? 60 : 80}
+                    bgClass={bgClass}
+                    sizeClass={THUMB_SIZE}
                   />
-                  <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: "15px", fontWeight: 600, color: "#1a1a1a", marginBottom: "3px" }}>
+                  <div className="flex-1">
+                    <p className="mb-[3px] text-[15px] font-semibold text-[#1a1a1a]">
                       {item.product.productName}
                     </p>
-                    <p style={{ fontSize: "12px", color: "#aaa", marginBottom: "10px" }}>
+                    <p className="mb-2.5 text-xs text-[#aaa]">
                       {item.product.size ? `Size: ${item.product.size}` : item.product.category || ""}
                     </p>
 
                     {hasDiscount ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <p style={{ fontSize: "14px", color: "#bbb", textDecoration: "line-through", margin: 0 }}>
+                      <div className="flex items-center gap-2">
+                        <p className="m-0 text-sm text-[#bbb] line-through">
                           {peso(item.product.price * item.quantity)}
                         </p>
-                        <p style={{ fontSize: "18px", fontWeight: 700, color: "#2d7a3a", margin: 0 }}>
+                        <p className="m-0 text-lg font-bold text-[#2d7a3a]">
                           {peso(effectivePrice * item.quantity)}
                         </p>
-                        <span
-                          style={{
-                            fontSize: "10px",
-                            fontWeight: 700,
-                            color: "#fff",
-                            background: "#e53935",
-                            borderRadius: "6px",
-                            padding: "2px 6px",
-                          }}
-                        >
+                        <span className="rounded-md bg-[#e53935] px-1.5 py-0.5 text-[10px] font-bold text-white">
                           PROMO
                         </span>
                       </div>
                     ) : (
-                      <p style={{ fontSize: "18px", fontWeight: 700, color: "#2d7a3a", margin: 0 }}>
+                      <p className="m-0 text-lg font-bold text-[#2d7a3a]">
                         {peso(effectivePrice * item.quantity)}
                       </p>
                     )}
                   </div>
 
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px", flexShrink: 0 }}>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          border: "1.5px solid #e8e8e8",
-                          borderRadius: "30px",
-                          overflow: "hidden",
-                        }}
-                      >
+                  <div className="flex shrink-0 items-center gap-3">
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="flex items-center overflow-hidden rounded-[30px] border-[1.5px] border-[#e8e8e8]">
                         <button
                           onClick={() => handleUpdateQty(item, -1)}
-                          style={{
-                            width: "36px",
-                            height: "36px",
-                            background: "none",
-                            border: "none",
-                            fontSize: "18px",
-                            cursor: "pointer",
-                            color: "#2d7a3a",
-                            fontWeight: 700,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
+                          className="flex h-9 w-9 cursor-pointer items-center justify-center border-none bg-transparent text-lg font-bold text-[#2d7a3a]"
                         >
                           −
                         </button>
-                        <span
-                          style={{
-                            minWidth: "32px",
-                            textAlign: "center",
-                            fontSize: "15px",
-                            fontWeight: 600,
-                            color: "#1a1a1a",
-                          }}
-                        >
+                        <span className="min-w-8 text-center text-[15px] font-semibold text-[#1a1a1a]">
                           {item.quantity}
                         </span>
                         <button
                           onClick={() => handleUpdateQty(item, 1)}
-                          style={{
-                            width: "36px",
-                            height: "36px",
-                            background: "none",
-                            border: "none",
-                            fontSize: "18px",
-                            cursor: atMax ? "not-allowed" : "pointer",
-                            color: atMax ? "#ccc" : "#2d7a3a",
-                            fontWeight: 700,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
+                          className={`flex h-9 w-9 items-center justify-center border-none bg-transparent text-lg font-bold ${
+                            atMax ? "cursor-not-allowed text-[#ccc]" : "cursor-pointer text-[#2d7a3a]"
+                          }`}
                         >
                           +
                         </button>
                       </div>
                       {stockWarning === item.id && (
-                        <span style={{ fontSize: "10px", color: "#e53935", fontWeight: 600, whiteSpace: "nowrap" }}>
+                        <span className="whitespace-nowrap text-[10px] font-semibold text-[#e53935]">
                           ⚠️ Max stock reached
                         </span>
                       )}
@@ -1166,18 +806,7 @@ export default function CartPage() {
 
                     <button
                       onClick={() => promptRemove(item)}
-                      style={{
-                        width: "36px",
-                        height: "36px",
-                        borderRadius: "10px",
-                        background: "#ffebee",
-                        border: "none",
-                        cursor: "pointer",
-                        fontSize: "16px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
+                      className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-[10px] border-none bg-[#ffebee] text-base"
                     >
                       🗑️
                     </button>
@@ -1187,58 +816,35 @@ export default function CartPage() {
             })}
             <Link
               href="/products"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                color: "#2d7a3a",
-                fontSize: "13px",
-                fontWeight: 500,
-                textDecoration: "none",
-                padding: "4px 0",
-              }}
+              className="flex items-center gap-2 py-1 text-[13px] font-medium text-[#2d7a3a] no-underline"
             >
               ← Continue Shopping
             </Link>
           </div>
 
           {/* ── RIGHT: Order Summary ── */}
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: "20px",
-              border: "0.5px solid #e8e8e8",
-              padding: "24px",
-              position: isMobile ? "relative" : "sticky",
-              top: isMobile ? "auto" : "20px",
-            }}
-          >
-            <p style={{ fontSize: "16px", fontWeight: 700, color: "#1a1a1a", marginBottom: "20px" }}>
-              Order Summary
-            </p>
+          <div className="relative rounded-[20px] border-[0.5px] border-[#e8e8e8] bg-white p-6 min-[900px]:sticky min-[900px]:top-5">
+            <p className="mb-5 text-base font-bold text-[#1a1a1a]">Order Summary</p>
 
             {/* Itemized list */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
+            <div className="mb-4 flex flex-col gap-2.5">
               {items.map((item) => {
                 const effectivePrice = getEffectivePrice(item);
                 const hasDiscount =
                   item.product.finalPrice != null && item.product.finalPrice < item.product.price;
 
                 return (
-                  <div
-                    key={item.id}
-                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
-                  >
-                    <span style={{ fontSize: "13px", color: "#555" }}>
+                  <div key={item.id} className="flex items-center justify-between">
+                    <span className="text-[13px] text-[#555]">
                       {item.product.productName} × {item.quantity}
                     </span>
-                    <div style={{ textAlign: "right" }}>
+                    <div className="text-right">
                       {hasDiscount && (
-                        <div style={{ fontSize: "11px", color: "#bbb", textDecoration: "line-through" }}>
+                        <div className="text-[11px] text-[#bbb] line-through">
                           {peso(item.product.price * item.quantity)}
                         </div>
                       )}
-                      <div style={{ fontSize: "13px", fontWeight: 600, color: "#2d7a3a" }}>
+                      <div className="text-[13px] font-semibold text-[#2d7a3a]">
                         {peso(effectivePrice * item.quantity)}
                       </div>
                     </div>
@@ -1247,44 +853,35 @@ export default function CartPage() {
               })}
             </div>
 
-            <div style={{ height: "1px", background: "#f0f0f0", margin: "14px 0" }} />
+            <div className="my-3.5 h-px bg-[#f0f0f0]" />
 
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-              <span style={{ fontSize: "13px", color: "#888" }}>Subtotal</span>
-              <span style={{ fontSize: "13px", color: "#1a1a1a" }}>{peso(subtotal)}</span>
+            <div className="mb-2 flex justify-between">
+              <span className="text-[13px] text-[#888]">Subtotal</span>
+              <span className="text-[13px] text-[#1a1a1a]">{peso(subtotal)}</span>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-              <span style={{ fontSize: "13px", color: "#888" }}>VAT (12%)</span>
-              <span style={{ fontSize: "13px", color: "#1a1a1a" }}>{peso(vat)}</span>
+            <div className="mb-2 flex justify-between">
+              <span className="text-[13px] text-[#888]">VAT (12%)</span>
+              <span className="text-[13px] text-[#1a1a1a]">{peso(vat)}</span>
             </div>
 
             {totalDiscount > 0 && (
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-                <span style={{ fontSize: "13px", color: "#e53935" }}>🏷️ You saved (promo)</span>
-                <span style={{ fontSize: "13px", fontWeight: 600, color: "#e53935" }}>
-                  {peso(totalDiscount)}
-                </span>
+              <div className="mb-2 flex justify-between">
+                <span className="text-[13px] text-[#e53935]">🏷️ You saved (promo)</span>
+                <span className="text-[13px] font-semibold text-[#e53935]">{peso(totalDiscount)}</span>
               </div>
             )}
 
-            <div style={{ height: "1px", background: "#f0f0f0", margin: "14px 0" }} />
+            <div className="my-3.5 h-px bg-[#f0f0f0]" />
 
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}
-            >
-              <span style={{ fontSize: "16px", fontWeight: 700, color: "#1a1a1a" }}>Total</span>
-              <span style={{ fontSize: "22px", fontWeight: 700, color: "#2d7a3a" }}>{peso(total)}</span>
+            <div className="mb-5 flex items-center justify-between">
+              <span className="text-base font-bold text-[#1a1a1a]">Total</span>
+              <span className="text-[22px] font-bold text-[#2d7a3a]">{peso(total)}</span>
             </div>
 
             {/* Payment Method */}
-            <p style={{ fontSize: "12px", color: "#aaa", marginBottom: "10px" }}>Payment Method</p>
-            <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+            <p className="mb-2.5 text-xs text-[#aaa]">Payment Method</p>
+            <div className="mb-4 flex gap-2">
               {[
                 { key: "cod", label: "💵 Cash on Delivery" },
                 { key: "gcash", label: "📱 GCash" },
@@ -1295,18 +892,11 @@ export default function CartPage() {
                     setPaymentMethod(m.key as "cod" | "gcash");
                     setGcashExpired(false);
                   }}
-                  style={{
-                    flex: 1,
-                    padding: "10px",
-                    borderRadius: "10px",
-                    cursor: "pointer",
-                    fontFamily: "sans-serif",
-                    border: paymentMethod === m.key ? "2px solid #2d7a3a" : "1.5px solid #e0e0e0",
-                    background: paymentMethod === m.key ? "#f0faf2" : "#fff",
-                    fontSize: "12px",
-                    fontWeight: 600,
-                    color: paymentMethod === m.key ? "#2d7a3a" : "#888",
-                  }}
+                  className={`flex-1 cursor-pointer rounded-[10px] p-2.5 font-sans text-xs font-semibold ${
+                    paymentMethod === m.key
+                      ? "border-2 border-[#2d7a3a] bg-[#f0faf2] text-[#2d7a3a]"
+                      : "border-[1.5px] border-[#e0e0e0] bg-white text-[#888]"
+                  }`}
                 >
                   {m.label}
                 </button>
@@ -1315,60 +905,33 @@ export default function CartPage() {
 
             {/* ── GCash notice (opens the timed form) ── */}
             {paymentMethod === "gcash" && (
-              <div
-                style={{
-                  background: "#f8f0ff",
-                  borderRadius: "14px",
-                  padding: "16px",
-                  border: "1px solid #e0c8ff",
-                }}
-              >
+              <div className="rounded-[14px] border border-[#e0c8ff] bg-[#f8f0ff] p-4">
                 {gcashExpired && (
-                  <div
-                    style={{
-                      background: "#ffebee",
-                      border: "1px solid #ef9a9a",
-                      color: "#c62828",
-                      borderRadius: "10px",
-                      padding: "10px 12px",
-                      fontSize: "12px",
-                      fontWeight: 600,
-                      marginBottom: "12px",
-                    }}
-                  >
+                  <div className="mb-3 rounded-[10px] border border-[#ef9a9a] bg-[#ffebee] px-3 py-2.5 text-xs font-semibold text-[#c62828]">
                     ⏱️ Your payment session expired. Please click Continue to start again.
                   </div>
                 )}
 
-                <p style={{ fontSize: "13px", fontWeight: 700, color: "#6a1b9a", marginBottom: "8px" }}>
-                  📲 GCash Payment Notice
-                </p>
-                <p style={{ fontSize: "12.5px", color: "#555", lineHeight: 1.6, marginBottom: "10px" }}>
-                  Please prepare <strong style={{ color: "#2d7a3a" }}>{peso(total)}</strong> in your GCash
+                <p className="mb-2 text-[13px] font-bold text-[#6a1b9a]">📲 GCash Payment Notice</p>
+                <p className="mb-2.5 text-[12.5px] leading-[1.6] text-[#555]">
+                  Please prepare <strong className="text-[#2d7a3a]">{peso(total)}</strong> in your GCash
                   account before continuing. You will have{" "}
                   <strong>{Math.floor(GCASH_TIME_LIMIT_SECONDS / 60)} minutes</strong> to scan the QR code,
                   pay the exact amount, then enter your reference number and upload your payment
                   screenshot.
                 </p>
-                <p style={{ fontSize: "11.5px", color: "#8e6bb0", lineHeight: 1.5, marginBottom: "14px" }}>
+                <p className="mb-3.5 text-[11.5px] leading-normal text-[#8e6bb0]">
                   If the time runs out, the form will close and you will need to click Continue again.
                 </p>
 
                 <button
                   onClick={openGcashForm}
                   disabled={hasStockIssue}
-                  style={{
-                    width: "100%",
-                    padding: "13px",
-                    borderRadius: "30px",
-                    border: "none",
-                    fontSize: "14px",
-                    fontWeight: 700,
-                    color: "#fff",
-                    background: hasStockIssue ? "#ccc" : "#6a1b9a",
-                    cursor: hasStockIssue ? "not-allowed" : "pointer",
-                    boxShadow: hasStockIssue ? "none" : "0 6px 18px rgba(106,27,154,0.3)",
-                  }}
+                  className={`w-full rounded-[30px] border-none p-[13px] text-sm font-bold text-white ${
+                    hasStockIssue
+                      ? "cursor-not-allowed bg-[#ccc]"
+                      : "cursor-pointer bg-[#6a1b9a] shadow-[0_6px_18px_rgba(106,27,154,0.3)]"
+                  }`}
                 >
                   {hasStockIssue ? "⚠️ Reduce quantity to match stock" : "Continue →"}
                 </button>
@@ -1378,45 +941,20 @@ export default function CartPage() {
             {/* ── COD Section with Cash Change Calculator ── */}
             {paymentMethod === "cod" && (
               <>
-                <div
-                  style={{
-                    background: "#f0faf2",
-                    borderRadius: "14px",
-                    padding: "16px",
-                    marginBottom: "16px",
-                    border: "1px solid #a5d6a7",
-                  }}
-                >
-                  <p style={{ fontSize: "12px", color: "#2e7d32", marginBottom: "14px" }}>
+                <div className="mb-4 rounded-[14px] border border-[#a5d6a7] bg-[#f0faf2] p-4">
+                  <p className="mb-3.5 text-xs text-[#2e7d32]">
                     💵 Pay in cash when your order arrives. Please prepare the exact amount.
                   </p>
 
-                  <div
-                    style={{
-                      background: "#fff",
-                      borderRadius: "10px",
-                      padding: "14px",
-                      border: "1px solid #c8e6c9",
-                    }}
-                  >
-                    <p style={{ fontSize: "12px", fontWeight: 600, color: "#1b5e20", marginBottom: "10px" }}>
-                      🧮 Change Calculator
-                    </p>
+                  <div className="rounded-[10px] border border-[#c8e6c9] bg-white p-3.5">
+                    <p className="mb-2.5 text-xs font-semibold text-[#1b5e20]">🧮 Change Calculator</p>
 
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
-                      <span style={{ fontSize: "12px", color: "#888" }}>Amount Due</span>
-                      <span style={{ fontSize: "13px", fontWeight: 700, color: "#1a1a1a" }}>{peso(total)}</span>
+                    <div className="mb-2.5 flex justify-between">
+                      <span className="text-xs text-[#888]">Amount Due</span>
+                      <span className="text-[13px] font-bold text-[#1a1a1a]">{peso(total)}</span>
                     </div>
 
-                    <label
-                      style={{
-                        fontSize: "12px",
-                        fontWeight: 600,
-                        color: "#2e7d32",
-                        marginBottom: "6px",
-                        display: "block",
-                      }}
-                    >
+                    <label className="mb-1.5 block text-xs font-semibold text-[#2e7d32]">
                       Customer Cash (₱)
                     </label>
                     <input
@@ -1425,59 +963,41 @@ export default function CartPage() {
                       value={cashInput}
                       onChange={(e) => setCashInput(e.target.value)}
                       placeholder={`e.g. ${Math.ceil(total + 50)}`}
-                      style={{
-                        width: "100%",
-                        padding: "10px 14px",
-                        borderRadius: "10px",
-                        border: cashInput
+                      className={`box-border w-full rounded-[10px] border-[1.5px] bg-white px-3.5 py-2.5 text-sm font-semibold text-[#1a1a1a] outline-none ${
+                        cashInput
                           ? isExactOrOver
-                            ? "1.5px solid #2d7a3a"
-                            : "1.5px solid #e53935"
-                          : "1.5px solid #c8e6c9",
-                        fontSize: "14px",
-                        fontWeight: 600,
-                        outline: "none",
-                        background: "#fff",
-                        boxSizing: "border-box",
-                        color: "#1a1a1a",
-                      }}
+                            ? "border-[#2d7a3a]"
+                            : "border-[#e53935]"
+                          : "border-[#c8e6c9]"
+                      }`}
                     />
 
                     {cashInput !== "" && (
                       <div
-                        style={{
-                          marginTop: "12px",
-                          padding: "12px 14px",
-                          borderRadius: "10px",
-                          background: isExactOrOver ? "#e8f5e9" : "#ffebee",
-                          border: `1.5px solid ${isExactOrOver ? "#a5d6a7" : "#ef9a9a"}`,
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                        }}
+                        className={`mt-3 flex items-center justify-between rounded-[10px] border-[1.5px] px-3.5 py-3 ${
+                          isExactOrOver
+                            ? "border-[#a5d6a7] bg-[#e8f5e9]"
+                            : "border-[#ef9a9a] bg-[#ffebee]"
+                        }`}
                       >
                         <span
-                          style={{
-                            fontSize: "13px",
-                            fontWeight: 600,
-                            color: isExactOrOver ? "#2e7d32" : "#c62828",
-                          }}
+                          className={`text-[13px] font-semibold ${
+                            isExactOrOver ? "text-[#2e7d32]" : "text-[#c62828]"
+                          }`}
                         >
                           {isExactOrOver ? "💰 Change" : "⚠️ Insufficient"}
                         </span>
                         <span
-                          style={{
-                            fontSize: "18px",
-                            fontWeight: 700,
-                            color: isExactOrOver ? "#2d7a3a" : "#e53935",
-                          }}
+                          className={`text-lg font-bold ${
+                            isExactOrOver ? "text-[#2d7a3a]" : "text-[#e53935]"
+                          }`}
                         >
                           {isExactOrOver ? peso(change) : `−${peso(Math.abs(change))}`}
                         </span>
                       </div>
                     )}
 
-                    <div style={{ marginTop: "10px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                    <div className="mt-2.5 flex flex-wrap gap-1.5">
                       {[
                         Math.ceil(total),
                         Math.ceil(total / 50) * 50,
@@ -1490,16 +1010,11 @@ export default function CartPage() {
                           <button
                             key={amt}
                             onClick={() => setCashInput(String(amt))}
-                            style={{
-                              padding: "5px 10px",
-                              borderRadius: "20px",
-                              border: "1.5px solid #a5d6a7",
-                              background: cashInput === String(amt) ? "#2d7a3a" : "#fff",
-                              color: cashInput === String(amt) ? "#fff" : "#2e7d32",
-                              fontSize: "11px",
-                              fontWeight: 600,
-                              cursor: "pointer",
-                            }}
+                            className={`cursor-pointer rounded-[20px] border-[1.5px] border-[#a5d6a7] px-2.5 py-[5px] text-[11px] font-semibold ${
+                              cashInput === String(amt)
+                                ? "bg-[#2d7a3a] text-white"
+                                : "bg-white text-[#2e7d32]"
+                            }`}
                           >
                             ₱{amt.toLocaleString()}
                           </button>
@@ -1518,21 +1033,14 @@ export default function CartPage() {
                     sessionStorage.setItem("paymentMethod", "cod");
                     sessionStorage.setItem("cashGiven", cashInput);
                     sessionStorage.removeItem("gcashRef");
+                    sessionStorage.removeItem("gcashReceiptUrl");
                     sessionStorage.removeItem("gcashProof");
                   }}
-                  style={{
-                    display: "block",
-                    textAlign: "center",
-                    textDecoration: "none",
-                    padding: "14px",
-                    borderRadius: "30px",
-                    fontSize: "15px",
-                    fontWeight: 700,
-                    background: canCheckoutCod ? "#2d7a3a" : "#ccc",
-                    color: "#fff",
-                    cursor: canCheckoutCod ? "pointer" : "not-allowed",
-                    boxShadow: canCheckoutCod ? "0 6px 20px rgba(45,122,58,0.3)" : "none",
-                  }}
+                  className={`block rounded-[30px] p-3.5 text-center text-[15px] font-bold text-white no-underline ${
+                    canCheckoutCod
+                      ? "cursor-pointer bg-[#2d7a3a] shadow-[0_6px_20px_rgba(45,122,58,0.3)]"
+                      : "cursor-not-allowed bg-[#ccc]"
+                  }`}
                 >
                   {hasStockIssue
                     ? "⚠️ Reduce quantity to match stock"
@@ -1542,7 +1050,6 @@ export default function CartPage() {
                 </Link>
               </>
             )}
-
           </div>
         </div>
       </div>

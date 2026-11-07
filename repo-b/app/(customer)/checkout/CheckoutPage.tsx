@@ -24,7 +24,7 @@ type PaymentInfo = {
   method: "cod" | "gcash";
   cashGiven: string;
   gcashRef: string;
-  gcashProof: string | null;
+  gcashReceiptUrl: string; // Cloudinary link saved by the cart page
 };
 
 const VAT_RATE = 0.12;
@@ -56,6 +56,7 @@ const clearCheckoutSession = () => {
   sessionStorage.removeItem("paymentMethod");
   sessionStorage.removeItem("cashGiven");
   sessionStorage.removeItem("gcashRef");
+  sessionStorage.removeItem("gcashReceiptUrl");
   sessionStorage.removeItem("gcashProof");
 };
 
@@ -86,7 +87,7 @@ export default function CheckoutPage() {
       method,
       cashGiven: sessionStorage.getItem("cashGiven") || "",
       gcashRef: sessionStorage.getItem("gcashRef") || "",
-      gcashProof: sessionStorage.getItem("gcashProof"),
+      gcashReceiptUrl: sessionStorage.getItem("gcashReceiptUrl") || "",
     });
 
     const id = getCustomerId();
@@ -130,7 +131,9 @@ export default function CheckoutPage() {
   const change = cashProvided && !cashShort ? round2(cashAmount - total) : 0;
 
   const hasStockIssue = items.some((i) => i.quantity > (i.product.stock ?? Infinity));
-  const gcashMissing = pay?.method === "gcash" && pay.gcashRef.length === 0;
+  // GCash needs both the typed reference number and the uploaded receipt link
+  const gcashMissing =
+    pay?.method === "gcash" && (pay.gcashRef.length === 0 || pay.gcashReceiptUrl.length === 0);
 
   const canPlace =
     !!pay && items.length > 0 && !hasStockIssue && !cashShort && !gcashMissing && !!customerId;
@@ -146,7 +149,10 @@ export default function CheckoutPage() {
         customerId,
         paymentMethod: pay.method,
         ...(pay.method === "cod" && cashProvided && { cashGiven: cashAmount }),
-        ...(pay.method === "gcash" && { gcashRef: pay.gcashRef }),
+        ...(pay.method === "gcash" && {
+          gcashRef: pay.gcashRef,
+          receiptImage: pay.gcashReceiptUrl,
+        }),
         ...(note.trim() && { note: note.trim() }),
         items: items.map((i) => ({
           productId: i.productId,
@@ -289,7 +295,7 @@ export default function CheckoutPage() {
     : cashShort
     ? "⚠️ Cash is less than the total"
     : gcashMissing
-    ? "⚠️ GCash reference is missing"
+    ? "⚠️ GCash reference or receipt is missing"
     : `Place Order · ${peso(total)}`;
 
   return (
@@ -391,10 +397,10 @@ export default function CheckoutPage() {
                     <span style={{ color: "#777" }}>Reference number</span>
                     <strong style={{ letterSpacing: "0.5px" }}>{pay?.gcashRef || "—"}</strong>
                   </div>
-                  {pay?.gcashProof && (
+                  {pay?.gcashReceiptUrl && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={pay.gcashProof}
+                      src={pay.gcashReceiptUrl}
                       alt="Payment screenshot"
                       style={{
                         width: "100%",
@@ -410,6 +416,12 @@ export default function CheckoutPage() {
                   <p style={{ fontSize: "11.5px", color: "#8e6bb0", lineHeight: 1.5, marginTop: "10px" }}>
                     We check your GCash payment before confirming the order.
                   </p>
+                  {gcashMissing && (
+                    <p style={{ fontSize: "12px", color: "#e53935", fontWeight: 600, marginTop: "10px" }}>
+                      Your GCash reference or receipt is missing. Go back to the cart and complete the GCash
+                      step again.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
