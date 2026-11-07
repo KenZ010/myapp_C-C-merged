@@ -487,7 +487,7 @@ export default function HomePage() {
       <div className="flex flex-wrap justify-between items-start gap-2 mb-5">
         <div>
           <h1 className="text-[22px] font-bold text-gray-900">
-            Good day, {customerName} 👋
+            Good day, {customerName} 
           </h1>
           <p className="text-[13px] text-gray-400 mt-1">
             Welcome back to Julieta Soft Drink Store

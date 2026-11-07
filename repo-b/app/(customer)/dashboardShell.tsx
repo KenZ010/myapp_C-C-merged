@@ -47,12 +47,31 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
   const [isMobile,      setIsMobile]      = useState(false);
   const [notifOpen,     setNotifOpen]     = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [customerName,  setCustomerName]  = useState("Guest");
   const notifRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => { connectSocket(); }, []);
+
+  // Load the customer name from localStorage (safe parse)
+  useEffect(() => {
+    const loadName = () => {
+      try {
+        const raw = localStorage.getItem("user");
+        const parsed = raw ? JSON.parse(raw) : {};
+        setCustomerName(parsed?.name?.trim() || "Guest");
+      } catch {
+        setCustomerName("Guest");
+      }
+    };
+    loadName();
+
+    // Update if another tab / the settings page changes the stored user
+    window.addEventListener("storage", loadName);
+    return () => window.removeEventListener("storage", loadName);
+  }, [pathname]);
 
   // Toast + bell entry whenever the cashier updates one of this customer's orders
   useEffect(() => {
@@ -115,9 +134,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
 
   const page = pageTitles[pathname] ?? { title: "Julieta Store", sub: "" };
 
-  const user = mounted ? JSON.parse(localStorage.getItem("user") || "{}") : {};
-  const displayName: string = user?.name || "Guest";
-  const initial = displayName.trim().charAt(0).toUpperCase() || "G";
+  const initial = customerName.trim().charAt(0).toUpperCase() || "G";
 
   const markAllRead = () =>
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
@@ -324,14 +341,14 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
               {initial}
             </span>
             <span
-              title={displayName}
+              title={customerName}
               style={{
                 color: "#fff", fontSize: "13px", fontWeight: 500,
                 maxWidth: isMobile ? "70px" : "140px",
                 whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
               }}
             >
-              {displayName}
+              {customerName}
             </span>
           </div>
 
