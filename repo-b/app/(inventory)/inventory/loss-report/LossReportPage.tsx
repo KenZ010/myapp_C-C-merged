@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 // BORDER #d6e8d9 · INK #14301b · MUTED #5f7a66 · FAINT #8fa596
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type LossReason = "EXPIRED" | "DAMAGED" | "THEFT" | "COUNT_ERROR" | "OTHER";
+type LossReason = "EXPIRED" | "DAMAGED" | "THEFT" | "COUNT_ERROR" ;
 
 type LossRecord = {
   id: string;
@@ -149,7 +149,6 @@ const REASON_CLASSES: Record<LossReason, { badge: string; header: string }> = {
   DAMAGED:     { badge: "bg-[#e8f5ea] text-[#1f5f2d]", header: "bg-[#1f5f2d]" },
   THEFT:       { badge: "bg-[#fef2f2] text-[#b91c1c]", header: "bg-[#b91c1c]" },
   COUNT_ERROR: { badge: "bg-[#e0f2ee] text-[#0f6b5e]", header: "bg-[#0f6b5e]" },
-  OTHER:       { badge: "bg-[#f1f5f2] text-[#5f7a66]", header: "bg-[#3f5a47]" },
 };
 
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
@@ -499,7 +498,7 @@ export default function LossReportPage() {
           </div>
 
           <div className="flex gap-0.5 bg-[#e8f5ea] rounded-lg p-0.5">
-            {(["ALL","EXPIRED","DAMAGED","THEFT","COUNT_ERROR","OTHER"] as const).map((r) => (
+            {(["ALL","EXPIRED","DAMAGED","THEFT","COUNT_ERROR"] as const).map((r) => (
               <button
                 key={r}
                 onClick={() => setReasonFil(r)}
@@ -545,7 +544,7 @@ export default function LossReportPage() {
                     {Icons.calendar} {label}
                   </span>
                   <span className="flex gap-4 items-center">
-                    {(["EXPIRED","DAMAGED","THEFT","COUNT_ERROR","OTHER"] as LossReason[])
+                    {(["EXPIRED","DAMAGED","THEFT","COUNT_ERROR"] as LossReason[])
                       .filter((r) => byReason(r) > 0)
                       .map((r) => (
                         <span key={r} className={`text-[11px] font-semibold px-2 py-0.5 rounded ${REASON_CLASSES[r].badge}`}>
