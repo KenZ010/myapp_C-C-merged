@@ -595,7 +595,7 @@ export default function InventoryAdjustmentPage() {
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; badge?: number }[] = [
     { key: "adjustment", label: "Inventory Adjustment", icon: Icon.box },
-    { key: "expiration", label: "Expiration",           icon: Icon.calendar, badge: expCounts.expired + expCounts.soon },
+    { key: "expiration", label: "Expiration Adjustment", icon: Icon.calendar, badge: expCounts.expired + expCounts.soon },
   ];
 
 
