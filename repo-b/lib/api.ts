@@ -334,6 +334,7 @@ export const api = {
     paymentMethod: 'cash' | 'gcash';
     cashGiven?: number;
     gcashRef?: string;
+    customerId?: string;
     walkInName: string;
     walkInPhone?: string;
     walkInAddress: string;

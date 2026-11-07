@@ -26,6 +26,7 @@ type Customer = {
 
 // ── VAT (12%), added on top of the item subtotal ─────────────────────────────
 const VAT_RATE = 0.12;
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export default function PaymentPage() {
   const router = useRouter();
@@ -51,9 +52,10 @@ export default function PaymentPage() {
     }
   }, []);
 
+  // Same maths as the server: total = subtotal + 12% VAT, rounded to centavos
   const subtotal = cartItems.reduce((s, i) => s + i.finalPrice * i.qty, 0);
-  const vat = subtotal * VAT_RATE;
-  const total = subtotal + vat;
+  const total = round2(subtotal + subtotal * VAT_RATE);
+  const vat = round2(total - subtotal);
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loadingCust, setLoadingCust] = useState(true);
@@ -67,6 +69,7 @@ export default function PaymentPage() {
           (Array.isArray(data) ? data : []).map((c: any) => ({
             ...c,
             customerName: c.customerName || c.name,
+            contactNumber: c.contactNumber || c.phone,
           })),
         );
       } catch (err) {
@@ -85,6 +88,7 @@ export default function PaymentPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
     null,
   );
+  const [existingAddress, setExistingAddress] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   const [newName, setNewName] = useState("");
   const [newAddress, setNewAddress] = useState("");
@@ -98,7 +102,9 @@ export default function PaymentPage() {
   const [gcashImage, setGcashImage] = useState<string | null>(null);
   const [amountPaid, setAmountPaid] = useState("");
   const [completed, setCompleted] = useState(false);
+  const [orderId, setOrderId] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const filteredCustomers = useMemo(
@@ -122,6 +128,11 @@ export default function PaymentPage() {
   const activeCustomer =
     customerType === "Existing Customer"
       ? selectedCustomer
+        ? {
+            ...selectedCustomer,
+            address: existingAddress.trim() || selectedCustomer.address,
+          }
+        : null
       : newName
         ? {
             customerName: newName,
@@ -139,30 +150,37 @@ export default function PaymentPage() {
     newName.trim() !== "" &&
     nameError === "" &&
     storeError === "" &&
-    phoneValid;
+    phoneValid &&
+    newAddress.trim() !== "";
+  const existingValid =
+    selectedCustomer !== null && existingAddress.trim() !== "";
+  const gcashRefValid = /^\d{13}$/.test(gcashRef.trim());
 
   const canComplete =
     cartItems.length > 0 &&
-    (customerType === "Existing Customer"
-      ? selectedCustomer !== null
-      : newCustomerValid) &&
+    (customerType === "Existing Customer" ? existingValid : newCustomerValid) &&
     (paymentMethod === "GCash"
-      ? /^\d+$/.test(gcashRef.trim()) && gcashImage !== null
-      : paid >= total);
+      ? gcashRefValid && gcashImage !== null
+      : paid + 0.005 >= total);
 
-  // What's still missing — shown under the Complete Order button
+  // What's still missing — shown under the Place Order button
   const missingSteps: string[] = [];
   if (cartItems.length === 0) missingSteps.push("Add items to the cart");
   if (customerType === "Existing Customer") {
     if (!selectedCustomer) missingSteps.push("Select a customer");
-  } else if (!newCustomerValid) {
-    missingSteps.push("Fill in the new customer's name and phone");
+    else if (existingAddress.trim() === "")
+      missingSteps.push("Enter the delivery address");
+  } else {
+    if (!newCustomerValid)
+      missingSteps.push(
+        "Fill in the customer's name, phone and delivery address",
+      );
   }
   if (paymentMethod === "GCash") {
-    if (!/^\d+$/.test(gcashRef.trim()))
-      missingSteps.push("Enter the GCash reference no.");
+    if (!gcashRefValid)
+      missingSteps.push("Enter the 13-digit GCash reference no.");
     if (!gcashImage) missingSteps.push("Upload the GCash receipt");
-  } else if (paid < total) {
+  } else if (paid + 0.005 < total) {
     missingSteps.push("Enter the amount received");
   }
 
@@ -191,13 +209,14 @@ export default function PaymentPage() {
     setNewPhone(digits);
   };
 
-  // GCash reference number: digits only (also strips letters/symbols from pasted text)
+  // GCash reference number: exactly 13 digits (also strips letters/symbols from pasted text)
   const handleGcashRefChange = (val: string) => {
-    setGcashRef(val.replace(/\D/g, ""));
+    setGcashRef(val.replace(/\D/g, "").slice(0, 13));
   };
 
   const handleSelectCustomer = (c: Customer) => {
     setSelectedCustomer(c);
+    setExistingAddress(c.address ?? "");
     setSearchQuery(c.customerName);
     setShowDropdown(false);
   };
@@ -214,27 +233,36 @@ export default function PaymentPage() {
     if (!canComplete || submitting) return;
     try {
       setSubmitting(true);
-      const method: "cod" | "gcash" =
-        paymentMethod === "Cash" ? "cod" : "gcash";
-      const payload = {
-        customerId: selectedCustomer?.id || "",
-        paymentMethod: method,
-        gcashRef: paymentMethod === "GCash" ? gcashRef : undefined,
+      setSubmitError(null);
+
+      const isExisting = customerType === "Existing Customer";
+
+      // The server recalculates prices; we only send what was bought.
+      // New customer = no account (guest). Existing = linked to their account.
+      const res = await api.placeWalkInOrder({
         items: cartItems.map((item) => ({
           productId: item.id,
           quantity: item.qty,
-          price: item.finalPrice,
         })),
-        subtotal,
-        vat,
-        totalAmount: total,
-      };
-      const res = await api.placeOrder(payload);
-      if (res?.saleId) await api.updateOrderStatus(res.saleId, "PROCESSING");
+        paymentMethod: paymentMethod === "Cash" ? "cash" : "gcash",
+        cashGiven: paymentMethod === "Cash" ? paid : undefined,
+        gcashRef: paymentMethod === "GCash" ? gcashRef.trim() : undefined,
+        customerId: isExisting ? selectedCustomer!.id : undefined,
+        walkInName: isExisting
+          ? selectedCustomer!.customerName
+          : newStore.trim()
+            ? `${newName.trim()} (${newStore.trim()})`
+            : newName.trim(),
+        walkInPhone: isExisting ? undefined : "+63" + newPhone,
+        walkInAddress: isExisting ? existingAddress.trim() : newAddress.trim(),
+      });
+
+      setOrderId(res?.saleId ?? "");
       sessionStorage.removeItem("pendingCart");
       setCompleted(true);
-    } catch (err) {
-      console.error("Failed to complete order:", err);
+    } catch (err: any) {
+      console.error("Failed to place order:", err);
+      setSubmitError(err?.message || "Failed to place the order. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -242,7 +270,10 @@ export default function PaymentPage() {
 
   const resetAll = () => {
     setCompleted(false);
+    setOrderId("");
+    setSubmitError(null);
     setSelectedCustomer(null);
+    setExistingAddress("");
     setSearchQuery("");
     setNewName("");
     setNewAddress("");
@@ -275,7 +306,7 @@ export default function PaymentPage() {
     marginTop: "4px",
   };
 
-  /* ── Completed Screen ── */
+  /* ── Order Placed Screen ── */
   if (completed) {
     return (
       <div
@@ -319,8 +350,13 @@ export default function PaymentPage() {
               marginBottom: "8px",
             }}
           >
-            Order Completed!
+            Order Placed!
           </h2>
+          {orderId && (
+            <p style={{ fontSize: "13px", color: "#888", marginBottom: "6px" }}>
+              Order No: <strong style={{ color: "#1a3c2e" }}>{orderId}</strong>
+            </p>
+          )}
           <p style={{ fontSize: "14px", color: "#888", marginBottom: "6px" }}>
             Payment received from{" "}
             <strong>{activeCustomer?.customerName}</strong>.
@@ -328,7 +364,11 @@ export default function PaymentPage() {
           <p style={{ fontSize: "14px", color: "#888", marginBottom: "6px" }}>
             Subtotal:{" "}
             <strong style={{ color: "#1a3c2e" }}>
-              ₱{subtotal.toLocaleString()}.00
+              ₱
+              {subtotal.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </strong>
           </p>
           <p style={{ fontSize: "14px", color: "#888", marginBottom: "6px" }}>
@@ -363,8 +403,23 @@ export default function PaymentPage() {
               </strong>
             </p>
           )}
-          <p style={{ fontSize: "14px", color: "#888", marginBottom: "28px" }}>
+          <p style={{ fontSize: "14px", color: "#888", marginBottom: "6px" }}>
             Payment Method: <strong>{paymentMethod}</strong>
+          </p>
+          <p
+            style={{
+              fontSize: "12px",
+              color: "#666",
+              background: "#fff",
+              border: "1px solid #c8e6c9",
+              borderRadius: "10px",
+              padding: "10px 12px",
+              margin: "14px 0 24px",
+              lineHeight: 1.5,
+            }}
+          >
+            Status: <strong>Pending</strong>. Track it under Active Orders, move
+            it to Out for Delivery, then mark it Completed once it arrives.
           </p>
           <button
             onClick={resetAll}
@@ -470,10 +525,20 @@ export default function PaymentPage() {
                   fontSize: "13px",
                   fontWeight: 700,
                   color: "#1a1a1a",
-                  marginBottom: "10px",
+                  marginBottom: "4px",
                 }}
               >
                 Customer Type
+              </p>
+              <p
+                style={{
+                  fontSize: "11px",
+                  color: "#888",
+                  marginBottom: "10px",
+                }}
+              >
+                New Customer = no account yet. Existing Customer = already has
+                an account.
               </p>
               <div style={{ display: "flex", gap: "10px" }}>
                 {(["New Customer", "Existing Customer"] as CustomerType[]).map(
@@ -483,6 +548,7 @@ export default function PaymentPage() {
                       onClick={() => {
                         setCustomerType(t);
                         setSelectedCustomer(null);
+                        setExistingAddress("");
                         setSearchQuery("");
                         setNewName("");
                         setNewAddress("");
@@ -490,6 +556,7 @@ export default function PaymentPage() {
                         setNewPhone("");
                         setNameError("");
                         setStoreError("");
+                        setSubmitError(null);
                       }}
                       style={{
                         flex: 1,
@@ -533,6 +600,7 @@ export default function PaymentPage() {
                       setSearchQuery(e.target.value);
                       setShowDropdown(true);
                       setSelectedCustomer(null);
+                      setExistingAddress("");
                     }}
                     onFocus={() => setShowDropdown(true)}
                     placeholder={
@@ -707,11 +775,6 @@ export default function PaymentPage() {
                             🏪 {selectedCustomer.storeName}
                           </p>
                         )}
-                        {selectedCustomer.address && (
-                          <p style={{ fontSize: "12px", color: "#666" }}>
-                            📍 {selectedCustomer.address}
-                          </p>
-                        )}
                         {selectedCustomer.contactNumber && (
                           <p style={{ fontSize: "12px", color: "#666" }}>
                             📞 {selectedCustomer.contactNumber}
@@ -722,6 +785,7 @@ export default function PaymentPage() {
                     <button
                       onClick={() => {
                         setSelectedCustomer(null);
+                        setExistingAddress("");
                         setSearchQuery("");
                       }}
                       style={{
@@ -734,6 +798,42 @@ export default function PaymentPage() {
                     >
                       ✕
                     </button>
+                  </div>
+                )}
+
+                {/* Delivery address (prefilled from the account, editable) */}
+                {selectedCustomer && (
+                  <div style={{ marginTop: "14px" }}>
+                    <label
+                      style={{
+                        fontSize: "12px",
+                        color: "#555",
+                        fontWeight: 500,
+                        marginBottom: "6px",
+                        display: "block",
+                      }}
+                    >
+                      📍 Delivery Address{" "}
+                      <span style={{ color: "#e53935" }}>*</span>
+                    </label>
+                    <input
+                      value={existingAddress}
+                      onChange={(e) => setExistingAddress(e.target.value)}
+                      placeholder="Enter delivery address"
+                      maxLength={200}
+                      style={{
+                        ...inputStyle,
+                        border:
+                          existingAddress.trim() === ""
+                            ? "1.5px solid #e53935"
+                            : "1px solid #e0e0e0",
+                      }}
+                    />
+                    {existingAddress.trim() === "" && (
+                      <p style={errorStyle}>
+                        ⚠️ Delivery address is required.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -831,12 +931,14 @@ export default function PaymentPage() {
                         display: "block",
                       }}
                     >
-                      📍 Address
+                      📍 Delivery Address{" "}
+                      <span style={{ color: "#e53935" }}>*</span>
                     </label>
                     <input
                       value={newAddress}
                       onChange={(e) => setNewAddress(e.target.value)}
-                      placeholder="Enter address"
+                      placeholder="Enter delivery address"
+                      maxLength={200}
                       style={inputStyle}
                     />
                   </div>
@@ -1127,15 +1229,26 @@ export default function PaymentPage() {
                     autoComplete="off"
                     value={gcashRef}
                     onChange={(e) => handleGcashRefChange(e.target.value)}
-                    placeholder="Enter GCash reference number (numbers only)"
+                    placeholder="13-digit reference number"
                     style={{
                       ...inputStyle,
                       letterSpacing: "1px",
-                      border: gcashRef
-                        ? "1.5px solid #6a1b9a"
-                        : "1px solid #e0c8ff",
+                      border: gcashRefValid
+                        ? "1.5px solid #2e7d32"
+                        : gcashRef
+                          ? "1.5px solid #6a1b9a"
+                          : "1px solid #e0c8ff",
                     }}
                   />
+                  <p
+                    style={{
+                      fontSize: "11px",
+                      marginTop: "4px",
+                      color: gcashRefValid ? "#2e7d32" : "#888",
+                    }}
+                  >
+                    {gcashRef.length}/13 digits
+                  </p>
                 </div>
                 <div>
                   <label
@@ -1240,7 +1353,7 @@ export default function PaymentPage() {
                     style={{ display: "none" }}
                   />
                 </div>
-                {(!gcashRef || !gcashImage) && (
+                {(!gcashRefValid || !gcashImage) && (
                   <p
                     style={{
                       fontSize: "11px",
@@ -1248,7 +1361,8 @@ export default function PaymentPage() {
                       marginTop: "10px",
                     }}
                   >
-                    ⚠️ Reference number and receipt image are required.
+                    ⚠️ A 13-digit reference number and the receipt image are
+                    required.
                   </p>
                 )}
               </div>
@@ -1313,7 +1427,7 @@ export default function PaymentPage() {
                         fontSize: "18px",
                         fontWeight: 700,
                         border:
-                          paid >= total
+                          paid + 0.005 >= total
                             ? "1.5px solid #2e7d32"
                             : "1.5px solid #e0e0e0",
                       }}
@@ -1331,7 +1445,13 @@ export default function PaymentPage() {
                   }}
                 >
                   {[
-                    ["Subtotal", `₱${subtotal.toLocaleString()}.00`],
+                    [
+                      "Subtotal",
+                      `₱${subtotal.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}`,
+                    ],
                     [
                       "VAT (12%)",
                       `₱${vat.toLocaleString(undefined, {
@@ -1348,7 +1468,10 @@ export default function PaymentPage() {
                     ],
                     [
                       "Amount Paid",
-                      `₱${paid > 0 ? paid.toLocaleString() : "0"}.00`,
+                      `₱${paid.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}`,
                     ],
                   ].map(([label, value]) => (
                     <div
@@ -1405,7 +1528,7 @@ export default function PaymentPage() {
                         : "0.00"}
                     </span>
                   </div>
-                  {paid > 0 && paid < total && (
+                  {paid > 0 && paid + 0.005 < total && (
                     <p
                       style={{
                         fontSize: "11px",
@@ -1436,6 +1559,7 @@ export default function PaymentPage() {
                   activeCustomer={activeCustomer}
                   canComplete={canComplete}
                   submitting={submitting}
+                  submitError={submitError}
                   missingSteps={missingSteps}
                   onComplete={handleComplete}
                   onOrderMore={() => router.back()}
@@ -1464,6 +1588,7 @@ export default function PaymentPage() {
                 activeCustomer={activeCustomer}
                 canComplete={canComplete}
                 submitting={submitting}
+                submitError={submitError}
                 missingSteps={missingSteps}
                 onComplete={handleComplete}
                 onOrderMore={() => router.back()}
@@ -1485,6 +1610,7 @@ function OrderSummaryCard({
   activeCustomer,
   canComplete,
   submitting,
+  submitError,
   missingSteps,
   onComplete,
   onOrderMore,
@@ -1501,11 +1627,17 @@ function OrderSummaryCard({
   } | null;
   canComplete: boolean;
   submitting: boolean;
+  submitError: string | null;
   missingSteps: string[];
   onComplete: () => void;
   onOrderMore: () => void;
 }) {
   const completeDisabled = !canComplete || submitting;
+  const money = (n: number) =>
+    `₱${n.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
 
   return (
     <>
@@ -1560,13 +1692,13 @@ function OrderSummaryCard({
                   {item.productName}
                 </p>
                 <p style={{ fontSize: "11px", color: "#aaa" }}>
-                  x{item.qty} × ₱{item.finalPrice.toLocaleString()}.00
+                  x{item.qty} × {money(item.finalPrice)}
                 </p>
               </div>
               <p
                 style={{ fontSize: "13px", fontWeight: 600, color: "#1a3c2e" }}
               >
-                ₱{(item.finalPrice * item.qty).toLocaleString()}.00
+                {money(item.finalPrice * item.qty)}
               </p>
             </div>
           ))
@@ -1582,7 +1714,7 @@ function OrderSummaryCard({
         >
           <span style={{ fontSize: "13px", color: "#888" }}>Sub Total</span>
           <span style={{ fontSize: "13px", color: "#1a1a1a" }}>
-            ₱{subtotal.toLocaleString()}.00
+            {money(subtotal)}
           </span>
         </div>
         <div
@@ -1594,11 +1726,7 @@ function OrderSummaryCard({
         >
           <span style={{ fontSize: "13px", color: "#888" }}>VAT (12%)</span>
           <span style={{ fontSize: "13px", color: "#1a1a1a" }}>
-            ₱
-            {vat.toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}
+            {money(vat)}
           </span>
         </div>
         <div
@@ -1615,11 +1743,7 @@ function OrderSummaryCard({
             Total
           </span>
           <span style={{ fontSize: "28px", fontWeight: 800, color: "#1a3c2e" }}>
-            ₱
-            {total.toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}
+            {money(total)}
           </span>
         </div>
 
@@ -1632,6 +1756,23 @@ function OrderSummaryCard({
             marginTop: "18px",
           }}
         >
+          {/* Server error (out of stock, GCash ref already used, etc.) */}
+          {submitError && (
+            <div
+              style={{
+                background: "#ffebee",
+                border: "1px solid #ef9a9a",
+                borderRadius: "10px",
+                padding: "10px 12px",
+                fontSize: "12px",
+                color: "#c62828",
+                lineHeight: 1.5,
+              }}
+            >
+              ⚠️ {submitError}
+            </div>
+          )}
+
           <button
             onClick={onComplete}
             disabled={completeDisabled}
@@ -1658,10 +1799,10 @@ function OrderSummaryCard({
             }}
           >
             {submitting ? (
-              "Processing…"
+              "Placing order…"
             ) : (
               <>
-                Complete Order
+                Place Order
                 <svg
                   width="16"
                   height="16"
@@ -1715,7 +1856,7 @@ function OrderSummaryCard({
             Order More
           </button>
 
-          {/* What's still needed before the order can be completed */}
+          {/* What's still needed before the order can be placed */}
           {!canComplete && missingSteps.length > 0 && (
             <div
               style={{
@@ -1733,7 +1874,7 @@ function OrderSummaryCard({
                   marginBottom: "4px",
                 }}
               >
-                Before you can complete:
+                Before you can place the order:
               </p>
               {missingSteps.map((step) => (
                 <p
