@@ -136,8 +136,9 @@ function normalizeOrder(o: Record<string, unknown>): Order {
     address:  walkInAddress || (customer ? String((customer.address as string) ?? "—") : "—"),
     total:    Number(o.totalAmount ?? 0),
     status,
-    isWalkIn: !!walkInName,
-    isOnline: !!customer && !walkInName,
+    // No account → the cashier completes it. Has an account → the customer completes it.
+    isWalkIn: !o.customerId,
+    isOnline: !!o.customerId,
     items: rawLines.map((l) => {
       const product = l.product as Record<string, unknown> | null;
       return {
