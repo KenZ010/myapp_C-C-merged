@@ -22,6 +22,8 @@ type OrderStatus =
   | "Completed"
   | "Cancelled";
 
+type PaymentMethod = "Cash" | "GCash";
+
 type OrderItem = { name: string; qty: number; price: number };
 
 type Order = {
@@ -34,8 +36,11 @@ type Order = {
   isOnline: boolean;
   isWalkIn: boolean;
   items: OrderItem[];
+  paymentMethod?: PaymentMethod;
   cashReceived?: number;
   changeDue?: number;
+  gcashRef?: string;
+  proofUrl?: string;
 };
 
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
@@ -65,6 +70,8 @@ const Icon = {
   layers: (<svg width="18" height="18" viewBox="0 0 24 24" {...svgProps}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>),
   chevronDown: (<svg width="11" height="11" viewBox="0 0 24 24" {...svgProps} strokeWidth={2.5}><polyline points="6 9 12 15 18 9"/></svg>),
   chevronUp: (<svg width="11" height="11" viewBox="0 0 24 24" {...svgProps} strokeWidth={2.5}><polyline points="18 15 12 9 6 15"/></svg>),
+  image: (<svg width="14" height="14" viewBox="0 0 24 24" {...svgProps}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>),
+  hash: (<svg width="14" height="14" viewBox="0 0 24 24" {...svgProps}><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>),
   emptyState: (<svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#a9d3b1" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 12"/></svg>),
 };
 
@@ -106,6 +113,12 @@ const backendStatus: Record<OrderStatus, string> = {
 
 const ACTIVE_STATUSES: OrderStatus[] = ["Pending", "Processing", "Out for Delivery"];
 
+// Payment method badge colours
+const methodStyle: Record<PaymentMethod, { bg: string; color: string; border: string }> = {
+  Cash:  { bg: GREEN_LIGHT, color: GREEN,     border: "#b7dcbd" },
+  GCash: { bg: "#eff6ff",   color: "#1d4ed8", border: "#bfdbfe" },
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 /** Peso amount with 2 decimals, e.g. 12493.6 -> "12,493.60" */
 const peso = (n: number) =>
@@ -121,9 +134,26 @@ function normalizeOrder(o: Record<string, unknown>): Order {
   const walkInName    = o.walkInName ? String(o.walkInName) : "";
   const walkInAddress = o.walkInAddress ? String(o.walkInAddress) : "";
 
+  // ── Payment ────────────────────────────────────────────────────────────────
+  // NOTE: field names below are best guesses — adjust to match your backend.
   const payment = o.payment as Record<string, unknown> | null;
   const cashReceived = payment?.cashReceived ?? payment?.amountReceived ?? payment?.tendered;
   const changeRaw    = payment?.change ?? payment?.changeAmount ?? payment?.changeDue;
+
+  const methodRaw = String(
+    payment?.method ?? payment?.paymentMethod ?? o.paymentMethod ?? ""
+  ).toUpperCase();
+
+  const paymentMethod: PaymentMethod | undefined = methodRaw.includes("GCASH")
+    ? "GCash"
+    : methodRaw.includes("CASH")
+    ? "Cash"
+    : cashReceived !== undefined && cashReceived !== null
+    ? "Cash"
+    : undefined;
+
+  const gcashRef = payment?.referenceNumber ?? payment?.referenceNo ?? payment?.gcashReference ?? payment?.reference;
+  const proofUrl = payment?.proofUrl ?? payment?.screenshotUrl ?? payment?.proofImage ?? payment?.receiptImage;
 
   return {
     id: String(o.id ?? ""),
@@ -147,10 +177,13 @@ function normalizeOrder(o: Record<string, unknown>): Order {
         price: Number(l.price ?? 0),
       };
     }),
+    paymentMethod,
     cashReceived:
       cashReceived !== undefined && cashReceived !== null ? Number(cashReceived) : undefined,
     changeDue:
       changeRaw !== undefined && changeRaw !== null ? Number(changeRaw) : undefined,
+    gcashRef: gcashRef ? String(gcashRef) : undefined,
+    proofUrl: proofUrl ? String(proofUrl) : undefined,
   };
 }
 
@@ -202,6 +235,7 @@ export default function PendingPage() {
   const [expandedId,  setExpandedId]  = useState<string | null>(null);
   const [updatingId,  setUpdatingId]  = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [proofModal,  setProofModal]  = useState<string | null>(null); // GCash screenshot URL
 
   const socket = useSocket();
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
@@ -259,6 +293,14 @@ export default function PendingPage() {
     };
   }, [socket, fetchOrders]);
 
+  // Close the screenshot viewer with Escape
+  useEffect(() => {
+    if (!proofModal) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setProofModal(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [proofModal]);
+
   const updateStatus = async (id: string, status: OrderStatus) => {
     const previous = orders.find((o) => o.id === id)?.status;
     setUpdatingId(id);
@@ -295,6 +337,7 @@ export default function PendingPage() {
       <style>{`
         @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
         @keyframes livePulse { 0%{box-shadow:0 0 0 0 rgba(46,125,62,0.45)} 70%{box-shadow:0 0 0 6px rgba(46,125,62,0)} 100%{box-shadow:0 0 0 0 rgba(46,125,62,0)} }
+        @keyframes fadeIn { from{opacity:0} to{opacity:1} }
         .btn-outline:hover { background: ${GREEN_TINT} !important; border-color: ${GREEN} !important; }
         .order-card { transition: box-shadow 0.18s, border-color 0.18s, transform 0.18s; }
         .order-card:hover { box-shadow: 0 8px 24px rgba(31,95,45,0.10); border-color: #b7dcbd !important; }
@@ -303,6 +346,7 @@ export default function PendingPage() {
         .act-green:hover:not(:disabled) { background: ${GREEN_DARK} !important; }
         .act-red:hover:not(:disabled) { background: #fee2e2 !important; }
         .act-amber:hover:not(:disabled) { background: #b45309 !important; }
+        .proof-thumb:hover { border-color: #1d4ed8 !important; }
         .pending-page button:focus-visible { outline: 2px solid ${GREEN}; outline-offset: 2px; }
       `}</style>
 
@@ -417,6 +461,17 @@ export default function PendingPage() {
 
               const sub = order.items.reduce((acc, i) => acc + i.price * i.qty, 0);
               const vat = sub * 0.12;
+              const grandTotal = sub + vat;
+
+              // Cash: what the cashier hands back
+              const change =
+                order.cashReceived !== undefined
+                  ? order.changeDue ?? Math.max(order.cashReceived - grandTotal, 0)
+                  : undefined;
+              const shortBy =
+                order.cashReceived !== undefined && order.cashReceived < grandTotal - 0.005
+                  ? grandTotal - order.cashReceived
+                  : 0;
 
               return (
                 <div key={order.id} className="order-card" style={{ background: "#fff", borderRadius: "14px", border: `1px solid ${GREEN_BORDER}`, overflow: "hidden" }}>
@@ -476,20 +531,88 @@ export default function PendingPage() {
                       <div style={{ borderTop: `1px solid ${GREEN_BORDER}`, margin: "9px 0" }} />
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                         <span style={{ fontSize: "13px", fontWeight: 600, color: INK }}>Total</span>
-                        <span style={{ fontSize: "20px", fontWeight: 800, color: GREEN, letterSpacing: "-0.02em" }}>₱{peso(sub + vat)}</span>
+                        <span style={{ fontSize: "20px", fontWeight: 800, color: GREEN, letterSpacing: "-0.02em" }}>₱{peso(grandTotal)}</span>
                       </div>
-                      {order.cashReceived !== undefined && (
-                        <>
-                          <div style={{ borderTop: `1px dashed #bcd7c1`, margin: "9px 0" }} />
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: MUTED, padding: "2px 0" }}>
-                            <span>Cash</span>
-                            <span>₱{peso(order.cashReceived)}</span>
+                    </div>
+
+                    {/* Payment */}
+                    <div style={{ background: "#fff", borderRadius: "12px", border: `1px solid ${GREEN_BORDER}`, padding: "13px 15px", marginBottom: "12px" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: order.paymentMethod ? "10px" : 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", color: GREEN }}>
+                          {Icon.wallet}
+                          <p style={{ fontSize: "11px", fontWeight: 700, margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>Payment</p>
+                        </div>
+                        {order.paymentMethod ? (
+                          <span style={{
+                            padding: "2px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700,
+                            background: methodStyle[order.paymentMethod].bg,
+                            color:      methodStyle[order.paymentMethod].color,
+                            border:     `1px solid ${methodStyle[order.paymentMethod].border}`,
+                          }}>
+                            {order.paymentMethod}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: "12px", color: FAINT }}>Not specified</span>
+                        )}
+                      </div>
+
+                      {/* Cash: amount given + change to return */}
+                      {order.paymentMethod === "Cash" && (
+                        order.cashReceived !== undefined ? (
+                          <>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: MUTED, padding: "2px 0" }}>
+                              <span>Customer gave</span>
+                              <span style={{ fontWeight: 600, color: INK }}>₱{peso(order.cashReceived)}</span>
+                            </div>
+                            <div style={{ borderTop: "1px dashed #bcd7c1", margin: "8px 0" }} />
+                            {shortBy > 0 ? (
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", color: "#b91c1c" }}>
+                                <span style={{ fontSize: "13px", fontWeight: 700 }}>Short by</span>
+                                <span style={{ fontSize: "18px", fontWeight: 800, letterSpacing: "-0.02em" }}>₱{peso(shortBy)}</span>
+                              </div>
+                            ) : (
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", color: GREEN }}>
+                                <span style={{ fontSize: "13px", fontWeight: 700 }}>Change to give</span>
+                                <span style={{ fontSize: "18px", fontWeight: 800, letterSpacing: "-0.02em" }}>₱{peso(change ?? 0)}</span>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <p style={{ fontSize: "12.5px", color: FAINT, margin: 0 }}>No cash amount recorded.</p>
+                        )
+                      )}
+
+                      {/* GCash: reference number + screenshot */}
+                      {order.paymentMethod === "GCash" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                          <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                            <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "#eff6ff", color: "#1d4ed8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{Icon.hash}</div>
+                            <div style={{ minWidth: 0 }}>
+                              <p style={{ fontSize: "11px", fontWeight: 600, color: FAINT, margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>Reference no.</p>
+                              <p style={{ fontSize: "14px", fontWeight: 700, fontFamily: "monospace", color: INK, margin: "1px 0 0", wordBreak: "break-all", letterSpacing: "0.02em" }}>
+                                {order.gcashRef ?? "—"}
+                              </p>
+                            </div>
                           </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: GREEN, fontWeight: 700, padding: "2px 0" }}>
-                            <span>Change</span>
-                            <span>₱{peso(order.changeDue ?? order.cashReceived - order.total)}</span>
+
+                          <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                            <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "#eff6ff", color: "#1d4ed8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{Icon.image}</div>
+                            <div style={{ minWidth: 0 }}>
+                              <p style={{ fontSize: "11px", fontWeight: 600, color: FAINT, margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Payment screenshot</p>
+                              {order.proofUrl ? (
+                                <button className="proof-thumb" onClick={() => setProofModal(order.proofUrl!)}
+                                  title="Click to enlarge"
+                                  style={{ padding: 0, border: `1px solid ${GREEN_BORDER}`, borderRadius: "10px", overflow: "hidden", cursor: "zoom-in", background: GREEN_TINT, display: "block", transition: "border-color 0.15s" }}>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={order.proofUrl} alt="GCash payment screenshot"
+                                    style={{ display: "block", width: "96px", height: "128px", objectFit: "cover" }} />
+                                </button>
+                              ) : (
+                                <p style={{ fontSize: "12.5px", color: "#b91c1c", margin: 0 }}>No screenshot uploaded.</p>
+                              )}
+                            </div>
                           </div>
-                        </>
+                        </div>
                       )}
                     </div>
 
@@ -554,6 +677,23 @@ export default function PendingPage() {
           </div>
         )}
       </div>
+
+      {/* GCash screenshot viewer */}
+      {proofModal && (
+        <div onClick={() => setProofModal(null)}
+          style={{ position: "fixed", inset: 0, background: "rgba(10,25,15,0.75)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "24px", animation: "fadeIn 0.15s" }}>
+          <div onClick={(e) => e.stopPropagation()}
+            style={{ position: "relative", maxWidth: "min(92vw, 520px)", maxHeight: "90vh", background: "#fff", borderRadius: "14px", padding: "12px", boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }}>
+            <button onClick={() => setProofModal(null)} aria-label="Close"
+              style={{ position: "absolute", top: "-12px", right: "-12px", width: "32px", height: "32px", borderRadius: "50%", border: "none", background: "#fff", color: INK, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 12px rgba(0,0,0,0.25)" }}>
+              {Icon.x}
+            </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={proofModal} alt="GCash payment screenshot"
+              style={{ display: "block", maxWidth: "100%", maxHeight: "calc(90vh - 24px)", borderRadius: "8px", objectFit: "contain", margin: "0 auto" }} />
+          </div>
+        </div>
+      )}
     </>
   );
 }
