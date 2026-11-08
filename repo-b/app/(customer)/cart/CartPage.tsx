@@ -24,8 +24,8 @@ type CartItem = {
 const VAT_RATE = 0.12;
 const GCASH_TIME_LIMIT_SECONDS = 5 * 60; // how long the customer has to finish the GCash form
 const GCASH_REF_LENGTH = 13;             // GCash reference numbers are 13 digits
-const GCASH_QR_SRC = "/gcash-qr.png";    // put your real QR image in /public/gcash-qr.png
-const GCASH_NUMBER = "0912 345 6789";
+const GCASH_QR_SRC = "/public/gcash-qr.png";    // put your real QR image in /public/gcash-qr.png
+const GCASH_NUMBER = "0936 960 2913";
 const GCASH_NAME = "Julieta Soft Drinks";
 
 const EMOJI_MAP: Record<string, string> = {
