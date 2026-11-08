@@ -421,7 +421,7 @@ export default function InventoryMonitoringPage() {
                   expired > 0 ? (
                     <button onClick={() => router.push(ADJUSTMENT_ROUTE)} className="writeoff-btn"
                       style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 13px", borderRadius: "8px", border: "none", background: "#b91c1c", color: "#fff", fontSize: "11.5px", fontWeight: 700, cursor: "pointer", transition: "background 0.15s" }}>
-                      Go to Inventory Adjustment ({expired})
+                      Go to Inventory Adjustment
                     </button>
                   ) : undefined
                 }
