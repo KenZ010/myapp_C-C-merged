@@ -430,7 +430,7 @@ export default function AccountManagementPage() {
           </div>
           <p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide mt-3">JULIETA SOFTDRINKS<br />STORE</p>
         </div>
-        <nav className="flex flex-col gap-1 flex-1 min-h-0 overflow-y-auto">
+        <nav className="flex flex-col gap-1">
           {navItems.map((item) => (
             <div key={item.label} onClick={() => navigate(item.label)}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${item.active ? "text-indigo-700 font-semibold" : "text-gray-400 hover:text-gray-600"}`}>

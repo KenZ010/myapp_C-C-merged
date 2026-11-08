@@ -567,7 +567,7 @@ export default function PromoManagementPage() {
           </div>
           <p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide mt-3">JULIETA SOFTDRINKS<br />STORE</p>
         </div>
-        <nav className="flex flex-col gap-1 flex-1 min-h-0 overflow-y-auto">
+        <nav className="flex flex-col gap-1">
           {navItems.map((item) => {
             const isActive = pathname === item.path;
             return (
