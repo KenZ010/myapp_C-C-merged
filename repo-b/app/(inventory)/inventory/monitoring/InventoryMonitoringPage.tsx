@@ -3,8 +3,8 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 
-// Where the Inventory Adjustment page lives in your app — change if your route differs
-const ADJUSTMENT_ROUTE = "/cashier/inventory-adjustment";
+// Where the Inventory Adjustment page lives in your app
+const ADJUSTMENT_ROUTE = "/inventory/adjustment";
 
 // ── Theme (same as the Cashier pages) ─────────────────────────────────────────
 const GREEN        = "#2e7d3e"; // primary
