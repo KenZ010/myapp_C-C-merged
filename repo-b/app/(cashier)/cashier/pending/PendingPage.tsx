@@ -134,26 +134,20 @@ function normalizeOrder(o: Record<string, unknown>): Order {
   const walkInName    = o.walkInName ? String(o.walkInName) : "";
   const walkInAddress = o.walkInAddress ? String(o.walkInAddress) : "";
 
-  // ── Payment ────────────────────────────────────────────────────────────────
-  // NOTE: field names below are best guesses — adjust to match your backend.
+  // ── Payment (matches the Prisma Payment model) ─────────────────────────────
   const payment = o.payment as Record<string, unknown> | null;
-  const cashReceived = payment?.cashReceived ?? payment?.amountReceived ?? payment?.tendered;
-  const changeRaw    = payment?.change ?? payment?.changeAmount ?? payment?.changeDue;
+  const cashReceived = payment?.amountTendered;   // FIX: real column name
+  const changeRaw    = payment?.change;
 
-  const methodRaw = String(
-    payment?.method ?? payment?.paymentMethod ?? o.paymentMethod ?? ""
-  ).toUpperCase();
+  const methodRaw = String(payment?.method ?? "").toUpperCase();
 
-  const paymentMethod: PaymentMethod | undefined = methodRaw.includes("GCASH")
-    ? "GCash"
-    : methodRaw.includes("CASH")
-    ? "Cash"
-    : cashReceived !== undefined && cashReceived !== null
-    ? "Cash"
-    : undefined;
+  const paymentMethod: PaymentMethod | undefined =
+    methodRaw === "GCASH" ? "GCash" :
+    methodRaw === "CASH"  ? "Cash"  :
+    undefined;
 
-  const gcashRef = payment?.referenceNumber ?? payment?.referenceNo ?? payment?.gcashReference ?? payment?.reference;
-  const proofUrl = payment?.proofUrl ?? payment?.screenshotUrl ?? payment?.proofImage ?? payment?.receiptImage;
+  const gcashRef = payment?.referenceNo;
+  const proofUrl = payment?.receiptImage;
 
   return {
     id: String(o.id ?? ""),
