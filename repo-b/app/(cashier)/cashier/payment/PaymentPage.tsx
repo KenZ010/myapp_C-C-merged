@@ -35,6 +35,12 @@ type ActiveCustomer = {
 
 // ── VAT (12%), added on top of the item subtotal ─────────────────────────────
 const VAT_RATE = 0.12;
+
+// ── GCash QR settings (same as the customer cart page) ───────────────────────
+const GCASH_QR_SRC = "/images/julietaqr.png";
+const GCASH_NUMBER = "0936 960 2913";
+const GCASH_NAME = "Julieta Soft Drinks";
+
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const money = (n: number) =>
   `₱${n.toLocaleString(undefined, {
@@ -49,6 +55,36 @@ const inputBase =
   "w-full box-border rounded-lg bg-white px-3.5 py-2.5 text-[13px] text-[#1a1a1a] outline-none font-sans";
 const labelCls = "mb-1.5 block text-xs font-medium text-[#555]";
 const errorCls = "mt-1 text-[11px] text-[#e53935]";
+
+// ── Placeholder QR (shown only if the QR image file is missing) ──────────────
+function PlaceholderQr({ size = 100 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 120 120"
+      className="mx-auto block"
+    >
+      <rect x="2" y="2" width="116" height="116" rx="8" fill="white" stroke="#6a1b9a" strokeWidth="3" />
+      {[[10, 10], [80, 10], [10, 80]].map(([x, y], i) => (
+        <g key={i}>
+          <rect x={x} y={y} width="30" height="30" rx="3" fill="#6a1b9a" />
+          <rect x={x + 5} y={y + 5} width="20" height="20" rx="2" fill="white" />
+          <rect x={x + 9} y={y + 9} width="12" height="12" rx="1" fill="#6a1b9a" />
+        </g>
+      ))}
+      {[
+        [50, 10], [56, 10], [62, 10], [50, 16], [62, 16], [50, 22], [58, 22], [62, 22],
+        [10, 50], [16, 50], [22, 50], [28, 50], [10, 62], [28, 62],
+        [50, 50], [58, 50], [66, 50], [50, 58], [62, 58], [50, 66], [58, 66],
+        [80, 50], [96, 50], [80, 58], [96, 58], [80, 66], [96, 66],
+        [50, 80], [58, 80], [50, 88], [62, 88], [54, 96], [66, 96],
+      ].map(([x, y], i) => (
+        <rect key={i} x={x} y={y} width="5" height="5" fill="#6a1b9a" />
+      ))}
+    </svg>
+  );
+}
 
 export default function PaymentPage() {
   const router = useRouter();
@@ -118,6 +154,7 @@ export default function PaymentPage() {
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
   const [receiptError, setReceiptError] = useState<string | null>(null);
+  const [qrFailed, setQrFailed] = useState(false);
 
   const [amountPaid, setAmountPaid] = useState("");
   const [completed, setCompleted] = useState(false);
@@ -737,36 +774,21 @@ export default function PaymentPage() {
                   📱 GCash Payment Details
                 </p>
                 <div className="mb-3.5 rounded-xl border border-[#e0c8ff] bg-white p-3.5 text-center">
-                  <svg
-                    width="100"
-                    height="100"
-                    viewBox="0 0 120 120"
-                    className="mx-auto block"
-                  >
-                    <rect x="2" y="2" width="116" height="116" rx="8" fill="white" stroke="#6a1b9a" strokeWidth="3" />
-                    <rect x="10" y="10" width="30" height="30" rx="3" fill="#6a1b9a" />
-                    <rect x="15" y="15" width="20" height="20" rx="2" fill="white" />
-                    <rect x="19" y="19" width="12" height="12" rx="1" fill="#6a1b9a" />
-                    <rect x="80" y="10" width="30" height="30" rx="3" fill="#6a1b9a" />
-                    <rect x="85" y="15" width="20" height="20" rx="2" fill="white" />
-                    <rect x="89" y="19" width="12" height="12" rx="1" fill="#6a1b9a" />
-                    <rect x="10" y="80" width="30" height="30" rx="3" fill="#6a1b9a" />
-                    <rect x="15" y="85" width="20" height="20" rx="2" fill="white" />
-                    <rect x="19" y="89" width="12" height="12" rx="1" fill="#6a1b9a" />
-                    {[
-                      [50, 10], [56, 10], [62, 10], [50, 16], [62, 16], [50, 22], [58, 22], [62, 22],
-                      [10, 50], [16, 50], [22, 50], [28, 50], [10, 62], [28, 62],
-                      [50, 50], [58, 50], [66, 50], [50, 58], [62, 58], [50, 66], [58, 66],
-                      [80, 50], [96, 50], [80, 58], [96, 58], [80, 66], [96, 66],
-                      [50, 80], [58, 80], [50, 88], [62, 88], [54, 96], [66, 96],
-                    ].map(([x, y], i) => (
-                      <rect key={i} x={x} y={y} width="5" height="5" fill="#6a1b9a" />
-                    ))}
-                  </svg>
+                  {qrFailed ? (
+                    <PlaceholderQr size={100} />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={GCASH_QR_SRC}
+                      alt="GCash QR code"
+                      onError={() => setQrFailed(true)}
+                      className="mx-auto block h-[180px] w-[180px] object-contain"
+                    />
+                  )}
                   <p className="mt-2 text-xs font-bold text-[#6a1b9a]">
-                    Julieta Soft Drinks
+                    {GCASH_NAME}
                   </p>
-                  <p className="text-[11px] text-[#aaa]">GCash: 0912 345 6789</p>
+                  <p className="text-[11px] text-[#aaa]">GCash: {GCASH_NUMBER}</p>
                   <p className="mt-1.5 text-base font-bold text-[#1a3c2e]">
                     Amount to Pay: {money(total)}
                   </p>
