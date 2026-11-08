@@ -679,7 +679,7 @@ export default function DashboardPage() {
             <div className="md:col-span-5 bg-white rounded-2xl p-4 shadow-sm flex flex-col">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-bold text-gray-800">Sales Report</h2>
-                <button onClick={() => router.push("/sales")}
+                <button onClick={() => router.push("/admin/sales")}
                   className="flex items-center gap-1 text-xs border border-gray-300 rounded-full px-3 py-1 text-gray-500 hover:bg-gray-50 hover:border-indigo-300 hover:text-indigo-500 transition-colors">
                   <BarChart3 className="w-3 h-3" /> Details
                 </button>
@@ -784,7 +784,7 @@ export default function DashboardPage() {
             <div className="md:col-span-4 bg-white rounded-2xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-bold text-gray-800">Top 3 Selling Items</h2>
-                <button onClick={() => router.push("/inventory")}
+                <button onClick={() => router.push("/admin/inventory")}
                   className="flex items-center gap-1 text-xs border border-gray-300 rounded-full px-3 py-1 text-gray-500 hover:bg-gray-50 hover:border-indigo-300 hover:text-indigo-500 transition-colors">
                   <ShoppingCart className="w-3 h-3" /> View Inventory
                 </button>
@@ -851,7 +851,7 @@ export default function DashboardPage() {
                     </div>
                   ))}
                   {customers.length > 6 && (
-                    <button onClick={() => router.push("/account")} className="text-xs text-indigo-600 hover:underline mt-1 text-left">
+                    <button onClick={() => router.push("/admin/account")} className="text-xs text-indigo-600 hover:underline mt-1 text-left">
                       See all {customers.length} customers →
                     </button>
                   )}
@@ -868,7 +868,7 @@ export default function DashboardPage() {
                 <h2 className="font-bold text-gray-800">Supplier Information</h2>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-400">{suppliers.length} total</span>
-                  <button onClick={() => router.push("/supplier")}
+                  <button onClick={() => router.push("/admin/supplier")}
                     className="text-xs border border-gray-300 rounded-full px-3 py-1 text-gray-500 hover:bg-gray-50 hover:border-indigo-300 hover:text-indigo-500 transition-colors">
                     See more
                   </button>
@@ -905,7 +905,7 @@ export default function DashboardPage() {
                 </tbody>
               </table>
               {suppliers.length > 5 && (
-                <button onClick={() => router.push("/supplier")} className="mt-3 text-xs text-indigo-600 hover:underline">
+                <button onClick={() => router.push("/admin/supplier")} className="mt-3 text-xs text-indigo-600 hover:underline">
                   See all {suppliers.length} suppliers →
                 </button>
               )}
@@ -961,7 +961,7 @@ export default function DashboardPage() {
             <div className="md:col-span-7 bg-white rounded-2xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-bold text-gray-800">Product Maintenance</h2>
-                <button onClick={() => router.push("/product")}
+                <button onClick={() => router.push("/admin/product")}
                   className="text-xs border border-gray-300 rounded-full px-3 py-1 text-gray-500 hover:bg-gray-50 hover:border-indigo-300 hover:text-indigo-500 transition-colors">
                   See more
                 </button>
@@ -1002,7 +1002,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-bold text-gray-800">Transaction Logs</h2>
                 <button
-                  onClick={() => router.push("/sales")}
+                  onClick={() => router.push("/admin/sales")}
                   className="text-xs border border-gray-300 rounded-full px-3 py-1 text-gray-500 hover:bg-gray-50 hover:border-indigo-300 hover:text-indigo-500 transition-colors">
                   See more
                 </button>

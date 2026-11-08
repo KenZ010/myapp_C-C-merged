@@ -215,15 +215,18 @@ export default function AccountManagementPage() {
   }, []);
 
   const navigate = (label: string) => {
-    if (label === "Dashboard") router.push("/dashboard");
-    if (label === "Inventory Maintenance") router.push("/inventory");
-    if (label === "Supplier Maintenance") router.push("/supplier");
-    if (label === "Sales Reports") router.push("/sales");
-    if (label === "Product Management") router.push("/product");
-    if (label === "Account Management") router.push("/account");
-    if (label === "Purchase Order") router.push("/purchase-order");
-    if (label === "Loss Report") router.push("/loss-report");
-    if (label === "Promo Management") router.push("/promo");
+    const routes: Record<string, string> = {
+      "Dashboard": "/admin/dashboard",
+      "Inventory Maintenance": "/admin/inventory",
+      "Supplier Maintenance": "/admin/supplier",
+      "Sales Reports": "/admin/sales",
+      "Product Management": "/admin/product",
+      "Account Management": "/admin/account",
+      "Purchase Order": "/admin/purchase-order",
+      "Loss Report": "/admin/loss-report",
+      "Promo Management": "/admin/promo",
+    };
+    if (routes[label]) router.push(routes[label]);
     setShowMobileMenu(false);
   };
 
