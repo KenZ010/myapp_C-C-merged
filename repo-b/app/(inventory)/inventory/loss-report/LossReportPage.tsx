@@ -394,14 +394,15 @@ export default function LossReportPage() {
         {/* Summary Cards */}
         <div className="grid gap-3.5 mb-6" style={{ gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", animation:"fadeUp 0.45s ease" }}>
           {[
-            { label:"Total Records",   value:String(totalRecords),                              icon:Icons.box,     accent:"text-[#2e7d3e]", bg:"bg-[#e8f5ea]" },
-            { label:"Total Qty Lost",  value:String(totalQty),                                  icon:Icons.warning, accent:"text-[#3f9a52]", bg:"bg-[#e8f5ea]" },
-            { label:"Expired",         value:String(bySummary("EXPIRED")?._count?.id ?? 0),     icon:Icons.warning, accent:"text-[#476b1c]", bg:"bg-[#eef6dc]" },
-            { label:"Damaged",         value:String(bySummary("DAMAGED")?._count?.id ?? 0),     icon:Icons.box,     accent:"text-[#1f5f2d]", bg:"bg-[#e8f5ea]" },
-            { label:"Theft",           value:String(bySummary("THEFT")?._count?.id ?? 0),       icon:Icons.warning, accent:"text-[#dc2626]", bg:"bg-[#fef2f2]" },
-            { label:"Count Error",     value:String(bySummary("COUNT_ERROR")?._count?.id ?? 0), icon:Icons.box,     accent:"text-[#0f6b5e]", bg:"bg-[#e0f2ee]" },
+            { label:"Total Records",   value:String(totalRecords),                              icon:Icons.box,     accent:"text-[#2563eb]", bg:"bg-[#eff6ff]", border:"border-[#bfdbfe]", bar:"bg-[#2563eb]" },
+            { label:"Total Qty Lost",  value:String(totalQty),                                  icon:Icons.warning, accent:"text-[#7c3aed]", bg:"bg-[#f5f3ff]", border:"border-[#ddd6fe]", bar:"bg-[#7c3aed]" },
+            { label:"Expired",         value:String(bySummary("EXPIRED")?._count?.id ?? 0),     icon:Icons.warning, accent:"text-[#b45309]", bg:"bg-[#fef3c7]", border:"border-[#fde68a]", bar:"bg-[#b45309]" },
+            { label:"Damaged",         value:String(bySummary("DAMAGED")?._count?.id ?? 0),     icon:Icons.box,     accent:"text-[#c2410c]", bg:"bg-[#ffedd5]", border:"border-[#fed7aa]", bar:"bg-[#c2410c]" },
+            { label:"Theft",           value:String(bySummary("THEFT")?._count?.id ?? 0),       icon:Icons.warning, accent:"text-[#dc2626]", bg:"bg-[#fef2f2]", border:"border-[#fecaca]", bar:"bg-[#dc2626]" },
+            { label:"Count Error",     value:String(bySummary("COUNT_ERROR")?._count?.id ?? 0), icon:Icons.box,     accent:"text-[#0f766e]", bg:"bg-[#ccfbf1]", border:"border-[#99f6e4]", bar:"bg-[#0f766e]" },
           ].map((s) => (
-            <div key={s.label} className="bg-white rounded-xl border border-[#e3efe6] p-[17px] flex items-center gap-3">
+            <div key={s.label} className={`bg-white rounded-xl border ${s.border} p-[17px] pl-[21px] flex items-center gap-3 relative overflow-hidden`}>
+              <span className={`absolute left-0 top-0 bottom-0 w-1 ${s.bar}`} />
               <div className={`w-9 h-9 rounded-xl ${s.bg} flex items-center justify-center ${s.accent} flex-shrink-0`}>{s.icon}</div>
               <div>
                 <p className="text-[10.5px] font-semibold text-[#8fa596] m-0 uppercase tracking-wide">{s.label}</p>
