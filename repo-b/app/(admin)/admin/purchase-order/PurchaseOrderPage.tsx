@@ -443,7 +443,6 @@ export default function PurchaseOrderPage() {
   const pathname = usePathname();
 
   const [activeTab,      setActiveTab]      = useState<Tab>("create");
-  const [showUserMenu,   setShowUserMenu]   = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [deliveries,     setDeliveries]     = useState<Delivery[]>([]);
   const [loading,        setLoading]        = useState(true);
@@ -880,6 +879,12 @@ export default function PurchaseOrderPage() {
             );
           })}
         </nav>
+        <button onClick={handleLogout} className="mt-auto flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          Log Out
+        </button>
       </aside>
 
       <main className="flex-1 flex flex-col overflow-auto">
@@ -899,21 +904,13 @@ export default function PurchaseOrderPage() {
               <span className="text-xs text-green-600 font-medium">Online</span>
             </div>
             <div className="relative">
-              <button onClick={() => setShowUserMenu(!showUserMenu)}
-                className={`flex items-center gap-2 px-2 py-1.5 rounded-xl transition-colors ${showUserMenu ? "bg-indigo-50 ring-2 ring-indigo-300" : "hover:bg-gray-100"}`}>
+              <div className="flex items-center gap-2 px-2 py-1.5">
                 <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-semibold text-sm md:text-base">R</div>
                 <div className="hidden md:block text-left">
                   <p className="text-sm font-semibold text-gray-800">Ray Teodoro</p>
                   <p className="text-xs text-green-500">Admin</p>
                 </div>
-              </button>
-              {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-lg border border-gray-100 z-50">
-                  <button onClick={handleLogout} className="flex items-center gap-2 w-full px-4 py-3 text-sm text-red-500 hover:bg-red-50 rounded-xl">
-                    Log Out
-                  </button>
-                </div>
-              )}
+              </div>
             </div>
           </div>
         </header>
@@ -930,6 +927,9 @@ export default function PurchaseOrderPage() {
                 </div>
               );
             })}
+            <button onClick={handleLogout} className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 transition-colors">
+              Log Out
+            </button>
           </div>
         )}
 
