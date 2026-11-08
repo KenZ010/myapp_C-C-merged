@@ -7,18 +7,18 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ReturnRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
-type ReturnReason = "DIRTY_INTERIOR" | "REDUCED_SOFT_DRINK_CONTENT" | "DAMAGED";
+type ReturnReason = "WRONG_ITEM_SENT" | "DAMAGED" | "EXPIRED" | "OTHER";
 
 type ReturnRequestItem = {
   id: string;
   returnRequestId: string;
   orderLineId: string;
-  returnQty: number;
+  returnQty: number; // bottles / pieces the customer wants to return
   createdAt: string;
   orderLine: {
     id: string;
     quantity: number;
-    price: number;
+    price: number; // price of one CASE
     subtotal: number;
     product: {
       id: string;
@@ -26,6 +26,7 @@ type ReturnRequestItem = {
       size?: string;
       image?: string;
       category: string;
+      piecesPerCase?: number; // bottles per case
     };
   };
 };
@@ -182,16 +183,18 @@ const fmtDate = (d: string) =>
   new Date(d).toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" });
 
 const REASON_LABELS: Record<ReturnReason, string> = {
-  DIRTY_INTERIOR:              "Dirty Interior",
-  REDUCED_SOFT_DRINK_CONTENT: "Reduced Soft Drink Content",
-  DAMAGED:                     "Damaged",
+  WRONG_ITEM_SENT: "Wrong Item Sent",
+  DAMAGED:         "Damaged",
+  EXPIRED:         "Expired",
+  OTHER:           "Other",
 };
 
 // ── Colour helpers (green family — reasons are told apart by shade) ──────────
 const reasonClasses: Record<ReturnReason, string> = {
-  DIRTY_INTERIOR:              "bg-[#e8f5ea] text-[#1f5f2d] border-[#c3e0c8]",
-  REDUCED_SOFT_DRINK_CONTENT: "bg-[#eef6dc] text-[#476b1c] border-[#d7e6b4]",
-  DAMAGED:                     "bg-[#e0f2ee] text-[#0f6b5e] border-[#b5dfd6]",
+  WRONG_ITEM_SENT: "bg-[#e0f2ee] text-[#0f6b5e] border-[#b5dfd6]",
+  DAMAGED:         "bg-[#e8f5ea] text-[#1f5f2d] border-[#c3e0c8]",
+  EXPIRED:         "bg-[#eef6dc] text-[#476b1c] border-[#d7e6b4]",
+  OTHER:           "bg-[#f1f5f2] text-[#5f7a66] border-[#dbe5dd]",
 };
 
 // Safe lookups: older records in the database may still carry a reason that no longer exists here
@@ -318,7 +321,13 @@ export default function ReturnPage() {
     }
   };
 
-  const itemValue    = (item: ReturnRequestItem) => item.returnQty * (item.orderLine?.price ?? 0);
+  // Return quantities are in bottles; orderLine.price is the price of one CASE.
+  // Value per bottle = case price ÷ bottles per case (falls back to 1 if the field is missing).
+  const unitPrice = (item: ReturnRequestItem) => {
+    const perCase = item.orderLine?.product?.piecesPerCase || 1;
+    return (item.orderLine?.price ?? 0) / perCase;
+  };
+  const itemValue    = (item: ReturnRequestItem) => item.returnQty * unitPrice(item);
   const requestTotal = (r: ReturnRequest) => r.items.reduce((s, i) => s + itemValue(i), 0);
 
  const summary = [
@@ -424,7 +433,7 @@ export default function ReturnPage() {
 
           {/* Reason filter */}
           <div className="flex gap-0.5 bg-[#e8f5ea] rounded-xl p-1 flex-wrap">
-            {(["ALL", "DIRTY_INTERIOR", "REDUCED_SOFT_DRINK_CONTENT", "DAMAGED"] as const).map((r) => (
+            {(["ALL", "WRONG_ITEM_SENT", "DAMAGED", "EXPIRED", "OTHER"] as const).map((r) => (
               <button
                 key={r}
                 onClick={() => setReasonFil(r)}
@@ -702,13 +711,13 @@ export default function ReturnPage() {
                     ["Sale ID",    viewItem.saleId ?? "—"],
                     ["Sale Date",  viewItem.saleRecord?.saleDate
                                     ? fmtDate(viewItem.saleRecord.saleDate)
-                                    : (viewItem as Record<string, unknown>).sale
-                                      ? fmtDate(((viewItem as Record<string, unknown>).sale as Record<string, unknown>).saleDate as string)
+                                    : viewItem.sale?.saleDate
+                                      ? fmtDate(viewItem.sale.saleDate)
                                       : "—"],
                     ["Sale Total", viewItem.saleRecord?.totalAmount != null
                                     ? fmt(viewItem.saleRecord.totalAmount)
-                                    : (viewItem as Record<string, unknown>).sale
-                                      ? fmt(((viewItem as Record<string, unknown>).sale as Record<string, unknown>).totalAmount as number)
+                                    : viewItem.sale?.totalAmount != null
+                                      ? fmt(viewItem.sale.totalAmount)
                                       : "—"],
                   ].map(([l, v], i, arr) => (
                     <div key={l} className={`flex justify-between items-center gap-3 px-3.5 py-2.5 ${i < arr.length - 1 ? "border-b border-[#d6e8d9]" : ""}`}>
@@ -725,7 +734,7 @@ export default function ReturnPage() {
                 <div className="flex flex-col gap-2">
                   {viewItem.items.map((item) => {
                     const product = item.orderLine?.product;
-                    const price   = item.orderLine?.price ?? 0;
+                    const price   = unitPrice(item); // price per bottle
                     return (
                     <div key={item.id} className="bg-white rounded-xl px-3.5 py-3 border border-[#d6e8d9] flex items-center gap-3">
                       {product?.image ? (
@@ -743,7 +752,7 @@ export default function ReturnPage() {
                       </div>
                       <div className="text-right">
                         <p className="text-[13px] font-extrabold text-[#2e7d3e] m-0">{fmt(item.returnQty * price)}</p>
-                        <p className="text-[11px] text-[#8fa596] m-0 mt-0.5">{item.returnQty} × {fmt(price)}</p>
+                        <p className="text-[11px] text-[#8fa596] m-0 mt-0.5">{item.returnQty} pcs × {fmt(price)}</p>
                       </div>
                     </div>
                     );
