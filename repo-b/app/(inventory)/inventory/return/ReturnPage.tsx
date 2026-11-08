@@ -53,12 +53,16 @@ type ReturnRequest = {
   saleRecord?: {
     id: string;
     totalAmount: number;
-    saleDate: string;
+    saleDate?: string;
+    createdAt?: string;
+    status?: string;
   } | null;
   sale?: {
     id: string;
     totalAmount: number;
-    saleDate: string;
+    saleDate?: string;
+    createdAt?: string;
+    status?: string;
   } | null;
   reviewer?: { id: string; name: string } | null;
   items: ReturnRequestItem[];
@@ -707,19 +711,16 @@ export default function ReturnPage() {
               <div>
                 <p className={labelCls}>Sale Reference</p>
                 <div className="bg-[#f4faf5] rounded-xl overflow-hidden border border-[#d6e8d9]">
-                  {[
-                    ["Sale ID",    viewItem.saleId ?? "—"],
-                    ["Sale Date",  viewItem.saleRecord?.saleDate
-                                    ? fmtDate(viewItem.saleRecord.saleDate)
-                                    : viewItem.sale?.saleDate
-                                      ? fmtDate(viewItem.sale.saleDate)
-                                      : "—"],
-                    ["Sale Total", viewItem.saleRecord?.totalAmount != null
-                                    ? fmt(viewItem.saleRecord.totalAmount)
-                                    : viewItem.sale?.totalAmount != null
-                                      ? fmt(viewItem.sale.totalAmount)
-                                      : "—"],
-                  ].map(([l, v], i, arr) => (
+                  {(() => {
+                    const sale     = viewItem.saleRecord ?? viewItem.sale ?? null;
+                    const saleDate = sale?.saleDate ?? sale?.createdAt;
+                    return [
+                      ["Sale ID",     viewItem.saleId ?? "—"],
+                      ["Sale Date",   saleDate ? fmtDate(saleDate) : "—"],
+                      ["Sale Total",  sale?.totalAmount != null ? fmt(sale.totalAmount) : "—"],
+                      ["Sale Status", sale?.status ? sale.status.replace(/_/g, " ") : "—"],
+                    ];
+                  })().map(([l, v], i, arr) => (
                     <div key={l} className={`flex justify-between items-center gap-3 px-3.5 py-2.5 ${i < arr.length - 1 ? "border-b border-[#d6e8d9]" : ""}`}>
                       <span className="text-[12px] text-[#8fa596]">{l}</span>
                       <span className={`text-[13px] font-semibold text-[#14301b] ${l === "Sale ID" ? "font-mono break-all text-right" : ""}`}>{v}</span>
@@ -747,7 +748,16 @@ export default function ReturnPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] font-bold text-[#14301b] m-0">{product?.productName ?? "—"}</p>
                         <p className="text-[11.5px] text-[#8fa596] m-0 mt-0.5">
-                          {[product?.size, product?.category].filter(Boolean).join(" · ") || "—"}
+                          {[
+                            product?.size ? `Bottle size: ${product.size}` : null,
+                            product?.category ?? null,
+                          ].filter(Boolean).join(" · ") || "—"}
+                        </p>
+                        <p className="text-[11px] text-[#8fa596] m-0 mt-0.5">
+                          {product?.piecesPerCase ? `${product.piecesPerCase} bottles per case` : "Bottles per case: —"}
+                          {item.orderLine?.quantity != null
+                            ? ` · Ordered: ${item.orderLine.quantity} case${item.orderLine.quantity !== 1 ? "s" : ""}`
+                            : ""}
                         </p>
                       </div>
                       <div className="text-right">
