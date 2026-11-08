@@ -24,7 +24,7 @@ type CartItem = {
 const VAT_RATE = 0.12;
 const GCASH_TIME_LIMIT_SECONDS = 5 * 60; 
 const GCASH_REF_LENGTH = 13;             
-const GCASH_QR_SRC = "/public/images/gcash-qr.png";    
+const GCASH_QR_SRC = "/public/images/julietaqr.png";    
 const GCASH_NUMBER = "0936 960 2913";
 const GCASH_NAME = "Julieta Soft Drinks";
 
