@@ -6,6 +6,7 @@ import Drawer from "@/components/Drawer";
 import { CartProvider } from "@/context/CartContext";
 import { toast } from "sonner";
 import { useSocket, useSocketActions } from "@/app/providers";
+import { api } from "@/lib/api";
 
 const pageTitles: Record<string, { title: string; sub: string }> = {
   "/home":          { title: "Dashboard",           sub: "Welcome back" },
@@ -37,16 +38,22 @@ const statusTitles: Record<string, string> = {
   COMPLETED:        "Order completed",
 };
 
-// Pull the real customer name out of the stored user object
+// Pull the real customer name out of the stored user object.
+// Checks customer.name first, then falls back to other common shapes.
 function extractName(user: any): string {
   if (!user || typeof user !== "object") return "";
-  const direct =
-    user.name ||
-    user.fullName ||
-    user.full_name ||
-    user.customerName ||
-    user.username;
-  if (typeof direct === "string" && direct.trim()) return direct.trim();
+
+  const candidates = [
+    user.customer?.name,   // { customer: { name } }
+    user.name,             // { name }
+    user.fullName,
+    user.full_name,
+    user.customerName,
+    user.username,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim()) return c.trim();
+  }
 
   const combined = `${user.firstName ?? user.first_name ?? ""} ${user.lastName ?? user.last_name ?? ""}`.trim();
   return combined;
@@ -70,24 +77,51 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => { connectSocket(); }, []);
 
-  // Load the real customer name from localStorage (safe parse)
+  // Load the customer's name: show the stored one instantly, then refresh it
+  // from the server (same source the Settings page uses).
   useEffect(() => {
-    const loadName = () => {
+    let cancelled = false;
+
+    const loadName = async () => {
+      let stored: any = null;
       try {
         const raw = localStorage.getItem("user");
-        const parsed = raw ? JSON.parse(raw) : null;
-        const name = extractName(parsed);
-        setCustomerName(name || "Guest");
-        if (!name) console.warn("[Layout] No name found in localStorage 'user':", parsed);
+        stored = raw ? JSON.parse(raw) : null;
       } catch {
-        setCustomerName("Guest");
+        stored = null;
+      }
+
+      // 1) whatever is already saved on this device
+      const localName = extractName(stored);
+      if (!cancelled) setCustomerName(localName || "Guest");
+
+      // 2) the real record from the backend (customer.name)
+      if (!stored?.id) return;
+      try {
+        const res = await api.getCustomer(stored.id);
+        const c = res?.customer ?? res;
+        const serverName = extractName(c);
+        if (cancelled || !serverName) return;
+
+        setCustomerName(serverName);
+        // remember it so the next page load shows it immediately
+        if (serverName !== stored.name) {
+          localStorage.setItem("user", JSON.stringify({ ...stored, name: serverName }));
+        }
+      } catch (err) {
+        console.warn("[Layout] Could not load customer name from the server:", err);
       }
     };
+
     loadName();
 
-    // Update if another tab / the settings page changes the stored user
-    window.addEventListener("storage", loadName);
-    return () => window.removeEventListener("storage", loadName);
+    // Update if another tab changes the stored user
+    const onStorage = () => { loadName(); };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("storage", onStorage);
+    };
   }, [pathname]);
 
   // Toast + bell entry whenever the cashier updates one of this customer's orders
