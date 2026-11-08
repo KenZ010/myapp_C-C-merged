@@ -3,6 +3,17 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "@/lib/api";
 
+// ── Theme (same green design as the other pages) ──────────────────────────────
+const GREEN        = "#2e7d3e"; // primary
+const GREEN_DARK   = "#1f5f2d"; // hover / emphasis
+const GREEN_MID    = "#3f9a52"; // lighter accent
+const GREEN_LIGHT  = "#e8f5ea"; // soft fills
+const GREEN_TINT   = "#f4faf5"; // panels / table headers
+const GREEN_BORDER = "#d6e8d9"; // borders
+const INK          = "#14301b"; // headings (green-tinted near-black)
+const MUTED        = "#5f7a66"; // secondary text
+const FAINT        = "#8fa596"; // labels / icons
+
 // ─── CASE UNIT SYSTEM ─────────────────────────────────────────────────────────
 type CaseUnit = "case_24" | "case_12" | "case_6" | "btl" | "pcs";
 
@@ -58,13 +69,64 @@ type ReceiveQty = {
   expiryDate: string; // must be non-empty before submission
 };
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
-const statusStyle: Record<POStatus, React.CSSProperties> = {
-  PENDING:            { background: "#fff9c4", color: "#f57f17" },
-  PARTIALLY_RECEIVED: { background: "#e3f2fd", color: "#1565c0" },
-  DELIVERED:          { background: "#e8f5e9", color: "#2e7d32" },
-  CANCELLED:          { background: "#ffebee", color: "#c62828" },
+// ─── SVG ICONS ────────────────────────────────────────────────────────────────
+const sp = {
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
 };
+
+const Icon = {
+  truck:      (<svg width="20" height="20" viewBox="0 0 24 24" {...sp} strokeWidth={1.8}><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>),
+  box:        (<svg width="16" height="16" viewBox="0 0 24 24" {...sp}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>),
+  receipt:    (<svg width="16" height="16" viewBox="0 0 24 24" {...sp}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>),
+  receiptLg:  (<svg width="20" height="20" viewBox="0 0 24 24" {...sp}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>),
+  building:   (<svg width="14" height="14" viewBox="0 0 24 24" {...sp}><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="9" y1="22" x2="9" y2="16"/><line x1="15" y1="22" x2="15" y2="16"/><line x1="9" y1="6" x2="9.01" y2="6"/><line x1="15" y1="6" x2="15.01" y2="6"/><line x1="9" y1="10" x2="9.01" y2="10"/><line x1="15" y1="10" x2="15.01" y2="10"/></svg>),
+  calendar:   (<svg width="14" height="14" viewBox="0 0 24 24" {...sp}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>),
+  search:     (<svg width="15" height="15" viewBox="0 0 24 24" {...sp}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>),
+  clock:      (<svg width="16" height="16" viewBox="0 0 24 24" {...sp}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>),
+  check:      (<svg width="14" height="14" viewBox="0 0 24 24" {...sp} strokeWidth={2.5}><polyline points="20 6 9 17 4 12"/></svg>),
+  checkCircle:(<svg width="18" height="18" viewBox="0 0 24 24" {...sp}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>),
+  alert:      (<svg width="14" height="14" viewBox="0 0 24 24" {...sp}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>),
+  alertLg:    (<svg width="24" height="24" viewBox="0 0 24 24" {...sp}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>),
+  x:          (<svg width="14" height="14" viewBox="0 0 24 24" {...sp} strokeWidth={2.5}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>),
+  xCircle:    (<svg width="18" height="18" viewBox="0 0 24 24" {...sp}><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>),
+  eye:        (<svg width="14" height="14" viewBox="0 0 24 24" {...sp}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>),
+  download:   (<svg width="14" height="14" viewBox="0 0 24 24" {...sp}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>),
+  refresh:    (<svg width="15" height="15" viewBox="0 0 24 24" {...sp}><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>),
+  plus:       (<svg width="14" height="14" viewBox="0 0 24 24" {...sp} strokeWidth={2.5}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>),
+  minus:      (<svg width="14" height="14" viewBox="0 0 24 24" {...sp} strokeWidth={2.5}><line x1="5" y1="12" x2="19" y2="12"/></svg>),
+  chevDown:   (<svg width="10" height="10" viewBox="0 0 24 24" {...sp} strokeWidth={2.5}><polyline points="6 9 12 15 18 9"/></svg>),
+  chevUp:     (<svg width="10" height="10" viewBox="0 0 24 24" {...sp} strokeWidth={2.5}><polyline points="18 15 12 9 6 15"/></svg>),
+  tag:        (<svg width="14" height="14" viewBox="0 0 24 24" {...sp}><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>),
+  pointer:    (<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#a9d3b1" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="M13 13l6 6"/></svg>),
+  emptyBox:   (<svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#a9d3b1" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>),
+};
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+const statusTheme: Record<POStatus, { bg: string; color: string; border: string; accent: string }> = {
+  PENDING:            { bg: "#fffbeb",   color: "#b45309",  border: "#fde68a", accent: "#d97706" },
+  PARTIALLY_RECEIVED: { bg: "#eff6ff",   color: "#1d4ed8",  border: "#bfdbfe", accent: "#2563eb" },
+  DELIVERED:          { bg: GREEN_LIGHT, color: GREEN_DARK, border: "#b7dcbd", accent: GREEN_MID },
+  CANCELLED:          { bg: "#fef2f2",   color: "#b91c1c",  border: "#fecaca", accent: "#dc2626" },
+};
+
+const statusIcons: Record<POStatus, React.ReactNode> = {
+  PENDING:            Icon.clock,
+  PARTIALLY_RECEIVED: Icon.box,
+  DELIVERED:          Icon.checkCircle,
+  CANCELLED:          Icon.xCircle,
+};
+
+const statusPill = (s: POStatus, size: "sm" | "md" = "md"): React.CSSProperties => ({
+  display: "inline-flex", alignItems: "center", gap: "5px",
+  padding: size === "sm" ? "3px 10px" : "4px 12px", borderRadius: "20px",
+  fontSize: size === "sm" ? "11px" : "11.5px", fontWeight: 600,
+  background: statusTheme[s].bg, color: statusTheme[s].color, border: `1px solid ${statusTheme[s].border}`,
+  whiteSpace: "nowrap",
+});
 
 const STATUS_LABEL: Record<POStatus, string> = {
   PENDING:            "Pending",
@@ -74,6 +136,94 @@ const STATUS_LABEL: Record<POStatus, string> = {
 };
 
 const ITEMS_PER_PAGE = 8;
+
+// ─── SHARED STYLES ────────────────────────────────────────────────────────────
+const card: React.CSSProperties = { background: "#fff", borderRadius: "14px", border: `1px solid ${GREEN_BORDER}` };
+const labelStyle: React.CSSProperties = {
+  fontSize: "11px", fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.5px",
+  display: "flex", alignItems: "center", gap: "6px", marginBottom: "6px",
+};
+const thStyle: React.CSSProperties = {
+  padding: "12px 16px", textAlign: "left", fontSize: "11px", fontWeight: 700, color: GREEN_DARK,
+  textTransform: "uppercase", letterSpacing: "0.06em", background: GREEN_TINT,
+  borderBottom: `1px solid ${GREEN_BORDER}`, whiteSpace: "nowrap",
+};
+const tdStyle: React.CSSProperties = {
+  padding: "13px 16px", fontSize: "13px", color: INK, borderBottom: `1px solid ${GREEN_LIGHT}`, verticalAlign: "middle",
+};
+const chip = (bg: string, color: string, border: string): React.CSSProperties => ({
+  display: "inline-flex", alignItems: "center", gap: "5px", background: bg, color, border: `1px solid ${border}`,
+  padding: "3px 10px", borderRadius: "20px", fontSize: "11.5px", fontWeight: 600, whiteSpace: "nowrap",
+});
+const shimmerBg: React.CSSProperties = {
+  background: "linear-gradient(90deg,#eef5ef 25%,#dfeae2 50%,#eef5ef 75%)",
+  backgroundSize: "200% 100%",
+  animation: "shimmer 1.4s infinite",
+};
+
+const CSS = `
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes toastIn { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
+  .btn-outline:hover:not(:disabled) { background: ${GREEN_TINT} !important; border-color: ${GREEN} !important; }
+  .btn-green:hover:not(:disabled) { background: ${GREEN_DARK} !important; }
+  .btn-red:hover:not(:disabled) { background: #fee2e2 !important; }
+  .btn-red-solid:hover:not(:disabled) { background: #be123c !important; }
+  .tab-btn:hover { color: ${GREEN_DARK} !important; }
+  .row-hover:hover { background: ${GREEN_TINT} !important; }
+  .po-card { transition: box-shadow 0.18s, border-color 0.18s; }
+  .po-card:hover { box-shadow: 0 8px 24px rgba(31,95,45,0.10); border-color: #b7dcbd !important; }
+  .green-input:focus { border-color: ${GREEN} !important; box-shadow: 0 0 0 3px rgba(46,125,62,0.14); outline: none; }
+  .po-page button:focus-visible { outline: 2px solid ${GREEN}; outline-offset: 2px; }
+`;
+
+// ─── PAGINATION (module level so it never remounts) ───────────────────────────
+function PaginationBar({
+  page, totalPages, setPage, total, label,
+}: { page: number; totalPages: number; setPage: (p: number) => void; total: number; label: string }) {
+  if (totalPages <= 1) return null;
+  const navBtn = (disabled: boolean): React.CSSProperties => ({
+    padding: "6px 12px", borderRadius: "8px", border: `1px solid ${GREEN_BORDER}`, background: "#fff",
+    fontSize: "12px", fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", color: MUTED, opacity: disabled ? 0.4 : 1,
+  });
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "16px", flexWrap: "wrap", gap: "8px" }}>
+      <p style={{ fontSize: "12px", color: MUTED, margin: 0 }}>
+        Showing {(page - 1) * ITEMS_PER_PAGE + 1}–{Math.min(page * ITEMS_PER_PAGE, total)} of {total} {label}
+      </p>
+      <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+        <button className="btn-outline" onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} style={navBtn(page === 1)}>← Prev</button>
+        {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+          <button key={p} onClick={() => setPage(p)}
+            style={{ padding: "6px 11px", borderRadius: "8px", border: page === p ? `1px solid ${GREEN}` : `1px solid ${GREEN_BORDER}`, background: page === p ? GREEN : "#fff", color: page === p ? "#fff" : MUTED, fontSize: "12px", cursor: "pointer", fontWeight: 700, boxShadow: page === p ? "0 2px 8px rgba(46,125,62,0.3)" : "none" }}>{p}</button>
+        ))}
+        <button className="btn-outline" onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages} style={navBtn(page === totalPages)}>Next →</button>
+      </div>
+    </div>
+  );
+}
+
+function ModalHeader({ icon, title, subtitle, onClose, right }: { icon?: React.ReactNode; title: string; subtitle?: string; onClose?: () => void; right?: React.ReactNode }) {
+  return (
+    <div style={{ background: `linear-gradient(135deg, ${GREEN}, ${GREEN_DARK})`, padding: "20px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+        {icon && (
+          <div style={{ width: "40px", height: "40px", borderRadius: "12px", background: "rgba(255,255,255,0.18)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{icon}</div>
+        )}
+        <div style={{ minWidth: 0 }}>
+          <p style={{ fontSize: "16px", fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.01em" }}>{title}</p>
+          {subtitle && <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.75)", margin: "2px 0 0", fontFamily: subtitle.length > 20 ? "monospace" : "inherit", wordBreak: "break-all" }}>{subtitle}</p>}
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
+        {right}
+        {onClose && (
+          <button onClick={onClose} aria-label="Close" style={{ background: "rgba(255,255,255,0.18)", border: "none", borderRadius: "50%", width: "32px", height: "32px", cursor: "pointer", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>{Icon.x}</button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function PurchaseOrderPage() {
@@ -302,64 +452,46 @@ export default function PurchaseOrderPage() {
     a.click();
   };
 
-  const PaginationBar = ({
-    page, totalPages, setPage, total, label,
-  }: { page: number; totalPages: number; setPage: (p: number) => void; total: number; label: string }) =>
-    totalPages <= 1 ? null : (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "16px", flexWrap: "wrap", gap: "8px" }}>
-        <p style={{ fontSize: "12px", color: "#888" }}>
-          Showing {(page - 1) * ITEMS_PER_PAGE + 1}–{Math.min(page * ITEMS_PER_PAGE, total)} of {total} {label}
-        </p>
-        <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
-          <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}
-            style={{ padding: "5px 12px", borderRadius: "8px", border: "1px solid #e0e0e0", background: "#fff", fontSize: "12px", cursor: page === 1 ? "not-allowed" : "pointer", color: "#555", opacity: page === 1 ? 0.4 : 1 }}>← Prev</button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-            <button key={p} onClick={() => setPage(p)}
-              style={{ padding: "5px 10px", borderRadius: "8px", border: page === p ? "none" : "1px solid #e0e0e0", background: page === p ? "#1a3c2e" : "#fff", color: page === p ? "#fff" : "#555", fontSize: "12px", cursor: "pointer", fontWeight: page === p ? 700 : 400 }}>{p}</button>
-          ))}
-          <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages}
-            style={{ padding: "5px 12px", borderRadius: "8px", border: "1px solid #e0e0e0", background: "#fff", fontSize: "12px", cursor: page === totalPages ? "not-allowed" : "pointer", color: "#555", opacity: page === totalPages ? 0.4 : 1 }}>Next →</button>
-        </div>
-      </div>
-    );
+  const tabs: { key: POStep; label: string; icon: React.ReactNode; badge?: number }[] = [
+    { key: "receiving", label: "Receiving",  icon: Icon.box,   badge: pendingDeliveries.length },
+    { key: "history",   label: "PO History", icon: Icon.clock },
+  ];
 
   return (
-    <div style={{ padding: "28px" }}>
+    <div className="po-page" style={{ padding: "28px 32px", width: "100%", boxSizing: "border-box" }}>
+      <style>{CSS}</style>
 
       {/* ── Receipt Number Modal ── */}
       {receiptModal.show && (
         <>
           <div onClick={() => setReceiptModal({ show: false, delivery: null, receiptNumber: "", error: "" })}
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 40 }} />
-          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 50, background: "#fff", borderRadius: "20px", width: "min(92vw, 400px)", boxShadow: "0 20px 60px rgba(0,0,0,0.18)", overflow: "hidden" }}>
-            <div style={{ background: "linear-gradient(135deg, #1a3c2e 0%, #2e7d32 100%)", padding: "22px 24px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <div style={{ width: "40px", height: "40px", borderRadius: "12px", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", flexShrink: 0 }}>🧾</div>
-                <div>
-                  <p style={{ fontSize: "16px", fontWeight: 800, color: "#fff" }}>Supplier Receipt Number</p>
-                  <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.65)" }}>{receiptModal.delivery?.supplier?.supplierName || ""}</p>
-                </div>
-              </div>
-            </div>
+            style={{ position: "fixed", inset: 0, background: "rgba(10,30,15,0.55)", zIndex: 40, backdropFilter: "blur(2px)" }} />
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 50, background: "#fff", borderRadius: "18px", width: "min(92vw, 400px)", boxShadow: "0 24px 70px rgba(10,30,15,0.3)", overflow: "hidden", border: `1px solid ${GREEN_BORDER}` }}>
+            <ModalHeader icon={Icon.receiptLg} title="Supplier Receipt Number" subtitle={receiptModal.delivery?.supplier?.supplierName || ""} />
             <div style={{ padding: "24px" }}>
-              <p style={{ fontSize: "13px", color: "#555", marginBottom: "16px", lineHeight: "1.6" }}>
-                Please enter the <strong>receipt or delivery note number</strong> provided by the supplier.
+              <p style={{ fontSize: "13px", color: MUTED, margin: "0 0 16px", lineHeight: 1.6 }}>
+                Please enter the <strong style={{ color: INK }}>receipt or delivery note number</strong> provided by the supplier.
               </p>
-              <label style={{ fontSize: "12px", fontWeight: 700, color: "#555", display: "block", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Receipt / DR Number *</label>
+              <label style={labelStyle}>Receipt / DR Number *</label>
               <input
                 type="text" value={receiptModal.receiptNumber}
                 onChange={(e) => setReceiptModal((m) => ({ ...m, receiptNumber: e.target.value, error: "" }))}
                 onKeyDown={(e) => e.key === "Enter" && handleReceiptConfirm()}
                 placeholder="e.g. DR-2024-00123" autoFocus
-                style={{ width: "100%", padding: "12px 16px", borderRadius: "12px", border: receiptModal.error ? "1.5px solid #e53935" : "1.5px solid #e0e0e0", fontSize: "15px", fontWeight: 600, outline: "none", color: "#1a1a1a", background: "#fff", boxSizing: "border-box", fontFamily: "monospace" }}
+                className="green-input"
+                style={{ width: "100%", padding: "12px 16px", borderRadius: "10px", border: receiptModal.error ? "1px solid #ef4444" : `1px solid ${GREEN_BORDER}`, fontSize: "15px", fontWeight: 600, color: INK, background: "#fff", boxSizing: "border-box", fontFamily: "monospace" }}
               />
-              {receiptModal.error && <p style={{ fontSize: "12px", color: "#e53935", marginTop: "6px" }}>⚠️ {receiptModal.error}</p>}
-              <div style={{ height: "1px", background: "#f0f0f0", margin: "20px 0" }} />
+              {receiptModal.error && (
+                <p style={{ fontSize: "12px", color: "#b91c1c", margin: "8px 0 0", display: "flex", alignItems: "center", gap: "6px", fontWeight: 600 }}>{Icon.alert} {receiptModal.error}</p>
+              )}
+              <div style={{ height: "1px", background: GREEN_LIGHT, margin: "20px 0" }} />
               <div style={{ display: "flex", gap: "10px" }}>
-                <button onClick={() => setReceiptModal({ show: false, delivery: null, receiptNumber: "", error: "" })}
-                  style={{ flex: 1, padding: "11px", borderRadius: "14px", border: "1.5px solid #e0e0e0", background: "#fff", color: "#555", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-                <button onClick={handleReceiptConfirm}
-                  style={{ flex: 2, padding: "11px", borderRadius: "14px", border: "none", background: "#1a3c2e", color: "#fff", fontSize: "14px", fontWeight: 700, cursor: "pointer" }}>📦 Proceed to Receive</button>
+                <button className="btn-outline" onClick={() => setReceiptModal({ show: false, delivery: null, receiptNumber: "", error: "" })}
+                  style={{ flex: 1, padding: "11px", borderRadius: "10px", border: `1px solid ${GREEN_BORDER}`, background: "#fff", color: MUTED, fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>Cancel</button>
+                <button className="btn-green" onClick={handleReceiptConfirm}
+                  style={{ flex: 2, padding: "11px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "14px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", boxShadow: "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
+                  {Icon.box} Proceed to Receive
+                </button>
               </div>
             </div>
           </div>
@@ -370,15 +502,15 @@ export default function PurchaseOrderPage() {
       {confirmModal.show && (
         <>
           <div onClick={() => setConfirmModal({ show: false, message: "", onConfirm: () => {} })}
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 40 }} />
-          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 50, background: "#fff", borderRadius: "20px", width: "min(92vw, 360px)", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", padding: "28px", textAlign: "center" }}>
-            <p style={{ fontSize: "28px", marginBottom: "8px" }}>⚠️</p>
-            <p style={{ fontSize: "14px", color: "#555", marginBottom: "20px" }}>{confirmModal.message}</p>
+            style={{ position: "fixed", inset: 0, background: "rgba(10,30,15,0.55)", zIndex: 40, backdropFilter: "blur(2px)" }} />
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 50, background: "#fff", borderRadius: "18px", width: "min(92vw, 360px)", boxShadow: "0 24px 70px rgba(10,30,15,0.3)", padding: "28px", textAlign: "center", border: `1px solid ${GREEN_BORDER}` }}>
+            <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: "#fef2f2", color: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>{Icon.alertLg}</div>
+            <p style={{ fontSize: "14px", color: INK, margin: "0 0 20px", fontWeight: 500, lineHeight: 1.5 }}>{confirmModal.message}</p>
             <div style={{ display: "flex", gap: "10px" }}>
-              <button onClick={() => setConfirmModal({ show: false, message: "", onConfirm: () => {} })}
-                style={{ flex: 1, padding: "10px", borderRadius: "12px", border: "1.5px solid #e0e0e0", background: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", color: "#555" }}>Cancel</button>
-              <button onClick={confirmModal.onConfirm}
-                style={{ flex: 1, padding: "10px", borderRadius: "12px", border: "none", background: "#e53935", fontSize: "13px", fontWeight: 700, cursor: "pointer", color: "#fff" }}>Confirm</button>
+              <button className="btn-outline" onClick={() => setConfirmModal({ show: false, message: "", onConfirm: () => {} })}
+                style={{ flex: 1, padding: "11px", borderRadius: "10px", border: `1px solid ${GREEN_BORDER}`, background: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", color: MUTED, transition: "all 0.15s" }}>Cancel</button>
+              <button className="btn-red-solid" onClick={confirmModal.onConfirm}
+                style={{ flex: 1, padding: "11px", borderRadius: "10px", border: "none", background: "#e11d48", fontSize: "13px", fontWeight: 700, cursor: "pointer", color: "#fff", boxShadow: "0 4px 12px rgba(225,29,72,0.28)", transition: "background 0.15s" }}>Confirm</button>
             </div>
           </div>
         </>
@@ -386,25 +518,44 @@ export default function PurchaseOrderPage() {
 
       {/* ── Toast ── */}
       {toast && (
-        <div style={{ position: "fixed", bottom: "24px", right: "24px", zIndex: 60, background: "#4caf50", color: "#fff", padding: "12px 20px", borderRadius: "14px", boxShadow: "0 4px 20px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", gap: "8px", fontSize: "14px", fontWeight: 600 }}>
-          ✅ {toast}
+        <div style={{ position: "fixed", bottom: "24px", right: "24px", zIndex: 60, background: `linear-gradient(135deg, ${GREEN}, ${GREEN_DARK})`, color: "#fff", padding: "12px 20px", borderRadius: "12px", boxShadow: "0 8px 24px rgba(31,95,45,0.35)", display: "flex", alignItems: "center", gap: "10px", fontSize: "14px", fontWeight: 600, animation: "toastIn 0.2s ease" }}>
+          <span style={{ display: "flex", width: "22px", height: "22px", borderRadius: "50%", background: "rgba(255,255,255,0.22)", alignItems: "center", justifyContent: "center" }}>{Icon.check}</span>
+          {toast}
         </div>
       )}
 
+      {/* ── Page Header ── */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "26px", flexWrap: "wrap", gap: "16px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+          <div style={{ width: "44px", height: "44px", borderRadius: "12px", background: `linear-gradient(135deg, ${GREEN_MID}, ${GREEN_DARK})`, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", boxShadow: "0 4px 12px rgba(46,125,62,0.28)", flexShrink: 0 }}>
+            {Icon.truck}
+          </div>
+          <div>
+            <h1 style={{ fontSize: "22px", fontWeight: 700, color: INK, margin: 0, letterSpacing: "-0.02em" }}>Restocking</h1>
+            <p style={{ fontSize: "13px", color: MUTED, margin: "2px 0 0" }}>Receive supplier deliveries and track purchase orders</p>
+          </div>
+        </div>
+        <button className="btn-outline" onClick={fetchAll}
+          style={{ display: "flex", alignItems: "center", gap: "7px", padding: "9px 16px", borderRadius: "10px", fontSize: "13px", fontWeight: 600, cursor: "pointer", border: `1px solid ${GREEN_BORDER}`, background: "#fff", color: GREEN, transition: "all 0.15s" }}>
+          <span style={{ display: "flex", animation: loading ? "spin 0.8s linear infinite" : "none" }}>{Icon.refresh}</span> Refresh
+        </button>
+      </div>
+
       {/* ── Step Tabs ── */}
-      <div style={{ display: "flex", marginBottom: "24px", background: "#fff", borderRadius: "14px", border: "0.5px solid #e8e8e8", overflow: "hidden", flexWrap: "wrap" }}>
-        {([
-          { key: "receiving", label: "📦 Receiving", badge: pendingDeliveries.length },
-          { key: "history",   label: "🕐 PO History" },
-        ] as { key: POStep; label: string; badge?: number }[]).map((t, i) => (
-          <button key={t.key} onClick={() => setStep(t.key)}
-            style={{ padding: "12px 28px", fontSize: "13px", fontWeight: step === t.key ? 700 : 400, cursor: "pointer", border: "none", borderRight: i < 1 ? "1px solid #e8e8e8" : "none", background: step === t.key ? "#1a3c2e" : "#fff", color: step === t.key ? "#fff" : "#555", display: "flex", alignItems: "center", gap: "6px" }}>
-            {t.label}
-            {t.badge != null && t.badge > 0 && (
-              <span style={{ background: step === t.key ? "rgba(255,255,255,0.3)" : "#1a3c2e", color: "#fff", fontSize: "11px", fontWeight: 700, padding: "1px 7px", borderRadius: "20px" }}>{t.badge}</span>
-            )}
-          </button>
-        ))}
+      <div style={{ display: "flex", gap: "2px", marginBottom: "24px", background: GREEN_LIGHT, borderRadius: "12px", padding: "4px", width: "fit-content", maxWidth: "100%", flexWrap: "wrap" }}>
+        {tabs.map((t) => {
+          const active = step === t.key;
+          return (
+            <button key={t.key} onClick={() => setStep(t.key)} className={active ? undefined : "tab-btn"}
+              style={{ padding: "8px 20px", borderRadius: "9px", fontSize: "13px", fontWeight: 600, cursor: "pointer", border: "none", background: active ? GREEN : "transparent", color: active ? "#fff" : MUTED, boxShadow: active ? "0 2px 8px rgba(46,125,62,0.3)" : "none", display: "flex", alignItems: "center", gap: "8px", transition: "all 0.15s" }}>
+              <span style={{ display: "flex" }}>{t.icon}</span>
+              {t.label}
+              {t.badge != null && t.badge > 0 && (
+                <span style={{ background: active ? "rgba(255,255,255,0.25)" : GREEN, color: "#fff", fontSize: "11px", fontWeight: 700, padding: "1px 8px", borderRadius: "20px" }}>{t.badge}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* ══════════════════════════════════════════════════════════════════
@@ -414,78 +565,103 @@ export default function PurchaseOrderPage() {
         <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "minmax(0,1fr) minmax(300px,380px)", gap: "24px", alignItems: "start" }}>
           {/* Left: pending list */}
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-            <div style={{ background: "#fff", borderRadius: "14px", border: "0.5px solid #e8e8e8", padding: "14px 20px", display: "flex", alignItems: "center", gap: "10px" }}>
-              <span>🔍</span>
+            <div style={{ position: "relative", maxWidth: "420px", width: "100%" }}>
+              <span style={{ position: "absolute", left: "13px", top: "50%", transform: "translateY(-50%)", color: FAINT, display: "flex" }}>{Icon.search}</span>
               <input value={receivingSearch} onChange={(e) => { setReceivingSearch(e.target.value); setReceivePage(1); }} placeholder="Search delivery ID or supplier..."
-                style={{ flex: 1, border: "none", outline: "none", fontSize: "13px", color: "#1a1a1a", background: "transparent" }} />
+                className="green-input"
+                style={{ width: "100%", padding: "10px 14px 10px 38px", borderRadius: "10px", border: `1px solid ${GREEN_BORDER}`, fontSize: "13px", color: INK, background: "#fff", boxSizing: "border-box", transition: "all 0.15s" }} />
             </div>
-            <p style={{ fontSize: "14px", color: "#888" }}>Select a Purchase Order to process receiving:</p>
+            <p style={{ fontSize: "13px", color: MUTED, margin: 0, fontWeight: 500 }}>Select a Purchase Order to process receiving:</p>
 
             {loading ? (
-              <div style={{ background: "#fff", borderRadius: "16px", border: "0.5px solid #e8e8e8", padding: "48px", textAlign: "center" }}><p style={{ color: "#aaa" }}>Loading...</p></div>
-            ) : paginatedReceiving.length === 0 ? (
-              <div style={{ background: "#fff", borderRadius: "16px", border: "0.5px solid #e8e8e8", padding: "48px", textAlign: "center" }}>
-                <div style={{ fontSize: "48px", marginBottom: "12px" }}>📦</div>
-                <p style={{ fontSize: "16px", fontWeight: 600, color: "#1a1a1a" }}>No pending deliveries</p>
-                <p style={{ fontSize: "13px", color: "#aaa", marginTop: "6px" }}>All purchase orders have been received or cancelled</p>
-              </div>
-            ) : paginatedReceiving.map((delivery) => (
-              <div key={delivery.id} style={{ background: "#fff", borderRadius: "16px", border: receivingDelivery?.id === delivery.id ? "1.5px solid #1a3c2e" : "0.5px solid #e8e8e8", padding: "20px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
-                    <p style={{ fontSize: "14px", fontWeight: 800, color: "#1a3c2e", fontFamily: "monospace" }}>{delivery.id.slice(0, 12)}...</p>
-                    <span style={{ padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 600, ...statusStyle[delivery.status] }}>{STATUS_LABEL[delivery.status]}</span>
+              <>
+                {[1, 2, 3].map((i) => (
+                  <div key={i} style={{ ...card, padding: "20px 24px" }}>
+                    <div style={{ ...shimmerBg, height: "14px", width: "40%", borderRadius: "6px", marginBottom: "12px" }} />
+                    <div style={{ ...shimmerBg, height: "12px", width: "60%", borderRadius: "6px", marginBottom: "8px" }} />
+                    <div style={{ ...shimmerBg, height: "12px", width: "45%", borderRadius: "6px" }} />
                   </div>
-                  <p style={{ fontSize: "13px", color: "#1a1a1a" }}>🏢 {delivery.supplier?.supplierName || delivery.supplierId}</p>
-                  <p style={{ fontSize: "13px", color: "#888" }}>📅 {new Date(delivery.deliveryDate).toLocaleDateString()} • {delivery.items?.length || 0} item{(delivery.items?.length || 0) > 1 ? "s" : ""}</p>
-                </div>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <button onClick={() => openReceiptModal(delivery)}
-                    style={{ padding: "10px 20px", borderRadius: "20px", border: "none", background: "#1a3c2e", color: "#fff", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}>
-                    📦 {receivingDelivery?.id === delivery.id ? "Selected" : "Receive"}
-                  </button>
-                  <button onClick={() => handleCancel(delivery.id)}
-                    style={{ padding: "10px 16px", borderRadius: "20px", border: "1.5px solid #ffcdd2", background: "#fff", color: "#e53935", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                ))}
+              </>
+            ) : paginatedReceiving.length === 0 ? (
+              <div style={{ ...card, padding: "56px 24px", textAlign: "center", borderStyle: "dashed" }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
+                  <div style={{ width: "84px", height: "84px", borderRadius: "50%", background: GREEN_TINT, display: "flex", alignItems: "center", justifyContent: "center" }}>{Icon.emptyBox}</div>
+                  <p style={{ fontSize: "16px", fontWeight: 700, color: INK, margin: 0 }}>No pending deliveries</p>
+                  <p style={{ fontSize: "13px", color: MUTED, margin: 0 }}>All purchase orders have been received or cancelled</p>
                 </div>
               </div>
-            ))}
+            ) : paginatedReceiving.map((delivery) => {
+              const selected = receivingDelivery?.id === delivery.id;
+              const itemCount = delivery.items?.length || 0;
+              return (
+                <div key={delivery.id} className="po-card" style={{ ...card, border: selected ? `1px solid ${GREEN}` : `1px solid ${GREEN_BORDER}`, boxShadow: selected ? `0 0 0 2px ${GREEN}` : "none", padding: "18px 22px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px", flexWrap: "wrap" }}>
+                      <span title={delivery.id} style={{ fontFamily: "monospace", fontSize: "12px", fontWeight: 700, color: GREEN_DARK, background: GREEN_LIGHT, border: "1px solid #c3e0c8", padding: "3px 9px", borderRadius: "6px" }}>{delivery.id.slice(0, 12)}…</span>
+                      <span style={statusPill(delivery.status, "sm")}>{statusIcons[delivery.status]}{STATUS_LABEL[delivery.status]}</span>
+                    </div>
+                    <p style={{ fontSize: "13px", fontWeight: 600, color: INK, margin: "0 0 4px", display: "flex", alignItems: "center", gap: "7px" }}>
+                      <span style={{ color: GREEN, display: "flex" }}>{Icon.building}</span>{delivery.supplier?.supplierName || delivery.supplierId}
+                    </p>
+                    <p style={{ fontSize: "12.5px", color: MUTED, margin: 0, display: "flex", alignItems: "center", gap: "7px" }}>
+                      <span style={{ color: FAINT, display: "flex" }}>{Icon.calendar}</span>
+                      {new Date(delivery.deliveryDate).toLocaleDateString()} • {itemCount} item{itemCount > 1 ? "s" : ""}
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <button className="btn-green" onClick={() => openReceiptModal(delivery)}
+                      style={{ padding: "9px 18px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "13px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "7px", boxShadow: "0 4px 12px rgba(46,125,62,0.25)", transition: "background 0.15s" }}>
+                      {Icon.box} {selected ? "Selected" : "Receive"}
+                    </button>
+                    <button className="btn-red" onClick={() => handleCancel(delivery.id)}
+                      style={{ padding: "9px 16px", borderRadius: "10px", border: "1px solid #fecaca", background: "#fef2f2", color: "#b91c1c", fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "background 0.15s" }}>Cancel</button>
+                  </div>
+                </div>
+              );
+            })}
             <PaginationBar page={receivePage} totalPages={receiveTotalPages} setPage={setReceivePage} total={filteredReceiving.length} label="deliveries" />
           </div>
 
           {/* Right: receive form */}
-          <div style={{ background: "#fff", borderRadius: "16px", border: "0.5px solid #e8e8e8", padding: "24px", position: "sticky", top: "20px" }}>
-            <p style={{ fontSize: "15px", fontWeight: 700, color: "#1a1a1a", marginBottom: "16px" }}>📦 Receiving Summary</p>
+          <div style={{ ...card, padding: "24px", position: "sticky", top: "20px" }}>
+            <p style={{ fontSize: "15px", fontWeight: 700, color: INK, margin: "0 0 16px", display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ width: "30px", height: "30px", borderRadius: "8px", background: GREEN_LIGHT, color: GREEN, display: "flex", alignItems: "center", justifyContent: "center" }}>{Icon.box}</span>
+              Receiving Summary
+            </p>
 
             {!receivingDelivery ? (
-              <div style={{ textAlign: "center", padding: "40px 20px", color: "#aaa" }}>
-                <div style={{ fontSize: "40px", marginBottom: "12px" }}>👆</div>
-                <p style={{ fontSize: "13px" }}>Click "Receive" on a delivery to confirm quantities</p>
+              <div style={{ textAlign: "center", padding: "36px 20px" }}>
+                <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: GREEN_TINT, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>{Icon.pointer}</div>
+                <p style={{ fontSize: "13px", color: MUTED, margin: 0 }}>Click &quot;Receive&quot; on a delivery to confirm quantities</p>
               </div>
             ) : (
               <>
                 {receiveError && (
-                  <div style={{ background: "#ffebee", border: "1px solid #ffcdd2", borderRadius: "10px", padding: "10px 14px", marginBottom: "12px", fontSize: "12px", color: "#c62828" }}>
-                    ⚠️ {receiveError}
+                  <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "10px", padding: "10px 14px", marginBottom: "12px", fontSize: "12.5px", fontWeight: 600, color: "#b91c1c", display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                    <span style={{ display: "flex", marginTop: "1px", flexShrink: 0 }}>{Icon.alert}</span>{receiveError}
                   </div>
                 )}
 
-                <div style={{ background: "#f0faf2", borderRadius: "10px", padding: "12px 14px", marginBottom: "12px" }}>
-                  <p style={{ fontSize: "13px", fontWeight: 700, color: "#1a3c2e" }}>{receivingDelivery.supplier?.supplierName || receivingDelivery.supplierId}</p>
-                  <p style={{ fontSize: "12px", color: "#888" }}>📅 {new Date(receivingDelivery.deliveryDate).toLocaleDateString()}</p>
+                <div style={{ background: GREEN_TINT, border: `1px solid ${GREEN_BORDER}`, borderRadius: "12px", padding: "12px 14px", marginBottom: "12px" }}>
+                  <p style={{ fontSize: "13px", fontWeight: 700, color: INK, margin: 0 }}>{receivingDelivery.supplier?.supplierName || receivingDelivery.supplierId}</p>
+                  <p style={{ fontSize: "12px", color: MUTED, margin: "3px 0 0", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ color: FAINT, display: "flex" }}>{Icon.calendar}</span>{new Date(receivingDelivery.deliveryDate).toLocaleDateString()}
+                  </p>
                 </div>
 
                 {receivingDelivery.receiptNumber && (
-                  <div style={{ background: "#fffde7", border: "1.5px solid #fff176", borderRadius: "10px", padding: "10px 14px", marginBottom: "14px", display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span style={{ fontSize: "16px" }}>🧾</span>
+                  <div style={{ background: GREEN_LIGHT, border: "1px solid #b7dcbd", borderRadius: "12px", padding: "10px 14px", marginBottom: "14px", display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ width: "30px", height: "30px", borderRadius: "8px", background: "#fff", color: GREEN, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{Icon.receipt}</span>
                     <div>
-                      <p style={{ fontSize: "11px", color: "#888", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>Supplier Receipt No.</p>
-                      <p style={{ fontSize: "14px", fontWeight: 800, color: "#1a1a1a", fontFamily: "monospace" }}>{receivingDelivery.receiptNumber}</p>
+                      <p style={{ fontSize: "10.5px", color: MUTED, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", margin: 0 }}>Supplier Receipt No.</p>
+                      <p style={{ fontSize: "14px", fontWeight: 800, color: GREEN_DARK, fontFamily: "monospace", margin: "2px 0 0" }}>{receivingDelivery.receiptNumber}</p>
                     </div>
                   </div>
                 )}
 
-                <p style={{ fontSize: "12px", fontWeight: 700, color: "#555", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                  Enter Received Quantities & Expiry Dates
+                <p style={{ fontSize: "11.5px", fontWeight: 700, color: MUTED, margin: "0 0 12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Enter Received Quantities &amp; Expiry Dates
                 </p>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "16px" }}>
@@ -500,82 +676,86 @@ export default function PurchaseOrderPage() {
                     const willReceive = (rq?.receivedQty ?? 0) > 0;
 
                     return (
-                      <div key={item.id} style={{ background: "#f9f9f9", borderRadius: "12px", padding: "14px", border: diff < 0 ? "1.5px solid #ffcc80" : "1px solid #f0f0f0" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
-                          <div>
-                            <p style={{ fontSize: "13px", fontWeight: 600, color: "#1a1a1a" }}>
+                      <div key={item.id} style={{ background: GREEN_TINT, borderRadius: "12px", padding: "14px", border: diff < 0 ? "1px solid #fde68a" : `1px solid ${GREEN_BORDER}` }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px", gap: "8px" }}>
+                          <div style={{ minWidth: 0 }}>
+                            <p style={{ fontSize: "13px", fontWeight: 700, color: INK, margin: 0 }}>
                               {item.product?.productName || item.productId}
-                              {item.product?.size && <span style={{ color: "#aaa", fontWeight: 400 }}> {item.product.size}</span>}
+                              {item.product?.size && <span style={{ color: FAINT, fontWeight: 400 }}> {item.product.size}</span>}
                             </p>
-                            <p style={{ fontSize: "12px", color: "#888" }}>
-                              Ordered: <strong>{item.orderedQty}</strong> {unitInfo.short} •
-                              Already received: <strong>{item.receivedQty}</strong> •
-                              Remaining: <strong style={{ color: "#1a3c2e" }}>{remaining}</strong>
+                            <p style={{ fontSize: "12px", color: MUTED, margin: "3px 0 0", lineHeight: 1.5 }}>
+                              Ordered: <strong style={{ color: INK }}>{item.orderedQty}</strong> {unitInfo.short} •
+                              Already received: <strong style={{ color: INK }}>{item.receivedQty}</strong> •
+                              Remaining: <strong style={{ color: GREEN }}>{remaining}</strong>
                             </p>
                           </div>
                           {diff < 0 && (
-                            <span style={{ background: "#fff3e0", color: "#e65100", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700, flexShrink: 0 }}>⚠️ {Math.abs(diff)} short</span>
+                            <span style={{ ...chip("#fffbeb", "#b45309", "#fde68a"), flexShrink: 0, fontSize: "11px", fontWeight: 700 }}>{Icon.alert}{Math.abs(diff)} short</span>
                           )}
                           {diff === 0 && (rq?.receivedQty ?? 0) > 0 && (
-                            <span style={{ background: "#e8f5e9", color: "#2e7d32", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700, flexShrink: 0 }}>✅ Complete</span>
+                            <span style={{ ...chip(GREEN_LIGHT, GREEN_DARK, "#b7dcbd"), flexShrink: 0, fontSize: "11px", fontWeight: 700 }}>{Icon.check}Complete</span>
                           )}
                         </div>
 
                         {/* Quantity input — capped at remaining */}
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-                          <span style={{ fontSize: "12px", color: "#555", flexShrink: 0 }}>Receiving now:</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px", flexWrap: "wrap" }}>
+                          <span style={{ fontSize: "12px", color: MUTED, flexShrink: 0, fontWeight: 600 }}>Receiving now:</span>
                           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                             <button
+                              aria-label="Decrease"
                               onClick={() => setReceiveQtys((prev) => prev.map((r) =>
                                 r.deliveryItemId === item.id ? { ...r, receivedQty: Math.max(0, r.receivedQty - 1) } : r
                               ))}
-                              style={{ width: "30px", height: "30px", borderRadius: "50%", border: "1.5px solid #e0e0e0", background: "#fff", fontSize: "16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#1a3c2e" }}>−</button>
+                              style={{ width: "30px", height: "30px", borderRadius: "50%", border: `1px solid ${GREEN_BORDER}`, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: GREEN }}>{Icon.minus}</button>
                             <input
                               type="number" min={0} max={remaining}
                               value={rq?.receivedQty ?? 0}
+                              className="green-input"
                               onChange={(e) => {
                                 const val = Math.min(Math.max(0, Number(e.target.value)), remaining);
                                 setReceiveQtys((prev) => prev.map((r) =>
                                   r.deliveryItemId === item.id ? { ...r, receivedQty: val } : r
                                 ));
                               }}
-                              style={{ width: "56px", textAlign: "center", padding: "5px", borderRadius: "8px", border: "1.5px solid #1a3c2e", fontSize: "14px", fontWeight: 700, outline: "none", color: "#000", background: "#fff"}}
+                              style={{ width: "58px", textAlign: "center", padding: "6px", borderRadius: "8px", border: `1px solid ${GREEN_BORDER}`, fontSize: "14px", fontWeight: 800, color: INK, background: "#fff" }}
                             />
                             <button
+                              aria-label="Increase"
                               onClick={() => setReceiveQtys((prev) => prev.map((r) =>
                                 r.deliveryItemId === item.id ? { ...r, receivedQty: Math.min(r.receivedQty + 1, remaining) } : r
                               ))}
-                              style={{ width: "30px", height: "30px", borderRadius: "50%", border: "none", background: "#1a3c2e", fontSize: "16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff" }}>+</button>
-                            <span style={{ fontSize: "12px", color: "#888" }}>{unitInfo.short}</span>
+                              style={{ width: "30px", height: "30px", borderRadius: "50%", border: "none", background: GREEN, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>{Icon.plus}</button>
+                            <span style={{ fontSize: "12px", color: MUTED }}>{unitInfo.short}</span>
                           </div>
                           {receivedBtl !== null && receivedBtl > 0 && (
-                            <span style={{ fontSize: "12px", color: "#6366f1", fontWeight: 600 }}>= {receivedBtl} btl</span>
+                            <span style={{ fontSize: "12px", color: GREEN, fontWeight: 700 }}>= {receivedBtl} btl</span>
                           )}
                         </div>
 
                         {/* Expiry Date — only shown when receiving qty > 0 */}
                         {willReceive && (
                           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                            <label style={{ fontSize: "11px", fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: "6px" }}>
-                              <span>📅</span> Expiry Date <span style={{ color: "#e53935" }}>*</span>
+                            <label style={{ ...labelStyle, marginBottom: 0 }}>
+                              <span style={{ color: GREEN, display: "flex" }}>{Icon.calendar}</span> Expiry Date <span style={{ color: "#dc2626" }}>*</span>
                             </label>
                             <input
                               type="date"
                               value={rq?.expiryDate ?? ""}
                               min={new Date().toISOString().split("T")[0]}
+                              className="green-input"
                               onChange={(e) => setReceiveQtys((prev) => prev.map((r) =>
                                 r.deliveryItemId === item.id ? { ...r, expiryDate: e.target.value } : r
                               ))}
                               style={{
-                                padding: "8px 12px", borderRadius: "10px",
-                                border: willReceive && !rq?.expiryDate ? "1.5px solid #ffcc80" : "1.5px solid #e0e0e0",
-                                fontSize: "13px", outline: "none", color: "#1a1a1a",
+                                padding: "9px 12px", borderRadius: "10px",
+                                border: willReceive && !rq?.expiryDate ? "1px solid #fcd34d" : `1px solid ${GREEN_BORDER}`,
+                                fontSize: "13px", color: INK,
                                 background: "#fff", width: "100%", boxSizing: "border-box",
                                 cursor: "pointer",
                               }}
                             />
                             {willReceive && !rq?.expiryDate && (
-                              <p style={{ fontSize: "11px", color: "#e65100" }}>⚠️ Required — check the box/label</p>
+                              <p style={{ fontSize: "11.5px", color: "#b45309", margin: 0, display: "flex", alignItems: "center", gap: "6px", fontWeight: 600 }}>{Icon.alert} Required — check the box/label</p>
                             )}
                           </div>
                         )}
@@ -589,33 +769,33 @@ export default function PurchaseOrderPage() {
                   const rq        = receiveQtys.find((r) => r.deliveryItemId === item.id);
                   const remaining = item.orderedQty - item.receivedQty;
                   return (
-                    <div key={item.id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "0.5px solid #f5f5f5" }}>
-                      <span style={{ fontSize: "12px", color: "#888" }}>{item.product?.productName || item.productId}</span>
-                      <span style={{ fontSize: "12px", fontWeight: 700, color: (rq?.receivedQty ?? 0) < remaining ? "#e65100" : "#2e7d32" }}>
+                    <div key={item.id} style={{ display: "flex", justifyContent: "space-between", gap: "10px", padding: "7px 0", borderBottom: `1px solid ${GREEN_LIGHT}` }}>
+                      <span style={{ fontSize: "12px", color: MUTED }}>{item.product?.productName || item.productId}</span>
+                      <span style={{ fontSize: "12px", fontWeight: 700, whiteSpace: "nowrap", color: (rq?.receivedQty ?? 0) < remaining ? "#b45309" : GREEN }}>
                         {rq?.receivedQty ?? 0}/{remaining} remaining
                       </span>
                     </div>
                   );
                 })}
 
-                <div style={{ height: "1px", background: "#f0f0f0", margin: "14px 0" }} />
+                <div style={{ height: "1px", background: GREEN_LIGHT, margin: "14px 0" }} />
 
                 {receiveQtys.some((r) => {
                   const item = receivingDelivery.items.find((i) => i.id === r.deliveryItemId);
                   const remaining = item ? item.orderedQty - item.receivedQty : 0;
                   return item && r.receivedQty < remaining;
                 }) && (
-                  <div style={{ background: "#fff3e0", borderRadius: "10px", padding: "10px 14px", marginBottom: "14px", border: "1px solid #ffcc80" }}>
-                    <p style={{ fontSize: "12px", color: "#e65100", fontWeight: 600 }}>⚠️ Some items are short. This will be recorded as a discrepancy.</p>
+                  <div style={{ background: "#fffbeb", borderRadius: "10px", padding: "10px 14px", marginBottom: "14px", border: "1px solid #fde68a" }}>
+                    <p style={{ fontSize: "12px", color: "#b45309", fontWeight: 600, margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>{Icon.alert} Some items are short. This will be recorded as a discrepancy.</p>
                   </div>
                 )}
 
-                <button onClick={handleReceive} disabled={receiving}
-                  style={{ width: "100%", padding: "13px", borderRadius: "20px", border: "none", background: receiving ? "#aaa" : "#1a3c2e", color: "#fff", fontSize: "14px", fontWeight: 700, cursor: receiving ? "not-allowed" : "pointer", marginBottom: "10px", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-                  {receiving ? "Processing..." : "✅ Confirm Receiving"}
+                <button className="btn-green" onClick={handleReceive} disabled={receiving}
+                  style={{ width: "100%", padding: "13px", borderRadius: "10px", border: "none", background: receiving ? "#c5d3c8" : GREEN, color: "#fff", fontSize: "14px", fontWeight: 700, cursor: receiving ? "not-allowed" : "pointer", marginBottom: "10px", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", boxShadow: receiving ? "none" : "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
+                  {receiving ? "Processing..." : <>{Icon.check} Confirm Receiving</>}
                 </button>
-                <button onClick={() => { setReceivingDelivery(null); setReceiveQtys([]); }}
-                  style={{ width: "100%", padding: "11px", borderRadius: "20px", border: "1.5px solid #e0e0e0", background: "#fff", color: "#555", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>← Back</button>
+                <button className="btn-outline" onClick={() => { setReceivingDelivery(null); setReceiveQtys([]); }}
+                  style={{ width: "100%", padding: "11px", borderRadius: "10px", border: `1px solid ${GREEN_BORDER}`, background: "#fff", color: MUTED, fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>← Back</button>
               </>
             )}
           </div>
@@ -627,39 +807,42 @@ export default function PurchaseOrderPage() {
       ══════════════════════════════════════════════════════════════════ */}
       {step === "history" && (
         <div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "14px", marginBottom: "20px" }}>
-            {([
-              { status: "PENDING",            icon: "📤", count: deliveries.filter((d) => d.status === "PENDING").length },
-              { status: "PARTIALLY_RECEIVED", icon: "📦", count: deliveries.filter((d) => d.status === "PARTIALLY_RECEIVED").length },
-              { status: "DELIVERED",          icon: "✅", count: deliveries.filter((d) => d.status === "DELIVERED").length },
-              { status: "CANCELLED",          icon: "✕",  count: deliveries.filter((d) => d.status === "CANCELLED").length },
-            ] as { status: POStatus; icon: string; count: number }[]).map((s) => (
-              <div key={s.status} style={{ background: "#fff", borderRadius: "12px", border: "0.5px solid #e8e8e8", padding: "14px 18px", display: "flex", gap: "12px", alignItems: "center" }}>
-                <div style={{ width: "36px", height: "36px", borderRadius: "10px", ...statusStyle[s.status], display: "flex", alignItems: "center", justifyContent: "center", fontSize: "16px" }}>{s.icon}</div>
-                <div>
-                  <p style={{ fontSize: "20px", fontWeight: 800, color: (statusStyle[s.status] as { color: string }).color }}>{s.count}</p>
-                  <p style={{ fontSize: "11px", color: "#888" }}>{STATUS_LABEL[s.status]}</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "14px", marginBottom: "22px" }}>
+            {(["PENDING", "PARTIALLY_RECEIVED", "DELIVERED", "CANCELLED"] as POStatus[]).map((status) => {
+              const count = deliveries.filter((d) => d.status === status).length;
+              const t = statusTheme[status];
+              return (
+                <div key={status} style={{ position: "relative", overflow: "hidden", ...card, padding: "20px 22px" }}>
+                  <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "4px", background: t.accent }} />
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
+                    <p style={{ fontSize: "12px", fontWeight: 600, color: MUTED, margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>{STATUS_LABEL[status]}</p>
+                    <div style={{ width: "34px", height: "34px", borderRadius: "10px", background: t.bg, color: t.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>{statusIcons[status]}</div>
+                  </div>
+                  <p style={{ fontSize: "28px", fontWeight: 800, color: INK, margin: 0, letterSpacing: "-0.02em", lineHeight: 1 }}>{count}</p>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
-          <div style={{ background: "#fff", borderRadius: "14px", border: "0.5px solid #e8e8e8", padding: "14px 20px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <div style={{ ...card, padding: "14px 18px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
             <div style={{ position: "relative" }}>
-              <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "13px" }}>🔍</span>
+              <span style={{ position: "absolute", left: "13px", top: "50%", transform: "translateY(-50%)", color: FAINT, display: "flex" }}>{Icon.search}</span>
               <input value={searchHistory} onChange={(e) => { setSearchHistory(e.target.value); setHistoryPage(1); }} placeholder="Search ID or supplier..."
-                style={{ padding: "8px 14px 8px 32px", borderRadius: "20px", border: "1.5px solid #ddd", fontSize: "13px", outline: "none", width: "220px", color: "#1a1a1a" }} />
+                className="green-input"
+                style={{ padding: "10px 14px 10px 38px", borderRadius: "10px", border: `1px solid ${GREEN_BORDER}`, fontSize: "13px", width: "250px", maxWidth: "100%", color: INK, background: "#fff", boxSizing: "border-box", transition: "all 0.15s" }} />
             </div>
             <div ref={statusDropRef} style={{ position: "relative" }}>
-              <button onClick={() => setShowStatusDrop(!showStatusDrop)}
-                style={{ padding: "8px 14px", borderRadius: "20px", border: historyStatus !== "All" ? "1.5px solid #1a3c2e" : "1.5px solid #ddd", background: historyStatus !== "All" ? "#f0faf2" : "#fff", color: historyStatus !== "All" ? "#1a3c2e" : "#555", fontSize: "13px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                🔖 {historyStatus === "All" ? "All Status" : STATUS_LABEL[historyStatus as POStatus] || historyStatus} {showStatusDrop ? "▲" : "▼"}
+              <button onClick={() => setShowStatusDrop(!showStatusDrop)} className={historyStatus === "All" ? "btn-outline" : undefined}
+                style={{ padding: "10px 14px", borderRadius: "10px", border: historyStatus !== "All" ? `1px solid ${GREEN}` : `1px solid ${GREEN_BORDER}`, background: historyStatus !== "All" ? GREEN_LIGHT : "#fff", color: GREEN_DARK, fontSize: "13px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", transition: "all 0.15s" }}>
+                <span style={{ color: GREEN, display: "flex" }}>{Icon.tag}</span>
+                {historyStatus === "All" ? "All Status" : STATUS_LABEL[historyStatus as POStatus] || historyStatus}
+                <span style={{ display: "flex" }}>{showStatusDrop ? Icon.chevUp : Icon.chevDown}</span>
               </button>
               {showStatusDrop && (
-                <div style={{ position: "absolute", top: "42px", left: 0, background: "#fff", borderRadius: "12px", border: "1px solid #e0e0e0", boxShadow: "0 8px 24px rgba(0,0,0,0.1)", zIndex: 20, overflow: "hidden", minWidth: "180px" }}>
+                <div style={{ position: "absolute", top: "46px", left: 0, background: "#fff", borderRadius: "12px", border: `1px solid ${GREEN_BORDER}`, boxShadow: "0 12px 32px rgba(31,95,45,0.16)", zIndex: 20, overflow: "hidden", minWidth: "190px" }}>
                   {(["All", "PENDING", "PARTIALLY_RECEIVED", "DELIVERED", "CANCELLED"] as const).map((opt) => (
-                    <button key={opt} onClick={() => { setHistoryStatus(opt); setHistoryPage(1); setShowStatusDrop(false); }}
-                      style={{ width: "100%", padding: "10px 16px", textAlign: "left", fontSize: "13px", fontWeight: historyStatus === opt ? 700 : 400, color: historyStatus === opt ? "#1a3c2e" : "#555", background: historyStatus === opt ? "#f0faf2" : "#fff", border: "none", cursor: "pointer", borderBottom: "0.5px solid #f5f5f5" }}>
+                    <button key={opt} className="row-hover" onClick={() => { setHistoryStatus(opt); setHistoryPage(1); setShowStatusDrop(false); }}
+                      style={{ width: "100%", padding: "10px 16px", textAlign: "left", fontSize: "13px", fontWeight: historyStatus === opt ? 700 : 500, color: historyStatus === opt ? GREEN_DARK : MUTED, background: historyStatus === opt ? GREEN_LIGHT : "#fff", border: "none", cursor: "pointer", borderBottom: `1px solid ${GREEN_LIGHT}` }}>
                       {opt === "All" ? "All Status" : STATUS_LABEL[opt]}
                     </button>
                   ))}
@@ -667,72 +850,90 @@ export default function PurchaseOrderPage() {
               )}
             </div>
             {historyStatus !== "All" && (
-              <button onClick={() => { setHistoryStatus("All"); setHistoryPage(1); }}
-                style={{ padding: "6px 12px", borderRadius: "20px", border: "1px solid #ffcdd2", background: "#fff", color: "#e53935", fontSize: "12px", cursor: "pointer" }}>✕ Clear</button>
+              <button className="btn-red" onClick={() => { setHistoryStatus("All"); setHistoryPage(1); }}
+                style={{ padding: "8px 12px", borderRadius: "10px", border: "1px solid #fecaca", background: "#fef2f2", color: "#b91c1c", fontSize: "12px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>{Icon.x} Clear</button>
             )}
-            <button onClick={handleExport}
-              style={{ padding: "8px 14px", borderRadius: "20px", border: "1.5px solid #ddd", background: "#fff", color: "#555", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>📤 Export</button>
-            <span style={{ marginLeft: "auto", fontSize: "12px", color: "#888", fontWeight: 500 }}>{filteredHistory.length} purchase order{filteredHistory.length !== 1 ? "s" : ""}</span>
+            <button className="btn-outline" onClick={handleExport}
+              style={{ padding: "10px 14px", borderRadius: "10px", border: `1px solid ${GREEN_BORDER}`, background: "#fff", color: GREEN, fontSize: "13px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "7px", transition: "all 0.15s" }}>{Icon.download} Export</button>
+            <span style={{ marginLeft: "auto", fontSize: "12px", color: MUTED, fontWeight: 500 }}>{filteredHistory.length} purchase order{filteredHistory.length !== 1 ? "s" : ""}</span>
           </div>
 
-          <div style={{ background: "#fff", borderRadius: "14px", border: "0.5px solid #e8e8e8", overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "700px" }}>
-              <thead>
-                <tr style={{ background: "#1a3c2e" }}>
-                  {["Delivery ID", "Supplier", "Date", "Items", "Receipt No.", "Status", "Action"].map((h) => (
-                    <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontSize: "12px", color: "#fff", fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr><td colSpan={7} style={{ padding: "40px", textAlign: "center", color: "#aaa" }}>Loading...</td></tr>
-                ) : paginatedHistory.length === 0 ? (
-                  <tr><td colSpan={7} style={{ padding: "48px", textAlign: "center" }}>
-                    <div style={{ fontSize: "40px", marginBottom: "10px" }}>📭</div>
-                    <p style={{ color: "#aaa", fontSize: "14px" }}>No deliveries found</p>
-                  </td></tr>
-                ) : paginatedHistory.map((delivery, idx) => (
-                  <tr key={delivery.id} style={{ borderBottom: "0.5px solid #f0f0f0", background: idx % 2 === 0 ? "#fff" : "#fafafa" }}>
-                    <td style={{ padding: "13px 16px" }}>
-                      <span style={{ background: "#37474f", color: "#fff", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontFamily: "monospace" }}>{delivery.id.slice(0, 8)}...</span>
-                    </td>
-                    <td style={{ padding: "13px 16px", fontSize: "13px", color: "#1a1a1a" }}>{delivery.supplier?.supplierName || delivery.supplierId}</td>
-                    <td style={{ padding: "13px 16px" }}>
-                      <span style={{ background: "#e8f0fe", color: "#1a237e", padding: "3px 10px", borderRadius: "20px", fontSize: "12px" }}>📅 {new Date(delivery.deliveryDate).toLocaleDateString()}</span>
-                    </td>
-                    <td style={{ padding: "13px 16px", fontSize: "13px", color: "#555" }}>{delivery.items?.length || 0} item{(delivery.items?.length || 0) > 1 ? "s" : ""}</td>
-                    <td style={{ padding: "13px 16px" }}>
-                      {delivery.receiptNumber ? (
-                        <span style={{ background: "#fffde7", color: "#f57f17", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700, fontFamily: "monospace" }}>🧾 {delivery.receiptNumber}</span>
-                      ) : (
-                        <span style={{ fontSize: "12px", color: "#ccc" }}>—</span>
-                      )}
-                    </td>
-                    <td style={{ padding: "13px 16px" }}>
-                      <span style={{ padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, ...statusStyle[delivery.status] }}>{STATUS_LABEL[delivery.status]}</span>
-                    </td>
-                    <td style={{ padding: "13px 16px" }}>
-                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                        <button onClick={() => setViewDelivery(delivery)}
-                          style={{ padding: "6px 14px", borderRadius: "20px", border: "none", background: "#e8f0fe", color: "#1565c0", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>👁 View</button>
-                        {(delivery.status === "PENDING" || delivery.status === "PARTIALLY_RECEIVED") && (
-                          <>
-                            <button onClick={() => { openReceiptModal(delivery); setStep("receiving"); }}
-                              style={{ padding: "6px 14px", borderRadius: "20px", border: "none", background: "#e8f5e9", color: "#1a3c2e", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>📦 Receive</button>
-                            <button onClick={() => handleCancel(delivery.id)}
-                              style={{ padding: "6px 14px", borderRadius: "20px", border: "1px solid #ffcdd2", background: "#fff", color: "#e53935", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-                          </>
-                        )}
-                      </div>
-                    </td>
+          <div style={{ ...card, overflow: "hidden" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "700px" }}>
+                <thead>
+                  <tr>
+                    {["Delivery ID", "Supplier", "Date", "Items", "Receipt No.", "Status", "Action"].map((h) => (
+                      <th key={h} style={thStyle}>{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            <div style={{ padding: "12px 20px", borderTop: "0.5px solid #f0f0f0" }}>
-              <PaginationBar page={historyPage} totalPages={historyTotalPages} setPage={setHistoryPage} total={filteredHistory.length} label="purchase orders" />
+                </thead>
+                <tbody>
+                  {loading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <tr key={i}>
+                        {[90, 120, 90, 60, 90, 80, 120].map((w, j) => (
+                          <td key={j} style={tdStyle}><div style={{ ...shimmerBg, height: "12px", width: `${w}px`, borderRadius: "6px" }} /></td>
+                        ))}
+                      </tr>
+                    ))
+                  ) : paginatedHistory.length === 0 ? (
+                    <tr><td colSpan={7} style={{ padding: "64px 24px", textAlign: "center" }}>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
+                        <div style={{ width: "84px", height: "84px", borderRadius: "50%", background: GREEN_TINT, display: "flex", alignItems: "center", justifyContent: "center" }}>{Icon.emptyBox}</div>
+                        <p style={{ fontSize: "16px", fontWeight: 700, color: INK, margin: 0 }}>No deliveries found</p>
+                        <p style={{ fontSize: "13px", color: MUTED, margin: 0 }}>Try a different search or filter</p>
+                      </div>
+                    </td></tr>
+                  ) : paginatedHistory.map((delivery) => {
+                    const itemCount = delivery.items?.length || 0;
+                    return (
+                      <tr key={delivery.id} className="row-hover" style={{ transition: "background 0.15s" }}>
+                        <td style={tdStyle}>
+                          <span title={delivery.id} style={{ fontFamily: "monospace", fontSize: "12px", fontWeight: 700, color: GREEN_DARK, background: GREEN_LIGHT, border: "1px solid #c3e0c8", padding: "3px 9px", borderRadius: "6px" }}>{delivery.id.slice(0, 8)}…</span>
+                        </td>
+                        <td style={{ ...tdStyle, fontWeight: 500 }}>{delivery.supplier?.supplierName || delivery.supplierId}</td>
+                        <td style={tdStyle}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12.5px", color: MUTED }}>
+                            <span style={{ color: FAINT, display: "flex" }}>{Icon.calendar}</span>{new Date(delivery.deliveryDate).toLocaleDateString()}
+                          </span>
+                        </td>
+                        <td style={{ ...tdStyle, color: MUTED }}>{itemCount} item{itemCount > 1 ? "s" : ""}</td>
+                        <td style={tdStyle}>
+                          {delivery.receiptNumber ? (
+                            <span style={{ ...chip(GREEN_TINT, GREEN_DARK, GREEN_BORDER), fontFamily: "monospace", fontWeight: 700 }}>{Icon.receipt}{delivery.receiptNumber}</span>
+                          ) : (
+                            <span style={{ fontSize: "12px", color: FAINT }}>—</span>
+                          )}
+                        </td>
+                        <td style={tdStyle}>
+                          <span style={statusPill(delivery.status)}>{statusIcons[delivery.status]}{STATUS_LABEL[delivery.status]}</span>
+                        </td>
+                        <td style={tdStyle}>
+                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                            <button className="btn-outline" onClick={() => setViewDelivery(delivery)}
+                              style={{ padding: "6px 12px", borderRadius: "8px", border: `1px solid ${GREEN_BORDER}`, background: "#fff", color: GREEN, fontSize: "12px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", transition: "all 0.15s" }}>{Icon.eye} View</button>
+                            {(delivery.status === "PENDING" || delivery.status === "PARTIALLY_RECEIVED") && (
+                              <>
+                                <button className="btn-green" onClick={() => { openReceiptModal(delivery); setStep("receiving"); }}
+                                  style={{ padding: "6px 12px", borderRadius: "8px", border: "none", background: GREEN, color: "#fff", fontSize: "12px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", boxShadow: "0 2px 8px rgba(46,125,62,0.25)", transition: "background 0.15s" }}>{Icon.box} Receive</button>
+                                <button className="btn-red" onClick={() => handleCancel(delivery.id)}
+                                  style={{ padding: "6px 12px", borderRadius: "8px", border: "1px solid #fecaca", background: "#fef2f2", color: "#b91c1c", fontSize: "12px", fontWeight: 600, cursor: "pointer", transition: "background 0.15s" }}>Cancel</button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
+            {historyTotalPages > 1 && (
+              <div style={{ padding: "4px 20px 14px", borderTop: `1px solid ${GREEN_BORDER}`, background: GREEN_TINT }}>
+                <PaginationBar page={historyPage} totalPages={historyTotalPages} setPage={setHistoryPage} total={filteredHistory.length} label="purchase orders" />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -740,77 +941,77 @@ export default function PurchaseOrderPage() {
       {/* ── View Delivery Modal ── */}
       {viewDelivery && (
         <>
-          <div onClick={() => setViewDelivery(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 40 }} />
-          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 50, background: "#fff", borderRadius: "20px", width: "min(92vw, 520px)", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", maxHeight: "85vh", overflowY: "auto" }}>
-            <div style={{ background: "#1a3c2e", padding: "20px 24px", borderRadius: "20px 20px 0 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <p style={{ fontSize: "16px", fontWeight: 800, color: "#fff" }}>Delivery Details</p>
-                <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.55)", fontFamily: "monospace" }}>{viewDelivery.id}</p>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <span style={{ padding: "4px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, ...statusStyle[viewDelivery.status] }}>{STATUS_LABEL[viewDelivery.status]}</span>
-                <button onClick={() => setViewDelivery(null)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: "50%", width: "30px", height: "30px", cursor: "pointer", color: "#fff", fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
-              </div>
-            </div>
+          <div onClick={() => setViewDelivery(null)} style={{ position: "fixed", inset: 0, background: "rgba(10,30,15,0.55)", zIndex: 40, backdropFilter: "blur(2px)" }} />
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 50, background: "#fff", borderRadius: "18px", width: "min(92vw, 540px)", boxShadow: "0 24px 70px rgba(10,30,15,0.3)", maxHeight: "88vh", overflowY: "auto", border: `1px solid ${GREEN_BORDER}` }}>
+            <ModalHeader
+              title="Delivery Details"
+              subtitle={viewDelivery.id}
+              onClose={() => setViewDelivery(null)}
+              right={<span style={statusPill(viewDelivery.status)}>{statusIcons[viewDelivery.status]}{STATUS_LABEL[viewDelivery.status]}</span>}
+            />
             <div style={{ padding: "24px" }}>
-              <div style={{ background: "#f9f9f9", borderRadius: "12px", padding: "16px", marginBottom: "18px" }}>
-                {[
+              <div style={{ background: GREEN_TINT, border: `1px solid ${GREEN_BORDER}`, borderRadius: "12px", padding: "6px 16px", marginBottom: "20px" }}>
+                {([
                   ["Delivery ID", viewDelivery.id],
                   ["Supplier",    viewDelivery.supplier?.supplierName || viewDelivery.supplierId],
                   ["Date",        new Date(viewDelivery.deliveryDate).toLocaleDateString()],
                   ["Total Items", String(viewDelivery.totalItems)],
                   ...(viewDelivery.receiptNumber ? [["Receipt No.", viewDelivery.receiptNumber]] : []),
                   ...(viewDelivery.notes ? [["Notes", viewDelivery.notes]] : []),
-                ].map(([label, value]) => (
-                  <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", flexWrap: "wrap", rowGap: "4px", borderBottom: "0.5px solid #f0f0f0" }}>
-                    <span style={{ fontSize: "12px", color: "#888" }}>{label}</span>
-                    <span style={{ fontSize: "13px", fontWeight: 600, color: "#1a1a1a", fontFamily: label === "Receipt No." ? "monospace" : "inherit", background: label === "Receipt No." ? "#fffde7" : "transparent", padding: label === "Receipt No." ? "2px 10px" : "0", borderRadius: label === "Receipt No." ? "20px" : "0" }}>
-                      {label === "Receipt No." ? `🧾 ${value}` : value}
-                    </span>
+                ] as string[][]).map(([label, value], i, arr) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", padding: "10px 0", flexWrap: "wrap", rowGap: "4px", borderBottom: i < arr.length - 1 ? `1px solid ${GREEN_BORDER}` : "none" }}>
+                    <span style={{ fontSize: "12px", color: FAINT }}>{label}</span>
+                    {label === "Receipt No." ? (
+                      <span style={{ ...chip(GREEN_LIGHT, GREEN_DARK, "#b7dcbd"), fontFamily: "monospace", fontWeight: 700 }}>{Icon.receipt}{value}</span>
+                    ) : (
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: INK, wordBreak: "break-all", textAlign: "right" }}>{value}</span>
+                    )}
                   </div>
                 ))}
               </div>
 
-              <p style={{ fontSize: "13px", fontWeight: 700, color: "#1a1a1a", marginBottom: "12px" }}>📦 Items Ordered</p>
-              <div style={{ borderRadius: "12px", overflowX: "auto", border: "0.5px solid #e8e8e8", marginBottom: "20px" }}>
-                <table style={{ minWidth: "460px", borderCollapse: "collapse", width: "100%" }}>
+              <p style={{ fontSize: "13px", fontWeight: 700, color: INK, margin: "0 0 12px", display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ color: GREEN, display: "flex" }}>{Icon.box}</span> Items Ordered
+              </p>
+              <div style={{ borderRadius: "12px", overflowX: "auto", border: `1px solid ${GREEN_BORDER}`, marginBottom: "20px" }}>
+                <table style={{ minWidth: "480px", borderCollapse: "collapse", width: "100%" }}>
                   <thead>
-                    <tr style={{ background: "#1a3c2e" }}>
+                    <tr>
                       {["Product", "Cost", "Ordered", "Received", "Expiry", "Status"].map((h) => (
-                        <th key={h} style={{ padding: "10px 12px", textAlign: "left", fontSize: "11px", color: "#fff", fontWeight: 600 }}>{h}</th>
+                        <th key={h} style={{ ...thStyle, padding: "10px 12px", fontSize: "10.5px" }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {viewDelivery.items?.map((item, i) => {
+                    {viewDelivery.items?.map((item) => {
                       const diff = item.receivedQty - item.orderedQty;
                       return (
-                        <tr key={item.id} style={{ borderBottom: "0.5px solid #f0f0f0", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
-                          <td style={{ padding: "10px 12px", fontSize: "13px", fontWeight: 500, color: "#1a1a1a" }}>
+                        <tr key={item.id} className="row-hover">
+                          <td style={{ ...tdStyle, padding: "10px 12px", fontWeight: 600 }}>
                             {item.product?.productName || item.productId}
-                            {item.product?.size && <span style={{ color: "#aaa" }}> {item.product.size}</span>}
+                            {item.product?.size && <span style={{ color: FAINT, fontWeight: 400 }}> {item.product.size}</span>}
                           </td>
-                          <td style={{ padding: "10px 12px", fontSize: "12px", color: "#1a1a1a" }}>₱{item.costPrice}</td>
-                          <td style={{ padding: "10px 12px", fontSize: "13px", fontWeight: 600, color: "#1a1a1a", textAlign: "center" }}>{item.orderedQty}</td>
-                          <td style={{ padding: "10px 12px", fontSize: "13px", fontWeight: 600, textAlign: "center", color: item.receivedQty === 0 ? "#aaa" : item.receivedQty < item.orderedQty ? "#e65100" : "#2e7d32" }}>
+                          <td style={{ ...tdStyle, padding: "10px 12px", fontSize: "12px", color: GREEN, fontWeight: 700 }}>₱{item.costPrice}</td>
+                          <td style={{ ...tdStyle, padding: "10px 12px", fontWeight: 600, textAlign: "center" }}>{item.orderedQty}</td>
+                          <td style={{ ...tdStyle, padding: "10px 12px", fontWeight: 700, textAlign: "center", color: item.receivedQty === 0 ? FAINT : item.receivedQty < item.orderedQty ? "#b45309" : GREEN }}>
                             {item.receivedQty === 0 ? "—" : item.receivedQty}
                           </td>
-                          <td style={{ padding: "10px 12px" }}>
+                          <td style={{ ...tdStyle, padding: "10px 12px" }}>
                             {item.expiryDate ? (
-                              <span style={{ fontSize: "11px", fontWeight: 600, color: "#1a3c2e", background: "#e8f5e9", padding: "2px 8px", borderRadius: "20px" }}>
-                                📅 {new Date(item.expiryDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                              <span style={{ ...chip(GREEN_LIGHT, GREEN_DARK, "#c3e0c8"), fontSize: "11px" }}>
+                                {Icon.calendar} {new Date(item.expiryDate).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                               </span>
                             ) : (
-                              <span style={{ fontSize: "11px", color: "#aaa" }}>—</span>
+                              <span style={{ fontSize: "11px", color: FAINT }}>—</span>
                             )}
                           </td>
-                          <td style={{ padding: "10px 12px" }}>
+                          <td style={{ ...tdStyle, padding: "10px 12px" }}>
                             {item.receivedQty === 0 ? (
-                              <span style={{ fontSize: "11px", color: "#aaa" }}>Pending</span>
+                              <span style={{ fontSize: "11px", color: FAINT }}>Pending</span>
                             ) : diff < 0 ? (
-                              <span style={{ fontSize: "11px", fontWeight: 600, color: "#e65100", background: "#fff3e0", padding: "2px 8px", borderRadius: "20px" }}>-{Math.abs(diff)} short</span>
+                              <span style={{ ...chip("#fffbeb", "#b45309", "#fde68a"), fontSize: "11px" }}>-{Math.abs(diff)} short</span>
                             ) : (
-                              <span style={{ fontSize: "11px", fontWeight: 600, color: "#2e7d32", background: "#e8f5e9", padding: "2px 8px", borderRadius: "20px" }}>Complete</span>
+                              <span style={{ ...chip(GREEN_LIGHT, GREEN_DARK, "#b7dcbd"), fontSize: "11px" }}>Complete</span>
                             )}
                           </td>
                         </tr>
@@ -819,8 +1020,8 @@ export default function PurchaseOrderPage() {
                   </tbody>
                 </table>
               </div>
-              <button onClick={() => setViewDelivery(null)}
-                style={{ width: "100%", padding: "11px", borderRadius: "20px", border: "1.5px solid #e0e0e0", background: "#fff", color: "#555", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>Close</button>
+              <button className="btn-outline" onClick={() => setViewDelivery(null)}
+                style={{ width: "100%", padding: "12px", borderRadius: "10px", border: `1px solid ${GREEN_BORDER}`, background: "#fff", color: MUTED, fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>Close</button>
             </div>
           </div>
         </>
