@@ -1,6 +1,10 @@
 "use client";
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+
+// Where the Inventory Adjustment page lives in your app — change if your route differs
+const ADJUSTMENT_ROUTE = "/cashier/inventory-adjustment";
 
 // ── Theme (same as the Cashier pages) ─────────────────────────────────────────
 const GREEN        = "#2e7d3e"; // primary
@@ -216,14 +220,8 @@ export default function InventoryMonitoringPage() {
   const [loading,         setLoading]         = useState(true);
   const [expiringBatches, setExpiringBatches] = useState<StockBatch[]>([]);
   const [expiredBatches,  setExpiredBatches]  = useState<StockBatch[]>([]);
-  const [writingOff,      setWritingOff]      = useState(false);
-  const [toast,           setToast]           = useState("");
   const [activeTab,       setActiveTab]       = useState<"expiring" | "expired">("expiring");
-
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(""), 3000);
-  };
+  const router = useRouter();
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -274,24 +272,6 @@ export default function InventoryMonitoringPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const handleWriteOff = async () => {
-    const raw = localStorage.getItem("employee") || localStorage.getItem("user") || "{}";
-    const employee = JSON.parse(raw);
-    const employeeId = employee?.id ?? employee?.employeeId ?? null;
-    if (!employeeId) { showToast("No employee session found."); return; }
-    if (!confirm(`Write off ${expiredBatches.length} expired batch(es)? This cannot be undone.`)) return;
-    try {
-      setWritingOff(true);
-      const result = await api.writeOffExpiredBatches(employeeId);
-      showToast(`Wrote off ${result.written} batch(es), ${result.totalQty} units total.`);
-      await fetchAll();
-    } catch (_e) {
-      showToast("Failed to write off expired batches.");
-    } finally {
-      setWritingOff(false);
-    }
-  };
-
   const filtered = useMemo(
     () => items.filter((p) => p.name.toLowerCase().includes(search.toLowerCase())),
     [items, search]
@@ -323,7 +303,11 @@ export default function InventoryMonitoringPage() {
   ];
 
   const alertItems = items.filter((p) => p.stockStatus !== "In Stock").slice(0, 6);
-  const batchList  = activeTab === "expiring" ? expiringBatches : expiredBatches;
+  const batchList  = [...(activeTab === "expiring" ? expiringBatches : expiredBatches)].sort(
+    (a, b) =>
+      (a.expiryDate ? new Date(a.expiryDate).getTime() : Infinity) -
+      (b.expiryDate ? new Date(b.expiryDate).getTime() : Infinity)
+  );
 
   const thStyle: React.CSSProperties = {
     padding: "12px 16px", textAlign: "left", fontSize: "11px", color: MUTED, fontWeight: 700,
@@ -343,13 +327,6 @@ export default function InventoryMonitoringPage() {
       `}</style>
 
       <div className="monitoring-page" style={{ padding: "28px 32px", width: "100%", boxSizing: "border-box" }}>
-
-        {/* ── Toast ── */}
-        {toast && (
-          <div style={{ position: "fixed", bottom: "24px", right: "24px", zIndex: 60, background: GREEN_DARK, color: "#fff", padding: "12px 18px", borderRadius: "12px", boxShadow: "0 10px 30px rgba(31,95,45,0.35)", fontSize: "13px", fontWeight: 600, animation: "toastIn 0.2s ease-out", display: "flex", alignItems: "center", gap: "8px" }}>
-            {Icon.check} {toast}
-          </div>
-        )}
 
         {/* ── Page Header ── */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "26px", flexWrap: "wrap", gap: "16px" }}>
@@ -442,9 +419,9 @@ export default function InventoryMonitoringPage() {
                 title="Batch Expiry"
                 right={
                   expired > 0 ? (
-                    <button onClick={handleWriteOff} disabled={writingOff} className="writeoff-btn"
-                      style={{ padding: "6px 13px", borderRadius: "8px", border: "none", background: writingOff ? "#9ca3af" : "#b91c1c", color: "#fff", fontSize: "11.5px", fontWeight: 700, cursor: writingOff ? "not-allowed" : "pointer", transition: "background 0.15s" }}>
-                      {writingOff ? "Writing off…" : `Write Off (${expired})`}
+                    <button onClick={() => router.push(ADJUSTMENT_ROUTE)} className="writeoff-btn"
+                      style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 13px", borderRadius: "8px", border: "none", background: "#b91c1c", color: "#fff", fontSize: "11.5px", fontWeight: 700, cursor: "pointer", transition: "background 0.15s" }}>
+                      Go to Inventory Adjustment ({expired})
                     </button>
                   ) : undefined
                 }
@@ -602,6 +579,7 @@ export default function InventoryMonitoringPage() {
             )}
           </>
         )}
+
       </div>
     </>
   );

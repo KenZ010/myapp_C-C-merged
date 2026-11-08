@@ -387,7 +387,17 @@ export default function InventoryAdjustmentPage() {
         const matchStat   = statFilter === "All" || p.status   === statFilter;
         return matchSearch && matchCat && matchStat;
       })
-      .sort((a, b) => b.stock - a.stock),
+      .sort((a, b) => {
+        // Expired and nearly expired products first, then the rest by stock
+        const priority: Record<ExpiryStatus, number> = { "Expired": 0, "Expiring Soon": 1, "Good": 2, "No Date": 3 };
+        const pa = priority[getExpiryStatus(a.expiryDate)];
+        const pb = priority[getExpiryStatus(b.expiryDate)];
+        if (pa !== pb) return pa - pb;
+        const da = daysUntilExpiry(a.expiryDate) ?? Infinity;
+        const db = daysUntilExpiry(b.expiryDate) ?? Infinity;
+        if (da !== db) return da - db;
+        return b.stock - a.stock;
+      }),
   [products, search, catFilter, statFilter]);
 
   const counts = useMemo(() => ({
