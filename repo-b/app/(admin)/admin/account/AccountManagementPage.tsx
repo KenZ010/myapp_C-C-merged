@@ -423,14 +423,14 @@ export default function AccountManagementPage() {
       {/* ✅ In-app AlertModal */}
       <AlertModal {...alertModal} />
 
-      <aside className="hidden md:flex w-52 bg-white flex-col py-6 px-4 border-r border-gray-100 shrink-0">
+      <aside className="hidden md:flex md:sticky md:top-0 md:h-screen w-52 bg-white flex-col py-6 px-4 border-r border-gray-100 shrink-0">
         <div className="text-center mb-6">
           <div className="w-24 h-24 rounded-full overflow-hidden mx-auto border-0 relative">
             <Image src="/logo-new.png" alt="Logo" fill className="object-cover" sizes="96px" />
           </div>
           <p className="text-xs font-extrabold text-indigo-900 leading-tight tracking-wide mt-3">JULIETA SOFTDRINKS<br />STORE</p>
         </div>
-        <nav className="flex flex-col gap-1">
+        <nav className="flex flex-col gap-1 flex-1 min-h-0 overflow-y-auto">
           {navItems.map((item) => (
             <div key={item.label} onClick={() => navigate(item.label)}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${item.active ? "text-indigo-700 font-semibold" : "text-gray-400 hover:text-gray-600"}`}>
