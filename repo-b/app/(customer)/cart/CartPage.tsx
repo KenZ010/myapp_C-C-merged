@@ -55,6 +55,9 @@ const peso = (n: number) =>
     maximumFractionDigits: 2,
   });
 
+// "1 case" / "3 cases"
+const caseLabel = (n: number) => `${n} case${n !== 1 ? "s" : ""}`;
+
 const formatTime = (secs: number) => {
   const m = Math.floor(secs / 60);
   const s = secs % 60;
@@ -484,6 +487,7 @@ export default function CartPage() {
   }
 
   const timeLow = secondsLeft <= 60;
+  const totalCases = items.reduce((sum, i) => sum + i.quantity, 0);
 
   return (
     <>
@@ -589,7 +593,7 @@ export default function CartPage() {
                     {items.map((item) => (
                       <div key={item.id} className="flex justify-between gap-2.5 text-[12.5px]">
                         <span className="text-[#444]">
-                          {item.product.productName} × {item.quantity}
+                          {item.product.productName} × {caseLabel(item.quantity)}
                         </span>
                         <span className="whitespace-nowrap font-semibold text-[#2d7a3a]">
                           {peso(getEffectivePrice(item) * item.quantity)}
@@ -723,7 +727,7 @@ export default function CartPage() {
 
       <div className="min-h-[calc(100vh-56px)] bg-[#f5f5f5] p-4 min-[900px]:p-7">
         <p className="mb-5 text-[13px] text-[#888]">
-          🛒 {items.length} item{items.length !== 1 ? "s" : ""} in your cart
+          🛒 {items.length} item{items.length !== 1 ? "s" : ""} in your cart · {caseLabel(totalCases)}
         </p>
 
         <div className="grid grid-cols-1 items-start gap-6 min-[900px]:grid-cols-[1fr_400px]">
@@ -753,8 +757,11 @@ export default function CartPage() {
                     <p className="mb-[3px] text-[15px] font-semibold text-[#1a1a1a]">
                       {item.product.productName}
                     </p>
-                    <p className="mb-2.5 text-xs text-[#aaa]">
+                    <p className="mb-1 text-xs text-[#aaa]">
                       {item.product.size ? `Size: ${item.product.size}` : item.product.category || ""}
+                    </p>
+                    <p className="mb-2.5 text-xs text-[#888]">
+                      {peso(effectivePrice)} per case
                     </p>
 
                     {hasDiscount ? (
@@ -785,8 +792,13 @@ export default function CartPage() {
                         >
                           −
                         </button>
-                        <span className="min-w-8 text-center text-[15px] font-semibold text-[#1a1a1a]">
-                          {item.quantity}
+                        <span className="flex min-w-12 flex-col items-center justify-center leading-none">
+                          <span className="text-[15px] font-semibold text-[#1a1a1a]">
+                            {item.quantity}
+                          </span>
+                          <span className="mt-0.5 text-[9px] font-medium uppercase tracking-wide text-[#aaa]">
+                            {item.quantity !== 1 ? "cases" : "case"}
+                          </span>
                         </span>
                         <button
                           onClick={() => handleUpdateQty(item, 1)}
@@ -836,7 +848,7 @@ export default function CartPage() {
                 return (
                   <div key={item.id} className="flex items-center justify-between">
                     <span className="text-[13px] text-[#555]">
-                      {item.product.productName} × {item.quantity}
+                      {item.product.productName} × {caseLabel(item.quantity)}
                     </span>
                     <div className="text-right">
                       {hasDiscount && (
@@ -856,7 +868,7 @@ export default function CartPage() {
             <div className="my-3.5 h-px bg-[#f0f0f0]" />
 
             <div className="mb-2 flex justify-between">
-              <span className="text-[13px] text-[#888]">Subtotal</span>
+              <span className="text-[13px] text-[#888]">Subtotal ({caseLabel(totalCases)})</span>
               <span className="text-[13px] text-[#1a1a1a]">{peso(subtotal)}</span>
             </div>
 
