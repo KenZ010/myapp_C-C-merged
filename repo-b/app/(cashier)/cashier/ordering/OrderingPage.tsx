@@ -164,40 +164,100 @@ function PromoBanner({ promos, products, onPick }: PromoBannerProps) {
   );
 }
 
-// ── Quantity Stepper ──────────────────────────────────────────────────────────
+// ── Quantity Stepper (with a number the cashier can type directly) ───────────
 type StepperProps = {
   value:        number;
   min:          number;
   max:          number;
   onChange:     (v: number) => void;
   onMaxReached: () => void;
+  size?:        "md" | "sm";
 };
 
-function QuantityStepper({ value, min, max, onChange, onMaxReached }: StepperProps) {
+function QuantityStepper({ value, min, max, onChange, onMaxReached, size = "md" }: StepperProps) {
   const atMax = value >= max;
+  const [draft, setDraft]     = useState<string>(String(value));
+  const [focused, setFocused] = useState<boolean>(false);
+
+  // Keep the box in sync when the value changes from outside (+ / − / cart changes)
+  useEffect(() => {
+    if (!focused) setDraft(String(value));
+  }, [value, focused]);
+
+  const handleType = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Digits only, so the cashier can't type letters, minus signs or decimals
+    const digits = e.target.value.replace(/\D/g, "").slice(0, 5);
+
+    if (digits === "") {
+      setDraft("");           // allow clearing the box so a new number can be typed
+      return;
+    }
+
+    const n = parseInt(digits, 10);
+    if (n > max) {
+      setDraft(String(max));
+      onChange(max);
+      onMaxReached();
+      return;
+    }
+
+    setDraft(String(n));
+    if (n >= min) onChange(n);
+  };
+
+  const commit = () => {
+    setFocused(false);
+    const n     = parseInt(draft, 10);
+    const final = isNaN(n) || n < min ? min : Math.min(n, max);
+    setDraft(String(final));
+    if (final !== value) onChange(final);
+  };
+
+  const btnSize   = size === "sm" ? "w-7 h-7 rounded-md"  : "w-8 h-8 rounded-lg";
+  const inputSize = size === "sm" ? "w-10 h-7 text-sm"    : "w-12 h-8 text-sm";
+  const wrapStyle = size === "sm"
+    ? "gap-1 rounded-lg px-0.5 py-0.5"
+    : "gap-1 rounded-xl px-1 py-1";
 
   return (
-    <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-1 py-1">
+    <div className={`flex items-center bg-gray-50 border border-gray-200 ${wrapStyle}`}>
       <button
+        type="button"
         onClick={() => onChange(Math.max(min, value - 1))}
         disabled={value <= min}
         aria-label="Decrease quantity"
-        className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500
-                   hover:bg-white hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed
-                   transition-all duration-150 font-bold text-base"
+        className={`${btnSize} flex items-center justify-center text-gray-500
+                    hover:bg-white hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed
+                    transition-all duration-150 font-bold text-base`}
       >
         −
       </button>
-      <span className="w-8 text-center text-sm font-semibold text-gray-800 tabular-nums">
-        {value}
-      </span>
+
+      {/* Type the quantity directly */}
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        value={draft}
+        onChange={handleType}
+        onFocus={(e) => { setFocused(true); e.target.select(); }}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        aria-label="Quantity"
+        className={`${inputSize} text-center font-semibold text-gray-800 tabular-nums
+                    bg-white border border-gray-200 rounded-md outline-none
+                    focus:border-violet-500 focus:ring-2 focus:ring-violet-200 transition-all`}
+      />
+
       {/* Not truly disabled at max, so tapping it can still show the "max stock" popup */}
       <button
+        type="button"
         onClick={() => (atMax ? onMaxReached() : onChange(value + 1))}
         aria-label="Increase quantity"
         aria-disabled={atMax}
         className={[
-          "w-8 h-8 rounded-lg flex items-center justify-center text-gray-500",
+          btnSize,
+          "flex items-center justify-center text-gray-500",
           "transition-all duration-150 font-bold text-base",
           atMax
             ? "opacity-30 cursor-not-allowed"
@@ -597,13 +657,13 @@ export default function OrderingPage() {
     addedTimer.current = setTimeout(() => setAddedId(null), 1200);
   }, [getFinalPrice]);
 
-  // Change a cart line's quantity by +1 / -1 (kept between 1 and the stock available)
-  const changeCartQty = (id: string, delta: number) => {
+  // Set a cart line's quantity directly (kept between 1 and the stock available)
+  const setCartQty = (id: string, next: number) => {
     setCart((prev) =>
       prev.map((i) => {
         if (i.id !== id) return i;
         const max = i.stock ?? i.qty;
-        return { ...i, qty: Math.max(1, Math.min(i.qty + delta, max)) };
+        return { ...i, qty: Math.max(1, Math.min(next, max)) };
       }),
     );
   };
@@ -826,8 +886,9 @@ export default function OrderingPage() {
           {/* Items list */}
           <div className="cart-scroll flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2.5 bg-gray-50/60">
             {cart.map((item) => {
-              const meta     = getMeta(item.category);
-              const atMax    = item.qty >= (item.stock ?? item.qty);
+              const meta      = getMeta(item.category);
+              const maxQty    = item.stock ?? item.qty;
+              const atMax     = item.qty >= maxQty;
               const lineTotal = item.finalPrice * item.qty;
               return (
                 <div
@@ -875,31 +936,14 @@ export default function OrderingPage() {
 
                   {/* Qty controls + line total */}
                   <div className="flex items-center justify-between mt-2.5">
-                    <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-lg px-0.5 py-0.5">
-                      <button
-                        onClick={() => changeCartQty(item.id, -1)}
-                        disabled={item.qty <= 1}
-                        aria-label="Decrease quantity"
-                        className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500
-                                   hover:bg-white hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed
-                                   transition-all font-bold"
-                      >
-                        −
-                      </button>
-                      <span className="w-7 text-center text-sm font-semibold text-gray-800 tabular-nums">
-                        {item.qty}
-                      </span>
-                      <button
-                        onClick={() => changeCartQty(item.id, 1)}
-                        disabled={atMax}
-                        aria-label="Increase quantity"
-                        className="w-7 h-7 rounded-md flex items-center justify-center text-gray-500
-                                   hover:bg-white hover:text-gray-800 disabled:opacity-30 disabled:cursor-not-allowed
-                                   transition-all font-bold"
-                      >
-                        +
-                      </button>
-                    </div>
+                    <QuantityStepper
+                      size="sm"
+                      value={item.qty}
+                      min={1}
+                      max={maxQty}
+                      onChange={(v) => setCartQty(item.id, v)}
+                      onMaxReached={() => { /* the "Max stock reached" note below already tells the cashier */ }}
+                    />
                     <p className="text-sm font-bold text-gray-900 tabular-nums">{formatMoney(lineTotal)}</p>
                   </div>
 
