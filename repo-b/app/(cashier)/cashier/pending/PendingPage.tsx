@@ -536,14 +536,17 @@ export default function PendingPage() {
                   <div style={{ padding: "16px 20px 18px" }}>
                     <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "16px" }}>
                       {[
-                        { icon: Icon.user, label: "Customer", value: order.customer },
-                        { icon: Icon.pin,  label: "Address",  value: order.address  },
+                        { icon: Icon.user, label: "Customer", value: order.customer, accent: false },
+                        { icon: Icon.pin,  label: "Address",  value: order.address,  accent: false },
+                        ...(order.deliveryMan
+                          ? [{ icon: Icon.truck, label: "Delivery man", value: order.deliveryMan, accent: true }]
+                          : []),
                       ].map((row) => (
                         <div key={row.label} style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
-                          <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: GREEN_LIGHT, color: GREEN, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{row.icon}</div>
+                          <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: row.accent ? "#fff7ed" : GREEN_LIGHT, color: row.accent ? "#c2410c" : GREEN, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{row.icon}</div>
                           <div style={{ minWidth: 0 }}>
                             <p style={{ fontSize: "11px", fontWeight: 600, color: FAINT, margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>{row.label}</p>
-                            <p style={{ fontSize: "13px", fontWeight: 500, color: INK, margin: "1px 0 0", wordBreak: "break-word" }}>{row.value}</p>
+                            <p style={{ fontSize: "13px", fontWeight: row.accent ? 700 : 500, color: INK, margin: "1px 0 0", wordBreak: "break-word" }}>{row.value}</p>
                           </div>
                         </div>
                       ))}
@@ -650,13 +653,6 @@ export default function PendingPage() {
                         </div>
                       )}
                     </div>
-
-                    {/* NEW: Delivery man (shown once assigned) */}
-                    {order.deliveryMan && (
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#fff7ed", border: "1px solid #fed7aa", color: "#c2410c", borderRadius: "10px", padding: "9px 12px", marginBottom: "12px", fontSize: "13px", fontWeight: 600 }}>
-                        {Icon.truck} Delivery by: <span style={{ color: INK }}>{order.deliveryMan}</span>
-                      </div>
-                    )}
 
                     {/* Items toggle */}
                     <button className="link-btn" onClick={() => setExpandedId(isExpanded ? null : order.id)}
