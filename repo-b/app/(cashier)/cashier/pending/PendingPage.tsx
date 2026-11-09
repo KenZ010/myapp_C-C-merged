@@ -41,6 +41,7 @@ type Order = {
   changeDue?: number;
   gcashRef?: string;
   proofUrl?: string;
+  deliveryMan?: string; // NEW: name of the person delivering the order
 };
 
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
@@ -178,6 +179,7 @@ function normalizeOrder(o: Record<string, unknown>): Order {
       changeRaw !== undefined && changeRaw !== null ? Number(changeRaw) : undefined,
     gcashRef: gcashRef ? String(gcashRef) : undefined,
     proofUrl: proofUrl ? String(proofUrl) : undefined,
+    deliveryMan: o.deliveryMan ? String(o.deliveryMan) : undefined, // NEW
   };
 }
 
@@ -230,6 +232,11 @@ export default function PendingPage() {
   const [updatingId,  setUpdatingId]  = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [proofModal,  setProofModal]  = useState<string | null>(null); // GCash screenshot URL
+
+  // NEW: delivery man modal
+  const [deliveryModal, setDeliveryModal] = useState<string | null>(null); // order id
+  const [deliveryName,  setDeliveryName]  = useState("");
+  const [deliveryError, setDeliveryError] = useState<string | null>(null);
 
   const socket = useSocket();
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
@@ -287,32 +294,66 @@ export default function PendingPage() {
     };
   }, [socket, fetchOrders]);
 
-  // Close the screenshot viewer with Escape
+  // Close the screenshot viewer / delivery modal with Escape
   useEffect(() => {
-    if (!proofModal) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setProofModal(null); };
+    if (!proofModal && !deliveryModal) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setProofModal(null);
+        setDeliveryModal(null);
+      }
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [proofModal]);
+  }, [proofModal, deliveryModal]);
 
-  const updateStatus = async (id: string, status: OrderStatus) => {
-    const previous = orders.find((o) => o.id === id)?.status;
+  const updateStatus = async (
+    id: string,
+    status: OrderStatus,
+    extra?: { deliveryMan?: string }
+  ) => {
+    const previous = orders.find((o) => o.id === id);
     setUpdatingId(id);
-    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
+    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status, ...extra } : o)));
     try {
-      await api.updateOrderStatus(id, backendStatus[status]);
+      await api.updateOrderStatus(id, backendStatus[status], extra);
       if (status === "Completed" || status === "Cancelled") {
         setTimeout(() => setOrders((prev) => prev.filter((o) => o.id !== id)), 1500);
       }
     } catch (err) {
       // Roll back the optimistic update and show the server's message
       if (previous) {
-        setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: previous } : o)));
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === id ? { ...o, status: previous.status, deliveryMan: previous.deliveryMan } : o
+          )
+        );
       }
       setError((err as Error).message || "Failed to update order status.");
     } finally {
       setUpdatingId(null);
     }
+  };
+
+  // NEW: delivery man modal handlers
+  const openDeliveryModal = (id: string) => {
+    setDeliveryName("");
+    setDeliveryError(null);
+    setDeliveryModal(id);
+  };
+
+  const closeDeliveryModal = () => setDeliveryModal(null);
+
+  const confirmDelivery = () => {
+    const name = deliveryName.trim();
+    if (name.length < 2) {
+      setDeliveryError("Please enter the delivery man's name.");
+      return;
+    }
+    if (!deliveryModal) return;
+    const id = deliveryModal;
+    closeDeliveryModal();
+    updateStatus(id, "Out for Delivery", { deliveryMan: name });
   };
 
   const filtered = activeTab === "All Orders" ? orders : orders.filter((o) => o.status === activeTab);
@@ -610,6 +651,13 @@ export default function PendingPage() {
                       )}
                     </div>
 
+                    {/* NEW: Delivery man (shown once assigned) */}
+                    {order.deliveryMan && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#fff7ed", border: "1px solid #fed7aa", color: "#c2410c", borderRadius: "10px", padding: "9px 12px", marginBottom: "12px", fontSize: "13px", fontWeight: 600 }}>
+                        {Icon.truck} Delivery by: <span style={{ color: INK }}>{order.deliveryMan}</span>
+                      </div>
+                    )}
+
                     {/* Items toggle */}
                     <button className="link-btn" onClick={() => setExpandedId(isExpanded ? null : order.id)}
                       style={{ background: "none", border: "none", color: GREEN, fontSize: "12.5px", fontWeight: 600, cursor: "pointer", padding: "2px 0", marginBottom: "12px", display: "flex", alignItems: "center", gap: "6px", transition: "color 0.12s" }}>
@@ -646,7 +694,8 @@ export default function PendingPage() {
                         </div>
                       )}
                       {order.status === "Processing" && (
-                        <button className="act-amber" onClick={() => updateStatus(order.id, "Out for Delivery")} disabled={isUpdating}
+                        // CHANGED: opens the delivery man modal instead of updating directly
+                        <button className="act-amber" onClick={() => openDeliveryModal(order.id)} disabled={isUpdating}
                           style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", border: "none", background: "#d97706", color: "#fff", fontSize: "13px", fontWeight: 700, cursor: isUpdating ? "not-allowed" : "pointer", opacity: isUpdating ? 0.6 : 1, boxShadow: "0 4px 12px rgba(217,119,6,0.25)", transition: "background 0.15s" }}>
                           {Icon.truck} Out for Delivery
                         </button>
@@ -685,6 +734,47 @@ export default function PendingPage() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={proofModal} alt="GCash payment screenshot"
               style={{ display: "block", maxWidth: "100%", maxHeight: "calc(90vh - 24px)", borderRadius: "8px", objectFit: "contain", margin: "0 auto" }} />
+          </div>
+        </div>
+      )}
+
+      {/* NEW: Delivery man modal */}
+      {deliveryModal && (
+        <div onClick={closeDeliveryModal}
+          style={{ position: "fixed", inset: 0, background: "rgba(10,25,15,0.75)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "24px", animation: "fadeIn 0.15s" }}>
+          <div onClick={(e) => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: "400px", background: "#fff", borderRadius: "14px", padding: "22px", boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px", color: GREEN }}>
+              {Icon.truckLg}
+              <h2 style={{ fontSize: "17px", fontWeight: 700, color: INK, margin: 0 }}>Assign delivery man</h2>
+            </div>
+            <p style={{ fontSize: "13px", color: MUTED, margin: "0 0 14px" }}>
+              Enter the name of the person delivering this order.
+            </p>
+
+            <input
+              autoFocus
+              value={deliveryName}
+              onChange={(e) => { setDeliveryName(e.target.value); setDeliveryError(null); }}
+              onKeyDown={(e) => { if (e.key === "Enter") confirmDelivery(); }}
+              placeholder="Delivery man's name"
+              maxLength={60}
+              style={{ width: "100%", boxSizing: "border-box", padding: "11px 13px", borderRadius: "10px", fontSize: "14px", color: INK, outline: "none", border: `1px solid ${deliveryError ? "#fecaca" : GREEN_BORDER}`, background: GREEN_TINT }}
+            />
+            {deliveryError && (
+              <p style={{ fontSize: "12px", color: "#b91c1c", margin: "6px 0 0" }}>{deliveryError}</p>
+            )}
+
+            <div style={{ display: "flex", gap: "8px", marginTop: "18px" }}>
+              <button onClick={closeDeliveryModal}
+                style={{ flex: 1, padding: "11px", borderRadius: "10px", border: `1px solid ${GREEN_BORDER}`, background: "#fff", color: MUTED, fontSize: "13px", fontWeight: 700, cursor: "pointer" }}>
+                Back
+              </button>
+              <button className="act-amber" onClick={confirmDelivery}
+                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "11px", borderRadius: "10px", border: "none", background: "#d97706", color: "#fff", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}>
+                {Icon.truck} Confirm
+              </button>
+            </div>
           </div>
         </div>
       )}
