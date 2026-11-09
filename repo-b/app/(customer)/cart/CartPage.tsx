@@ -126,6 +126,75 @@ function CartThumb({
   );
 }
 
+// ── Quantity number box (cashier-style: tap it and type the quantity) ───────
+function CartQtyInput({
+  value,
+  max,
+  onCommit,
+  onMaxReached,
+}: {
+  value: number;
+  max: number;
+  onCommit: (n: number) => void;
+  onMaxReached: () => void;
+}) {
+  const [draft, setDraft] = useState<string>(String(value));
+  const [focused, setFocused] = useState<boolean>(false);
+
+  // Stay in sync when the quantity changes from the + / − buttons
+  useEffect(() => {
+    if (!focused) setDraft(String(value));
+  }, [value, focused]);
+
+  const handleType = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/\D/g, "").slice(0, 5);
+    if (digits === "") {
+      setDraft(""); // allow clearing so a new number can be typed
+      return;
+    }
+    const n = parseInt(digits, 10);
+    if (n > max) {
+      setDraft(String(max));
+      onMaxReached();
+      return;
+    }
+    setDraft(String(n));
+  };
+
+  const commit = () => {
+    setFocused(false);
+    const n = parseInt(draft, 10);
+    // Empty or 0 → go back to the current quantity (use the 🗑️ button to remove)
+    if (isNaN(n) || n < 1) {
+      setDraft(String(value));
+      return;
+    }
+    const final = Math.min(n, max);
+    setDraft(String(final));
+    if (final !== value) onCommit(final);
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      value={draft}
+      onChange={handleType}
+      onFocus={(e) => {
+        setFocused(true);
+        e.target.select();
+      }}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+      }}
+      aria-label="Quantity"
+      className="h-8 w-12 rounded-md border border-[#e8e8e8] bg-white text-center text-[15px] font-semibold tabular-nums text-[#1a1a1a] outline-none transition-colors focus:border-[#2d7a3a] focus:ring-2 focus:ring-[#2d7a3a]/20"
+    />
+  );
+}
+
 // ── Delete Confirmation Modal ──────────────────────────────────────────────────
 function DeleteModal({
   item,
@@ -349,6 +418,34 @@ export default function CartPage() {
       console.error("Failed to update cart:", err);
       await fetchCart();
     }
+  };
+
+  // Set an exact quantity typed into the number box
+  const handleSetQty = async (item: CartItem, newQty: number) => {
+    const customerId = getCustomerId();
+    const stock = item.product.stock ?? Infinity;
+    const qty = Math.min(newQty, stock);
+    if (qty < 1 || qty === item.quantity) return;
+
+    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, quantity: qty } : i)));
+    try {
+      await api.updateCartItem(customerId, item.id, qty);
+    } catch (err) {
+      console.error("Failed to update cart:", err);
+      await fetchCart();
+    }
+  };
+
+  // Shows the "max stock" warning + toast (used by the typeable number box)
+  const showMaxStock = (item: CartItem) => {
+    const stock = item.product.stock ?? 0;
+    if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+    setStockWarning(item.id);
+    warningTimerRef.current = setTimeout(() => setStockWarning(null), 2500);
+
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setMaxStockToast({ productName: item.product.productName, stock });
+    toastTimerRef.current = setTimeout(() => setMaxStockToast(null), 2800);
   };
 
   const promptRemove = (item: CartItem) => setDeleteTarget(item);
@@ -792,14 +889,12 @@ export default function CartPage() {
                         >
                           −
                         </button>
-                        <span className="flex min-w-12 flex-col items-center justify-center leading-none">
-                          <span className="text-[15px] font-semibold text-[#1a1a1a]">
-                            {item.quantity}
-                          </span>
-                          <span className="mt-0.5 text-[9px] font-medium uppercase tracking-wide text-[#aaa]">
-                            {item.quantity !== 1 ? "cases" : "case"}
-                          </span>
-                        </span>
+                        <CartQtyInput
+                          value={item.quantity}
+                          max={item.product.stock ?? 99999}
+                          onCommit={(n) => handleSetQty(item, n)}
+                          onMaxReached={() => showMaxStock(item)}
+                        />
                         <button
                           onClick={() => handleUpdateQty(item, 1)}
                           className={`flex h-9 w-9 items-center justify-center border-none bg-transparent text-lg font-bold ${
