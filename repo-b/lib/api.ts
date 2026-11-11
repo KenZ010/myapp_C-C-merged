@@ -405,9 +405,10 @@ export const api = {
   // ── RETURNS ─────────────────────────────────────────────────────────────────
   // CUSTOMER: submit a return request
   submitReturnRequest: async (payload: {
-    saleId:  string;
-    reason:  'WRONG_ITEM_SENT' | 'DAMAGED' | 'EXPIRED' | 'OTHER';
-    items:   { orderLineId: string; returnQty: number }[];
+    saleId:     string;
+    reason:     'WRONG_ITEM_SENT' | 'DAMAGED' | 'EXPIRED' | 'OTHER';
+    items:      { orderLineId: string; returnQty: number }[];
+    proofImage?: string;
   }) => {
     const res = await fetch(`${API_URL}/returns`, {
       method:  'POST',

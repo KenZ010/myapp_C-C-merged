@@ -176,6 +176,29 @@ type StepperProps = {
 
 function QuantityStepper({ value, min, max, onChange, onMaxReached }: StepperProps) {
   const atMax = value >= max;
+  const [raw, setRaw] = useState<string>(String(value));
+
+  useEffect(() => {
+    setRaw(String(value));
+  }, [value]);
+
+  const overMax = raw !== "" && !isNaN(Number(raw)) && Number(raw) > max;
+
+  const commit = () => {
+    const n = parseInt(raw, 10);
+    const clamped = isNaN(n) ? min : Math.min(max, Math.max(min, n));
+    setRaw(String(clamped));
+    onChange(clamped);
+    if (clamped >= max) onMaxReached();
+  };
+
+  const handleInputChange = (next: string) => {
+    if (!/^\d*$/.test(next)) return;
+    setRaw(next);
+    if (next === "") return;
+    const n = parseInt(next, 10);
+    if (!isNaN(n) && n >= min && n <= max) onChange(n);
+  };
 
   return (
     <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-1 py-1">
@@ -189,9 +212,22 @@ function QuantityStepper({ value, min, max, onChange, onMaxReached }: StepperPro
       >
         −
       </button>
-      <span className="w-8 text-center text-sm font-semibold text-gray-800 tabular-nums">
-        {value}
-      </span>
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        value={raw}
+        onChange={(e) => handleInputChange(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        aria-label="Quantity"
+        className={[
+          "w-9 h-8 rounded-lg text-center text-sm font-semibold tabular-nums",
+          "outline-none transition-all duration-150",
+          "focus:bg-white focus:ring-2 focus:ring-violet-200",
+          overMax ? "text-red-600 bg-red-50" : "text-gray-800 bg-transparent",
+        ].join(" ")}
+      />
       {/* Not truly disabled at max, so tapping it can still show the "max stock" popup */}
       <button
         onClick={() => (atMax ? onMaxReached() : onChange(value + 1))}

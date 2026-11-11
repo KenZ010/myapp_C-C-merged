@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -37,6 +37,36 @@ const RETURN_REASON_LABELS: Record<ReturnReason, string> = {
 };
 
 const RETURNABLE_STATUSES = ["COMPLETED", "PARTIALLY_RETURNED"];
+
+function compressImage(file: File, maxWidth = 1200, quality = 0.78): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("read"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("decode"));
+      img.onload = () => {
+        const scale = Math.min(1, maxWidth / img.width);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("canvas"));
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function dataUrlToFile(dataUrl: string, name: string): Promise<File> {
+  const blob = await (await fetch(dataUrl)).blob();
+  return new File([blob], name, { type: blob.type || "image/jpeg" });
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function normalizeOrder(o: Record<string, unknown>): Order {
@@ -101,8 +131,11 @@ function ReturnFormModal({
   const [selectedLines, setSelectedLines] = useState<Record<string, boolean>>({});
   const [rawValues,     setRawValues]     = useState<Record<string, string>>({});
   const [reason,        setReason]        = useState<ReturnReason | "">("");
+  const [proofImage,    setProofImage]    = useState<string | null>(null);
+  const [proofError,    setProofError]    = useState<string | null>(null);
   const [submitting,    setSubmitting]    = useState(false);
   const [error,         setError]         = useState<string | null>(null);
+  const proofInputRef = useRef<HTMLInputElement>(null);
 
   // Only lines from this order that still have returnable pieces
   const returnableLines = order.orderLines.filter((l) => maxReturnable(l) > 0);
@@ -168,6 +201,27 @@ function ReturnFormModal({
   );
   const canSubmit    = anySelected && !!reason && !submitting && !anyInvalid;
 
+  const handleProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setProofError("Please attach an image file (JPG or PNG).");
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setProofError("That image is too large. Please choose one under 8 MB.");
+      return;
+    }
+    try {
+      setProofError(null);
+      setProofImage(await compressImage(file));
+    } catch {
+      setProofError("We couldn't read that image. Please try another one.");
+    }
+  };
+
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setError(null);
@@ -180,10 +234,18 @@ function ReturnFormModal({
           returnQty:   resolvedQty(l.id, maxReturnable(l)),
         }));
 
+      let proofImageUrl: string | undefined;
+      if (proofImage) {
+        const upload = await api.uploadReceipt(await dataUrlToFile(proofImage, "return-proof.jpg"));
+        proofImageUrl = upload?.receiptImage;
+        if (!proofImageUrl) throw new Error("Proof photo upload failed. Please try again.");
+      }
+
       const data = await api.submitReturnRequest({
         saleId: order.id,
         reason: reason as ReturnReason,
         items,
+        proofImage: proofImageUrl,
       });
 
       onSuccess(data.returnRequest?.id ?? order.id);
@@ -407,6 +469,56 @@ function ReturnFormModal({
                 <option key={val} value={val}>{label}</option>
               ))}
             </select>
+          </div>
+
+          {/* Step 3 — Proof photo */}
+          <div>
+            <p style={{ fontSize: "12px", fontWeight: 700, color: "#c2185b", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+              3 · Photo proof <span style={{ color: "#bbb", fontWeight: 600, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
+            </p>
+
+            {proofImage ? (
+              <div style={{ position: "relative", borderRadius: 12, overflow: "hidden", border: "1.5px solid #e91e8c", background: "#fff8fa" }}>
+                <img
+                  src={proofImage}
+                  alt="Return proof preview"
+                  style={{ display: "block", width: "100%", maxHeight: 200, objectFit: "contain", background: "#fff" }}
+                />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 12px", background: "#fff0f6", borderTop: "1px solid #f8c0d8" }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#2e7d32" }}>✓ Photo ready</span>
+                  <button
+                    type="button"
+                    onClick={() => { setProofImage(null); setProofError(null); }}
+                    style={{ background: "none", border: "none", color: "#c2185b", fontSize: 11, fontWeight: 700, cursor: "pointer", padding: 0 }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div
+                onClick={() => proofInputRef.current?.click()}
+                style={{ cursor: "pointer", borderRadius: 12, border: "2px dashed #f0a6c4", background: "#fff8fa", padding: "18px 16px", textAlign: "center" }}
+              >
+                <div style={{ fontSize: 26, marginBottom: 4 }}>📷</div>
+                <p style={{ fontSize: 13, fontWeight: 600, color: "#c2185b", margin: 0 }}>
+                  Click to attach a photo of the item
+                </p>
+                <p style={{ fontSize: 11, color: "#bbb", margin: "3px 0 0" }}>JPG or PNG · up to 8 MB</p>
+              </div>
+            )}
+
+            <input
+              ref={proofInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleProofUpload}
+              style={{ display: "none" }}
+            />
+
+            {proofError && (
+              <p style={{ fontSize: 11, color: "#e53935", margin: "6px 0 0" }}>⚠️ {proofError}</p>
+            )}
           </div>
 
           {/* Validation hint before submit */}
