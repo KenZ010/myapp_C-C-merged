@@ -19,6 +19,8 @@ const FAINT        = "#8fa596"; // labels / icons
 const YELLOW       = "#facc15"; // avatar + unread dot
 const PAGE_BG      = "#f6faf7"; // app background
 
+const ROLE_LABEL = "Cashier";
+
 // Same statuses the Pending page treats as "not completed yet"
 const ACTIVE_STATUSES = ["PENDING", "PROCESSING", "OUT_FOR_DELIVERY"];
 
@@ -211,7 +213,6 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
   const page = pageTitles[pathname] ?? { title: "Cashier Panel", sub: "" };
 
   const displayName = currentUser?.name || currentUser?.username || "Cashier";
-  const displayRole = String(currentUser?.role || "Cashier").toLowerCase();
   const initial     = String(displayName).charAt(0).toUpperCase();
 
   const handleLogout = () => {
@@ -302,8 +303,8 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
               <p style={{ fontSize: "13px", fontWeight: 700, color: INK, lineHeight: 1.2, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {displayName}
               </p>
-              <p style={{ fontSize: "11px", color: GREEN, fontWeight: 600, margin: "2px 0 0", textTransform: "capitalize" }}>
-                {displayRole}
+              <p style={{ fontSize: "11px", color: GREEN, fontWeight: 600, margin: "2px 0 0" }}>
+                {ROLE_LABEL}
               </p>
             </div>
           </div>
@@ -557,12 +558,12 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
               <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: YELLOW, color: GREEN_DARK, fontWeight: 700, fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 {initial}
               </div>
-              <div className="hidden sm:block" style={{ minWidth: 0 }}>
+              <div className="hidden sm:block">
                 <p style={{ fontSize: "14px", fontWeight: 600, color: "#fff", lineHeight: 1.2, margin: 0 }}>
                   {displayName}
                 </p>
-                <p style={{ fontSize: "11px", fontWeight: 500, color: "rgba(255,255,255,0.75)", lineHeight: 1.2, margin: "2px 0 0", textTransform: "capitalize" }}>
-                  {displayRole}
+                <p style={{ fontSize: "11px", fontWeight: 500, color: "rgba(255,255,255,0.75)", lineHeight: 1.2, margin: "1px 0 0" }}>
+                  {ROLE_LABEL}
                 </p>
               </div>
             </div>
