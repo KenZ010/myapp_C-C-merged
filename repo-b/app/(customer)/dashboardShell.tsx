@@ -8,6 +8,8 @@ import { toast } from "sonner";
 import { useSocket, useSocketActions } from "@/app/providers";
 import { api } from "@/lib/api";
 
+const ROLE_LABEL = "Customer";
+
 const pageTitles: Record<string, { title: string; sub: string }> = {
   "/home":          { title: "Dashboard",           sub: "Welcome back" },
   "/products":      { title: "Products",            sub: "Browse our selection" },
@@ -374,7 +376,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
             `}</style>
           </div>
 
-          {/* Customer name */}
+          {/* Customer name + role */}
           <div
             style={{
               display: "flex", alignItems: "center", gap: "8px",
@@ -391,16 +393,25 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
             >
               {initial}
             </span>
-            <span
-              title={customerName}
-              style={{
-                color: "#fff", fontSize: "13px", fontWeight: 500,
-                maxWidth: isMobile ? "70px" : "140px",
-                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-              }}
-            >
-              {customerName}
-            </span>
+            <div style={{ minWidth: 0 }}>
+              <p
+                title={customerName}
+                style={{
+                  color: "#fff", fontSize: "13px", fontWeight: 500, lineHeight: 1.15, margin: 0,
+                  maxWidth: isMobile ? "70px" : "140px",
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}
+              >
+                {customerName}
+              </p>
+              <p
+                style={{
+                  color: "rgba(255,255,255,0.75)", fontSize: "10.5px", fontWeight: 500, lineHeight: 1.15, margin: "1px 0 0",
+                }}
+              >
+                {ROLE_LABEL}
+              </p>
+            </div>
           </div>
 
         </div>
