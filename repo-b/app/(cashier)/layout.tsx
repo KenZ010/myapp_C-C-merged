@@ -211,6 +211,7 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
   const page = pageTitles[pathname] ?? { title: "Cashier Panel", sub: "" };
 
   const displayName = currentUser?.name || currentUser?.username || "Cashier";
+  const displayRole = currentUser?.role || "Cashier";
   const initial     = String(displayName).charAt(0).toUpperCase();
 
   const handleLogout = () => {
@@ -302,7 +303,7 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
                 {displayName}
               </p>
               <p style={{ fontSize: "11px", color: GREEN, fontWeight: 600, margin: "2px 0 0" }}>
-                {currentUser?.role || "Cashier"}
+                {displayRole}
               </p>
             </div>
           </div>
@@ -551,14 +552,19 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
               )}
             </div>
 
-            {/* User pill */}
+            {/* User pill — name with role below */}
             <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "rgba(255,255,255,0.16)", padding: "5px 14px 5px 6px", borderRadius: "999px" }}>
               <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: YELLOW, color: GREEN_DARK, fontWeight: 700, fontSize: "14px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 {initial}
               </div>
-              <p className="hidden sm:block" style={{ fontSize: "14px", fontWeight: 600, color: "#fff", margin: 0 }}>
-                {displayName}
-              </p>
+              <div className="hidden sm:block" style={{ minWidth: 0 }}>
+                <p style={{ fontSize: "14px", fontWeight: 600, color: "#fff", lineHeight: 1.2, margin: 0 }}>
+                  {displayName}
+                </p>
+                <p style={{ fontSize: "11px", fontWeight: 500, color: "rgba(255,255,255,0.75)", lineHeight: 1.2, margin: "2px 0 0" }}>
+                  {displayRole}
+                </p>
+              </div>
             </div>
 
           </div>
