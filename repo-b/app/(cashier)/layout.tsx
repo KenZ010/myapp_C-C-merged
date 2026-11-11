@@ -211,7 +211,7 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
   const page = pageTitles[pathname] ?? { title: "Cashier Panel", sub: "" };
 
   const displayName = currentUser?.name || currentUser?.username || "Cashier";
-  const displayRole = currentUser?.role || "Cashier";
+  const displayRole = String(currentUser?.role || "Cashier").toLowerCase();
   const initial     = String(displayName).charAt(0).toUpperCase();
 
   const handleLogout = () => {
@@ -302,7 +302,7 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
               <p style={{ fontSize: "13px", fontWeight: 700, color: INK, lineHeight: 1.2, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {displayName}
               </p>
-              <p style={{ fontSize: "11px", color: GREEN, fontWeight: 600, margin: "2px 0 0" }}>
+              <p style={{ fontSize: "11px", color: GREEN, fontWeight: 600, margin: "2px 0 0", textTransform: "capitalize" }}>
                 {displayRole}
               </p>
             </div>
@@ -561,7 +561,7 @@ export default function CashierLayout({ children }: { children: React.ReactNode 
                 <p style={{ fontSize: "14px", fontWeight: 600, color: "#fff", lineHeight: 1.2, margin: 0 }}>
                   {displayName}
                 </p>
-                <p style={{ fontSize: "11px", fontWeight: 500, color: "rgba(255,255,255,0.75)", lineHeight: 1.2, margin: "2px 0 0" }}>
+                <p style={{ fontSize: "11px", fontWeight: 500, color: "rgba(255,255,255,0.75)", lineHeight: 1.2, margin: "2px 0 0", textTransform: "capitalize" }}>
                   {displayRole}
                 </p>
               </div>
