@@ -249,6 +249,11 @@ export default function AccountManagementPage() {
       showAlert("Full name is required.", "Missing Field");
       return;
     }
+    // ✅ Drivers don't log in, so only other roles need a password
+    if (empEditingId === null && empForm.role !== "DRIVER" && empForm.password.length < 8) {
+      showAlert("Password must be at least 8 characters.", "Invalid Password");
+      return;
+    }
     try {
       if (empEditingId !== null) {
         const res = await api.updateEmployee(empEditingId, empForm);
@@ -528,7 +533,12 @@ export default function AccountManagementPage() {
                         </td>
                         <td className="p-3 text-gray-500">{emp.phone}</td>
                         <td className="p-3">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${emp.role === "CASHIER" ? "bg-blue-100 text-blue-600" : emp.role === "STOCK_MANAGER" ? "bg-purple-100 text-purple-600" : "bg-red-100 text-red-600"}`}>{emp.role}</span>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            emp.role === "CASHIER" ? "bg-blue-100 text-blue-600"
+                            : emp.role === "STOCK_MANAGER" ? "bg-purple-100 text-purple-600"
+                            : emp.role === "DRIVER" ? "bg-amber-100 text-amber-700"
+                            : "bg-red-100 text-red-600"
+                          }`}>{emp.role}</span>
                         </td>
                         <td className="p-3">
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[emp.userStatus] || "bg-gray-200 text-gray-600"}`}>{emp.userStatus}</span>
@@ -657,7 +667,8 @@ export default function AccountManagementPage() {
                 <label className="text-xs font-medium text-gray-600">Phone</label>
                 <PhoneInput value={empForm.phone} onChange={(val) => setEmpForm({ ...empForm, phone: val })} />
               </div>
-              {empEditingId === null && (
+              {/* ✅ Password is hidden for drivers (they don't log in) */}
+              {empEditingId === null && empForm.role !== "DRIVER" && (
                 <div>
                   <label className="text-xs font-medium text-gray-600">Password <span className="text-red-400">(min 8 characters)</span></label>
                   <input type="password" value={empForm.password} onChange={(e) => setEmpForm({ ...empForm, password: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" />
@@ -665,9 +676,20 @@ export default function AccountManagementPage() {
               )}
               <div>
                 <label className="text-xs font-medium text-gray-600">Role</label>
-                <select value={empForm.role} onChange={(e) => setEmpForm({ ...empForm, role: e.target.value })} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900">
+                <select
+                  value={empForm.role}
+                  onChange={(e) =>
+                    setEmpForm({
+                      ...empForm,
+                      role: e.target.value,
+                      password: e.target.value === "DRIVER" ? "" : empForm.password,
+                    })
+                  }
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900"
+                >
                   <option value="CASHIER">CASHIER</option>
                   <option value="STOCK_MANAGER">STOCK_MANAGER</option>
+                  <option value="DRIVER">DRIVER</option>
                 </select>
               </div>
               <div>
