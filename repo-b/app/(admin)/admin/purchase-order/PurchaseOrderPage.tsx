@@ -1,14 +1,13 @@
 "use client";
 import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
 import { exportStyledExcel } from "@/lib/excelExport";
-import { 
-  LayoutDashboard, ShoppingCart, Users, LineChart, 
-  Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift,
-  Building2, Box, Clock, CheckCircle, Calendar, Inbox, Search, Lightbulb
+import {
+  LayoutDashboard, ShoppingCart, Users, LineChart,
+  Package, User, ClipboardList, AlertTriangle, Gift,
+  Clock, Inbox, Search,
 } from "lucide-react";
 
 // ─── CASE UNIT SYSTEM ────────────────────────────────────────────────────────
@@ -48,225 +47,6 @@ function UnitPill({ unit, qty }: { unit?: string; qty?: number }) {
   );
 }
 
-// ─── CUSTOM SUPPLIER DROPDOWN ─────────────────────────────────────────────────
-function SupplierSelect({
-  value, onChange, suppliers, hint, lowStockCount, search = "",
-}: {
-  value: string;
-  onChange: (id: string) => void;
-  suppliers: { id: string; supplierName: string }[];
-  hint?: string;
-  lowStockCount?: number;
-  search?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const selected = suppliers.find((s) => s.id === value);
-  const filteredSuppliers = suppliers.filter((s) =>
-    s.supplierName.toLowerCase().includes(search.trim().toLowerCase())
-  );
-
-  useEffect(() => {
-    if (search) setOpen(true);
-  }, [search]);
-
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className={`w-full flex items-center justify-between border rounded-xl px-4 py-3 text-sm transition-colors bg-white text-left
-          ${open ? "border-indigo-400 ring-2 ring-indigo-100" : "border-gray-200"}`}
-      >
-        {selected ? (
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold shrink-0">
-              {selected.supplierName.charAt(0).toUpperCase()}
-            </div>
-            <span className="font-medium text-gray-800">{selected.supplierName}</span>
-          </div>
-        ) : (
-          <span className="text-gray-400">Select a supplier...</span>
-        )}
-        <svg className="w-4 h-4 text-gray-400 shrink-0 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {open && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] overflow-hidden">
-          {suppliers.length === 0 ? (
-            <div className="px-4 py-3 text-sm text-gray-400 text-center">No suppliers found</div>
-          ) : filteredSuppliers.length === 0 ? (
-            <div className="px-4 py-3 text-sm text-gray-400 text-center">No suppliers match your search</div>
-          ) : (
-            filteredSuppliers.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => { onChange(s.id); setOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-indigo-50
-                  ${value === s.id ? "bg-indigo-50" : ""}`}
-              >
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0
-                  ${value === s.id ? "bg-indigo-600 text-white" : "bg-gray-100 text-gray-600"}`}>
-                  {s.supplierName.charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <span className={`text-sm font-medium ${value === s.id ? "text-indigo-700" : "text-gray-700"}`}>
-                    {s.supplierName}
-                  </span>
-                  {value === s.id && lowStockCount != null && lowStockCount > 0 && (
-                    <span className="ml-2 text-xs text-red-500 font-medium">⚠️ {lowStockCount} low stock</span>
-                  )}
-                </div>
-                {value === s.id && <span className="ml-auto text-indigo-600 text-xs">✓</span>}
-              </button>
-            ))
-          )}
-        </div>
-      )}
-      {hint && <p className="text-xs mt-1.5 text-indigo-500">{hint}</p>}
-    </div>
-  );
-}
-
-// ─── CUSTOM DATE PICKER ───────────────────────────────────────────────────────
-function DateField({
-  value, onChange, label,
-}: {
-  value: string; onChange: (v: string) => void; label?: string;
-}) {
-  const [show, setShow] = useState(false);
-  const [calendarPos, setCalendarPos] = useState({ top: 0, left: 0 });
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const calendarRef = useRef<HTMLDivElement>(null);
-  const today = new Date();
-
-  const [viewYear, setViewYear] = useState(() => value ? parseInt(value.split("-")[0]) : today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(() => value ? parseInt(value.split("-")[1]) - 1 : today.getMonth());
-
-  const openCalendar = () => {
-    setViewYear(value ? parseInt(value.split("-")[0]) : today.getFullYear());
-    setViewMonth(value ? parseInt(value.split("-")[1]) - 1 : today.getMonth());
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      const calH = 320;
-      let top = rect.bottom + 6;
-      const left = rect.left;
-      if (window.innerHeight - rect.bottom < calH && rect.top > calH) top = rect.top - calH - 6;
-      setCalendarPos({ top, left });
-    }
-    setShow(true);
-  };
-
-  useEffect(() => {
-    if (!show) return;
-    const h = (e: MouseEvent) => {
-      if (calendarRef.current && !calendarRef.current.contains(e.target as Node) &&
-        buttonRef.current && !buttonRef.current.contains(e.target as Node)) setShow(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [show]);
-
-  useEffect(() => {
-    if (!show) return;
-    const h = () => setShow(false);
-    window.addEventListener("scroll", h, true);
-    return () => window.removeEventListener("scroll", h, true);
-  }, [show]);
-
-  const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-
-  const selectDate = (day: number) => {
-    onChange(`${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
-    setShow(false);
-  };
-
-  const displayValue = value
-    ? new Date(value + "T00:00:00").toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" })
-    : "";
-
-  const selDay = value ? parseInt(value.split("-")[2]) : null;
-  const selMonth = value ? parseInt(value.split("-")[1]) - 1 : null;
-  const selYear = value ? parseInt(value.split("-")[0]) : null;
-
-  const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); };
-  const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); };
-
-  const calendar = show ? (
-    <div ref={calendarRef}
-      style={{ position: "fixed", top: calendarPos.top, left: calendarPos.left, width: 280, zIndex: 99999 }}
-      className="bg-white border border-gray-200 rounded-2xl shadow-2xl p-4">
-      <div className="flex items-center justify-between mb-3">
-        <button type="button" onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600 font-medium">‹</button>
-        <div className="flex items-center gap-1">
-          <select value={viewMonth} onChange={(e) => setViewMonth(Number(e.target.value))}
-            className="text-sm font-semibold text-gray-800 border-none outline-none bg-transparent cursor-pointer">
-            {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
-          </select>
-          <input type="number" value={viewYear} onChange={(e) => setViewYear(Number(e.target.value))}
-            className="w-16 text-sm font-semibold text-gray-800 border border-gray-200 rounded px-1 text-center outline-none focus:border-indigo-400" />
-        </div>
-        <button type="button" onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600 font-medium">›</button>
-      </div>
-      <div className="grid grid-cols-7 mb-1">
-        {DAYS.map(d => <div key={d} className="text-center text-xs font-semibold text-gray-400 py-1">{d}</div>)}
-      </div>
-      <div className="grid grid-cols-7 gap-0.5">
-        {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
-        {Array.from({ length: daysInMonth }).map((_, i) => {
-          const day = i + 1;
-          const isSel = day === selDay && viewMonth === selMonth && viewYear === selYear;
-          const isToday = day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
-          return (
-            <button key={day} type="button" onClick={() => selectDate(day)}
-              className={`w-full aspect-square flex items-center justify-center rounded-lg text-xs transition-colors
-                ${isSel ? "bg-indigo-600 text-white font-semibold" : isToday ? "border border-indigo-400 text-indigo-600 font-semibold" : "text-gray-700 hover:bg-indigo-50"}`}>
-              {day}
-            </button>
-          );
-        })}
-      </div>
-      <button type="button"
-        onClick={() => { setViewYear(today.getFullYear()); setViewMonth(today.getMonth()); selectDate(today.getDate()); }}
-        className="w-full mt-3 py-1.5 text-xs font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50">
-        Today
-      </button>
-    </div>
-  ) : null;
-
-  return (
-    <div className="relative">
-      {label && <label className="text-xs font-medium text-gray-500 mb-1 block">{label}</label>}
-      <button ref={buttonRef} type="button" onClick={openCalendar}
-        className="w-full flex items-center gap-2 border border-gray-200 rounded-xl px-4 py-3 text-sm text-left bg-white focus:outline-none focus:border-indigo-400">
-        <Calendar className="w-4 h-4 text-gray-400" />
-        <span className={`flex-1 truncate ${displayValue ? "text-gray-800 font-medium" : "text-gray-400"}`}>
-          {displayValue || "Select date"}
-        </span>
-        {value && (
-          <span role="button" onClick={(e) => { e.stopPropagation(); onChange(""); setShow(false); }}
-            className="ml-auto text-gray-300 hover:text-gray-500 text-xs leading-none">✕</span>
-        )}
-      </button>
-      {typeof document !== "undefined" && calendar ? createPortal(calendar, document.body) : null}
-    </div>
-  );
-}
-
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 type DeliveryItem = {
   id: string; productId: string;
@@ -284,37 +64,29 @@ type Delivery = {
   items: DeliveryItem[];
 };
 
-type LineItem = {
-  productId: string; productName: string; size?: string | null;
-  quantity: number | string; unitPrice: number | string;
-  unit: CaseUnit;
+type Product = {
+  id: string; productName: string; price: number; costPrice?: number | null;
+  supplierId?: string; supplier?: { id: string; supplierName: string } | string;
+  status?: string; stockUnit?: string; stockQuantity?: number; size?: string | null;
 };
 
-type DeliveryForm = { supplierId: string; lineItems: LineItem[]; notes: string; deliveryDate: string };
-type Supplier    = { id: string; supplierName: string };
-type Product     = { 
-  id: string; productName: string; price: number; costPrice?: number | null; 
-  supplierId?: string; supplier?: { id: string; supplierName: string } | string; 
-  status?: string; stockUnit?: string; stockQuantity?: number; size?: string | null 
+// Order Request — created by the inventory manager, reviewed by the admin
+type RequestStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+type OrderRequestItem = {
+  id: string; productId: string; quantity: number; costPrice: number; unit?: string;
+  product?: { id: string; productName: string; size?: string | null; stockUnit?: string };
 };
-// Reorder suggestion shape returned by GET /api/reorder/suggestions
-type ReorderSuggestion = {
-  productId: string;
-  supplierId?: string;
-  productName: string;
-  size?: string | null;
-  stock: number;
-  availableStock: number;
-  netUnitsSold: number;
-  dailyVelocity: number;
-  daysOfStockLeft: number | null;
-  needsReorder: boolean;
-  urgency: "high" | "medium" | "low";
-  unitProfit: number | null;
-  totalProfitWindow: number | null;
-  suggestedUnits: number;
-  suggestedCases: number | null;
+
+type OrderRequest = {
+  id: string; supplierId: string; status: RequestStatus;
+  notes?: string; adminRemarks?: string; createdAt: string;
+  supplier?: { id: string; supplierName: string };
+  requestedBy?: { id: string; name: string; role: string };
+  items: OrderRequestItem[];
 };
+
+type Tab = "requests" | "history";
 
 const STATUS_CONFIG: Record<string, { bg: string; text: string }> = {
   PENDING:            { bg: "bg-yellow-100", text: "text-yellow-800" },
@@ -323,181 +95,64 @@ const STATUS_CONFIG: Record<string, { bg: string; text: string }> = {
   CANCELLED:          { bg: "bg-red-100",    text: "text-red-700"    },
 };
 
+const REQUEST_STATUS_CONFIG: Record<RequestStatus, { bg: string; text: string }> = {
+  PENDING:  { bg: "bg-yellow-100", text: "text-yellow-800" },
+  APPROVED: { bg: "bg-green-100",  text: "text-green-800"  },
+  REJECTED: { bg: "bg-red-100",    text: "text-red-700"    },
+};
+
+const requestTotal = (r: OrderRequest) =>
+  r.items?.reduce((s, i) => s + Number(i.quantity) * Number(i.costPrice), 0) || 0;
+
 const navItems = [
-  { label: "Dashboard",             icon: LayoutDashboard, path:"/admin/dashboard"      },
-  { label: "Inventory Maintenance", icon: ShoppingCart, path:"/admin/inventory"      },
-  { label: "Supplier Maintenance",  icon: Users, path:"/admin/supplier"       },
-  { label: "Sales Reports",         icon: LineChart, path:"/admin/sales"          },
-  { label: "Product Management",    icon: Package, path:"/admin/product"        },
-  { label: "Account Management",    icon: User, path:"/admin/account"        },
-  { label: "Purchase Order",        icon: ClipboardList, path:"/admin/purchase-order" },
-  { label: "Loss Report",               icon: AlertTriangle, path:"/admin/loss-report"         },
-  { label: "Promo Management",      icon: Gift, path:"/admin/promo"          },
+  { label: "Dashboard",             icon: LayoutDashboard, path: "/admin/dashboard"      },
+  { label: "Inventory Maintenance", icon: ShoppingCart,    path: "/admin/inventory"      },
+  { label: "Supplier Maintenance",  icon: Users,           path: "/admin/supplier"       },
+  { label: "Sales Reports",         icon: LineChart,       path: "/admin/sales"          },
+  { label: "Product Management",    icon: Package,         path: "/admin/product"        },
+  { label: "Account Management",    icon: User,            path: "/admin/account"        },
+  { label: "Purchase Order",        icon: ClipboardList,   path: "/admin/purchase-order" },
+  { label: "Loss Report",           icon: AlertTriangle,   path: "/admin/loss-report"    },
+  { label: "Promo Management",      icon: Gift,            path: "/admin/promo"          },
 ];
 
 const ITEMS_PER_PAGE = 8;
-const emptyLineItem  = (): LineItem => ({ productId: "", productName: "", quantity: 1, unitPrice: 0, unit: "case_24" });
-const makeEmptyForm  = (): DeliveryForm => ({
-  supplierId: "",
-  lineItems: [emptyLineItem()],
-  notes: "",
-  deliveryDate: new Date().toISOString().split("T")[0],
-});
-
-type Tab = "create" | "history";
-
-// Helper to get product name from allProducts
-const getProductName = (productId: string, allProducts: Product[], deliveryItems?: DeliveryItem[]) => {
-  // First check if the item has product info attached (from API)
-  const fromItem = deliveryItems?.find(item => item.productId === productId)?.product?.productName;
-  if (fromItem) return fromItem;
-  // Fallback to allProducts
-  return allProducts.find(p => p.id === productId)?.productName || productId;
-};
-
-// ─── PRODUCT DROPDOWN (custom, no native select) ──────────────────────────────
-function ProductSelect({
-  value, onChange, products, usedIds, productSales,
-}: {
-  value: string;
-  onChange: (id: string) => void;
-  products: Product[];
-  usedIds: string[];
-  idx: number;
-  productSales: Record<string, number>;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const selected = products.find((p) => p.id === value);
-
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className={`w-full flex items-center justify-between border rounded-lg px-2.5 py-1.5 text-sm transition-colors bg-white text-left
-          ${open ? "border-indigo-400" : "border-gray-200"}`}
-      >
-        {selected ? (
-          <span className="text-gray-800 text-xs truncate">
-            {selected.productName}{selected.size ? ` ${selected.size}` : ""}
-          </span>
-        ) : (
-          <span className="text-gray-400 text-xs">Select product</span>
-        )}
-        <svg className="w-3 h-3 text-gray-400 shrink-0 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {open && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] max-h-48 overflow-y-auto">
-          {products.length === 0 ? (
-            <div className="px-4 py-3 text-xs text-gray-400 text-center">No products</div>
-          ) : (
-            products.map((p) => {
-              const isUsed       = usedIds.includes(p.id) && p.id !== value;
-              const isOutOfStock = (p.stockQuantity ?? 0) === 0;
-              const isDisabled   = isUsed;
-              const stockLabel   = p.stockQuantity != null ? `${formatQty(p.stockQuantity, p.stockUnit)} left` : null;
-              const salesCount   = productSales[p.id] ?? 0;
-              const topSales     = products
-                .map((x) => productSales[x.id] ?? 0)
-                .sort((a, b) => b - a)
-                .filter((v) => v > 0);
-              const isRecommended = salesCount > 0 && topSales.length > 0 && salesCount >= (topSales[Math.min(2, topSales.length - 1)] ?? 0);
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  disabled={isDisabled}
-                  onClick={() => { if (!isDisabled) { onChange(p.id); setOpen(false); } }}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors
-                    ${isDisabled ? "opacity-40 cursor-not-allowed" : "hover:bg-indigo-50"}
-                    ${value === p.id ? "bg-indigo-50" : ""}`}
-                >
-                  <div className="min-w-0">
-                    <p className={`text-xs font-medium truncate ${value === p.id ? "text-indigo-700" : "text-gray-800"}`}>
-                      {p.productName}
-                      {p.size && <span className="text-gray-400 font-normal ml-1">{p.size}</span>}
-                      {isRecommended && <span className="ml-1.5 text-[10px] bg-orange-100 text-orange-700 font-semibold px-1.5 py-0.5 rounded-full">Recommended</span>}
-                    </p>
-                    {stockLabel && !isOutOfStock && <p className="text-xs text-gray-400 mt-0.5">{stockLabel}</p>}
-                    {isOutOfStock && <p className="text-xs text-red-500 font-medium mt-0.5">No Stock</p>}
-                    {isUsed && <p className="text-xs text-amber-600 font-medium mt-0.5">Already added — adjust quantity above</p>}
-                  </div>
-                  {value === p.id && <span className="text-indigo-600 text-xs ml-2 shrink-0">✓</span>}
-                </button>
-              );
-            })
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function PurchaseOrderPage() {
   const router   = useRouter();
   const pathname = usePathname();
 
-  const [activeTab,      setActiveTab]      = useState<Tab>("create");
+  const [activeTab,      setActiveTab]      = useState<Tab>("requests");
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [deliveries,     setDeliveries]     = useState<Delivery[]>([]);
-  const [loading,        setLoading]        = useState(true);
-  const [suppliers,      setSuppliers]      = useState<Supplier[]>([]);
-  const [supplierSearch, setSupplierSearch] = useState("");
+  const [orderRequests,  setOrderRequests]  = useState<OrderRequest[]>([]);
   const [allProducts,    setAllProducts]    = useState<Product[]>([]);
-  const [productSales,   setProductSales]   = useState<Record<string, number>>({});
-  const [form,           setForm]           = useState<DeliveryForm>(makeEmptyForm());
-  const [saving,         setSaving]         = useState(false);
+  const [loading,        setLoading]        = useState(true);
 
-  // Reorder suggestions — fetched whenever a supplier is selected
-  const [reorderSuggestions, setReorderSuggestions] = useState<ReorderSuggestion[]>([]);
-  const [loadingReorder,     setLoadingReorder]     = useState(false);
+  const [pageError,   setPageError]   = useState("");
+  const [pageSuccess, setPageSuccess] = useState("");
 
-  const [confirmModal,  setConfirmModal]  = useState<{ show: boolean; message: string; onConfirm: () => void }>({ show: false, message: "", onConfirm: () => {} });
-  const [previewModal,   setPreviewModal]   = useState(false);
-  const [createError,   setCreateError]   = useState("");
-  const [createSuccess, setCreateSuccess] = useState("");
+  const [confirmModal, setConfirmModal] = useState<{ show: boolean; message: string; onConfirm: () => void }>({ show: false, message: "", onConfirm: () => {} });
+  const closeConfirm = () => setConfirmModal({ show: false, message: "", onConfirm: () => {} });
+  const showConfirm  = (msg: string, fn: () => void) => setConfirmModal({ show: true, message: msg, onConfirm: fn });
 
-  const showConfirm = (msg: string, fn: () => void) => setConfirmModal({ show: true, message: msg, onConfirm: fn });
+  // Order Request state
+  const [requestSearch,  setRequestSearch]  = useState("");
+  const [requestStatus,  setRequestStatus]  = useState<"All" | RequestStatus>("PENDING");
+  const [requestPage,    setRequestPage]    = useState(1);
+  const [viewRequest,    setViewRequest]    = useState<OrderRequest | null>(null);
+  const [rejectTarget,   setRejectTarget]   = useState<OrderRequest | null>(null);
+  const [rejectReason,   setRejectReason]   = useState("");
+  const [processingId,   setProcessingId]   = useState<string | null>(null);
 
+  // PO History state
   const [historySearch,         setHistorySearch]         = useState("");
   const [historyStatus,         setHistoryStatus]         = useState("All");
   const [historyPage,           setHistoryPage]           = useState(1);
   const [viewDelivery,          setViewDelivery]          = useState<Delivery | null>(null);
   const [showHistoryStatusDrop, setShowHistoryStatusDrop] = useState(false);
   const historyStatusRef = useRef<HTMLDivElement>(null);
-
-  const supplierProducts = form.supplierId
-    ? allProducts
-        .filter((p) => p.supplierId === form.supplierId && p.status !== "INACTIVE")
-        .sort((a, b) => (productSales[b.id] ?? 0) - (productSales[a.id] ?? 0))
-    : [];
-
-  const lowStockProducts = form.supplierId
-    ? supplierProducts.filter((p) => { const s = p.stockQuantity ?? 0; return s > 0 && s <= 10; })
-    : [];
-  const outOfStockProducts = form.supplierId
-    ? supplierProducts.filter((p) => (p.stockQuantity ?? 0) === 0)
-    : [];
-
-  const productQuery = supplierSearch.trim().toLowerCase();
-  const filteredProductResults = form.supplierId && productQuery
-    ? supplierProducts.filter((p) =>
-        `${p.productName} ${p.size ?? ""}`.toLowerCase().includes(productQuery)
-      )
-    : [];
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -510,168 +165,105 @@ export default function PurchaseOrderPage() {
   const fetchAll = async () => {
     try {
       setLoading(true);
-      const [d, s, p, orders] = await Promise.all([
-        api.getDeliveries(), api.getSuppliers(), api.getProducts(), api.getCompletedOrders(),
+      const [d, p, reqs] = await Promise.all([
+        api.getDeliveries(),
+        api.getProducts(),
+        api.getOrderRequests().catch(() => []),
       ]);
       setDeliveries(Array.isArray(d) ? d : []);
-      setSuppliers((Array.isArray(s) ? s : []).filter((sup: { status?: string }) => sup.status !== "INACTIVE"));
+      setOrderRequests(Array.isArray(reqs) ? reqs : []);
       const normalized = (Array.isArray(p) ? p : []).map((prod: Product) => ({
         ...prod,
-        supplierId: prod.supplierId || (typeof prod.supplier === 'object' ? prod.supplier?.id : prod.supplier) || "",
+        supplierId: prod.supplierId || (typeof prod.supplier === "object" ? prod.supplier?.id : prod.supplier) || "",
         stockQuantity: Number(prod.stockQuantity ?? (prod as any).stock ?? 0),
         stockUnit: (prod.stockUnit as CaseUnit) || "case_24",
         costPrice: prod.costPrice != null ? Number(prod.costPrice) : null,
       }));
       setAllProducts(normalized);
-
-      // Compute sales count per product from completed orders
-      const sales: Record<string, number> = {};
-      const orderList = Array.isArray(orders) ? orders : [];
-      for (const order of orderList) {
-        const lines = (order as any).orderLines ?? [];
-        if (Array.isArray(lines)) {
-          for (const line of lines) {
-            const product = (line as any).product as Record<string, unknown> | null;
-            const prodId = product?.id ? String(product.id) : null;
-            const prodName = product?.productName ? String(product.productName) : null;
-            const qty = Number((line as any).quantity ?? 0);
-            // Try to match by product id first, then by name
-            if (prodId) {
-              sales[prodId] = (sales[prodId] ?? 0) + qty;
-            } else if (prodName) {
-              // Fallback: match by name across all products
-              const match = normalized.find((np) => np.productName === prodName);
-              if (match) {
-                sales[match.id] = (sales[match.id] ?? 0) + qty;
-              }
-            }
-          }
-        }
-      }
-      setProductSales(sales);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
 
   useEffect(() => { fetchAll(); }, []);
 
-  // Fetch reorder suggestions for every supplier once, then scope client-side
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
+  const productNameFor = (item: { productId: string; product?: { productName: string } }) =>
+    item.product?.productName || allProducts.find((p) => p.id === item.productId)?.productName || item.productId;
+
+  // ── Order Request actions ──
+  const handleApproveRequest = (r: OrderRequest) =>
+    showConfirm("Approve this request and create the purchase order?", async () => {
       try {
-        setLoadingReorder(true);
-        const res = await api.getReorderSuggestions();
-        if (!cancelled) setReorderSuggestions(Array.isArray(res?.suggestions) ? res.suggestions : []);
+        setProcessingId(r.id);
+        setPageError("");
+        const employeeId = localStorage.getItem("userId") || "";
+        const res = await api.createDelivery({
+          supplierId: r.supplierId,
+          employeeId,
+          deliveryDate: new Date().toISOString().split("T")[0],
+          totalItems: r.items.reduce((s, i) => s + Number(i.quantity), 0),
+          notes: r.notes || "",
+          items: r.items.map((i) => ({
+            productId: i.productId,
+            quantity: Number(i.quantity) || 1,
+            costPrice: Number(i.costPrice) || 0,
+            unit: i.unit || "case_24",
+          })),
+        });
+        if (res?.error || res?.message?.toLowerCase().includes("error")) {
+          setPageError(res.message || "Failed to create delivery.");
+          return;
+        }
+        await api.updateOrderRequest(r.id, { status: "APPROVED" });
+        await fetchAll();
+        setViewRequest(null);
+        setPageSuccess("Request approved — purchase order created.");
+        setTimeout(() => setPageSuccess(""), 3000);
       } catch (e) {
         console.error(e);
-        if (!cancelled) setReorderSuggestions([]);
+        setPageError("Failed to approve request. Please try again.");
       } finally {
-        if (!cancelled) setLoadingReorder(false);
+        setProcessingId(null);
+        closeConfirm();
       }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+    });
 
-  const handleSupplierChange = (supplierId: string) => {
-    setForm({ ...form, supplierId, lineItems: [emptyLineItem()] });
-    setSupplierSearch("");
-  };
-
-  const calculateTotal = (items: LineItem[]) =>
-    items.reduce((s, i) => s + Number(i.quantity) * Number(i.unitPrice), 0);
-
-  const validLineItems = form.lineItems.filter((i) => i.productId);
-
-  const handleSave = async () => {
-    if (!form.supplierId) { setCreateError("Please select a supplier."); return; }
-    if (validLineItems.length === 0) { setCreateError("Please add at least one product."); return; }
+  const handleRejectRequest = async () => {
+    if (!rejectTarget) return;
     try {
-      setSaving(true); setCreateError("");
-      const employeeId = localStorage.getItem("userId") || "";
-      const res = await api.createDelivery({
-        supplierId: form.supplierId,
-        employeeId,
-        deliveryDate: form.deliveryDate,
-        totalItems: validLineItems.reduce((s, i) => s + Number(i.quantity), 0),
-        notes: form.notes || "",
-        items: validLineItems.map((i) => ({
-          productId: i.productId, quantity: Number(i.quantity) || 1,
-          costPrice: Number(i.unitPrice) || 0, unit: i.unit || "case_24",
-        })),
-      });
-      if (res?.error || res?.message?.toLowerCase().includes("error")) {
-        setCreateError(res.message || "Failed to create delivery."); return;
-      }
-      setForm(makeEmptyForm()); await fetchAll();
-      setCreateSuccess("Delivery created successfully!");
-      setTimeout(() => setCreateSuccess(""), 3000);
-    } catch (e) { console.error(e); setCreateError("Failed to create delivery. Please try again."); }
-    finally { setSaving(false); }
+      setProcessingId(rejectTarget.id);
+      setPageError("");
+      await api.updateOrderRequest(rejectTarget.id, { status: "REJECTED", adminRemarks: rejectReason });
+      await fetchAll();
+      setRejectTarget(null);
+      setRejectReason("");
+      setViewRequest(null);
+      setPageSuccess("Request rejected.");
+      setTimeout(() => setPageSuccess(""), 3000);
+    } catch (e) {
+      console.error(e);
+      setPageError("Failed to reject request. Please try again.");
+    } finally { setProcessingId(null); }
   };
 
-  const addLineItem    = () => {
-    if (!form.supplierId) { setCreateError("Please select a supplier first."); return; }
-    setForm({ ...form, lineItems: [...form.lineItems, emptyLineItem()] });
-  };
-
-  const addRecommendedItem = (productId: string) => {
-    const p = supplierProducts.find((x) => x.id === productId);
-    if (!p) return;
-    const alreadyAdded = form.lineItems.some((i) => i.productId === productId);
-    if (alreadyAdded) return;
-    setForm({
-      ...form,
-      lineItems: [
-        ...form.lineItems,
-        { productId, productName: p.productName, size: p.size, quantity: 1, unitPrice: p.costPrice ?? 0, unit: (p.stockUnit as CaseUnit) || "case_24" },
-      ],
-    });
-  };
-
-  const addProductFromSearch = (productId: string) => {
-    addRecommendedItem(productId);
-    setSupplierSearch("");
-  };
-
-  // Add a reorder-suggested item to the order, prefilled with the suggested case quantity
-  const addSuggestedItem = (s: ReorderSuggestion) => {
-    const alreadyAdded = form.lineItems.some((i) => i.productId === s.productId);
-    if (alreadyAdded) return;
-    const p = supplierProducts.find((x) => x.id === s.productId);
-    setForm({
-      ...form,
-      lineItems: [
-        ...form.lineItems,
-        {
-          productId: s.productId,
-          productName: s.productName,
-          size: s.size,
-          quantity: s.suggestedCases ?? Math.max(1, s.suggestedUnits),
-          unitPrice: p?.costPrice ?? 0,
-          unit: (p?.stockUnit as CaseUnit) || "case_24",
-        },
-      ],
-    });
-  };
-
-  const removeLineItem = (idx: number) => setForm({ ...form, lineItems: form.lineItems.filter((_, i) => i !== idx) });
-
-  const updateLineItem = (idx: number, field: keyof LineItem, value: string | number) => {
-    const items = [...form.lineItems];
-    if (field === "productId") {
-      const p = supplierProducts.find((p) => p.id === value);
-      items[idx] = { ...items[idx], productId: String(value), productName: p?.productName || "", size: p?.size || null, unitPrice: p?.costPrice ?? 0, unit: (p?.stockUnit as CaseUnit) || "case_24" };
-    } else {
-      items[idx] = { ...items[idx], [field]: value };
-    }
-    setForm({ ...form, lineItems: items });
-  };
-
+  // ── Delivery actions ──
   const handleCancel = (id: string) => showConfirm("Cancel this delivery?", async () => {
-    try { await api.updateDelivery(id, { status: "CANCELLED" }); await fetchAll(); setConfirmModal({ show: false, message: "", onConfirm: () => {} }); }
+    try { await api.updateDelivery(id, { status: "CANCELLED" }); await fetchAll(); closeConfirm(); }
     catch (e) { console.error(e); }
   });
+
+  // ── Derived lists ──
+  const filteredRequests = orderRequests.filter((r) => {
+    const q = requestSearch.toLowerCase();
+    return (
+      (r.id.toLowerCase().includes(q) ||
+        (r.supplier?.supplierName || "").toLowerCase().includes(q) ||
+        (r.requestedBy?.name || "").toLowerCase().includes(q)) &&
+      (requestStatus === "All" || r.status === requestStatus)
+    );
+  });
+  const requestTotalPages = Math.ceil(filteredRequests.length / ITEMS_PER_PAGE);
+  const paginatedRequests = filteredRequests.slice((requestPage - 1) * ITEMS_PER_PAGE, requestPage * ITEMS_PER_PAGE);
+  const pendingCount      = orderRequests.filter((r) => r.status === "PENDING").length;
 
   const filteredHistory = deliveries.filter((d) =>
     (d.id.toLowerCase().includes(historySearch.toLowerCase()) || (d.supplier?.supplierName || "").toLowerCase().includes(historySearch.toLowerCase()))
@@ -709,60 +301,12 @@ export default function PurchaseOrderPage() {
         ],
       });
     } catch {
-      setCreateError("Failed to export deliveries.");
+      setPageError("Failed to export deliveries.");
     }
   };
 
   const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("token"); localStorage.removeItem("employee"); router.push("/"); };
   const navigate     = (path: string) => { router.push(path); setShowMobileMenu(false); };
-  const selectedSupplierName = suppliers.find((s) => s.id === form.supplierId)?.supplierName;
-
-  // Suggestions do not always carry a supplierId, so resolve each product's supplier locally
-  const supplierIdByProduct: Record<string, string> = {};
-  allProducts.forEach((p) => { supplierIdByProduct[p.id] = p.supplierId || ""; });
-  const supplierIdFor = (s: ReorderSuggestion) => s.supplierId || supplierIdByProduct[s.productId] || "";
-
-  // Only the items the reorder engine flags, sorted by profit
-  const flaggedFor = (supplierId: string) =>
-    reorderSuggestions
-      .filter((s) => s.needsReorder && supplierIdFor(s) === supplierId)
-      .sort((a, b) => (b.totalProfitWindow ?? -Infinity) - (a.totalProfitWindow ?? -Infinity));
-
-  const flaggedSuggestions = form.supplierId ? flaggedFor(form.supplierId) : [];
-
-  // One entry per supplier that actually needs restocking, heaviest first
-  const restockBySupplier = suppliers
-    .map((sup) => {
-      const items = flaggedFor(sup.id);
-      return { supplier: sup, items };
-    })
-    .filter((g) => g.items.length > 0)
-    .sort((a, b) => b.items.length - a.items.length);
-
-  // Picking a supplier from the restock overview pre-fills the whole order,
-  // so the user only has to review the quantities and confirm.
-  const applyRestock = (supplierId: string) => {
-    const items = flaggedFor(supplierId);
-    if (items.length === 0) {
-      setForm({ ...form, supplierId, lineItems: [emptyLineItem()] });
-      return;
-    }
-    setForm({
-      ...form,
-      supplierId,
-      lineItems: items.map((s) => {
-        const p = allProducts.find((x) => x.id === s.productId);
-        return {
-          productId: s.productId,
-          productName: s.productName,
-          size: s.size,
-          quantity: s.suggestedCases ?? Math.max(1, s.suggestedUnits),
-          unitPrice: p?.costPrice ?? 0,
-          unit: (p?.stockUnit as CaseUnit) || "case_24",
-        };
-      }),
-    });
-  };
 
   const PaginationBar = ({ page, totalPages, setPage, total, label }: {
     page: number; totalPages: number; setPage: (p: number) => void; total: number; label: string;
@@ -785,106 +329,17 @@ export default function PurchaseOrderPage() {
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
 
+      {/* Confirm modal */}
       {confirmModal.show && (
         <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-[60] px-4">
           <div className="bg-white rounded-2xl p-6 w-80 shadow-xl text-center">
             <p className="text-2xl mb-2">⚠️</p>
             <p className="text-sm text-gray-700 mb-5">{confirmModal.message}</p>
             <div className="flex gap-3">
-              <button onClick={() => setConfirmModal({ show: false, message: "", onConfirm: () => {} })}
+              <button onClick={closeConfirm}
                 className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
               <button onClick={confirmModal.onConfirm}
                 className="flex-1 bg-red-500 rounded-lg py-2 text-sm text-white hover:bg-red-600">Confirm</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Order Preview Modal */}
-      {previewModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-[60] px-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                  <ClipboardList className="w-5 h-5 text-indigo-600" />
-                  Order Preview
-                </h2>
-                <p className="text-xs text-gray-400 mt-0.5">Please review before submitting</p>
-              </div>
-              <button onClick={() => setPreviewModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
-            </div>
-
-            <div className="flex flex-col gap-3 mb-5">
-              <div className="flex items-center gap-2 p-3 bg-indigo-50 rounded-xl border border-indigo-100">
-                <Building2 className="w-5 h-5 text-indigo-600" />
-                <div>
-                  <p className="text-xs text-indigo-400">Supplier</p>
-                  <p className="text-sm font-semibold text-indigo-800">{selectedSupplierName}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl border border-gray-100">
-                <Calendar className="w-4 h-4 text-gray-400" />
-                <div>
-                  <p className="text-xs text-gray-400">Delivery Date Created</p>
-                  <p className="text-sm font-medium text-gray-700">
-                    {new Date().toLocaleDateString("en-PH", { weekday: "short", month: "long", day: "numeric", year: "numeric" })}
-                  </p>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 rounded-xl p-3">
-                <p className="text-xs font-semibold text-gray-600 mb-3">Order Items ({validLineItems.length})</p>
-                <div className="space-y-3 max-h-64 overflow-y-auto">
-                  {validLineItems.map((item, idx) => {
-                    const breakdown = getCaseBreakdown(Number(item.quantity), item.unit);
-                    return (
-                      <div key={idx} className="py-2 border-b border-gray-100 last:border-0">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <p className="font-medium text-sm text-gray-800">{item.productName}</p>
-                            <div className="flex items-center gap-1 mt-1 flex-wrap">
-                              <UnitPill unit={item.unit} qty={Number(item.quantity)} />
-                              <span className="text-xs text-gray-400">× ₱{Number(item.unitPrice).toLocaleString()}</span>
-                            </div>
-                            {breakdown && <p className="text-xs text-indigo-500 font-medium mt-0.5">{breakdown}</p>}
-                          </div>
-                          <span className="text-sm font-semibold text-indigo-700 ml-3 shrink-0">
-                            ₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center bg-indigo-900 text-white rounded-xl p-4">
-                <div>
-                  <p className="text-xs text-indigo-200">Total Amount</p>
-                  <p className="text-xs text-indigo-200">({validLineItems.reduce((s, i) => s + Number(i.quantity), 0)} items)</p>
-                </div>
-                <p className="text-xl font-bold">₱{calculateTotal(validLineItems).toLocaleString()}</p>
-              </div>
-
-              {form.notes && (
-                <div className="bg-gray-50 rounded-xl p-3">
-                  <p className="text-xs text-gray-400 mb-1">Notes</p>
-                  <p className="text-sm text-gray-700">{form.notes}</p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-3">
-              <button onClick={() => setPreviewModal(false)}
-                className="flex-1 border border-gray-200 rounded-xl py-3 text-sm text-gray-600 hover:bg-gray-50 font-medium">
-                Cancel
-              </button>
-              <button onClick={() => { setPreviewModal(false); handleSave(); }}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2">
-                <span>✅</span> Confirm Order
-              </button>
             </div>
           </div>
         </div>
@@ -929,7 +384,7 @@ export default function PurchaseOrderPage() {
           </button>
           <div>
             <h1 className="text-xl md:text-2xl font-bold text-gray-800">Purchase Order</h1>
-            <p className="text-xs text-gray-400 hidden md:block">Create and manage deliveries from suppliers</p>
+            <p className="text-xs text-gray-400 hidden md:block">Review order requests and manage deliveries from suppliers</p>
           </div>
           <div className="flex items-center gap-3">
             <div className="hidden md:flex items-center gap-1">
@@ -970,14 +425,17 @@ export default function PurchaseOrderPage() {
         <div className="bg-white border-b border-gray-100 px-4 md:px-6">
           <div className="flex">
             {([
-              { key: "create",    label: "Create Order", icon: ClipboardList },
-              { key: "history",   label: "PO History",   icon: Clock },
+              { key: "requests", label: "Order Request", icon: Inbox },
+              { key: "history",  label: "PO History",    icon: Clock },
             ] as { key: Tab; label: string; icon: typeof ClipboardList }[]).map((tab) => (
               <button key={tab.key} onClick={() => setActiveTab(tab.key)}
                 className={`flex items-center gap-1 md:gap-2 px-3 md:px-6 py-3 text-xs md:text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.key ? "border-indigo-600 text-indigo-700 bg-indigo-50" : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
                 }`}>
                 <tab.icon className="w-4 h-4" /><span>{tab.label}</span>
+                {tab.key === "requests" && pendingCount > 0 && (
+                  <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{pendingCount}</span>
+                )}
               </button>
             ))}
           </div>
@@ -985,601 +443,117 @@ export default function PurchaseOrderPage() {
 
         <div className="flex-1 p-3 md:p-5 bg-green-50">
 
-          {/* CREATE */}
-          {activeTab === "create" && (
-            <div className="flex flex-col lg:flex-row gap-4">
-              <div className="flex-1 flex flex-col gap-4">
+          {pageError && (
+            <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-2">
+              <span>⚠️</span><span>{pageError}</span>
+              <button onClick={() => setPageError("")} className="ml-auto">✕</button>
+            </div>
+          )}
 
-                {/* Restock overview — every supplier's restock needs in one place.
-                    Picking a supplier pre-fills the order below with its suggested items. */}
-                <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm">
-                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
-                        <Lightbulb className="w-3.5 h-3.5" />
-                      </div>
-                      <h2 className="text-sm font-bold text-gray-700">Restock Needs by Supplier</h2>
-                      {restockBySupplier.length > 0 && (
-                        <span className="text-xs text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">
-                          {restockBySupplier.length} supplier{restockBySupplier.length > 1 ? "s" : ""}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-xs text-gray-400">Based on last 30 days</span>
-                  </div>
-
-                  {loadingReorder ? (
-                    <p className="text-xs text-gray-400 text-center py-6">Calculating suggestions...</p>
-                  ) : restockBySupplier.length === 0 ? (
-                    <p className="text-xs text-gray-400 text-center py-6">
-                      Nothing needs restocking right now — stock levels look healthy across all suppliers.
-                    </p>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
-                      {restockBySupplier.map(({ supplier, items }) => {
-                        const isActive = form.supplierId === supplier.id;
-                        const worst = items.some((s) => s.urgency === "high") ? "high"
-                          : items.some((s) => s.urgency === "medium") ? "medium" : "low";
-                        const ring = { high: "bg-red-500", medium: "bg-yellow-500", low: "bg-green-500" }[worst];
-                        return (
-                          <button
-                            key={supplier.id}
-                            type="button"
-                            onClick={() => applyRestock(supplier.id)}
-                            className={`text-left rounded-xl border p-3 transition-colors ${
-                              isActive
-                                ? "border-indigo-400 bg-indigo-50/60"
-                                : "border-gray-100 bg-gray-50/50 hover:border-indigo-200 hover:bg-indigo-50/30"
-                            }`}
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className={`w-2 h-2 rounded-full shrink-0 ${ring}`} />
-                                <p className="text-sm font-semibold text-gray-800 truncate">{supplier.supplierName}</p>
-                              </div>
-                              <span className="text-xs font-medium text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full shrink-0">
-                                {items.length} to restock
-                              </span>
-                            </div>
-                            <ul className="mt-2 space-y-1">
-                              {items.slice(0, 3).map((s) => (
-                                <li key={s.productId} className="flex items-center justify-between gap-2 text-xs">
-                                  <span className="text-gray-600 truncate">
-                                    {s.productName}{s.size ? ` ${s.size}` : ""}
-                                  </span>
-                                  <span className="text-gray-400 shrink-0">
-                                    {s.suggestedCases != null ? pluralize(s.suggestedCases, "case") : pluralize(s.suggestedUnits, "piece")}
-                                  </span>
-                                </li>
-                              ))}
-                              {items.length > 3 && (
-                                <li className="text-xs text-gray-400">+{items.length - 3} more</li>
-                              )}
-                            </ul>
-                            <p className={`text-xs font-semibold mt-2 ${isActive ? "text-indigo-600" : "text-indigo-500"}`}>
-                              {isActive ? "Loaded ✓ — review below" : "Review & pre-fill order →"}
-                            </p>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+          {/* ORDER REQUESTS */}
+          {activeTab === "requests" && (
+            <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <div>
+                  <h2 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                    <Inbox className="w-4 h-4 text-gray-600" /> Order Requests
+                  </h2>
+                  <p className="text-xs text-gray-400 mt-0.5">Requests submitted by the inventory manager for your approval</p>
                 </div>
-
-                {/* Step 1 — Supplier + Date */}
-                <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm">
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold">1</div>
-                    <h2 className="text-sm font-bold text-gray-700">Select Supplier &amp; Date</h2>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 w-48">
+                    <Search className="w-4 h-4 text-gray-400" />
+                    <input type="text" placeholder="Search..." value={requestSearch}
+                      onChange={(e) => { setRequestSearch(e.target.value); setRequestPage(1); }}
+                      className="outline-none text-sm text-gray-700 w-full bg-transparent" />
                   </div>
-
-                  {createError && (
-                    <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm flex items-center gap-2">
-                      <span>⚠️</span><span>{createError}</span>
-                      <button onClick={() => setCreateError("")} className="ml-auto">✕</button>
-                    </div>
-                  )}
-                  {createSuccess && (
-                    <div className="mb-3 p-3 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm flex items-center gap-2">
-                      <span>✅</span><span>{createSuccess}</span>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* ✅ Custom supplier picker — no native select, no dashes */}
-                    <div>
-                      <label className="text-xs font-medium text-gray-500 mb-1.5 block">
-                        Supplier <span className="text-red-400">*</span>
-                      </label>
-                      <SupplierSelect
-                        value={form.supplierId}
-                        onChange={handleSupplierChange}
-                        suppliers={suppliers}
-                        search={form.supplierId ? "" : supplierSearch}
-                        lowStockCount={lowStockProducts.length}
-                        hint={form.supplierId
-                          ? supplierProducts.length > 0
-                            ? `${supplierProducts.length} product${supplierProducts.length > 1 ? "s" : ""} available from ${selectedSupplierName}`
-                            : `⚠️ No active products found for ${selectedSupplierName}`
-                          : undefined}
-                      />
-                    </div>
-
-                    <div className="relative">
-                      <label className="text-xs font-medium text-gray-500 mb-1.5 block">
-                        {form.supplierId ? "Search Product" : "Search Supplier"}
-                      </label>
-                      <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-4 py-3 focus-within:border-indigo-400 bg-white">
-                        <Search className="w-4 h-4 text-gray-400 shrink-0" />
-                        <input
-                          type="text"
-                          value={supplierSearch}
-                          onChange={(e) => setSupplierSearch(e.target.value)}
-                          placeholder={form.supplierId ? `Search ${selectedSupplierName}'s products...` : "Type to search suppliers..."}
-                          className="outline-none text-sm text-gray-700 w-full bg-transparent"
-                        />
-                        {supplierSearch && (
-                          <button type="button" onClick={() => setSupplierSearch("")} className="text-gray-300 hover:text-gray-500 text-xs leading-none shrink-0">✕</button>
-                        )}
-                      </div>
-
-                      {form.supplierId && productQuery && (
-                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-[9999] max-h-64 overflow-y-auto">
-                          {filteredProductResults.length === 0 ? (
-                            <div className="px-4 py-3 text-sm text-gray-400 text-center">No products match your search</div>
-                          ) : (
-                            filteredProductResults.map((p) => {
-                              const inCart = form.lineItems.some((i) => i.productId === p.id);
-                              return (
-                                <button
-                                  key={p.id}
-                                  type="button"
-                                  disabled={inCart}
-                                  onClick={() => addProductFromSearch(p.id)}
-                                  className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors ${inCart ? "opacity-60 cursor-default" : "hover:bg-indigo-50"}`}
-                                >
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-medium text-gray-800 truncate">
-                                      {p.productName}{p.size ? ` ${p.size}` : ""}
-                                    </p>
-                                    <p className="text-xs text-gray-400 mt-0.5">
-                                      {p.stockQuantity != null ? `${formatQty(p.stockQuantity, p.stockUnit)} left` : ""}
-                                      {p.costPrice != null ? ` · ₱${p.costPrice}` : ""}
-                                    </p>
-                                  </div>
-                                  <span className={`text-xs font-semibold shrink-0 ${inCart ? "text-green-600" : "text-indigo-600"}`}>
-                                    {inCart ? "Added ✓" : "Add +"}
-                                  </span>
-                                </button>
-                              );
-                            })
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Delivery date is set automatically to current date */}
-                  </div>
-                </div>
-
-                {/* Suggested Reorders — shows only once a supplier is picked.
-                    Driven by /api/reorder/suggestions: sales velocity + profit + urgency,
-                    scoped to the selected supplier's products. */}
-                {form.supplierId && (
-                  <div className="bg-white border border-indigo-100 rounded-2xl p-4 md:p-5 shadow-sm">
-                    <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
-                          <Lightbulb className="w-3.5 h-3.5" />
-                        </div>
-                        <h2 className="text-sm font-bold text-gray-700">Suggested Reorders</h2>
-                        {flaggedSuggestions.length > 0 && (
-                          <span className="text-xs text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">
-                            {flaggedSuggestions.length} item{flaggedSuggestions.length > 1 ? "s" : ""}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-xs text-gray-400">Based on last 30 days</span>
-                    </div>
-
-                    {loadingReorder ? (
-                      <p className="text-xs text-gray-400 text-center py-6">Calculating suggestions...</p>
-                    ) : flaggedSuggestions.length === 0 ? (
-                      <p className="text-xs text-gray-400 text-center py-6">
-                        No reorder suggestions right now — stock levels look healthy.
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {flaggedSuggestions.map((s) => {
-                          const urgencyStyle = {
-                            high:   "bg-red-100 text-red-700",
-                            medium: "bg-yellow-100 text-yellow-700",
-                            low:    "bg-green-100 text-green-700",
-                          }[s.urgency];
-                          const dotColor = {
-                            high:   "bg-red-500",
-                            medium: "bg-yellow-500",
-                            low:    "bg-green-500",
-                          }[s.urgency];
-                          const inCart = form.lineItems.some((i) => i.productId === s.productId);
-                          return (
-                            <div key={s.productId} className="flex items-center justify-between rounded-xl p-3 border border-gray-100 bg-gray-50/50">
-                              <div className="flex items-center gap-3 min-w-0 flex-1">
-                                <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <p className="text-sm font-medium text-gray-800 truncate">
-                                      {s.productName}{s.size ? ` ${s.size}` : ""}
-                                    </p>
-                                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${urgencyStyle}`}>
-                                      {s.daysOfStockLeft !== null ? `${s.daysOfStockLeft}d left` : "no recent sales"}
-                                    </span>
-                                  </div>
-                                  <p className="text-xs text-gray-400 mt-0.5">
-                                    {s.netUnitsSold} sold/30d
-                                    {s.unitProfit != null && ` · ₱${s.unitProfit.toFixed(2)} profit/unit`}
-                                    {s.totalProfitWindow != null && ` · ₱${s.totalProfitWindow.toLocaleString()} earned`}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="text-right shrink-0 ml-2">
-                                <p className="text-xs text-gray-400">Suggested</p>
-                                <p className="text-sm font-semibold text-gray-800 mb-1.5">
-                                  {s.suggestedCases != null ? pluralize(s.suggestedCases, "case") : pluralize(s.suggestedUnits, "piece")}
-                                </p>
-                                <button
-                                  onClick={() => addSuggestedItem(s)}
-                                  disabled={inCart}
-                                  className={`text-xs font-semibold rounded-lg px-3 py-1.5 transition-colors ${
-                                    inCart
-                                      ? "bg-green-100 text-green-700 cursor-default"
-                                      : "bg-indigo-600 text-white hover:bg-indigo-700"
-                                  }`}
-                                >
-                                  {inCart ? "Added ✓" : "Add to Order"}
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Recommended Products */}
-                {form.supplierId && supplierProducts.length > 0 && (() => {
-                  const topProducts = supplierProducts
-                    .filter((p) => (productSales[p.id] ?? 0) > 0)
-                    .slice(0, 5);
-                  if (topProducts.length === 0) return null;
-                  return (
-                    <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-2xl p-4 md:p-5 shadow-sm">
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="text-lg">🔥</span>
-                        <h2 className="text-sm font-bold text-orange-800">Top Seller Products</h2>
-                        <span className="text-xs text-orange-500 bg-orange-100 px-2 py-0.5 rounded-full">{topProducts.length} product{topProducts.length > 1 ? "s" : ""}</span>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                        {topProducts.map((p) => {
-                          const stock = p.stockQuantity ?? 0;
-                          const isOutOfStock = stock === 0;
-                          const inCart = form.lineItems.some((i) => i.productId === p.id);
-                          return (
-                            <div key={p.id} className={`flex items-center justify-between rounded-xl p-3 border ${isOutOfStock ? "border-red-200 bg-red-50/50" : "border-orange-100 bg-white"}`}>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-xs font-semibold text-gray-800 truncate">{p.productName}{p.size ? ` ${p.size}` : ""}</p>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <span className="text-xs font-medium text-gray-500">₱{p.costPrice ?? "—"}</span>
-                                  {isOutOfStock ? (
-                                    <span className="text-xs text-red-500 font-medium">Out of Stock</span>
-                                  ) : (
-                                    <span className="text-xs text-gray-400">{formatQty(stock, p.stockUnit)}</span>
-                                  )}
-                                  {productSales[p.id] && (
-                                    <span className="text-xs text-orange-600 font-medium">{productSales[p.id]} sold</span>
-                                  )}
-                                </div>
-                              </div>
-                              <button
-                                type="button"
-                                disabled={inCart}
-                                onClick={() => addRecommendedItem(p.id)}
-                                className={`ml-2 shrink-0 text-xs font-semibold rounded-lg px-3 py-1.5 transition-colors ${
-                                  inCart
-                                    ? "bg-green-100 text-green-700 cursor-default"
-                                    : isOutOfStock
-                                    ? "bg-orange-500 text-white hover:bg-orange-600 opacity-70"
-                                    : "bg-orange-500 text-white hover:bg-orange-600"
-                                }`}>
-                                {inCart ? "Added ✓" : "Add to Order"}
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Step 2 — Products */}
-                <div className={`bg-white rounded-2xl p-4 md:p-5 shadow-sm transition-opacity ${!form.supplierId ? "opacity-50 pointer-events-none" : ""}`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-6 h-6 rounded-full text-white text-xs flex items-center justify-center font-bold ${form.supplierId ? "bg-indigo-600" : "bg-gray-300"}`}>2</div>
-                      <h2 className="text-sm font-bold text-gray-700">
-                        Select Products
-                        {form.supplierId && selectedSupplierName && (
-                          <span className="ml-2 text-xs font-normal text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">from {selectedSupplierName}</span>
-                        )}
-                      </h2>
-                    </div>
-                    <button onClick={addLineItem} disabled={!form.supplierId || supplierProducts.length === 0}
-                      className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold border border-indigo-200 rounded-lg px-3 py-1.5 hover:bg-indigo-50 disabled:opacity-40 disabled:cursor-not-allowed">
-                      + Add Item
+                  {(["PENDING", "APPROVED", "REJECTED", "All"] as const).map((opt) => (
+                    <button key={opt} onClick={() => { setRequestStatus(opt); setRequestPage(1); }}
+                      className={`px-3 py-2 rounded-lg text-xs border transition-colors ${
+                        requestStatus === opt ? "border-indigo-400 text-indigo-600 bg-indigo-50 font-semibold" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                      {opt === "All" ? "All" : opt.charAt(0) + opt.slice(1).toLowerCase()}
                     </button>
-                  </div>
+                  ))}
+                </div>
+              </div>
 
-                  {!form.supplierId && (
-                    <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-gray-200 rounded-xl">
-                      <Building2 className="w-10 h-10 text-gray-300 mb-2" />
-                      <p className="text-sm text-gray-400 font-medium">Select a supplier first</p>
-                    </div>
-                  )}
+              <div className="flex gap-2 mb-4 flex-wrap">
+                {[
+                  { label: "Total",    count: orderRequests.length,                                          color: "bg-indigo-100 text-indigo-700" },
+                  { label: "Pending",  count: orderRequests.filter((r) => r.status === "PENDING").length,    color: "bg-yellow-100 text-yellow-800" },
+                  { label: "Approved", count: orderRequests.filter((r) => r.status === "APPROVED").length,   color: "bg-green-100 text-green-800"   },
+                  { label: "Rejected", count: orderRequests.filter((r) => r.status === "REJECTED").length,   color: "bg-red-100 text-red-700"       },
+                ].map((s) => <span key={s.label} className={`${s.color} rounded-full px-3 py-1 text-xs font-semibold`}>{s.label}: {s.count}</span>)}
+              </div>
 
-                  {form.supplierId && supplierProducts.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-8 text-center border-2 border-dashed border-yellow-200 rounded-xl bg-yellow-50">
-                      <Box className="w-10 h-10 text-yellow-300 mb-2" />
-                      <p className="text-sm text-yellow-700 font-medium">No products found for this supplier</p>
-                    </div>
-                  )}
-
-                  {form.supplierId && supplierProducts.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-medium text-gray-400 px-1">
-                        <div className="col-span-4">Product</div>
-                        <div className="col-span-3 text-center">Quantity</div>
-                        <div className="col-span-2">Cost (₱)</div>
-                        <div className="col-span-3 text-right">Sub</div>
-                      </div>
-
-                      {form.lineItems.map((item, idx) => {
-                        const breakdown  = getCaseBreakdown(Number(item.quantity), item.unit);
-                        const usedIds    = form.lineItems.filter((_, i) => i !== idx).map((li) => li.productId).filter(Boolean);
-                        return (
-                          <div key={idx} className="bg-gray-50 rounded-xl p-2.5">
-                            <div className="grid grid-cols-2 md:grid-cols-12 gap-2 items-center">
-                              {/* ✅ Custom product dropdown — no native select placeholder issues */}
-                              <div className="col-span-2 md:col-span-4">
-                                <label className="text-xs text-gray-400 md:hidden">Product</label>
-                                <ProductSelect
-                                  value={item.productId}
-                                  onChange={(id) => updateLineItem(idx, "productId", id)}
-                                  products={supplierProducts}
-                                  usedIds={usedIds}
-                                  idx={idx}
-                                  productSales={productSales}
-                                />
-                              </div>
-                              <div className="col-span-1 md:col-span-3">
-                                <label className="text-xs text-gray-400 md:hidden">Qty</label>
-                                <input type="number" min="1" value={item.quantity}
-                                  onChange={(e) => updateLineItem(idx, "quantity", e.target.value)}
-                                  className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-center text-gray-900 bg-white" />
-                              </div>
-                              <div className="col-span-1 md:col-span-2">
-                                <label className="text-xs text-gray-400 md:hidden">Cost (₱)</label>
-                                <input type="number" min="0" step="0.01" value={item.unitPrice}
-                                  onChange={(e) => updateLineItem(idx, "unitPrice", e.target.value)}
-                                  className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white" placeholder="₱0" />
-                              </div>
-                              <div className="col-span-1 md:col-span-3 flex items-center justify-end gap-1">
-                                <span className="text-xs font-medium text-gray-700 whitespace-nowrap">
-                                  ₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
-                                </span>
-                                {form.lineItems.length > 1 && (
-                                  <button onClick={() => removeLineItem(idx)} className="text-red-400 hover:text-red-600 ml-1 text-sm shrink-0">✕</button>
-                                )}
-                              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-max">
+                  <thead>
+                    <tr className="bg-indigo-900 text-white text-xs">
+                      <th className="p-3 text-left">Request ID</th>
+                      <th className="p-3 text-left">Requested By</th>
+                      <th className="p-3 text-left">Supplier</th>
+                      <th className="p-3 text-left">Products</th>
+                      <th className="p-3 text-left">Total</th>
+                      <th className="p-3 text-left">Date</th>
+                      <th className="p-3 text-left">Status</th>
+                      <th className="p-3 text-left">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading ? (
+                      <tr><td colSpan={8} className="p-6 text-center text-gray-400">Loading...</td></tr>
+                    ) : paginatedRequests.length === 0 ? (
+                      <tr><td colSpan={8} className="p-10 text-center">
+                        <div className="flex flex-col items-center gap-2">
+                          <Inbox className="w-8 h-8 text-gray-300" />
+                          <p className="text-gray-400 text-sm">No order requests found.</p>
+                        </div>
+                      </td></tr>
+                    ) : paginatedRequests.map((r) => (
+                      <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="p-3"><span className="bg-gray-700 text-white px-3 py-1 rounded-full text-xs font-mono">{r.id.slice(0, 8)}...</span></td>
+                        <td className="p-3 text-xs text-gray-600">
+                          {r.requestedBy ? (
+                            <div>
+                              <p className="font-medium">{r.requestedBy.name}</p>
+                              <p className="text-gray-400">{r.requestedBy.role}</p>
                             </div>
-                            {breakdown && item.productId && (
-                              <p className="text-xs text-indigo-500 font-medium mt-1.5 pl-1 flex items-center gap-1">
-                                <Box className="w-3 h-3" /> {breakdown}
-                              </p>
+                          ) : "—"}
+                        </td>
+                        <td className="p-3 text-gray-700">{r.supplier?.supplierName || r.supplierId}</td>
+                        <td className="p-3 text-gray-600 text-xs max-w-xs">
+                          <div className="space-y-1">
+                            {r.items?.slice(0, 3).map((item, idx) => (
+                              <div key={idx} className="truncate">{productNameFor(item)}</div>
+                            ))}
+                            {(r.items?.length || 0) > 3 && <p className="text-gray-400">+{r.items.length - 3} more</p>}
+                          </div>
+                        </td>
+                        <td className="p-3 text-gray-700 font-medium">₱{requestTotal(r).toLocaleString()}</td>
+                        <td className="p-3 text-xs text-gray-500">{new Date(r.createdAt).toLocaleDateString("en-PH")}</td>
+                        <td className="p-3">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${REQUEST_STATUS_CONFIG[r.status]?.bg} ${REQUEST_STATUS_CONFIG[r.status]?.text}`}>{r.status}</span>
+                        </td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => setViewRequest(r)} className="border border-indigo-300 text-indigo-600 hover:bg-indigo-50 rounded-lg px-2 py-1 text-xs font-medium">View</button>
+                            {r.status === "PENDING" && (
+                              <>
+                                <button disabled={processingId === r.id} onClick={() => handleApproveRequest(r)}
+                                  className="bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white rounded-lg px-2 py-1 text-xs font-medium">Approve</button>
+                                <button disabled={processingId === r.id} onClick={() => setRejectTarget(r)}
+                                  className="border border-red-200 text-red-500 hover:bg-red-50 disabled:opacity-50 rounded-lg px-2 py-1 text-xs font-medium">Reject</button>
+                              </>
                             )}
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Step 3 — Notes */}
-                <div className={`bg-white rounded-2xl p-4 md:p-5 shadow-sm transition-opacity ${!form.supplierId ? "opacity-50 pointer-events-none" : ""}`}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className={`w-6 h-6 rounded-full text-white text-xs flex items-center justify-center font-bold ${form.supplierId ? "bg-indigo-600" : "bg-gray-300"}`}>3</div>
-                    <h2 className="text-sm font-bold text-gray-700">Notes (Optional)</h2>
-                  </div>
-                  <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                    rows={3} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 bg-white resize-none"
-                    placeholder="Optional notes about this delivery..." />
-                </div>
-
-                {/* Stock Overview — all products with stock status */}
-                {form.supplierId && supplierProducts.length > 0 && (
-                  <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-6 h-6 rounded-full bg-gray-600 text-white text-xs flex items-center justify-center font-bold">#</div>
-                      <h2 className="text-sm font-bold text-gray-700">Stock Overview</h2>
-                      <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{supplierProducts.length} product{supplierProducts.length > 1 ? "s" : ""}</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {supplierProducts.map((p) => {
-                        const stock = p.stockQuantity ?? 0;
-                        const isOutOfStock = stock === 0;
-                        const isLowStock = stock > 0 && stock <= 10;
-                        const badgeColor = isOutOfStock
-                          ? "bg-red-100 text-red-700 border-red-200"
-                          : isLowStock
-                          ? "bg-yellow-100 text-yellow-700 border-yellow-200"
-                          : "bg-green-100 text-green-700 border-green-200";
-                        const dotColor = isOutOfStock
-                          ? "bg-red-500"
-                          : isLowStock
-                          ? "bg-yellow-500"
-                          : "bg-green-500";
-                        const statusText = isOutOfStock ? "Out of Stock" : isLowStock ? "Low Stock" : "In Stock";
-                        return (
-                          <div key={p.id} className={`flex items-center justify-between rounded-lg p-2.5 border ${isOutOfStock ? "border-red-100 bg-red-50/50" : isLowStock ? "border-yellow-100 bg-yellow-50/50" : "border-gray-100 bg-gray-50/50"}`}>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5">
-                                <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor} ${isOutOfStock ? "animate-pulse" : ""}`} />
-                                <p className="text-xs font-medium text-gray-800 truncate">{p.productName}{p.size ? ` ${p.size}` : ""}</p>
-                                {(() => {
-                                  const salesCount = productSales[p.id] ?? 0;
-                                  const topVals = supplierProducts
-                                    .map((x) => productSales[x.id] ?? 0)
-                                    .sort((a, b) => b - a)
-                                    .filter((v) => v > 0);
-                                  const isTop = salesCount > 0 && topVals.length > 0 && salesCount >= (topVals[Math.min(2, topVals.length - 1)] ?? 0);
-                                  return isTop ? <span className="ml-1 text-[10px] bg-orange-100 text-orange-700 font-semibold px-1.5 py-0.5 rounded-full shrink-0">Top Seller</span> : null;
-                                })()}
-                              </div>
-                              <p className={`text-xs mt-0.5 font-medium ${isOutOfStock ? "text-red-500" : isLowStock ? "text-yellow-600" : "text-green-600"}`}>{statusText}</p>
-                            </div>
-                            <div className="text-right shrink-0 ml-2">
-                              {isOutOfStock ? (
-                                <span className="text-xs font-bold text-red-500">—</span>
-                              ) : (
-                                <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-1.5 py-0.5 rounded-full border ${badgeColor}`}>
-                                  {formatQty(stock, p.stockUnit)}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Low Stock & Out of Stock Alert */}
-                {(lowStockProducts.length > 0 || outOfStockProducts.length > 0) && (
-                  <div className="bg-red-50 border border-red-200 rounded-2xl p-4 shadow-sm">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-6 h-6 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-bold">!</div>
-                      <h2 className="text-sm font-bold text-red-700">Stock Alert</h2>
-                      <span className="text-xs text-red-500 bg-red-100 px-2 py-0.5 rounded-full">{outOfStockProducts.length + lowStockProducts.length} item{(outOfStockProducts.length + lowStockProducts.length) > 1 ? "s" : ""}</span>
-                    </div>
-                    <div className="space-y-2">
-                      {outOfStockProducts.length > 0 && (
-                        <div>
-                          <p className="text-xs font-bold text-red-600 mb-1.5">⚠️ Out of Stock ({outOfStockProducts.length})</p>
-                          <div className="space-y-1.5">
-                            {outOfStockProducts.map((p) => (
-                              <div key={p.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-red-200">
-                                <p className="text-sm font-medium text-gray-800">{p.productName}{p.size ? ` ${p.size}` : ""}</p>
-                                <span className="text-xs font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">Out of Stock</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {lowStockProducts.length > 0 && (
-                        <div>
-                          <p className="text-xs font-bold text-yellow-700 mb-1.5">Low Stock ({lowStockProducts.length})</p>
-                          <div className="space-y-1.5">
-                            {lowStockProducts.map((p) => {
-                              const stock = p.stockQuantity ?? 0;
-                              return (
-                                <div key={p.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-yellow-200">
-                                  <p className="text-sm font-medium text-gray-800">{p.productName}{p.size ? ` ${p.size}` : ""}</p>
-                                  <span className="text-xs font-bold text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded-full">{formatQty(stock, p.stockUnit)}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-
-              {/* Order Summary sidebar */}
-              <div className="w-full lg:w-72 shrink-0">
-                <div className="bg-white rounded-2xl p-5 shadow-sm sticky top-4">
-                  <h2 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
-                    <ClipboardList className="w-4 h-4 text-indigo-600" />
-                    Order Summary</h2>
-                  {form.supplierId ? (
-                    <div className="mb-4 flex items-center gap-2 p-2.5 bg-indigo-50 rounded-xl border border-indigo-100">
-                      <Building2 className="w-5 h-5 text-indigo-600" />
-                      <div>
-                        <p className="text-xs text-indigo-400">Supplier</p>
-                        <p className="text-sm font-semibold text-indigo-800">{selectedSupplierName}</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mb-4 p-2.5 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center">
-                      <p className="text-xs text-gray-400">No supplier selected</p>
-                    </div>
-                  )}
-
-                  <div className="mb-4 flex items-center gap-2 p-2.5 bg-gray-50 rounded-xl border border-gray-100">
-                    <Calendar className="w-4 h-4 text-gray-400" />
-                    <div>
-                      <p className="text-xs text-gray-400">Delivery Date Created</p>
-                      <p className="text-xs font-semibold text-gray-700">
-                        {new Date().toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
-                      </p>
-                    </div>
-                  </div>
-
-                  {validLineItems.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-8 text-center">
-                      <ClipboardList className="w-10 h-10 text-gray-200 mb-3" />
-                      <p className="text-xs text-gray-400">No items yet.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2 mb-4">
-                      {validLineItems.map((item, idx) => {
-                        const breakdown = getCaseBreakdown(Number(item.quantity), item.unit);
-                        return (
-                          <div key={idx} className="py-2 border-b border-gray-50">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <p className="font-medium text-gray-800 text-xs">{item.productName}{item.size ? <span className="text-gray-400 font-normal ml-1">{item.size}</span> : ""}</p>
-                                <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                                  <UnitPill unit={item.unit} qty={Number(item.quantity)} />
-                                  <span className="text-xs text-gray-400">× ₱{Number(item.unitPrice).toLocaleString()}</span>
-                                </div>
-                                {breakdown && <p className="text-xs text-indigo-500 font-medium mt-0.5">{breakdown}</p>}
-                              </div>
-                              <span className="text-xs font-semibold text-indigo-700 ml-2 shrink-0">
-                                ₱{(Number(item.quantity) * Number(item.unitPrice)).toLocaleString()}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      <div className="pt-2 flex justify-between items-center">
-                        <span className="text-sm font-semibold text-gray-600">Total</span>
-                        <span className="text-base font-bold text-indigo-900">₱{calculateTotal(validLineItems).toLocaleString()}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  <button onClick={() => {
-                      if (!form.supplierId) { setCreateError("Please select a supplier."); return; }
-                      if (validLineItems.length === 0) { setCreateError("Please add at least one product."); return; }
-                      setPreviewModal(true);
-                    }} disabled={saving || validLineItems.length === 0 || !form.supplierId}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-2">
-                    {saving ? <><span className="animate-spin inline-block">⏳</span> Submitting...</> : <><span>📤</span> Review & Submit</>}
-                  </button>
-                </div>
-              </div>
+              <PaginationBar page={requestPage} totalPages={requestTotalPages} setPage={setRequestPage} total={filteredRequests.length} label="requests" />
             </div>
           )}
 
@@ -1604,7 +578,7 @@ export default function PurchaseOrderPage() {
                     </button>
                     {showHistoryStatusDrop && (
                       <div className="absolute top-10 left-0 bg-white border border-gray-200 rounded-xl shadow-lg z-50 w-48">
-                        {["All","PARTIALLY_RECEIVED","DELIVERED","CANCELLED"].map((opt) => (
+                        {["All", "PARTIALLY_RECEIVED", "DELIVERED", "CANCELLED"].map((opt) => (
                           <button key={opt} onClick={() => { setHistoryStatus(opt); setHistoryPage(1); setShowHistoryStatusDrop(false); }}
                             className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${historyStatus === opt ? "text-indigo-600 font-semibold" : "text-gray-600"}`}>
                             {opt === "All" ? "All Status" : opt}
@@ -1623,9 +597,9 @@ export default function PurchaseOrderPage() {
               <div className="flex gap-2 mb-4 flex-wrap">
                 {[
                   { label: "Total",     count: deliveries.length,                                              color: "bg-indigo-100 text-indigo-700" },
-                  { label: "Partial",   count: deliveries.filter(d => d.status==="PARTIALLY_RECEIVED").length, color: "bg-blue-100 text-blue-800"     },
-                  { label: "Delivered", count: deliveries.filter(d => d.status==="DELIVERED").length,          color: "bg-green-100 text-green-800"   },
-                  { label: "Cancelled", count: deliveries.filter(d => d.status==="CANCELLED").length,          color: "bg-red-100 text-red-700"       },
+                  { label: "Partial",   count: deliveries.filter((d) => d.status === "PARTIALLY_RECEIVED").length, color: "bg-blue-100 text-blue-800"     },
+                  { label: "Delivered", count: deliveries.filter((d) => d.status === "DELIVERED").length,          color: "bg-green-100 text-green-800"   },
+                  { label: "Cancelled", count: deliveries.filter((d) => d.status === "CANCELLED").length,          color: "bg-red-100 text-red-700"       },
                 ].map((s) => <span key={s.label} className={`${s.color} rounded-full px-3 py-1 text-xs font-semibold`}>{s.label}: {s.count}</span>)}
               </div>
 
@@ -1662,7 +636,7 @@ export default function PurchaseOrderPage() {
                         <td className="p-3 text-gray-600 text-xs max-w-xs">
                           <div className="space-y-1">
                             {row.items?.slice(0, 3).map((item, idx) => (
-                              <div key={idx} className="truncate">{item.product?.productName || allProducts.find(p => p.id === item.productId)?.productName || item.productId}</div>
+                              <div key={idx} className="truncate">{productNameFor(item)}</div>
                             ))}
                             {(row.items?.length || 0) > 3 && <p className="text-gray-400">+{(row.items?.length || 0) - 3} more</p>}
                           </div>
@@ -1689,6 +663,116 @@ export default function PurchaseOrderPage() {
           )}
         </div>
       </main>
+
+      {/* VIEW ORDER REQUEST MODAL */}
+      {viewRequest && (
+        <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h2 className="text-lg font-bold text-gray-800">Order Request</h2>
+                <p className="text-xs text-gray-400 font-mono mt-0.5">{viewRequest.id}</p>
+              </div>
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${REQUEST_STATUS_CONFIG[viewRequest.status]?.bg} ${REQUEST_STATUS_CONFIG[viewRequest.status]?.text}`}>{viewRequest.status}</span>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-indigo-50 rounded-xl p-3 border border-indigo-100">
+                  <p className="text-xs text-indigo-400 mb-1">Supplier</p>
+                  <p className="text-sm font-semibold text-indigo-800">{viewRequest.supplier?.supplierName || viewRequest.supplierId}</p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400 mb-1">Requested By</p>
+                  <p className="text-sm font-medium text-gray-800">{viewRequest.requestedBy?.name || "—"}</p>
+                  <p className="text-xs text-gray-500">{viewRequest.requestedBy?.role}</p>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-xs text-gray-400 mb-1">Date Requested</p>
+                <p className="text-sm font-medium text-gray-800">
+                  {new Date(viewRequest.createdAt).toLocaleDateString("en-PH", { weekday: "short", month: "long", day: "numeric", year: "numeric" })}
+                </p>
+              </div>
+
+              {viewRequest.notes && (
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400 mb-1">Notes from Inventory Manager</p>
+                  <p className="text-sm text-gray-700">{viewRequest.notes}</p>
+                </div>
+              )}
+
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-xs font-semibold text-gray-600 mb-3">Requested Products ({viewRequest.items.length})</p>
+                <div className="space-y-3">
+                  {viewRequest.items.map((item, idx) => {
+                    const breakdown = getCaseBreakdown(Number(item.quantity), item.unit || item.product?.stockUnit);
+                    return (
+                      <div key={idx} className="py-2 border-b border-gray-100 last:border-0 flex justify-between items-start">
+                        <div>
+                          <p className="font-medium text-sm text-gray-800">
+                            {productNameFor(item)}
+                            {item.product?.size && <span className="text-gray-500 font-normal ml-1">{item.product.size}</span>}
+                          </p>
+                          <div className="flex items-center gap-1 mt-1 flex-wrap">
+                            <UnitPill unit={item.unit || item.product?.stockUnit} qty={Number(item.quantity)} />
+                            <span className="text-xs text-gray-400">× ₱{Number(item.costPrice).toLocaleString()}</span>
+                          </div>
+                          {breakdown && <p className="text-xs text-indigo-500 font-medium mt-0.5">{breakdown}</p>}
+                        </div>
+                        <span className="text-sm font-semibold text-indigo-700 ml-3 shrink-0">
+                          ₱{(Number(item.quantity) * Number(item.costPrice)).toLocaleString()}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 pt-3 border-t border-gray-200 flex justify-between">
+                  <p className="text-sm font-medium text-gray-600">Total Amount</p>
+                  <p className="text-lg font-bold text-indigo-700">₱{requestTotal(viewRequest).toLocaleString()}</p>
+                </div>
+              </div>
+
+              {viewRequest.status === "REJECTED" && viewRequest.adminRemarks && (
+                <div className="bg-red-50 border border-red-100 rounded-xl p-3">
+                  <p className="text-xs text-red-400 mb-1">Reason for rejection</p>
+                  <p className="text-sm text-red-700">{viewRequest.adminRemarks}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setViewRequest(null)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Close</button>
+              {viewRequest.status === "PENDING" && (
+                <>
+                  <button onClick={() => setRejectTarget(viewRequest)} className="flex-1 border border-red-200 text-red-500 hover:bg-red-50 rounded-lg py-2 text-sm font-medium">Reject</button>
+                  <button onClick={() => handleApproveRequest(viewRequest)} className="flex-1 bg-green-500 hover:bg-green-600 text-white rounded-lg py-2 text-sm font-semibold">Approve</button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REJECT REASON MODAL */}
+      {rejectTarget && (
+        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-[70] px-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+            <h2 className="text-base font-bold text-gray-800 mb-1">Reject this request?</h2>
+            <p className="text-xs text-gray-400 mb-3">The inventory manager will see your reason.</p>
+            <textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3}
+              placeholder="Reason (optional)..."
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 resize-none" />
+            <div className="flex gap-3 mt-4">
+              <button onClick={() => { setRejectTarget(null); setRejectReason(""); }}
+                className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={handleRejectRequest} disabled={processingId === rejectTarget.id}
+                className="flex-1 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white rounded-lg py-2 text-sm font-semibold">Reject</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* VIEW DELIVERY MODAL */}
       {viewDelivery && (
@@ -1735,15 +819,14 @@ export default function PurchaseOrderPage() {
                 <p className="text-xs text-gray-400 mb-2">Products Ordered</p>
                 <div className="space-y-3">
                   {viewDelivery.items?.map((item, idx) => {
-                    const unitInfo    = getUnit(item.unit || item.product?.stockUnit);
-                    const orderedBtl  = unitInfo.bottlesPerCase ? item.orderedQty  * unitInfo.bottlesPerCase : null;
-                    const productName = item.product?.productName || allProducts.find(p => p.id === item.productId)?.productName || item.productId;
+                    const unitInfo   = getUnit(item.unit || item.product?.stockUnit);
+                    const orderedBtl = unitInfo.bottlesPerCase ? item.orderedQty * unitInfo.bottlesPerCase : null;
                     return (
                       <div key={idx} className="py-2 border-b border-gray-100 last:border-0">
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <p className="font-medium text-sm text-gray-800">
-                              {productName}
+                              {productNameFor(item)}
                               {item.product?.size && <span className="text-gray-500 font-normal ml-1">{item.product.size}</span>}
                             </p>
                             <div className="flex items-center gap-1 mt-0.5">
@@ -1779,9 +862,10 @@ export default function PurchaseOrderPage() {
         </div>
       )}
 
-      {createSuccess && (
+      {/* Success toast */}
+      {pageSuccess && (
         <div className="fixed bottom-6 right-6 z-50 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
-          <span>✅</span><span className="text-sm font-medium">{createSuccess}</span>
+          <span>✅</span><span className="text-sm font-medium">{pageSuccess}</span>
         </div>
       )}
     </div>
