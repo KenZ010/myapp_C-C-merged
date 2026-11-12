@@ -516,7 +516,7 @@ function ProductSelect({
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function PurchaseOrderPage() {
   const [isNarrow, setIsNarrow] = useState(false);
-  const [step, setStep] = useState<POStep>("receiving");
+  const [step, setStep] = useState<POStep>("create");
 
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [loading,    setLoading]    = useState(true);
@@ -987,8 +987,8 @@ export default function PurchaseOrderPage() {
   };
 
   const tabs: { key: POStep; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { key: "receiving", label: "Receiving",    icon: Icon.box,       badge: pendingDeliveries.length },
-    { key: "create",    label: "Create Order", icon: Icon.clipboard },
+    { key: "create", label: "Create Order",    icon: Icon.clipboard },
+    { key: "receiving",    label: "Receiving", icon: Icon.box,  badge: pendingDeliveries.length },
     { key: "history",   label: "PO History",   icon: Icon.clock },
   ];
 
