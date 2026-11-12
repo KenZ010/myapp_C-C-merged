@@ -28,6 +28,7 @@ type Transaction = {
   id: string; date: string; rawDate: Date; createdAt: string;
   customer: string; customerId: string | null;
   employeeName: string; total: number; paymentMethod: string;
+  driverName: string | null;
   orderLines: OrderLine[];
 };
 
@@ -95,6 +96,7 @@ function fmtDate(str: string) {
 function normalizeTransaction(o: Record<string, unknown>): Transaction {
   const customer = o.customer as Record<string, unknown> | null;
   const employee = o.employee as Record<string, unknown> | null;
+  const driver   = o.driver   as Record<string, unknown> | null;
   const payment  = o.payment  as Record<string, unknown> | null;
   const rawLines = (o.orderLines ?? []) as Record<string, unknown>[];
   const createdAt = String(o.createdAt ?? o.saleDate ?? "");
@@ -109,6 +111,7 @@ function normalizeTransaction(o: Record<string, unknown>): Transaction {
     employeeName:  employee ? String(employee.name ?? "—") : "—",
     total:         Number(o.totalAmount ?? 0),
     paymentMethod: payment ? String(payment.method ?? "CASH") : "CASH",
+    driverName:    driver ? String(driver.name ?? "") || null : null,
     orderLines:    rawLines.map(l => {
       const product = l.product as Record<string, unknown> | null;
       return {
@@ -636,6 +639,8 @@ function ReceiptModal({ tx, onClose }: { tx: Transaction; onClose: () => void })
             ["Order ID",  tx.id],
             ["Customer",  tx.customerId ? tx.customer : "Walk-in Customer"],
             ["Cashier",   tx.employeeName],
+            // Older orders have no driver picked, so they show a placeholder
+            ["Driver",    tx.driverName ?? "Not assigned"],
             ["Date",      fmtDate(tx.createdAt)],
             ["Payment",   tx.paymentMethod],
           ].map(([label, value]) => (
@@ -829,13 +834,7 @@ export default function SalesReportsPage() {
             <div className="flex items-center gap-2">
               <div className="relative"><Bell className="w-5 h-5 text-gray-500" /><div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" /></div>
               <div className="relative">
-                <div className="flex items-center gap-2 md:gap-3 px-2 md:px-3 py-2">
-                  <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-semibold text-sm md:text-base">R</div>
-                  <div className="text-left hidden md:block">
-                    <p className="text-sm font-semibold text-gray-800">Ray Teodoro</p>
-                    <p className="text-xs text-green-500">Admin</p>
-                  </div>
-                </div>
+                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-semibold text-sm md:text-base">R</div>
               </div>
             </div>
           </header>

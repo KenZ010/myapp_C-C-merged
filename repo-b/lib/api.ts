@@ -391,11 +391,12 @@ export const api = {
     if (!res.ok) throw new Error('Failed to fetch customer orders');
     return res.json();
   },
-  updateOrderStatus: async (orderId: string, status: string) => {
+  // driverId is required by the backend when status is OUT_FOR_DELIVERY
+  updateOrderStatus: async (orderId: string, status: string, driverId?: string) => {
     const res = await fetch(`${API_URL}/orders/${orderId}/status`, {
       method:  'PATCH',
       headers: authHeaders(),
-      body:    JSON.stringify({ status }),
+      body:    JSON.stringify({ status, driverId }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Failed to update order status');
