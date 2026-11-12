@@ -8,9 +8,9 @@ type ReturnReason = "WRONG_ITEM_SENT" | "DAMAGED" | "EXPIRED" | "OTHER";
 type OrderLine = {
   id: string;
   productName: string;
-  quantity: number;
+  quantity: number;       // cases ordered
   piecesPerCase: number;
-  returnedQty: number;
+  returnedQty: number;    // pieces already returned
   price: number;
 };
 
@@ -26,7 +26,7 @@ type Order = {
 
 type ReturnItem = {
   orderLineId: string;
-  returnQty: number;
+  returnQty: number; // always sent in PIECES
 };
 
 const RETURN_REASON_LABELS: Record<ReturnReason, string> = {
@@ -77,7 +77,7 @@ function normalizeOrder(o: Record<string, unknown>): Order {
       id:            String(l.id ?? ""),
       productName:   String(product?.productName ?? l.name ?? "Item"),
       quantity:      Number(l.quantity ?? 1),
-      piecesPerCase: Number(product?.productPiecesPerCase ?? product?.piecesPerCase ?? l.piecesPerCase ?? 1),
+      piecesPerCase: Math.max(1, Number(product?.productPiecesPerCase ?? product?.piecesPerCase ?? l.piecesPerCase ?? 1)),
       returnedQty:   Number(l.returnedQty ?? 0),
       price:         Number(l.price ?? 0),
     };
@@ -104,7 +104,29 @@ function totalOrdered(line: OrderLine): number {
 
 // Pieces still eligible to return (ordered - already returned)
 function maxReturnable(line: OrderLine): number {
-  return totalOrdered(line) - line.returnedQty;
+  return Math.max(0, totalOrdered(line) - line.returnedQty);
+}
+
+// Split a piece count into cases + loose pieces
+function splitPieces(total: number, ppc: number): { cases: number; pcs: number } {
+  if (ppc <= 1) return { cases: 0, pcs: total };
+  return { cases: Math.floor(total / ppc), pcs: total % ppc };
+}
+
+// Human-readable "2 cases + 5 pcs"
+function formatQty(total: number, ppc: number): string {
+  if (ppc <= 1) return `${total} pc${total !== 1 ? "s" : ""}`;
+  const { cases, pcs } = splitPieces(total, ppc);
+  const parts: string[] = [];
+  if (cases > 0) parts.push(`${cases} case${cases !== 1 ? "s" : ""}`);
+  if (pcs > 0) parts.push(`${pcs} pc${pcs !== 1 ? "s" : ""}`);
+  return parts.length ? parts.join(" + ") : "0 pcs";
+}
+
+function parseNum(raw: string | undefined): number {
+  if (!raw) return 0;
+  const n = parseInt(raw, 10);
+  return isNaN(n) ? 0 : n;
 }
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
@@ -114,6 +136,76 @@ function SkeletonRow() {
       {[200, 120, 80, 60].map((w, i) => (
         <div key={i} style={{ height: 13, borderRadius: 6, width: w, background: "linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.4s infinite" }} />
       ))}
+    </div>
+  );
+}
+
+// ─── Qty Field (label + − input +) ────────────────────────────────────────────
+function QtyField({
+  label,
+  value,
+  invalid,
+  disableMinus,
+  disablePlus,
+  onChange,
+  onBlur,
+  onStep,
+}: {
+  label:        string;
+  value:        string;
+  invalid:      boolean;
+  disableMinus: boolean;
+  disablePlus:  boolean;
+  onChange:     (v: string) => void;
+  onBlur:       () => void;
+  onStep:       (delta: number) => void;
+}) {
+  const stepBtn = (disabled: boolean): React.CSSProperties => ({
+    width: 28, height: 28, borderRadius: "50%",
+    border: "1.5px solid #e91e8c", background: "#fff",
+    color: disabled ? "#f0c0cc" : "#e91e8c",
+    fontWeight: 700, fontSize: 16, lineHeight: 1,
+    cursor: disabled ? "not-allowed" : "pointer",
+  });
+
+  return (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <p style={{ fontSize: 11, fontWeight: 700, color: "#888", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.4px" }}>
+        {label}
+      </p>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onStep(-1); }}
+          disabled={disableMinus}
+          style={stepBtn(disableMinus)}
+        >−</button>
+
+        <input
+          type="text"
+          inputMode="numeric"
+          value={value}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
+          style={{
+            width: 52, textAlign: "center", padding: "4px 6px",
+            borderRadius: 8,
+            border: `1.5px solid ${invalid ? "#e53935" : "#f0c0cc"}`,
+            fontSize: 13, fontWeight: 700,
+            color: invalid ? "#e53935" : "#c2185b",
+            background: invalid ? "#fff0f0" : "#fff",
+            outline: "none", transition: "all 0.15s",
+          }}
+        />
+
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onStep(1); }}
+          disabled={disablePlus}
+          style={stepBtn(disablePlus)}
+        >+</button>
+      </div>
     </div>
   );
 }
@@ -129,7 +221,8 @@ function ReturnFormModal({
   onSuccess: (returnRequestId: string) => void;
 }) {
   const [selectedLines, setSelectedLines] = useState<Record<string, boolean>>({});
-  const [rawValues,     setRawValues]     = useState<Record<string, string>>({});
+  const [rawCases,      setRawCases]      = useState<Record<string, string>>({});
+  const [rawPcs,        setRawPcs]        = useState<Record<string, string>>({});
   const [reason,        setReason]        = useState<ReturnReason | "">("");
   const [proofImage,    setProofImage]    = useState<string | null>(null);
   const [proofError,    setProofError]    = useState<string | null>(null);
@@ -140,66 +233,78 @@ function ReturnFormModal({
   // Only lines from this order that still have returnable pieces
   const returnableLines = order.orderLines.filter((l) => maxReturnable(l) > 0);
 
-  // Resolve raw string → valid number (falls back to max when blank)
-  const resolvedQty = (lineId: string, max: number): number => {
-    const raw = rawValues[lineId];
-    if (raw === undefined || raw === "") return max;
-    const n = parseInt(raw, 10);
-    return isNaN(n) ? max : Math.min(max, Math.max(1, n));
+  // Current values shown in the inputs (defaults to the max split until edited)
+  const getValues = (line: OrderLine) => {
+    const max = maxReturnable(line);
+    const def = splitPieces(max, line.piecesPerCase);
+    return {
+      cases: rawCases[line.id] ?? String(def.cases),
+      pcs:   rawPcs[line.id]   ?? String(def.pcs),
+    };
   };
 
-  // Check whether the current raw value is out of range (for live feedback)
-  const isOverMax = (lineId: string, max: number): boolean => {
-    const raw = rawValues[lineId];
-    if (!raw) return false;
-    const n = parseInt(raw, 10);
-    return !isNaN(n) && n > max;
+  // Total pieces the customer entered for this line
+  const totalPieces = (line: OrderLine): number => {
+    const v = getValues(line);
+    return parseNum(v.cases) * line.piecesPerCase + parseNum(v.pcs);
   };
 
-  const isUnderMin = (lineId: string): boolean => {
-    const raw = rawValues[lineId];
-    if (!raw) return false;
-    const n = parseInt(raw, 10);
-    return !isNaN(n) && n < 1;
+  const isOverMax  = (line: OrderLine) => totalPieces(line) > maxReturnable(line);
+  const isUnderMin = (line: OrderLine) => totalPieces(line) < 1;
+  const isInvalid  = (line: OrderLine) => isOverMax(line) || isUnderMin(line);
+
+  const setSplit = (line: OrderLine, total: number) => {
+    const { cases, pcs } = splitPieces(total, line.piecesPerCase);
+    setRawCases((prev) => ({ ...prev, [line.id]: String(cases) }));
+    setRawPcs((prev)   => ({ ...prev, [line.id]: String(pcs) }));
   };
 
-  const toggleLine = (lineId: string, max: number) => {
+  const toggleLine = (line: OrderLine) => {
     setSelectedLines((prev) => {
-      const next = { ...prev, [lineId]: !prev[lineId] };
-      if (next[lineId] && rawValues[lineId] === undefined) {
-        setRawValues((r) => ({ ...r, [lineId]: String(max) }));
+      const next = { ...prev, [line.id]: !prev[line.id] };
+      if (next[line.id] && rawCases[line.id] === undefined && rawPcs[line.id] === undefined) {
+        setSplit(line, maxReturnable(line));
       }
       return next;
     });
   };
 
-  // Allow free typing of digits only — no immediate clamping
-  const handleRawChange = (lineId: string, val: string) => {
-    if (/^\d*$/.test(val)) {
-      setRawValues((prev) => ({ ...prev, [lineId]: val }));
-    }
+  // Digits only, no clamping while typing
+  const handleCasesChange = (lineId: string, val: string) => {
+    if (/^\d*$/.test(val)) setRawCases((prev) => ({ ...prev, [lineId]: val }));
+  };
+  const handlePcsChange = (lineId: string, val: string) => {
+    if (/^\d*$/.test(val)) setRawPcs((prev) => ({ ...prev, [lineId]: val }));
   };
 
-  // Clamp & normalise on blur
-  const handleBlur = (lineId: string, max: number) => {
-    const raw = rawValues[lineId];
-    const n   = parseInt(raw ?? "", 10);
-    const clamped = isNaN(n) || n < 1 ? 1 : Math.min(n, max);
-    setRawValues((prev) => ({ ...prev, [lineId]: String(clamped) }));
+  // On blur: clamp the total into [1, max] and re-split (e.g. 0 cases + 30 pcs → 1 case + 6 pcs)
+  const handleBlur = (line: OrderLine) => {
+    const max   = maxReturnable(line);
+    const total = Math.min(max, Math.max(1, totalPieces(line)));
+    setSplit(line, total);
   };
 
-  const stepQty = (lineId: string, delta: number, max: number) => {
-    const current = resolvedQty(lineId, max);
-    const next    = Math.min(max, Math.max(1, current + delta));
-    setRawValues((prev) => ({ ...prev, [lineId]: String(next) }));
+  const stepCases = (line: OrderLine, delta: number) => {
+    const v = getValues(line);
+    const next = Math.max(0, parseNum(v.cases) + delta);
+    const total = next * line.piecesPerCase + parseNum(v.pcs);
+    if (total > maxReturnable(line) || total < 1) return;
+    setRawCases((prev) => ({ ...prev, [line.id]: String(next) }));
+    setRawPcs((prev)   => ({ ...prev, [line.id]: v.pcs }));
   };
 
-  const anySelected  = returnableLines.some((l) => selectedLines[l.id]);
-  // Block submit if any selected line has an out-of-range raw value
-  const anyInvalid   = returnableLines.some((l) =>
-    selectedLines[l.id] && (isOverMax(l.id, maxReturnable(l)) || isUnderMin(l.id))
-  );
-  const canSubmit    = anySelected && !!reason && !submitting && !anyInvalid;
+  const stepPcs = (line: OrderLine, delta: number) => {
+    const v = getValues(line);
+    const next = Math.max(0, parseNum(v.pcs) + delta);
+    const total = parseNum(v.cases) * line.piecesPerCase + next;
+    if (total > maxReturnable(line) || total < 1) return;
+    setRawPcs((prev)   => ({ ...prev, [line.id]: String(next) }));
+    setRawCases((prev) => ({ ...prev, [line.id]: v.cases }));
+  };
+
+  const anySelected = returnableLines.some((l) => selectedLines[l.id]);
+  const anyInvalid  = returnableLines.some((l) => selectedLines[l.id] && isInvalid(l));
+  const canSubmit   = anySelected && !!reason && !submitting && !anyInvalid;
 
   const handleProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -227,11 +332,12 @@ function ReturnFormModal({
     setError(null);
     setSubmitting(true);
     try {
+      // returnQty is always in PIECES (cases × pcsPerCase + loose pieces)
       const items: ReturnItem[] = returnableLines
         .filter((l) => selectedLines[l.id])
         .map((l) => ({
           orderLineId: l.id,
-          returnQty:   resolvedQty(l.id, maxReturnable(l)),
+          returnQty:   totalPieces(l),
         }));
 
       let proofImageUrl: string | undefined;
@@ -304,19 +410,23 @@ function ReturnFormModal({
             )}
 
             {returnableLines.map((line) => {
+              const ppc      = line.piecesPerCase;
               const max      = maxReturnable(line);
               const ordered  = totalOrdered(line);
               const checked  = !!selectedLines[line.id];
-              const raw      = rawValues[line.id] ?? String(max);
-              const overMax  = isOverMax(line.id, max);
-              const underMin = isUnderMin(line.id);
+              const values   = getValues(line);
+              const total    = totalPieces(line);
+              const overMax  = isOverMax(line);
+              const underMin = isUnderMin(line);
               const invalid  = overMax || underMin;
+              const hasCases = ppc > 1;
+              const maxSplit = splitPieces(max, ppc);
 
               return (
                 <div key={line.id} style={{ marginBottom: 8 }}>
                   {/* Line toggle */}
                   <div
-                    onClick={() => toggleLine(line.id, max)}
+                    onClick={() => toggleLine(line)}
                     style={{
                       display: "flex", alignItems: "center", gap: 12,
                       padding: "12px 14px",
@@ -342,13 +452,12 @@ function ReturnFormModal({
                       <p style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a", margin: 0 }}>
                         {line.productName}
                       </p>
-                      {/* Ordered breakdown */}
                       <p style={{ fontSize: 11, color: "#aaa", margin: "2px 0 0" }}>
-                        Ordered: {line.quantity} case{line.quantity !== 1 ? "s" : ""} × {line.piecesPerCase} pcs = <strong style={{ color: "#888" }}>{ordered} pcs total</strong>
+                        Ordered: {line.quantity} case{line.quantity !== 1 ? "s" : ""} × {ppc} pcs = <strong style={{ color: "#888" }}>{ordered} pcs total</strong>
                       </p>
                       {line.returnedQty > 0 && (
                         <p style={{ fontSize: 11, color: "#e91e8c", margin: "1px 0 0" }}>
-                          Already returned: {line.returnedQty} pcs
+                          Already returned: {formatQty(line.returnedQty, ppc)} ({line.returnedQty} pcs)
                         </p>
                       )}
                     </div>
@@ -375,62 +484,49 @@ function ReturnFormModal({
                       background: invalid ? "#fff5f5" : "#fff8fb",
                       transition: "all 0.15s",
                     }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontSize: 12, color: "#888", flex: 1 }}>Pieces to return:</span>
+                      <p style={{ fontSize: 12, color: "#888", margin: "0 0 10px" }}>
+                        How much will you return?
+                      </p>
 
-                        <button
-                          onClick={(e) => { e.stopPropagation(); stepQty(line.id, -1, max); }}
-                          disabled={resolvedQty(line.id, max) <= 1}
-                          style={{
-                            width: 28, height: 28, borderRadius: "50%",
-                            border: "1.5px solid #e91e8c", background: "#fff",
-                            color: resolvedQty(line.id, max) <= 1 ? "#f0c0cc" : "#e91e8c",
-                            fontWeight: 700, fontSize: 16, cursor: resolvedQty(line.id, max) <= 1 ? "not-allowed" : "pointer", lineHeight: 1,
-                          }}
-                        >−</button>
-
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={raw}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => handleRawChange(line.id, e.target.value)}
-                          onBlur={() => handleBlur(line.id, max)}
-                          style={{
-                            width: 52, textAlign: "center", padding: "4px 8px",
-                            borderRadius: 8,
-                            border: `1.5px solid ${invalid ? "#e53935" : "#f0c0cc"}`,
-                            fontSize: 13, fontWeight: 700,
-                            color: invalid ? "#e53935" : "#c2185b",
-                            background: invalid ? "#fff0f0" : "#fff",
-                            outline: "none",
-                            transition: "all 0.15s",
-                          }}
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap" }}>
+                        {hasCases && (
+                          <QtyField
+                            label="Cases"
+                            value={values.cases}
+                            invalid={invalid}
+                            disableMinus={parseNum(values.cases) <= 0 || total - ppc < 1}
+                            disablePlus={total + ppc > max}
+                            onChange={(v) => handleCasesChange(line.id, v)}
+                            onBlur={() => handleBlur(line)}
+                            onStep={(d) => stepCases(line, d)}
+                          />
+                        )}
+                        <QtyField
+                          label="Pieces"
+                          value={values.pcs}
+                          invalid={invalid}
+                          disableMinus={parseNum(values.pcs) <= 0 || total - 1 < 1}
+                          disablePlus={total + 1 > max}
+                          onChange={(v) => handlePcsChange(line.id, v)}
+                          onBlur={() => handleBlur(line)}
+                          onStep={(d) => stepPcs(line, d)}
                         />
-
-                        <button
-                          onClick={(e) => { e.stopPropagation(); stepQty(line.id, 1, max); }}
-                          disabled={resolvedQty(line.id, max) >= max}
-                          style={{
-                            width: 28, height: 28, borderRadius: "50%",
-                            border: "1.5px solid #e91e8c", background: "#fff",
-                            color: resolvedQty(line.id, max) >= max ? "#f0c0cc" : "#e91e8c",
-                            fontWeight: 700, fontSize: 16, cursor: resolvedQty(line.id, max) >= max ? "not-allowed" : "pointer", lineHeight: 1,
-                          }}
-                        >+</button>
-
-                        <span style={{ fontSize: 11, color: "#bbb" }}>/ {max} max</span>
                       </div>
+
+                      <p style={{ fontSize: 11, color: "#bbb", margin: "8px 0 0" }}>
+                        Max you can return: {formatQty(max, ppc)}
+                        {hasCases && maxSplit.cases > 0 && maxSplit.pcs > 0 ? ` (${max} pcs)` : ""}
+                      </p>
 
                       {/* Live validation message */}
                       {overMax && (
-                        <p style={{ fontSize: 11, color: "#e53935", margin: "8px 0 0", display: "flex", alignItems: "center", gap: 4 }}>
-                          ⚠️ You can only return up to <strong>{max} pcs</strong> (what you ordered minus already returned).
+                        <p style={{ fontSize: 11, color: "#e53935", margin: "8px 0 0" }}>
+                          ⚠️ You can only return up to <strong>{formatQty(max, ppc)}</strong> (what you ordered minus already returned).
                         </p>
                       )}
                       {underMin && (
-                        <p style={{ fontSize: 11, color: "#e53935", margin: "8px 0 0", display: "flex", alignItems: "center", gap: 4 }}>
-                          ⚠️ Minimum return quantity is 1 piece.
+                        <p style={{ fontSize: 11, color: "#e53935", margin: "8px 0 0" }}>
+                          ⚠️ Please enter at least 1 piece{hasCases ? " or 1 case" : ""} to return.
                         </p>
                       )}
 
@@ -442,7 +538,9 @@ function ReturnFormModal({
                           display: "inline-flex", alignItems: "center", gap: 6,
                         }}>
                           <span style={{ fontSize: 11, color: "#c2185b" }}>
-                            Returning <strong>{resolvedQty(line.id, max)}</strong> of <strong>{ordered}</strong> pcs
+                            Returning <strong>{formatQty(total, ppc)}</strong>
+                            {hasCases && total >= ppc ? <> = <strong>{total}</strong> pcs</> : null}
+                            {" "}of <strong>{ordered}</strong> pcs
                             {line.returnedQty > 0 && ` (${line.returnedQty} already returned)`}
                           </span>
                         </div>
