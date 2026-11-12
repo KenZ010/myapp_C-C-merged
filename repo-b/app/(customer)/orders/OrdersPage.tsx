@@ -12,15 +12,21 @@ type OrderStatus =
   | "Received"
   | "Cancelled";
 
-type OrderItem = { name: string; qty: number; price: number };
+type OrderItem = {
+  name:          string;
+  qty:           number;  // cases ordered
+  piecesPerCase: number;
+  price:         number;
+};
 
 type Order = {
-  id:     string;
-  date:   string;
-  status: OrderStatus;
-  note:   string;
-  total:  number;
-  items:  OrderItem[];
+  id:            string;
+  date:          string;
+  status:        OrderStatus;
+  note:          string;
+  total:         number;
+  paymentMethod: string;  // raw, uppercased (e.g. "CASH", "GCASH")
+  items:         OrderItem[];
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -86,9 +92,10 @@ function normalizeOrder(o: Record<string, unknown>): Order {
   const items: OrderItem[] = rawLines.map((l) => {
     const product = l.product as Record<string, unknown> | null;
     return {
-      name:  product ? String(product.productName ?? "Item") : String(l.name ?? "Item"),
-      qty:   Number(l.quantity ?? l.qty ?? 1),
-      price: Number(l.price ?? 0),
+      name:          product ? String(product.productName ?? "Item") : String(l.name ?? "Item"),
+      qty:           Number(l.quantity ?? l.qty ?? 1),
+      piecesPerCase: Math.max(1, Number(product?.productPiecesPerCase ?? product?.piecesPerCase ?? l.piecesPerCase ?? 1)),
+      price:         Number(l.price ?? 0),
     };
   });
 
@@ -98,7 +105,44 @@ function normalizeOrder(o: Record<string, unknown>): Order {
     ? new Date(rawDate).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" })
     : "—";
 
-  return { id: String(o.id ?? ""), date, status, note: statusNote[status], total, items };
+  const payment = o.payment as Record<string, unknown> | null;
+  const paymentMethod = String(payment?.method ?? o.paymentMethod ?? "CASH")
+    .toUpperCase()
+    .replace(/[\s_-]/g, "");
+
+  return { id: String(o.id ?? ""), date, status, note: statusNote[status], total, paymentMethod, items };
+}
+
+// GCash orders are already paid, so they can't be cancelled by the customer
+const isGcash = (order: Pick<Order, "paymentMethod">) => order.paymentMethod.includes("GCASH");
+
+const canCancelOrder = (order: Order) =>
+  (order.status === "Waiting" || order.status === "Processing") && !isGcash(order);
+
+function paymentLabel(method: string): { icon: string; label: string; badge: string } {
+  if (method.includes("GCASH")) return { icon: "📱", label: "GCash", badge: "bg-blue-50 text-blue-700" };
+  if (method.includes("CASH"))  return { icon: "💵", label: "Cash",  badge: "bg-green-50 text-green-700" };
+  const pretty = method ? method.charAt(0) + method.slice(1).toLowerCase() : "Cash";
+  return { icon: "💳", label: pretty, badge: "bg-gray-100 text-gray-600" };
+}
+
+// "2 cases · 48 pcs" (or "5 pcs" when the product has no case size)
+function qtyLabel(item: OrderItem): string {
+  if (item.piecesPerCase > 1) {
+    const pcs = item.qty * item.piecesPerCase;
+    return `${item.qty} case${item.qty !== 1 ? "s" : ""} · ${pcs} pcs`;
+  }
+  return `${item.qty} pc${item.qty !== 1 ? "s" : ""}`;
+}
+
+// Small "paid via" chip
+function PaymentChip({ method }: { method: string }) {
+  const p = paymentLabel(method);
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold ${p.badge}`}>
+      {p.icon} {p.label}
+    </span>
+  );
 }
 
 // ── Receive Confirmation Modal ─────────────────────────────────────────────────
@@ -144,6 +188,12 @@ function ReceiveModal({
           </div>
         </div>
 
+        {/* Payment method */}
+        <div className="px-6 py-3 border-b border-gray-100 flex justify-between items-center">
+          <p className="text-[11px] text-gray-400 m-0">Payment Method</p>
+          <PaymentChip method={order.paymentMethod} />
+        </div>
+
         {/* Items list */}
         <div className="px-6 py-4 max-h-[240px] overflow-y-auto">
           <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-3">
@@ -161,7 +211,7 @@ function ReceiveModal({
                   </div>
                   <div>
                     <p className="text-[13px] font-semibold text-gray-900 m-0">{item.name}</p>
-                    <p className="text-[11px] text-gray-400 m-0">Qty: {item.qty}</p>
+                    <p className="text-[11px] text-gray-400 m-0">{qtyLabel(item)}</p>
                   </div>
                 </div>
                 <p className="text-[13px] font-bold text-[#2d7a3a] m-0">
@@ -294,6 +344,12 @@ export default function OrdersPage() {
   };
 
   const cancelOrder = async (id: string) => {
+    // Safety guard: never cancel a GCash (already paid) order from the client
+    const target = orders.find((o) => o.id === id);
+    if (!target || !canCancelOrder(target)) {
+      setShowCancelConfirm(null);
+      return;
+    }
     setCancellingId(id);
     setShowCancelConfirm(null);
     setOrders((prev) => prev.map((o) => o.id === id ? { ...o, status: "Cancelled" } : o));
@@ -441,7 +497,8 @@ export default function OrdersPage() {
           ) : (
             filtered.map((order) => {
               const isSelected = selectedOrder?.id === order.id;
-              const canCancel  = order.status === "Waiting" || order.status === "Processing";
+              const canCancel  = canCancelOrder(order);
+              const gcashLocked = isGcash(order) && (order.status === "Waiting" || order.status === "Processing");
               const canReceive = order.status === "Out For Delivery";
               const { subtotal, vat, grandTotal } = withVat(order);
 
@@ -464,17 +521,21 @@ export default function OrdersPage() {
                     </span>
                   </div>
 
-                  <p className="text-xs text-gray-400 mb-3.5">📅 {order.date}</p>
+                  <div className="flex items-center justify-between gap-2 flex-wrap mb-3.5">
+                    <p className="text-xs text-gray-400 m-0">📅 {order.date}</p>
+                    <PaymentChip method={order.paymentMethod} />
+                  </div>
 
                   {/* Items */}
                   <div className="bg-gray-50 rounded-xl px-3.5 py-3 mb-3.5">
                     <p className="text-xs text-gray-400 mb-2">{order.note}</p>
                     {order.items.map((item, i) => (
-                      <div key={i} className="flex justify-between mb-1">
-                        <span className="text-[13px] text-gray-600">
-                          {item.name} <span className="text-gray-300">x{item.qty}</span>
-                        </span>
-                        <span className="text-[13px] text-gray-900">
+                      <div key={i} className="flex justify-between gap-3 mb-1.5">
+                        <div className="min-w-0">
+                          <p className="text-[13px] text-gray-600 m-0">{item.name}</p>
+                          <p className="text-[11px] text-gray-400 m-0">{qtyLabel(item)}</p>
+                        </div>
+                        <span className="text-[13px] text-gray-900 shrink-0">
                           ₱{(item.price * item.qty).toLocaleString()}.00
                         </span>
                       </div>
@@ -492,6 +553,13 @@ export default function OrdersPage() {
                       <span className="text-xs text-gray-500">₱{money(vat)}</span>
                     </div>
                   </div>
+
+                  {/* GCash no-cancel notice */}
+                  {gcashLocked && (
+                    <p className="text-[11px] text-blue-700 bg-blue-50 rounded-lg px-3 py-2 mb-3.5 m-0">
+                      📱 Paid via GCash — this order can no longer be cancelled.
+                    </p>
+                  )}
 
                   {/* Footer */}
                   <div className="flex justify-between items-center">
@@ -541,7 +609,9 @@ export default function OrdersPage() {
           const stepIndex = selectedOrder.status !== "Cancelled"
             ? statusSteps.indexOf(selectedOrder.status)
             : -1;
-          const canCancel  = selectedOrder.status === "Waiting" || selectedOrder.status === "Processing";
+          const canCancel  = canCancelOrder(selectedOrder);
+          const gcashLocked = isGcash(selectedOrder) &&
+            (selectedOrder.status === "Waiting" || selectedOrder.status === "Processing");
           const canReceive = selectedOrder.status === "Out For Delivery";
           const { subtotal, vat, grandTotal } = withVat(selectedOrder);
 
@@ -562,9 +632,12 @@ export default function OrdersPage() {
               <div className="bg-gray-50 rounded-xl px-4 py-3.5 mb-4">
                 <p className="text-[11px] text-gray-400 m-0">Order ID</p>
                 <p className="text-sm font-bold text-gray-900 mb-2">{selectedOrder.id}</p>
-                <span className={`px-3.5 py-1 rounded-full text-xs font-semibold ${statusBadge[selectedOrder.status]}`}>
-                  {statusIcon[selectedOrder.status]} {selectedOrder.status}
-                </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`px-3.5 py-1 rounded-full text-xs font-semibold ${statusBadge[selectedOrder.status]}`}>
+                    {statusIcon[selectedOrder.status]} {selectedOrder.status}
+                  </span>
+                  <PaymentChip method={selectedOrder.paymentMethod} />
+                </div>
               </div>
 
               {/* Progress tracker */}
@@ -619,7 +692,7 @@ export default function OrdersPage() {
                   <div key={i} className="flex justify-between py-2.5 border-b border-gray-50">
                     <div>
                       <p className="text-[13px] font-medium text-gray-900 m-0">{item.name}</p>
-                      <p className="text-[11px] text-gray-400 m-0">qty: {item.qty}</p>
+                      <p className="text-[11px] text-gray-400 m-0">{qtyLabel(item)}</p>
                     </div>
                     <p className="text-sm font-semibold text-[#2d7a3a] m-0">
                       ₱{(item.price * item.qty).toLocaleString()}.00
@@ -638,6 +711,12 @@ export default function OrdersPage() {
                   <span className="text-[13px] text-gray-400">VAT (12%)</span>
                   <span className="text-[13px] text-gray-700">₱{money(vat)}</span>
                 </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[13px] text-gray-400">Payment Method</span>
+                  <span className="text-[13px] text-gray-700">
+                    {paymentLabel(selectedOrder.paymentMethod).icon} {paymentLabel(selectedOrder.paymentMethod).label}
+                  </span>
+                </div>
               </div>
 
               {/* Total */}
@@ -647,6 +726,13 @@ export default function OrdersPage() {
                   ₱{money(grandTotal)}
                 </span>
               </div>
+
+              {/* GCash no-cancel notice */}
+              {gcashLocked && (
+                <p className="text-[11px] text-blue-700 bg-blue-50 rounded-lg px-3 py-2 mb-3 m-0">
+                  📱 Paid via GCash — this order can no longer be cancelled.
+                </p>
+              )}
 
               {/* Actions */}
               <div className="flex flex-col gap-2.5">
