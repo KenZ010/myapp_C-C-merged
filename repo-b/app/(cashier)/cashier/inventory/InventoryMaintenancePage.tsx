@@ -19,6 +19,7 @@ type Product = {
   id: string;
   productName: string;
   price: number;
+  size?: string | null;
   stock: number;
   supplierId?: string;
   status?: string;
@@ -399,7 +400,10 @@ export default function InventoryMaintenancePage() {
 
                   {/* Card Body */}
                   <div style={{ padding: "14px 16px 16px" }}>
-                    <p style={{ fontSize: "14px", fontWeight: 700, color: INK, margin: "0 0 2px", lineHeight: 1.3 }}>{p.productName}</p>
+                    <p style={{ fontSize: "14px", fontWeight: 700, color: INK, margin: "0 0 2px", lineHeight: 1.3 }}>
+                      {p.productName}
+                      {p.size && <span style={{ fontSize: "11.5px", fontWeight: 500, color: FAINT }}> · {p.size}</span>}
+                    </p>
                     <p style={{ fontSize: "11.5px", color: FAINT, margin: "0 0 12px", display: "flex", alignItems: "center", gap: "5px" }}>
                       <span style={{ display: "flex" }}>{Icon.truck}</span>{p.supplier?.supplierName || "—"}
                     </p>
@@ -444,6 +448,7 @@ export default function InventoryMaintenancePage() {
           const pct = Math.min((selected.stock / MAX_STOCK) * 100, 100);
           const rows: { icon: React.ReactNode; label: string; value: string }[] = [
             { icon: Icon.peso, label: "Price",       value: `₱${peso(selected.price)} per unit` },
+            { icon: Icon.tag,  label: "Size",        value: selected.size || "—" },
             { icon: Icon.box,  label: "Stock level", value: `${selected.stock} case` },
             { icon: Icon.chart,label: "Status",      value: status },
             { icon: Icon.tag,  label: "Product ID",  value: selected.id },
@@ -463,7 +468,10 @@ export default function InventoryMaintenancePage() {
                 <div style={{ padding: "22px 24px 24px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px", marginBottom: "16px" }}>
                     <div style={{ minWidth: 0 }}>
-                      <h2 style={{ fontSize: "19px", fontWeight: 700, color: INK, margin: "0 0 4px", letterSpacing: "-0.02em" }}>{selected.productName}</h2>
+                      <h2 style={{ fontSize: "19px", fontWeight: 700, color: INK, margin: "0 0 4px", letterSpacing: "-0.02em" }}>
+                        {selected.productName}
+                        {selected.size && <span style={{ fontSize: "13px", fontWeight: 500, color: FAINT }}> · {selected.size}</span>}
+                      </h2>
                       <p style={{ fontSize: "13px", color: MUTED, margin: 0, display: "flex", alignItems: "center", gap: "6px" }}>
                         <span style={{ display: "flex", color: FAINT }}>{Icon.truck}</span>
                         {selected.supplier?.supplierName || "—"}

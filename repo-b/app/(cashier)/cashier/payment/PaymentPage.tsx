@@ -10,6 +10,7 @@ type RefStatus = "idle" | "checking" | "ok" | "used" | "error";
 type CartItem = {
   id: string;
   productName: string;
+  size?: string | null;
   qty: number;
   finalPrice: number;
   price: number;
@@ -1044,7 +1045,7 @@ function OrderSummaryCard({
                   {item.productName}
                 </p>
                 <p className="text-[11px] text-[#aaa]">
-                  x{item.qty} × {money(item.finalPrice)}
+                  {item.size ? `${item.size} · ` : ""}{item.qty} case{item.qty !== 1 ? "s" : ""} × {money(item.finalPrice)}
                 </p>
               </div>
               <p className="text-[13px] font-semibold text-[#1a3c2e]">

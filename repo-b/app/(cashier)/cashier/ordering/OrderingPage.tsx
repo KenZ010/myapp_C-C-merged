@@ -912,6 +912,9 @@ export default function OrderingPage() {
                       </p>
                       <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                         {item.size && <span className="text-[11px] text-gray-400">{item.size}</span>}
+                        <span className="text-[11px] text-gray-400">
+                          {item.size ? "· " : ""}{item.qty} case{item.qty !== 1 ? "s" : ""}
+                        </span>
                         {promoMap[item.id] && (
                           <span className="text-[10px] font-bold text-red-600 bg-red-50 rounded-full px-1.5 py-0.5">
                             PROMO
