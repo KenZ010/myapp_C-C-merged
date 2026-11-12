@@ -26,6 +26,8 @@ type PaymentMethod = "Cash" | "GCash";
 
 type OrderItem = { name: string; qty: number; price: number };
 
+type Driver = { id: string; name: string; phone?: string };
+
 type Order = {
   id: string;
   date: string;
@@ -41,6 +43,9 @@ type Order = {
   changeDue?: number;
   gcashRef?: string;
   proofUrl?: string;
+  driverId?: string;
+  driverName?: string;
+  driverPhone?: string;
 };
 
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
@@ -149,6 +154,9 @@ function normalizeOrder(o: Record<string, unknown>): Order {
   const gcashRef = payment?.referenceNo;
   const proofUrl = payment?.receiptImage;
 
+  // ── Driver (assigned when the order goes out for delivery) ─────────────────
+  const driver = o.driver as Record<string, unknown> | null;
+
   return {
     id: String(o.id ?? ""),
     date: o.createdAt
@@ -178,6 +186,9 @@ function normalizeOrder(o: Record<string, unknown>): Order {
       changeRaw !== undefined && changeRaw !== null ? Number(changeRaw) : undefined,
     gcashRef: gcashRef ? String(gcashRef) : undefined,
     proofUrl: proofUrl ? String(proofUrl) : undefined,
+    driverId:    o.driverId ? String(o.driverId) : undefined,
+    driverName:  driver?.name  ? String(driver.name)  : undefined,
+    driverPhone: driver?.phone ? String(driver.phone) : undefined,
   };
 }
 
@@ -231,6 +242,10 @@ export default function PendingPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [proofModal,  setProofModal]  = useState<string | null>(null); // GCash screenshot URL
 
+  // Drivers the cashier can pick from + the pick made on each Processing card
+  const [drivers,         setDrivers]         = useState<Driver[]>([]);
+  const [selectedDrivers, setSelectedDrivers] = useState<Record<string, string>>({}); // orderId -> driverId
+
   const socket = useSocket();
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -255,6 +270,13 @@ export default function PendingPage() {
 
   // Initial fetch
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
+
+  // Load the list of active drivers once
+  useEffect(() => {
+    api.getDrivers()
+      .then((d: Driver[]) => setDrivers(Array.isArray(d) ? d : []))
+      .catch((err: Error) => setError(err.message || "Failed to load drivers."));
+  }, []);
 
   // Poll every 10 seconds as fallback — DISABLED for testing
   // useEffect(() => {
@@ -297,12 +319,13 @@ export default function PendingPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [proofModal]);
 
-  const updateStatus = async (id: string, status: OrderStatus) => {
+  const updateStatus = async (id: string, status: OrderStatus, driverId?: string) => {
     const previous = orders.find((o) => o.id === id);
     setUpdatingId(id);
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
     try {
-      await api.updateOrderStatus(id, backendStatus[status]);
+      await api.updateOrderStatus(id, backendStatus[status], driverId);
+      if (driverId) fetchOrders(true); // pull in the driver's name/phone
       if (status === "Completed" || status === "Cancelled") {
         setTimeout(() => setOrders((prev) => prev.filter((o) => o.id !== id)), 1500);
       }
@@ -346,6 +369,7 @@ export default function PendingPage() {
         .act-amber:hover:not(:disabled) { background: #b45309 !important; }
         .proof-thumb:hover { border-color: #1d4ed8 !important; }
         .pending-page button:focus-visible { outline: 2px solid ${GREEN}; outline-offset: 2px; }
+        .pending-page select:focus-visible { outline: 2px solid ${GREEN}; outline-offset: 2px; }
       `}</style>
 
       <div className="pending-page" style={{ padding: "28px 32px", width: "100%", boxSizing: "border-box" }}>
@@ -470,6 +494,9 @@ export default function PendingPage() {
                 order.cashReceived !== undefined && order.cashReceived < grandTotal - 0.005
                   ? grandTotal - order.cashReceived
                   : 0;
+
+              // Driver picked on this card (Processing orders only)
+              const pickedDriverId = selectedDrivers[order.id] ?? "";
 
               return (
                 <div key={order.id} className="order-card" style={{ background: "#fff", borderRadius: "14px", border: `1px solid ${GREEN_BORDER}`, overflow: "hidden" }}>
@@ -635,6 +662,20 @@ export default function PendingPage() {
                       </div>
                     )}
 
+                    {/* Assigned driver (shown once the order is dispatched) */}
+                    {order.driverName && (
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", marginBottom: "12px" }}>
+                        <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "#fff7ed", color: "#c2410c", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{Icon.truck}</div>
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ fontSize: "11px", fontWeight: 600, color: FAINT, margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>Driver</p>
+                          <p style={{ fontSize: "13px", fontWeight: 600, color: INK, margin: "1px 0 0" }}>
+                            {order.driverName}
+                            {order.driverPhone && <span style={{ fontWeight: 400, color: MUTED }}> · {order.driverPhone}</span>}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Actions */}
                     <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                       {order.status === "Pending" && (
@@ -650,10 +691,36 @@ export default function PendingPage() {
                         </div>
                       )}
                       {order.status === "Processing" && (
-                        <button className="act-amber" onClick={() => updateStatus(order.id, "Out for Delivery")} disabled={isUpdating}
-                          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", border: "none", background: "#d97706", color: "#fff", fontSize: "13px", fontWeight: 700, cursor: isUpdating ? "not-allowed" : "pointer", opacity: isUpdating ? 0.6 : 1, boxShadow: "0 4px 12px rgba(217,119,6,0.25)", transition: "background 0.15s" }}>
-                          {Icon.truck} Out for Delivery
-                        </button>
+                        <>
+                          {/* A driver must be picked before the order can go out */}
+                          <div>
+                            <p style={{ fontSize: "11px", fontWeight: 600, color: FAINT, margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                              Assign driver
+                            </p>
+                            <select
+                              value={pickedDriverId}
+                              onChange={(e) => setSelectedDrivers((p) => ({ ...p, [order.id]: e.target.value }))}
+                              disabled={isUpdating}
+                              aria-label="Select a driver"
+                              style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", fontSize: "13px", color: INK, background: "#fff", border: `1px solid ${pickedDriverId ? GREEN : GREEN_BORDER}`, cursor: "pointer" }}>
+                              <option value="">Select a driver…</option>
+                              {drivers.map((d) => (
+                                <option key={d.id} value={d.id}>{d.name}{d.phone ? ` · ${d.phone}` : ""}</option>
+                              ))}
+                            </select>
+                            {drivers.length === 0 && (
+                              <p style={{ fontSize: "12px", color: "#b91c1c", margin: "6px 0 0" }}>No active drivers available.</p>
+                            )}
+                          </div>
+
+                          <button className="act-amber"
+                            onClick={() => updateStatus(order.id, "Out for Delivery", pickedDriverId)}
+                            disabled={isUpdating || !pickedDriverId}
+                            title={!pickedDriverId ? "Select a driver first" : undefined}
+                            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", border: "none", background: "#d97706", color: "#fff", fontSize: "13px", fontWeight: 700, cursor: isUpdating || !pickedDriverId ? "not-allowed" : "pointer", opacity: isUpdating || !pickedDriverId ? 0.5 : 1, boxShadow: "0 4px 12px rgba(217,119,6,0.25)", transition: "background 0.15s" }}>
+                            {Icon.truck} Out for Delivery
+                          </button>
+                        </>
                       )}
                       {order.status === "Out for Delivery" && (
                         order.isWalkIn ? (

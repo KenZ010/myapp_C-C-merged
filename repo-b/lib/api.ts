@@ -391,6 +391,11 @@ export const api = {
     if (!res.ok) throw new Error('Failed to fetch customer orders');
     return res.json();
   },
+  // Active drivers the cashier can pick from before dispatching an order
+  getDrivers: async () => {
+    const res = await fetch(`${API_URL}/orders/drivers`, { headers: authHeaders() });
+    return parseJson(res, 'Failed to fetch drivers');
+  },
   // driverId is required by the backend when status is OUT_FOR_DELIVERY
   updateOrderStatus: async (orderId: string, status: string, driverId?: string) => {
     const res = await fetch(`${API_URL}/orders/${orderId}/status`, {
