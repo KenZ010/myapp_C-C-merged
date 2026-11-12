@@ -595,9 +595,15 @@ export default function PurchaseOrderPage() {
     ? supplierProducts.filter((p) => { const s = p.stockQuantity ?? 0; return s > 0 && s <= 10; })
     : [];
 
+  // Before a supplier is picked, search every active product; after, only that supplier's
   const productQuery = supplierSearch.trim().toLowerCase();
-  const filteredProductResults = form.supplierId && productQuery
-    ? supplierProducts.filter((p) => `${p.productName} ${p.size ?? ""}`.toLowerCase().includes(productQuery))
+  const searchPool = form.supplierId
+    ? supplierProducts
+    : allProducts.filter(
+        (p) => p.status !== "INACTIVE" && p.supplierId && suppliers.some((s) => s.id === p.supplierId)
+      );
+  const filteredProductResults = productQuery
+    ? searchPool.filter((p) => `${p.productName} ${p.size ?? ""}`.toLowerCase().includes(productQuery))
     : [];
 
   const validLineItems = form.lineItems.filter((i) => i.productId);
@@ -864,8 +870,20 @@ export default function PurchaseOrderPage() {
   };
 
   const addProductFromSearch = (productId: string) => {
-    addProductFromList(productId);
+    const p = allProducts.find((x) => x.id === productId);
+    if (!p) return;
+    const item: LineItem = {
+      productId, productName: p.productName, size: p.size, quantity: 1,
+      unitPrice: p.costPrice ?? 0, unit: (p.stockUnit as CaseUnit) || "case_24",
+    };
+    if (!form.supplierId) {
+      // No supplier yet: adopt the product's supplier and start the order with it
+      setForm({ ...form, supplierId: p.supplierId || "", lineItems: [item] });
+    } else {
+      appendItem(item);
+    }
     setSupplierSearch("");
+    setCreateError("");
   };
 
   const addSuggestedItem = (s: ReorderSuggestion) => {
@@ -987,8 +1005,8 @@ export default function PurchaseOrderPage() {
   };
 
   const tabs: { key: POStep; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { key: "create", label: "Create Order",    icon: Icon.clipboard },
-    { key: "receiving",    label: "Receiving", icon: Icon.box,  badge: pendingDeliveries.length },
+    { key: "create",    label: "Create Order", icon: Icon.clipboard },
+    { key: "receiving", label: "Receiving",    icon: Icon.box,       badge: pendingDeliveries.length },
     { key: "history",   label: "PO History",   icon: Icon.clock },
   ];
 
@@ -1258,7 +1276,6 @@ export default function PurchaseOrderPage() {
                     value={form.supplierId}
                     onChange={handleSupplierChange}
                     suppliers={suppliers}
-                    search={form.supplierId ? "" : supplierSearch}
                     lowStockCount={lowStockProducts.length}
                     hint={form.supplierId
                       ? supplierProducts.length > 0
@@ -1269,14 +1286,14 @@ export default function PurchaseOrderPage() {
                 </div>
 
                 <div style={{ position: "relative" }}>
-                  <label style={labelStyle}>{form.supplierId ? "Search Product" : "Search Supplier"}</label>
+                  <label style={labelStyle}>Search Product</label>
                   <div style={{ position: "relative" }}>
                     <span style={{ position: "absolute", left: "13px", top: "50%", transform: "translateY(-50%)", color: FAINT, display: "flex" }}>{Icon.search}</span>
                     <input
                       type="text"
                       value={supplierSearch}
                       onChange={(e) => setSupplierSearch(e.target.value)}
-                      placeholder={form.supplierId ? `Search ${selectedSupplierName}'s products...` : "Type to search suppliers..."}
+                      placeholder={form.supplierId ? `Search ${selectedSupplierName}'s products...` : "Type to search products..."}
                       className="green-input"
                       style={{ ...fieldStyle, padding: "10px 34px 10px 38px" }}
                     />
@@ -1286,7 +1303,7 @@ export default function PurchaseOrderPage() {
                     )}
                   </div>
 
-                  {form.supplierId && productQuery && (
+                  {productQuery && (
                     <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "#fff", border: `1px solid ${GREEN_BORDER}`, borderRadius: "12px", boxShadow: "0 12px 32px rgba(31,95,45,0.16)", zIndex: 30, maxHeight: "260px", overflowY: "auto" }}>
                       {filteredProductResults.length === 0 ? (
                         <div style={{ padding: "14px", fontSize: "13px", color: FAINT, textAlign: "center" }}>No products match your search</div>
@@ -1307,6 +1324,7 @@ export default function PurchaseOrderPage() {
                                   {p.productName}{p.size ? ` ${p.size}` : ""}
                                 </p>
                                 <p style={{ fontSize: "11.5px", color: FAINT, margin: "2px 0 0" }}>
+                                  {!form.supplierId && `${suppliers.find((s) => s.id === p.supplierId)?.supplierName ?? ""} · `}
                                   {p.stockQuantity != null ? `${p.stockQuantity} ${getUnitShort(p.stockUnit)} left` : ""}
                                   {p.costPrice != null ? ` · ₱${p.costPrice}` : ""}
                                 </p>
