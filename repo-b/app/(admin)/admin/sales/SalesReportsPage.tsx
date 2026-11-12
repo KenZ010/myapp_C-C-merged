@@ -7,6 +7,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar,
 } from "recharts";
+import type { Workbook, Worksheet, Row, Borders } from "exceljs";
 import { api } from "@/lib/api";
 import {
   LayoutDashboard, ShoppingCart, Users, BarChart3,
@@ -30,6 +31,8 @@ type Transaction = {
   orderLines: OrderLine[];
 };
 
+type ProductStat = { name: string; category: string; units: number; revenue: number };
+
 const navItems = [
   { label: "Dashboard",             icon: LayoutDashboard, path:"/admin/dashboard"      },
   { label: "Inventory Maintenance", icon: ShoppingCart, path:"/admin/inventory"      },
@@ -51,12 +54,30 @@ const getCategoryIcon = (cat?: string) => CATEGORY_ICONS[cat?.toUpperCase() || "
 const toDateKey = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-function getPeriodLabel(period: Period, customDate = ""): string {
+// ₱1,234.50
+const peso = (n: number) =>
+  "₱" + n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Make sure from <= to (swaps them if needed)
+function normalizeRange(from: string, to: string): [string, string] {
+  if (from && to && from > to) return [to, from];
+  return [from, to];
+}
+
+const fmtShort = (key: string) =>
+  new Date(key + "T00:00:00").toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+
+function getPeriodLabel(period: Period, from = "", to = ""): string {
   const now = new Date();
   if (period === "Custom") {
-    return customDate
-      ? new Date(customDate + "T00:00:00").toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
-      : "Pick a date";
+    if (!from && !to) return "Pick a date range";
+    if (from && to) {
+      if (from === to) {
+        return new Date(from + "T00:00:00").toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+      }
+      return `${fmtShort(from)} – ${fmtShort(to)}`;
+    }
+    return from ? `From ${fmtShort(from)}` : `Until ${fmtShort(to)}`;
   }
   if (period === "Daily") return now.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   if (period === "Weekly") {
@@ -102,8 +123,14 @@ function normalizeTransaction(o: Record<string, unknown>): Transaction {
   };
 }
 
-function filterByPeriod(txs: Transaction[], period: Period, customDate = ""): Transaction[] {
-  if (period === "Custom") return customDate ? txs.filter(({ rawDate: d }) => toDateKey(d) === customDate) : txs;
+function filterByPeriod(txs: Transaction[], period: Period, from = "", to = ""): Transaction[] {
+  if (period === "Custom") {
+    if (!from && !to) return txs;
+    return txs.filter(({ rawDate: d }) => {
+      const key = toDateKey(d);
+      return (!from || key >= from) && (!to || key <= to);
+    });
+  }
   const now = new Date();
   return txs.filter(({ rawDate: d }) => {
     if (period === "Daily")  return d.toDateString() === now.toDateString();
@@ -112,10 +139,11 @@ function filterByPeriod(txs: Transaction[], period: Period, customDate = ""): Tr
   });
 }
 
-function buildRevenueChart(txs: Transaction[], period: Period) {
+// hourly = a single day (Daily, or a Custom range where From === To)
+function buildRevenueChart(txs: Transaction[], hourly: boolean) {
   const map: Record<string, number> = {};
   txs.forEach(({ rawDate: d, total }) => {
-    const key = period === "Daily" || period === "Custom"
+    const key = hourly
       ? d.toLocaleTimeString("en-PH", { hour: "2-digit", hour12: true })
       : d.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
     map[key] = (map[key] ?? 0) + total;
@@ -123,10 +151,10 @@ function buildRevenueChart(txs: Transaction[], period: Period) {
   return Object.entries(map).map(([date, revenue]) => ({ date, revenue })).slice(-16);
 }
 
-function buildTransactionChart(txs: Transaction[], period: Period) {
+function buildTransactionChart(txs: Transaction[], period: Period, hourly: boolean) {
   const map: Record<string, number> = {};
   txs.forEach(({ rawDate: d }) => {
-    const key = period === "Daily" || period === "Custom"
+    const key = hourly
       ? d.toLocaleTimeString("en-PH", { hour: "2-digit", hour12: true })
       : period === "Weekly"
       ? d.toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" })
@@ -136,8 +164,8 @@ function buildTransactionChart(txs: Transaction[], period: Period) {
   return Object.entries(map).map(([date, transactions]) => ({ date, transactions })).slice(-16);
 }
 
-function buildTopSelling(txs: Transaction[]) {
-  const map: Record<string, { name: string; category: string; units: number; revenue: number }> = {};
+function buildTopSelling(txs: Transaction[]): ProductStat[] {
+  const map: Record<string, ProductStat> = {};
   txs.forEach(tx => tx.orderLines.forEach(line => {
     const key = line.productName;
     if (!map[key]) map[key] = { name: key, category: line.category, units: 0, revenue: 0 };
@@ -151,16 +179,301 @@ function buildUnpopular(txs: Transaction[]) {
   return buildTopSelling(txs).slice().reverse().slice(0, 5);
 }
 
-function exportCSV(headers: string[], rows: (string | number)[][], filename: string) {
-  const csv  = [headers, ...rows].map(r => r.join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const a    = document.createElement("a");
-  a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+// ── Excel export (formatted, multi-sheet) ─────────────────────────────────────
+const XL_GREEN = "FF2D7A3A";
+const XL_LIGHT = "FFF0FAF2";
+const XL_ZEBRA = "FFF9FAFB";
+const XL_PESO  = '"₱"#,##0.00';
+
+const thinBorder: Partial<Borders> = {
+  top:    { style: "thin", color: { argb: "FFE5E7EB" } },
+  left:   { style: "thin", color: { argb: "FFE5E7EB" } },
+  bottom: { style: "thin", color: { argb: "FFE5E7EB" } },
+  right:  { style: "thin", color: { argb: "FFE5E7EB" } },
+};
+
+function styleHeaderRow(row: Row) {
+  row.height = 22;
+  row.eachCell({ includeEmpty: true }, (cell) => {
+    cell.font      = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+    cell.fill      = { type: "pattern", pattern: "solid", fgColor: { argb: XL_GREEN } };
+    cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    cell.border    = thinBorder;
+  });
+}
+
+function addSheetTitle(ws: Worksheet, title: string, periodLabel: string, colCount: number) {
+  ws.mergeCells(1, 1, 1, colCount);
+  const t = ws.getCell(1, 1);
+  t.value = title;
+  t.font = { size: 16, bold: true, color: { argb: XL_GREEN } };
+  t.alignment = { vertical: "middle" };
+  ws.getRow(1).height = 28;
+
+  ws.mergeCells(2, 1, 2, colCount);
+  const p = ws.getCell(2, 1);
+  p.value = `Period: ${periodLabel}`;
+  p.font = { size: 11, italic: true, color: { argb: "FF6B7280" } };
+}
+
+type XlCol = { header: string; width: number; format?: string; align?: "left" | "center" | "right" };
+
+function buildTableSheet(
+  wb: Workbook,
+  name: string,
+  title: string,
+  periodLabel: string,
+  cols: XlCol[],
+  rows: (string | number | Date)[][],
+  totals?: (string | number | null)[],
+) {
+  const ws = wb.addWorksheet(name, { views: [{ state: "frozen", ySplit: 4, showGridLines: false }] });
+  ws.columns = cols.map((c) => ({ width: c.width }));
+  addSheetTitle(ws, title, periodLabel, cols.length);
+
+  const header = ws.getRow(4);
+  header.values = cols.map((c) => c.header);
+  styleHeaderRow(header);
+
+  rows.forEach((r, i) => {
+    const row = ws.addRow(r);
+    row.height = 20;
+    row.eachCell({ includeEmpty: true }, (cell, n) => {
+      const c = cols[n - 1];
+      if (!c) return;
+      if (c.format) cell.numFmt = c.format;
+      cell.alignment = { vertical: "middle", horizontal: c.align ?? "left" };
+      cell.border = thinBorder;
+      if (i % 2 === 1) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: XL_ZEBRA } };
+    });
+  });
+
+  if (rows.length === 0) {
+    ws.mergeCells(5, 1, 5, cols.length);
+    const empty = ws.getCell(5, 1);
+    empty.value = "No data for this period.";
+    empty.font = { italic: true, color: { argb: "FF9CA3AF" } };
+    empty.alignment = { horizontal: "center" };
+  } else {
+    ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: cols.length } };
+  }
+
+  if (totals && rows.length > 0) {
+    const row = ws.addRow(totals);
+    row.height = 22;
+    row.eachCell({ includeEmpty: true }, (cell, n) => {
+      const c = cols[n - 1];
+      if (!c) return;
+      if (c.format) cell.numFmt = c.format;
+      cell.font = { bold: true, color: { argb: "FF1A3C2E" } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: XL_LIGHT } };
+      cell.alignment = { vertical: "middle", horizontal: c.align ?? "left" };
+      cell.border = {
+        top:    { style: "medium", color: { argb: XL_GREEN } },
+        bottom: { style: "thin",   color: { argb: XL_GREEN } },
+        left:   thinBorder.left,
+        right:  thinBorder.right,
+      };
+    });
+  }
+  return ws;
+}
+
+async function exportSalesExcel(opts: {
+  periodLabel: string;
+  fileTag:     string;
+  txs:         Transaction[];
+  topSelling:  ProductStat[];
+  unpopular:   ProductStat[];
+}) {
+  const { periodLabel, fileTag, txs, topSelling, unpopular } = opts;
+
+  const mod = await import("exceljs");
+  const ExcelJS = (mod as any).default ?? mod;
+  const wb: Workbook = new ExcelJS.Workbook();
+  wb.creator = "Julieta Soft Drinks Store";
+  wb.created = new Date();
+
+  const totalRevenue = txs.reduce((s, t) => s + t.total, 0);
+  const txCount      = txs.length;
+  const avgOrder     = txCount > 0 ? totalRevenue / txCount : 0;
+
+  // ── Sheet 1: Summary ──────────────────────────────────────────────────────
+  const ws = wb.addWorksheet("Summary", { views: [{ showGridLines: false }] });
+  ws.columns = [{ width: 30 }, { width: 22 }, { width: 22 }];
+
+  ws.mergeCells("A1:C1");
+  ws.getCell("A1").value = "Julieta Soft Drinks Store";
+  ws.getCell("A1").font  = { size: 20, bold: true, color: { argb: XL_GREEN } };
+  ws.getRow(1).height = 32;
+
+  ws.mergeCells("A2:C2");
+  ws.getCell("A2").value = "Sales Report";
+  ws.getCell("A2").font  = { size: 14, bold: true, color: { argb: "FF374151" } };
+
+  ws.getCell("A3").value = "Report Period";
+  ws.getCell("A3").font  = { bold: true, color: { argb: "FF6B7280" } };
+  ws.mergeCells("B3:C3");
+  ws.getCell("B3").value = periodLabel;
+
+  ws.getCell("A4").value = "Generated On";
+  ws.getCell("A4").font  = { bold: true, color: { argb: "FF6B7280" } };
+  ws.mergeCells("B4:C4");
+  ws.getCell("B4").value = new Date().toLocaleString("en-PH", { dateStyle: "long", timeStyle: "short" });
+
+  // Key metrics
+  const metricsHeader = ws.getRow(6);
+  metricsHeader.values = ["Key Metrics", "Value"];
+  styleHeaderRow(metricsHeader);
+  const metrics: [string, number, string | undefined][] = [
+    ["Total Revenue",       totalRevenue, XL_PESO],
+    ["Total Transactions",  txCount,      "#,##0"],
+    ["Average Order Value", avgOrder,     XL_PESO],
+  ];
+  metrics.forEach(([label, value, fmt], i) => {
+    const row = ws.getRow(7 + i);
+    row.values = [label, value];
+    row.height = 20;
+    row.eachCell({ includeEmpty: true }, (cell, n) => {
+      if (n > 2) return;
+      cell.border = thinBorder;
+      cell.alignment = { vertical: "middle", horizontal: n === 1 ? "left" : "right" };
+      if (n === 2) { cell.numFmt = fmt!; cell.font = { bold: true }; }
+    });
+  });
+
+  // Payment breakdown
+  const payMap: Record<string, { count: number; revenue: number }> = {};
+  txs.forEach((t) => {
+    const key = t.paymentMethod.toUpperCase();
+    if (!payMap[key]) payMap[key] = { count: 0, revenue: 0 };
+    payMap[key].count   += 1;
+    payMap[key].revenue += t.total;
+  });
+
+  const payHeader = ws.getRow(12);
+  payHeader.values = ["Payment Method", "Transactions", "Revenue"];
+  styleHeaderRow(payHeader);
+
+  const payEntries = Object.entries(payMap).sort((a, b) => b[1].revenue - a[1].revenue);
+  payEntries.forEach(([method, v], i) => {
+    const row = ws.getRow(13 + i);
+    row.values = [method, v.count, v.revenue];
+    row.height = 20;
+    row.eachCell({ includeEmpty: true }, (cell, n) => {
+      cell.border = thinBorder;
+      cell.alignment = { vertical: "middle", horizontal: n === 1 ? "left" : "right" };
+      if (n === 2) cell.numFmt = "#,##0";
+      if (n === 3) cell.numFmt = XL_PESO;
+    });
+  });
+  if (payEntries.length > 0) {
+    const row = ws.getRow(13 + payEntries.length);
+    row.values = ["Total", txCount, totalRevenue];
+    row.height = 22;
+    row.eachCell({ includeEmpty: true }, (cell, n) => {
+      cell.font = { bold: true, color: { argb: "FF1A3C2E" } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: XL_LIGHT } };
+      cell.alignment = { vertical: "middle", horizontal: n === 1 ? "left" : "right" };
+      if (n === 2) cell.numFmt = "#,##0";
+      if (n === 3) cell.numFmt = XL_PESO;
+      cell.border = {
+        top:    { style: "medium", color: { argb: XL_GREEN } },
+        bottom: { style: "thin",   color: { argb: XL_GREEN } },
+        left:   thinBorder.left,
+        right:  thinBorder.right,
+      };
+    });
+  }
+
+  // ── Sheet 2: Top Selling Items ────────────────────────────────────────────
+  buildTableSheet(
+    wb, "Top Selling", "Top Selling Items", periodLabel,
+    [
+      { header: "Rank",            width: 8,  align: "center" },
+      { header: "Product Name",    width: 36 },
+      { header: "Category",        width: 18 },
+      { header: "Units Sold",      width: 14, format: "#,##0",  align: "right" },
+      { header: "Revenue (₱)",     width: 18, format: XL_PESO,  align: "right" },
+      { header: "% of Revenue",    width: 14, format: "0.0%",   align: "right" },
+    ],
+    topSelling.map((p, i) => [
+      i + 1, p.name, p.category, p.units, p.revenue,
+      totalRevenue > 0 ? p.revenue / totalRevenue : 0,
+    ]),
+    [
+      "", "TOTAL", "",
+      topSelling.reduce((s, p) => s + p.units, 0),
+      topSelling.reduce((s, p) => s + p.revenue, 0),
+      null,
+    ],
+  );
+
+  // ── Sheet 3: Unpopular Items ──────────────────────────────────────────────
+  buildTableSheet(
+    wb, "Unpopular Items", "Unpopular Items (Needs Attention)", periodLabel,
+    [
+      { header: "Product Name", width: 36 },
+      { header: "Category",     width: 18 },
+      { header: "Units Sold",   width: 14, format: "#,##0", align: "right" },
+      { header: "Revenue (₱)",  width: 18, format: XL_PESO, align: "right" },
+    ],
+    unpopular.map((p) => [p.name, p.category, p.units, p.revenue]),
+  );
+
+  // ── Sheet 4: Transactions ─────────────────────────────────────────────────
+  const sortedTx = [...txs].sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime());
+  buildTableSheet(
+    wb, "Transactions", "Transaction Logs", periodLabel,
+    [
+      { header: "Order ID",    width: 26 },
+      { header: "Date & Time", width: 22, format: "mmm d, yyyy h:mm AM/PM", align: "left" },
+      { header: "Customer",    width: 26 },
+      { header: "Type",        width: 12, align: "center" },
+      { header: "Cashier",     width: 22 },
+      { header: "Payment",     width: 14, align: "center" },
+      { header: "Items",       width: 10, format: "#,##0", align: "right" },
+      { header: "Total (₱)",   width: 18, format: XL_PESO, align: "right" },
+    ],
+    sortedTx.map((t) => [
+      t.id,
+      t.rawDate,
+      t.customerId ? t.customer : "Walk-in Customer",
+      t.customerId ? "Online" : "Walk-in",
+      t.customerId ? "—" : t.employeeName,
+      t.paymentMethod.toUpperCase(),
+      t.orderLines.reduce((s, l) => s + l.quantity, 0),
+      t.total,
+    ]),
+    [
+      "TOTAL", "", "", "", "", "",
+      sortedTx.reduce((s, t) => s + t.orderLines.reduce((x, l) => x + l.quantity, 0), 0),
+      sortedTx.reduce((s, t) => s + t.total, 0),
+    ],
+  );
+
+  // ── Download ──────────────────────────────────────────────────────────────
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `Sales_Report_${fileTag}.xlsx`;
+  a.click();
   URL.revokeObjectURL(a.href);
 }
 
 // ── DatePicker — portal-based, never clipped by the scrolling content area ─────
-function DatePicker({ value, onChange, label }: { value: string; onChange: (val: string) => void; label?: string }) {
+function DatePicker({
+  value, onChange, label, minDate, maxDate,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  label?: string;
+  minDate?: string;
+  maxDate?: string;
+}) {
   const [show, setShow] = useState(false);
   const [calendarPos, setCalendarPos] = useState({ top: 0, left: 0 });
   const buttonRef   = useRef<HTMLButtonElement>(null);
@@ -208,8 +521,14 @@ function DatePicker({ value, onChange, label }: { value: string; onChange: (val:
   const firstDay   = new Date(viewYear, viewMonth, 1).getDay();
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
 
+  const keyFor = (day: number) =>
+    `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const isDisabled = (key: string) => (!!minDate && key < minDate) || (!!maxDate && key > maxDate);
+
   const selectDate = (day: number) => {
-    onChange(`${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
+    const key = keyFor(day);
+    if (isDisabled(key)) return;
+    onChange(key);
     setShow(false);
   };
 
@@ -223,6 +542,9 @@ function DatePicker({ value, onChange, label }: { value: string; onChange: (val:
 
   const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); };
   const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); };
+
+  const todayKey = toDateKey(today);
+  const todayDisabled = isDisabled(todayKey);
 
   const calendar = show ? (
     <div ref={calendarRef}
@@ -247,20 +569,25 @@ function DatePicker({ value, onChange, label }: { value: string; onChange: (val:
         {Array.from({ length: firstDay }).map((_, i) => <div key={`e-${i}`} />)}
         {Array.from({ length: daysInMonth }).map((_, i) => {
           const day = i + 1;
+          const disabled = isDisabled(keyFor(day));
           const isSel   = day === selDay   && viewMonth === selMonth  && viewYear === selYear;
           const isToday = day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
           return (
-            <button key={day} type="button" onClick={() => selectDate(day)}
+            <button key={day} type="button" onClick={() => selectDate(day)} disabled={disabled}
               className={`w-full aspect-square flex items-center justify-center rounded-lg text-xs transition-colors
-                ${isSel ? "bg-indigo-600 text-white font-semibold" : isToday ? "border border-indigo-400 text-indigo-600 font-semibold" : "text-gray-700 hover:bg-indigo-50"}`}>
+                ${disabled ? "text-gray-300 cursor-not-allowed"
+                  : isSel ? "bg-indigo-600 text-white font-semibold"
+                  : isToday ? "border border-indigo-400 text-indigo-600 font-semibold"
+                  : "text-gray-700 hover:bg-indigo-50"}`}>
               {day}
             </button>
           );
         })}
       </div>
       <button type="button"
-        onClick={() => { setViewYear(today.getFullYear()); setViewMonth(today.getMonth()); selectDate(today.getDate()); }}
-        className="w-full mt-3 py-1.5 text-xs font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50">
+        disabled={todayDisabled}
+        onClick={() => { setViewYear(today.getFullYear()); setViewMonth(today.getMonth()); onChange(todayKey); setShow(false); }}
+        className="w-full mt-3 py-1.5 text-xs font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 disabled:text-gray-300 disabled:border-gray-200 disabled:hover:bg-transparent disabled:cursor-not-allowed">
         Today
       </button>
     </div>
@@ -353,12 +680,14 @@ export default function SalesReportsPage() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [activeTab,      setActiveTab]      = useState<TabKey>("report");
   const [period,         setPeriod]         = useState<Period>("Monthly");
-  const [customDate,     setCustomDate]     = useState("");
+  const [customFrom,     setCustomFrom]     = useState("");
+  const [customTo,       setCustomTo]       = useState("");
   const [topSearch,      setTopSearch]      = useState("");
   const [unpopSearch,    setUnpopSearch]    = useState("");
   const [logSearch,      setLogSearch]      = useState("");
   const [transactions,   setTransactions]   = useState<Transaction[]>([]);
   const [loading,        setLoading]        = useState(true);
+  const [exporting,      setExporting]      = useState(false);
   const [error,          setError]          = useState<string | null>(null);
   const [selectedTx,     setSelectedTx]     = useState<Transaction | null>(null);
 
@@ -374,15 +703,20 @@ export default function SalesReportsPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const filtered    = useMemo(() => filterByPeriod(transactions, period, customDate), [transactions, period, customDate]);
-  const revenueData = useMemo(() => buildRevenueChart(filtered, period),  [filtered, period]);
-  const txChartData = useMemo(() => buildTransactionChart(filtered, period), [filtered, period]);
+  // Always-ordered range (From <= To)
+  const [rangeFrom, rangeTo] = useMemo(() => normalizeRange(customFrom, customTo), [customFrom, customTo]);
+  // A single day shows hourly charts
+  const hourly = period === "Daily" || (period === "Custom" && !!rangeFrom && rangeFrom === rangeTo);
+
+  const filtered    = useMemo(() => filterByPeriod(transactions, period, rangeFrom, rangeTo), [transactions, period, rangeFrom, rangeTo]);
+  const revenueData = useMemo(() => buildRevenueChart(filtered, hourly),  [filtered, hourly]);
+  const txChartData = useMemo(() => buildTransactionChart(filtered, period, hourly), [filtered, period, hourly]);
   const topSelling  = useMemo(() => buildTopSelling(filtered), [filtered]);
   const unpopular   = useMemo(() => buildUnpopular(filtered),  [filtered]);
 
   const totalSales = useMemo(() => filtered.reduce((s, t) => s + t.total, 0), [filtered]);
   const txCount    = filtered.length;
-  const avgOrder   = txCount > 0 ? Math.round(totalSales / txCount) : 0;
+  const avgOrder   = txCount > 0 ? totalSales / txCount : 0;
 
   const filteredTop = useMemo(() => topSelling.filter(i =>
     i.name.toLowerCase().includes(topSearch.toLowerCase()) ||
@@ -404,18 +738,36 @@ export default function SalesReportsPage() {
     );
   }, [filtered, logSearch]);
 
-  const sectionLabel = period === "Daily" ? "Today" : period === "Weekly" ? "This Week" : period === "Custom" ? "Selected Date" : "This Month";
+  const periodLabel  = getPeriodLabel(period, rangeFrom, rangeTo);
+  const sectionLabel = period === "Daily" ? "Today" : period === "Weekly" ? "This Week" : period === "Custom" ? "Selected Range" : "This Month";
   const logRevenue   = filtered.reduce((s, t) => s + t.total, 0);
   const cashCount    = filtered.filter(t => t.paymentMethod.toUpperCase() === "CASH").length;
   const onlineCount  = filtered.filter(t => t.paymentMethod.toUpperCase() !== "CASH").length;
 
   const navigate     = (path: string) => { router.push(path); setShowMobileMenu(false); };
   const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("employee"); router.push("/"); };
-  const exportSales  = () => exportCSV(
-    ["Product Name","Category","Units Sold","Revenue (₱)"],
-    topSelling.map(i => [i.name, i.category, i.units, i.revenue]),
-    "sales_report.csv"
-  );
+
+  const handleExport = async () => {
+    if (exporting) return;
+    try {
+      setExporting(true);
+      const fileTag =
+        period === "Custom"
+          ? `${rangeFrom || "start"}_to_${rangeTo || "end"}`
+          : `${period.toLowerCase()}_${toDateKey(new Date())}`;
+      await exportSalesExcel({
+        periodLabel,
+        fileTag,
+        txs: filtered,
+        topSelling,
+        unpopular,
+      });
+    } catch (err) {
+      setError((err as Error).message || "Failed to export the report.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const Skeleton = ({ h, w }: { h: number; w?: string }) => (
     <div style={{ height: h, width: w ?? "100%", borderRadius: 8, background: "linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.4s infinite" }} />
@@ -526,17 +878,35 @@ export default function SalesReportsPage() {
             <div className="bg-white rounded-2xl p-4 shadow-sm flex flex-wrap items-center gap-3">
               <span className="text-xs text-gray-400 flex items-center gap-1"><Calendar className="w-3 h-3" /> Report Period:</span>
               {(["Daily", "Weekly", "Monthly", "Custom"] as Period[]).map(p => (
-                <button key={p} onClick={() => { setPeriod(p); if (p === "Custom" && !customDate) setCustomDate(toDateKey(new Date())); }}
+                <button key={p}
+                  onClick={() => {
+                    setPeriod(p);
+                    if (p === "Custom" && !customFrom && !customTo) {
+                      const t = toDateKey(new Date());
+                      setCustomFrom(t); setCustomTo(t);
+                    }
+                  }}
                   className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${period === p ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
                   {p}
                 </button>
               ))}
               <span className="text-xs text-indigo-600 font-medium bg-indigo-50 px-3 py-1.5 rounded-lg flex items-center gap-1">
-                <Calendar className="w-3 h-3" /> {getPeriodLabel(period, customDate)}
+                <Calendar className="w-3 h-3" /> {periodLabel}
               </span>
+
+              {/* Export to Excel */}
+              <button
+                onClick={handleExport}
+                disabled={loading || exporting || transactions.length === 0}
+                className="ml-auto flex items-center gap-1.5 bg-[#2d7a3a] text-white rounded-lg px-4 py-1.5 text-xs font-semibold hover:bg-[#245f2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {exporting ? "Exporting…" : "📊 Export to Excel"}
+              </button>
+
               {period === "Custom" && (
-                <div className="w-full sm:w-72">
-                  <DatePicker value={customDate} onChange={setCustomDate} />
+                <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3 sm:max-w-xl">
+                  <DatePicker label="From" value={customFrom} onChange={setCustomFrom} maxDate={customTo || undefined} />
+                  <DatePicker label="To"   value={customTo}   onChange={setCustomTo}   minDate={customFrom || undefined} />
                 </div>
               )}
             </div>
@@ -553,7 +923,7 @@ export default function SalesReportsPage() {
                   ) : (
                     <>
                       <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center justify-between">
-                        <div><p className="text-xs text-gray-400">Total Revenue</p><p className="text-2xl font-bold text-gray-800">₱{totalSales.toLocaleString()}</p></div>
+                        <div><p className="text-xs text-gray-400">Total Revenue</p><p className="text-2xl font-bold text-gray-800">{peso(totalSales)}</p></div>
                         <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-500 text-lg font-bold">₱</div>
                       </div>
                       <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center justify-between">
@@ -563,7 +933,7 @@ export default function SalesReportsPage() {
                       </div>
                       </div>
                       <div className="bg-white rounded-2xl p-4 shadow-sm flex items-center justify-between">
-                        <div><p className="text-xs text-gray-400">Avg Order Value</p><p className="text-2xl font-bold text-gray-800">₱{avgOrder.toLocaleString()}</p><p className="text-xs text-gray-400">Per transaction</p></div>
+                        <div><p className="text-xs text-gray-400">Avg Order Value</p><p className="text-2xl font-bold text-gray-800">{peso(avgOrder)}</p><p className="text-xs text-gray-400">Per transaction</p></div>
                         <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center text-purple-500 text-lg font-bold">₱</div>
                       </div>
                     </>
@@ -574,13 +944,10 @@ export default function SalesReportsPage() {
                 <div className="bg-white rounded-2xl p-4 shadow-sm overflow-x-auto">
                   <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                     <h2 className="font-bold text-gray-800">Top Selling Items</h2>
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-1.5">
-                        <Search className="w-3 h-3 text-gray-400" />
-                        <input type="text" placeholder="Search..." value={topSearch} onChange={e => setTopSearch(e.target.value)}
-                          className="outline-none text-xs text-gray-700 w-28 bg-transparent" />
-                      </div>
-                      <button onClick={exportSales} className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50">📤 Export</button>
+                    <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-1.5">
+                      <Search className="w-3 h-3 text-gray-400" />
+                      <input type="text" placeholder="Search..." value={topSearch} onChange={e => setTopSearch(e.target.value)}
+                        className="outline-none text-xs text-gray-700 w-28 bg-transparent" />
                     </div>
                   </div>
                   {loading ? <Skeleton h={160} /> : filteredTop.length === 0 ? (
@@ -592,7 +959,7 @@ export default function SalesReportsPage() {
                           <th className="py-2 text-left">Product Name</th>
                           <th className="py-2 text-left">Category</th>
                           <th className="py-2 text-right">Units Sold</th>
-                          <th className="py-2 text-right">Revenue</th>
+                          <th className="py-2 text-right">Revenue (₱)</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -601,7 +968,7 @@ export default function SalesReportsPage() {
                             <td className="py-2 text-gray-700">{item.name}</td>
                             <td className="py-2 text-gray-400 text-xs">{item.category}</td>
                             <td className="py-2 text-right text-gray-700">{item.units}</td>
-                            <td className="py-2 text-right font-medium text-green-600">₱{item.revenue.toLocaleString()}</td>
+                            <td className="py-2 text-right font-medium text-green-600">{peso(item.revenue)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -628,7 +995,7 @@ export default function SalesReportsPage() {
                           <th className="py-2 text-left">Product Name</th>
                           <th className="py-2 text-left">Category</th>
                           <th className="py-2 text-right">Units Sold</th>
-                          <th className="py-2 text-right">Revenue</th>
+                          <th className="py-2 text-right">Revenue (₱)</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -637,7 +1004,7 @@ export default function SalesReportsPage() {
                             <td className="py-2 text-gray-700">{item.name}</td>
                             <td className="py-2 text-gray-400 text-xs">{item.category}</td>
                             <td className="py-2 text-right text-red-500 font-medium">{item.units}</td>
-                            <td className="py-2 text-right text-gray-500">₱{item.revenue.toLocaleString()}</td>
+                            <td className="py-2 text-right text-gray-500">{peso(item.revenue)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -655,8 +1022,8 @@ export default function SalesReportsPage() {
                       <LineChart data={revenueData} margin={{ top: 5, right: 10, left: 0, bottom: 20 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis dataKey="date" tick={{ fontSize: 10 }} angle={-15} textAnchor="end" />
-                        <YAxis tick={{ fontSize: 10 }} />
-                        <Tooltip formatter={v => `₱${Number(v).toLocaleString()}`} />
+                        <YAxis tick={{ fontSize: 10 }} width={70} tickFormatter={(v) => `₱${Number(v).toLocaleString()}`} />
+                        <Tooltip formatter={v => peso(Number(v))} />
                         <Line type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={2} dot={false} name="Revenue (₱)" />
                       </LineChart>
                     </ResponsiveContainer>
@@ -690,7 +1057,7 @@ export default function SalesReportsPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-semibold text-gray-700">{sectionLabel}</span>
                     <span className="text-xs text-indigo-600 font-medium bg-indigo-50 px-2 py-0.5 rounded-lg">
-                      {getPeriodLabel(period, customDate)}
+                      {periodLabel}
                     </span>
                     <div className="flex-1 h-px bg-gray-200" />
                     <span className="text-xs text-gray-400">{filteredLogs.length} record{filteredLogs.length !== 1 ? "s" : ""}</span>
@@ -712,9 +1079,9 @@ export default function SalesReportsPage() {
                 {!loading && !error && (
                   <div className="grid grid-cols-3 gap-3 mb-6">
                     {[
-                      { label: "Total Revenue", value: `₱${logRevenue.toLocaleString()}`, color: "text-indigo-700", bg: "bg-indigo-50" },
-                      { label: "Cash Orders",   value: String(cashCount),                   color: "text-green-700",  bg: "bg-green-50"  },
-                      { label: "Online Orders", value: String(onlineCount),                 color: "text-purple-700", bg: "bg-purple-50" },
+                      { label: "Total Revenue", value: peso(logRevenue),     color: "text-indigo-700", bg: "bg-indigo-50" },
+                      { label: "Cash Orders",   value: String(cashCount),    color: "text-green-700",  bg: "bg-green-50"  },
+                      { label: "Online Orders", value: String(onlineCount),  color: "text-purple-700", bg: "bg-purple-50" },
                     ].map(s => (
                       <div key={s.label} className={`${s.bg} rounded-xl p-3 text-center`}>
                         <p className="text-xs text-gray-500 mb-1">{s.label}</p>
@@ -749,7 +1116,7 @@ export default function SalesReportsPage() {
                               <p className="text-xs text-gray-400 mt-0.5">{t.id}</p>
                             </div>
                             <div className="text-right">
-                              <p className="font-bold text-indigo-700 text-base">₱{t.total.toLocaleString()}.00</p>
+                              <p className="font-bold text-indigo-700 text-base">{peso(t.total)}</p>
                               <span className="text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-600">
                                 Completed ✓
                               </span>
