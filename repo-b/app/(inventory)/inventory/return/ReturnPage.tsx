@@ -40,6 +40,10 @@ type ReturnRequest = {
   reviewedBy?: string | null;
   reviewedAt?: string | null;
   reviewNote?: string | null;
+  proofImage?: string | null;
+  proofImageUrl?: string | null;
+  proof?: string | null;
+  image?: string | null;
   createdAt: string;
   updatedAt: string;
   customer: {
@@ -56,6 +60,9 @@ type ReturnRequest = {
     saleDate?: string;
     createdAt?: string;
     status?: string;
+    proofImage?: string | null;
+    proofImageUrl?: string | null;
+    receiptImage?: string | null;
   } | null;
   sale?: {
     id: string;
@@ -63,6 +70,9 @@ type ReturnRequest = {
     saleDate?: string;
     createdAt?: string;
     status?: string;
+    proofImage?: string | null;
+    proofImageUrl?: string | null;
+    receiptImage?: string | null;
   } | null;
   reviewer?: { id: string; name: string } | null;
   items: ReturnRequestItem[];
@@ -179,6 +189,23 @@ async function reviewReturnRequest(
   return data;
 }
 
+async function getReturnRequestDetail(id: string): Promise<ReturnRequest | null> {
+  try {
+    const res = await fetch(`${API_URL}/returns/${id}`, { headers: authHeaders() });
+    if (!res.ok) return null;
+    const raw = await res.json();
+    const node =
+      raw && typeof raw === "object"
+        ? (raw as Record<string, unknown>).returnRequest ??
+          (raw as Record<string, unknown>).data ??
+          raw
+        : raw;
+    return node && typeof node === "object" ? (node as ReturnRequest) : null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Formatting ────────────────────────────────────────────────────────────────
 const fmt = (n: number) =>
   `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
@@ -204,6 +231,75 @@ const reasonClasses: Record<ReturnReason, string> = {
 // Safe lookups: older records in the database may still carry a reason that no longer exists here
 const reasonLabel = (r: string) => REASON_LABELS[r as ReturnReason] ?? r;
 const reasonClass = (r: string) => reasonClasses[r as ReturnReason] ?? "bg-[#f1f5f2] text-[#5f7a66] border-[#dbe5dd]";
+const proofUrl = (r: ReturnRequest) => {
+  const toUrl = (value: unknown): string | null => {
+    if (typeof value === "string" && value.trim()) return value;
+    if (value && typeof value === "object") {
+      const obj = value as Record<string, unknown>;
+      const nested = obj.url ?? obj.imageUrl ?? obj.path ?? obj.proofImage ?? obj.image;
+      if (typeof nested === "string" && nested.trim()) return nested;
+    }
+    return null;
+  };
+
+  const raw = r as unknown as Record<string, unknown>;
+  const sale = (r.saleRecord ?? r.sale ?? null) as Record<string, unknown> | null;
+  const containers: Record<string, unknown>[] = [raw];
+  if (sale) {
+    containers.push(sale);
+    if (sale.payment && typeof sale.payment === "object") {
+      containers.push(sale.payment as Record<string, unknown>);
+    }
+  }
+  if (raw.payment && typeof raw.payment === "object") {
+    containers.push(raw.payment as Record<string, unknown>);
+  }
+  if (Array.isArray(r.items)) {
+    for (const item of r.items) {
+      if (item && typeof item === "object") containers.push(item as unknown as Record<string, unknown>);
+    }
+  }
+
+  const listKeys = ["proofs", "proofImages", "images", "proofPhotos", "attachments", "files"];
+  for (const source of [raw, sale]) {
+    if (!source) continue;
+    for (const key of listKeys) {
+      const list = source[key];
+      if (!Array.isArray(list)) continue;
+      for (const entry of list) {
+        if (entry && typeof entry === "object") containers.push(entry as Record<string, unknown>);
+      }
+    }
+  }
+
+  const urlKeys = [
+    "proofImage",
+    "proofImageUrl",
+    "proofImageURL",
+    "proofImagePath",
+    "imageProof",
+    "proofUrl",
+    "proof",
+    "proofPhoto",
+    "photoProof",
+    "photo",
+    "image",
+    "receiptImage",
+    "receiptUrl",
+    "attachmentUrl",
+    "fileUrl",
+    "url",
+    "imageUrl",
+    "path",
+  ];
+  for (const container of containers) {
+    for (const key of urlKeys) {
+      const url = toUrl(container[key]);
+      if (url) return url;
+    }
+  }
+  return null;
+};
 
 // Only the status colours that carry meaning stay non-green: waiting = amber, rejected = red
 const statusClasses: Record<ReturnRequestStatus, { badge: string; dot: string }> = {
@@ -323,6 +419,28 @@ export default function ReturnPage() {
     } finally {
       setReviewing(false);
     }
+  };
+
+  // ── Open view modal (fetch full detail so photo proof is included) ────────
+  const openView = async (r: ReturnRequest) => {
+    setViewItem(r);
+    setReviewNote("");
+    setConfirmAction(null);
+    setReviewError(null);
+
+    const detail = await getReturnRequestDetail(r.id);
+    if (!detail) return;
+    if (!proofUrl(detail)) {
+      console.warn("[ReturnPage] No photo proof field found in return detail response:", detail);
+    }
+    setViewItem((prev) => {
+      if (!prev || prev.id !== r.id) return prev;
+      return {
+        ...prev,
+        ...detail,
+        items: Array.isArray(detail.items) && detail.items.length > 0 ? detail.items : prev.items,
+      };
+    });
   };
 
   // Return quantities are in bottles; orderLine.price is the price of one CASE.
@@ -585,7 +703,7 @@ export default function ReturnPage() {
                         {/* Action */}
                         <td className="px-4 py-3.5 border-b border-[#e8f5ea] align-middle">
                           <button
-                            onClick={() => { setViewItem(r); setReviewNote(""); setConfirmAction(null); setReviewError(null); }}
+                            onClick={() => { void openView(r); }}
                             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-[#d6e8d9] bg-white text-[#2e7d3e] text-[12px] font-semibold cursor-pointer hover:bg-[#2e7d3e] hover:text-white hover:border-[#2e7d3e] transition-all"
                           >
                             {Icons.eye} View
@@ -768,6 +886,34 @@ export default function ReturnPage() {
                     );
                   })}
                 </div>
+              </div>
+
+              {/* Photo proof */}
+              <div>
+                <p className={labelCls}>Photo Proof</p>
+                {proofUrl(viewItem) ? (
+                  <>
+                    <a
+                      href={proofUrl(viewItem)!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block rounded-xl overflow-hidden border border-[#d6e8d9] bg-[#f4faf5] hover:border-[#2e7d3e] transition-colors"
+                      title="Open full size"
+                    >
+                      <img
+                        src={proofUrl(viewItem)!}
+                        alt="Return photo proof"
+                        className="w-full object-contain"
+                        style={{ maxHeight: 260, background: "#f4faf5" }}
+                      />
+                    </a>
+                    <p className="text-[11px] text-[#8fa596] m-0 mt-1.5">Click the photo to open it full size.</p>
+                  </>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-[#d6e8d9] bg-[#f4faf5] px-4 py-6 text-center">
+                    <p className="text-[12.5px] text-[#8fa596] m-0">No photo proof attached to this request.</p>
+                  </div>
+                )}
               </div>
 
               {/* Review info (already reviewed) */}

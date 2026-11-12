@@ -83,6 +83,16 @@ const navLinks = [
       </svg>
     ),
   },
+  {
+    href: "/cashier/returns",
+    label: "Returned Orders",
+    icon: (
+      <svg {...iconProps}>
+        <polyline points="1 4 1 10 7 10" />
+        <path d="M3.51 15a9 9 0 1 0 .49-4.5" />
+      </svg>
+    ),
+  },
 ];
 
 const pageTitles: Record<string, { title: string; sub: string }> = {
@@ -90,6 +100,7 @@ const pageTitles: Record<string, { title: string; sub: string }> = {
   "/cashier/ordering":     { title: "Ordering",            sub: "Create order for customer" },
   "/cashier/pending":      { title: "Transactions Status", sub: "Orders waiting for action" },
   "/cashier/transactions": { title: "Transaction History", sub: "Sales reports & records" },
+  "/cashier/returns":      { title: "Returned Orders",     sub: "Review customer return requests" },
   "/cashier/payment":      { title: "Payment",             sub: "Complete the customer order" },
 };
 
