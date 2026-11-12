@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
+import { exportStyledExcel } from "@/lib/excelExport";
 import { 
   LayoutDashboard, ShoppingCart, Users, LineChart, 
   Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift,
@@ -445,13 +446,29 @@ export default function SupplierMaintenancePage() {
     } catch { showToast("Failed to delete supplier(s).", true); }
   };
 
-  const handleExport = () => {
-    const headers = ["ID","Company Name","Contact No","Address","Agent Name","Last Ordered","Status"];
-    const rows    = items.map(item => [item.id, item.supplierName, item.contactNo, item.address, item.agentName, item.lastOrdered, item.status]);
-    const csv     = [headers, ...rows].map(row => row.join(",")).join("\n");
-    const a       = document.createElement("a");
-    a.href        = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download    = "suppliers.csv"; a.click();
+  const handleExport = async () => {
+    try {
+      await exportStyledExcel({
+        fileName: "Suppliers",
+        sheetName: "Suppliers",
+        title: "Supplier Maintenance",
+        cols: [
+          { header: "ID",           width: 26 },
+          { header: "Company Name", width: 30 },
+          { header: "Contact No",   width: 18 },
+          { header: "Address",      width: 36 },
+          { header: "Agent Name",   width: 24 },
+          { header: "Last Ordered", width: 18, align: "center" },
+          { header: "Status",       width: 14, align: "center" },
+        ],
+        rows: items.map((item) => [
+          item.id, item.supplierName, item.contactNo, item.address,
+          item.agentName, item.lastOrdered, item.status,
+        ]),
+      });
+    } catch {
+      showToast("Failed to export suppliers.", true);
+    }
   };
 
   const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("employee"); router.push("/"); };
@@ -536,7 +553,7 @@ export default function SupplierMaintenancePage() {
 
             {/* Action buttons */}
             <div className="flex items-center gap-2 mb-4 flex-wrap justify-end">
-              <button onClick={handleExport} className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-600 hover:bg-gray-50">📤 Export</button>
+              <button onClick={handleExport} className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-600 hover:bg-gray-50">📤 Export to Excel</button>
               <button onClick={handleDelete} className="flex items-center gap-1 border border-red-200 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-red-500 hover:bg-red-50">🗑️ Delete</button>
               <button onClick={openEditModal} className="flex items-center gap-1 border border-gray-800 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-gray-800 hover:bg-gray-100">✏️ Edit</button>
               <button onClick={openAddModal} className="flex items-center gap-1 bg-gray-900 rounded-lg px-2 md:px-3 py-2 text-xs md:text-sm text-white hover:bg-gray-700">+ Add Supplier</button>

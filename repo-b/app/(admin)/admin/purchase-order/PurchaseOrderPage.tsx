@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
+import { exportStyledExcel } from "@/lib/excelExport";
 import { 
   LayoutDashboard, ShoppingCart, Users, LineChart, 
   Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift,
@@ -14,28 +15,35 @@ import {
 type CaseUnit = "case_24" | "case_12" | "case_6" | "btl" | "pcs";
 
 const CASE_UNITS: { value: CaseUnit; label: string; short: string; bottlesPerCase: number | null; detail: string }[] = [
-  { value: "case_24", label: "Case (24 pcs)", short: "24-cs", bottlesPerCase: 24, detail: "1 case = 24 bottles" },
-  { value: "case_12", label: "Case (12 pcs)", short: "12-cs", bottlesPerCase: 12, detail: "1 case = 12 bottles" },
-  { value: "case_6",  label: "Case (6 pcs)",  short: "6-cs",  bottlesPerCase: 6,  detail: "1 case = 6 bottles"  },
-  { value: "btl",     label: "Bottles",        short: "btl",   bottlesPerCase: null, detail: "Individual bottle" },
-  { value: "pcs",     label: "Pieces",         short: "pcs",   bottlesPerCase: null, detail: "Single piece"      },
+  { value: "case_24", label: "Case (24 pieces)", short: "24-cs", bottlesPerCase: 24, detail: "1 case = 24 pieces" },
+  { value: "case_12", label: "Case (12 pieces)", short: "12-cs", bottlesPerCase: 12, detail: "1 case = 12 pieces" },
+  { value: "case_6",  label: "Case (6 pieces)",  short: "6-cs",  bottlesPerCase: 6,  detail: "1 case = 6 pieces"  },
+  { value: "btl",     label: "Bottles",          short: "btl",   bottlesPerCase: null, detail: "Individual bottle" },
+  { value: "pcs",     label: "Pieces",           short: "pcs",   bottlesPerCase: null, detail: "Single piece"      },
 ];
 
-const getUnit      = (u?: string) => CASE_UNITS.find((x) => x.value === u) ?? CASE_UNITS[0];
-const getUnitShort = (u?: string) => getUnit(u).short;
+const getUnit = (u?: string) => CASE_UNITS.find((x) => x.value === u) ?? CASE_UNITS[0];
+
+const pluralize = (n: number, singular: string, plural = `${singular}s`) =>
+  `${n.toLocaleString()} ${n === 1 ? singular : plural}`;
+
+const getUnitName = (u?: string) => (getUnit(u).bottlesPerCase ? "case" : "piece");
+
+const formatQty = (qty: number, u?: string) => pluralize(qty, getUnitName(u));
 
 function getCaseBreakdown(qty: number, unit?: string): string | null {
   const u = getUnit(unit);
   if (!u.bottlesPerCase) return null;
-  return `${qty} × ${u.bottlesPerCase} = ${qty * u.bottlesPerCase} btl`;
+  return `${pluralize(qty, "case")} × ${pluralize(u.bottlesPerCase, "piece")} = ${pluralize(qty * u.bottlesPerCase, "piece")}`;
 }
 
 function UnitPill({ unit, qty }: { unit?: string; qty?: number }) {
   const u = getUnit(unit);
   return (
     <span className="inline-flex items-center gap-0.5 text-xs text-indigo-600 font-medium bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full whitespace-nowrap">
-      {qty != null && <span className="text-gray-700 font-semibold">{qty}</span>}
-      <span>{u.short}</span>
+      <span className={qty != null ? "text-gray-700 font-semibold" : ""}>
+        {qty != null ? formatQty(qty, unit) : u.label}
+      </span>
     </span>
   );
 }
@@ -399,7 +407,7 @@ function ProductSelect({
               const isUsed       = usedIds.includes(p.id) && p.id !== value;
               const isOutOfStock = (p.stockQuantity ?? 0) === 0;
               const isDisabled   = isUsed;
-              const stockLabel   = p.stockQuantity != null ? `${p.stockQuantity} ${getUnitShort(p.stockUnit)} left` : null;
+              const stockLabel   = p.stockQuantity != null ? `${formatQty(p.stockQuantity, p.stockUnit)} left` : null;
               const salesCount   = productSales[p.id] ?? 0;
               const topSales     = products
                 .map((x) => productSales[x.id] ?? 0)
@@ -672,12 +680,37 @@ export default function PurchaseOrderPage() {
   const historyTotalPages = Math.ceil(filteredHistory.length / ITEMS_PER_PAGE);
   const paginatedHistory  = filteredHistory.slice((historyPage - 1) * ITEMS_PER_PAGE, historyPage * ITEMS_PER_PAGE);
 
-  const handleExport = () => {
-    const headers = ["ID","Supplier","Delivery Date","Total Items","Status","Notes"];
-    const rows    = deliveries.map((d) => [d.id, d.supplier?.supplierName || d.supplierId, new Date(d.createdAt || d.deliveryDate).toLocaleDateString(), d.totalItems, d.status, d.notes || ""]);
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([[headers, ...rows].map((r) => r.join(",")).join("\n")], { type: "text/csv" }));
-    a.download = "deliveries.csv"; a.click();
+  const handleExport = async () => {
+    try {
+      await exportStyledExcel({
+        fileName: "Deliveries",
+        sheetName: "Deliveries",
+        title: "Purchase Orders / Deliveries",
+        cols: [
+          { header: "ID",            width: 26 },
+          { header: "Supplier",      width: 30 },
+          { header: "Delivery Date", width: 18, align: "center" },
+          { header: "Total Items",   width: 14, format: "#,##0", align: "right" },
+          { header: "Status",        width: 16, align: "center" },
+          { header: "Notes",         width: 40 },
+        ],
+        rows: deliveries.map((d) => [
+          d.id,
+          d.supplier?.supplierName || d.supplierId,
+          new Date(d.createdAt || d.deliveryDate).toLocaleDateString(),
+          d.totalItems,
+          d.status,
+          d.notes || "",
+        ]),
+        totals: [
+          "TOTAL", "", "",
+          deliveries.reduce((s, d) => s + Number(d.totalItems || 0), 0),
+          "", "",
+        ],
+      });
+    } catch {
+      setCreateError("Failed to export deliveries.");
+    }
   };
 
   const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("token"); localStorage.removeItem("employee"); router.push("/"); };
@@ -1015,7 +1048,7 @@ export default function PurchaseOrderPage() {
                                     {s.productName}{s.size ? ` ${s.size}` : ""}
                                   </span>
                                   <span className="text-gray-400 shrink-0">
-                                    {s.suggestedCases != null ? `${s.suggestedCases} cs` : `${s.suggestedUnits} u`}
+                                    {s.suggestedCases != null ? pluralize(s.suggestedCases, "case") : pluralize(s.suggestedUnits, "piece")}
                                   </span>
                                 </li>
                               ))}
@@ -1110,7 +1143,7 @@ export default function PurchaseOrderPage() {
                                       {p.productName}{p.size ? ` ${p.size}` : ""}
                                     </p>
                                     <p className="text-xs text-gray-400 mt-0.5">
-                                      {p.stockQuantity != null ? `${p.stockQuantity} ${getUnitShort(p.stockUnit)} left` : ""}
+                                      {p.stockQuantity != null ? `${formatQty(p.stockQuantity, p.stockUnit)} left` : ""}
                                       {p.costPrice != null ? ` · ₱${p.costPrice}` : ""}
                                     </p>
                                   </div>
@@ -1192,7 +1225,7 @@ export default function PurchaseOrderPage() {
                               <div className="text-right shrink-0 ml-2">
                                 <p className="text-xs text-gray-400">Suggested</p>
                                 <p className="text-sm font-semibold text-gray-800 mb-1.5">
-                                  {s.suggestedCases != null ? `${s.suggestedCases} 24-cs` : `${s.suggestedUnits} units`}
+                                  {s.suggestedCases != null ? pluralize(s.suggestedCases, "case") : pluralize(s.suggestedUnits, "piece")}
                                 </p>
                                 <button
                                   onClick={() => addSuggestedItem(s)}
@@ -1241,7 +1274,7 @@ export default function PurchaseOrderPage() {
                                   {isOutOfStock ? (
                                     <span className="text-xs text-red-500 font-medium">Out of Stock</span>
                                   ) : (
-                                    <span className="text-xs text-gray-400">{stock} {getUnitShort(p.stockUnit)}</span>
+                                    <span className="text-xs text-gray-400">{formatQty(stock, p.stockUnit)}</span>
                                   )}
                                   {productSales[p.id] && (
                                     <span className="text-xs text-orange-600 font-medium">{productSales[p.id]} sold</span>
@@ -1305,7 +1338,7 @@ export default function PurchaseOrderPage() {
                     <div className="space-y-2">
                       <div className="hidden md:grid grid-cols-12 gap-2 text-xs font-medium text-gray-400 px-1">
                         <div className="col-span-4">Product</div>
-                        <div className="col-span-3 text-center">Cases</div>
+                        <div className="col-span-3 text-center">Quantity</div>
                         <div className="col-span-2">Cost (₱)</div>
                         <div className="col-span-3 text-right">Sub</div>
                       </div>
@@ -1329,7 +1362,7 @@ export default function PurchaseOrderPage() {
                                 />
                               </div>
                               <div className="col-span-1 md:col-span-3">
-                                <label className="text-xs text-gray-400 md:hidden">Cases</label>
+                                <label className="text-xs text-gray-400 md:hidden">Qty</label>
                                 <input type="number" min="1" value={item.quantity}
                                   onChange={(e) => updateLineItem(idx, "quantity", e.target.value)}
                                   className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:border-indigo-400 text-center text-gray-900 bg-white" />
@@ -1351,7 +1384,7 @@ export default function PurchaseOrderPage() {
                             </div>
                             {breakdown && item.productId && (
                               <p className="text-xs text-indigo-500 font-medium mt-1.5 pl-1 flex items-center gap-1">
-                                <Box className="w-3 h-3" /> {item.quantity} {getUnitShort(item.unit)} = {breakdown.split("= ")[1]}
+                                <Box className="w-3 h-3" /> {breakdown}
                               </p>
                             )}
                           </div>
@@ -1419,7 +1452,7 @@ export default function PurchaseOrderPage() {
                                 <span className="text-xs font-bold text-red-500">—</span>
                               ) : (
                                 <span className={`inline-flex items-center gap-0.5 text-xs font-bold px-1.5 py-0.5 rounded-full border ${badgeColor}`}>
-                                  {stock} {getUnitShort(p.stockUnit)}
+                                  {formatQty(stock, p.stockUnit)}
                                 </span>
                               )}
                             </div>
@@ -1461,7 +1494,7 @@ export default function PurchaseOrderPage() {
                               return (
                                 <div key={p.id} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-yellow-200">
                                   <p className="text-sm font-medium text-gray-800">{p.productName}{p.size ? ` ${p.size}` : ""}</p>
-                                  <span className="text-xs font-bold text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded-full">{stock} {getUnitShort(p.stockUnit)}</span>
+                                  <span className="text-xs font-bold text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded-full">{formatQty(stock, p.stockUnit)}</span>
                                 </div>
                               );
                             })}
@@ -1583,7 +1616,7 @@ export default function PurchaseOrderPage() {
                   {historyStatus !== "All" && (
                     <button onClick={() => { setHistoryStatus("All"); setHistoryPage(1); }} className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
                   )}
-                  <button onClick={handleExport} className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 hover:bg-gray-50">📤 Export</button>
+                  <button onClick={handleExport} className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 hover:bg-gray-50">📤 Export to Excel</button>
                 </div>
               </div>
 
@@ -1719,8 +1752,8 @@ export default function PurchaseOrderPage() {
                             </div>
                             <div className="mt-1.5 space-y-0.5">
                               <p className="text-xs text-gray-500">
-                                Ordered: <span className="font-medium text-gray-700">{item.orderedQty} {unitInfo.short}</span>
-                                {orderedBtl !== null && <span className="text-indigo-500 ml-1">= {orderedBtl} btl</span>}
+                                Ordered: <span className="font-medium text-gray-700">{formatQty(item.orderedQty, item.unit || item.product?.stockUnit)}</span>
+                                {orderedBtl !== null && <span className="text-indigo-500 ml-1">= {pluralize(orderedBtl, "piece")}</span>}
                               </p>
                             </div>
                           </div>
