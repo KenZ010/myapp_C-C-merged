@@ -3,6 +3,7 @@ import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { exportStyledExcel } from "@/lib/excelExport";
 import { 
   LayoutDashboard, ShoppingCart, Users, LineChart, 
   Package, User, ClipboardList, RotateCcw, AlertTriangle, Gift,
@@ -281,13 +282,25 @@ export default function AccountManagementPage() {
     }
   };
 
-  const exportEmp = () => {
-    const headers = ["ID", "Full Name", "Phone", "Role", "Status", "Created At"];
-    const rows = employees.map((e) => [e.id, e.name, e.phone, e.role, e.userStatus, e.createdAt]);
-    const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "employees.csv"; a.click(); URL.revokeObjectURL(url);
+  const exportEmp = async () => {
+    try {
+      await exportStyledExcel({
+        fileName: "Employees",
+        sheetName: "Employees",
+        title: "Employee Accounts",
+        cols: [
+          { header: "ID",         width: 26 },
+          { header: "Full Name",  width: 28 },
+          { header: "Phone",      width: 18 },
+          { header: "Role",       width: 16 },
+          { header: "Status",     width: 14, align: "center" },
+          { header: "Created At", width: 22 },
+        ],
+        rows: employees.map((e) => [e.id, e.name, e.phone, e.role, e.userStatus, e.createdAt]),
+      });
+    } catch {
+      setEmpError("Failed to export employees.");
+    }
   };
 
   const filteredCus = customers.filter((c) =>
@@ -400,13 +413,26 @@ export default function AccountManagementPage() {
     }
   };
 
-  const exportCus = () => {
-    const headers = ["ID", "Full Name", "Email", "Phone", "Address", "Status", "Created At"];
-    const rows = customers.map((c) => [c.id, c.name, c.email, c.phone, c.address, c.userStatus, c.createdAt]);
-    const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "customers.csv"; a.click(); URL.revokeObjectURL(url);
+  const exportCus = async () => {
+    try {
+      await exportStyledExcel({
+        fileName: "Customers",
+        sheetName: "Customers",
+        title: "Customer Accounts",
+        cols: [
+          { header: "ID",         width: 26 },
+          { header: "Full Name",  width: 28 },
+          { header: "Email",      width: 28 },
+          { header: "Phone",      width: 18 },
+          { header: "Address",    width: 34 },
+          { header: "Status",     width: 14, align: "center" },
+          { header: "Created At", width: 22 },
+        ],
+        rows: customers.map((c) => [c.id, c.name, c.email, c.phone, c.address, c.userStatus, c.createdAt]),
+      });
+    } catch {
+      setCusError("Failed to export customers.");
+    }
   };
 
   const handleLogout = () => {
@@ -491,7 +517,7 @@ export default function AccountManagementPage() {
                   <Search className="w-3.5 h-3.5 text-gray-400" />
                   <input type="text" placeholder="Search" value={empSearch} onChange={(e) => { setEmpSearch(e.target.value); setEmpPage(1); }} className="outline-none text-sm text-gray-700 w-full" />
                 </div>
-                <button onClick={exportEmp} className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">📤 Export</button>
+                <button onClick={exportEmp} className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">📤 Export to Excel</button>
                 {empSelected.length > 0 && <button onClick={() => setShowEmpDelete(true)} className="flex items-center gap-1 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-500 hover:bg-red-50">🗑️ Delete</button>}
                 <button onClick={openAddEmp} className="flex items-center gap-1 bg-gray-900 rounded-lg px-3 py-2 text-sm text-white hover:bg-gray-700">+ Add Employee</button>
               </div>
@@ -567,7 +593,7 @@ export default function AccountManagementPage() {
                   <Search className="w-3.5 h-3.5 text-gray-400" />
                   <input type="text" placeholder="Search" value={cusSearch} onChange={(e) => { setCusSearch(e.target.value); setCusPage(1); }} className="outline-none text-sm text-gray-700 w-full" />
                 </div>
-                <button onClick={exportCus} className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">📤 Export</button>
+                <button onClick={exportCus} className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">📤 Export to Excel</button>
                 {cusSelected.length > 0 && <button onClick={() => setShowCusDelete(true)} className="flex items-center gap-1 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-500 hover:bg-red-50">🗑️ Delete</button>}
                 <button onClick={openAddCus} className="flex items-center gap-1 bg-gray-900 rounded-lg px-3 py-2 text-sm text-white hover:bg-gray-700">+ Add Customer</button>
               </div>

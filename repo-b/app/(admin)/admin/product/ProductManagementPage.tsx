@@ -14,15 +14,32 @@ type CaseUnit = "case_24" | "case_12" | "case_6" | "btl" | "pcs";
 const CASE_UNITS: {
   value: CaseUnit; label: string; short: string; bottlesPerCase: number | null;
 }[] = [
-  { value: "case_24", label: "Case (24 pcs)", short: "24-cs", bottlesPerCase: 24 },
-  { value: "case_12", label: "Case (12 pcs)", short: "12-cs", bottlesPerCase: 12 },
-  { value: "case_6",  label: "Case (6 pcs)",  short: "6-cs",  bottlesPerCase: 6  },
+  { value: "case_24", label: "Case (24 pieces)", short: "24-cs", bottlesPerCase: 24 },
+  { value: "case_12", label: "Case (12 pieces)", short: "12-cs", bottlesPerCase: 12 },
+  { value: "case_6",  label: "Case (6 pieces)",  short: "6-cs",  bottlesPerCase: 6  },
   { value: "btl",     label: "Bottles",        short: "btl",   bottlesPerCase: null },
   { value: "pcs",     label: "Pieces",         short: "pcs",   bottlesPerCase: null },
 ];
 
 const getUnit = (u?: string): typeof CASE_UNITS[number] =>
   CASE_UNITS.find((x) => x.value === u) ?? CASE_UNITS[0];
+
+const pluralize = (n: number, singular: string, plural = `${singular}s`) =>
+  `${n.toLocaleString()} ${n === 1 ? singular : plural}`;
+
+const getStockLabels = (quantity: number, piecesPerCase?: number | null) => {
+  const qty    = Number(quantity) || 0;
+  const pcs    = Number(piecesPerCase) || 1;
+  const byCase = pcs > 1;
+  return {
+    qty,
+    pcs,
+    byCase,
+    quantityLabel: byCase ? pluralize(qty, "case") : pluralize(qty, "piece"),
+    piecesLabel: byCase ? `${pluralize(pcs, "piece")} per case` : null,
+    totalLabel: byCase ? `${pluralize(qty * pcs, "piece")} total` : null,
+  };
+};
 
 const navItems = [
   { label: "Dashboard",             icon: LayoutDashboard, path:"/admin/dashboard"      },
@@ -100,7 +117,7 @@ function CaseUnitInput({
       </div>
       {qty > 0 && totalBtl !== null && (
         <p className="text-xs text-indigo-500 mt-1 font-medium">
-          {qty} × {sel.bottlesPerCase} = {totalBtl} bottles total
+          {pluralize(qty, "case")} × {pluralize(sel.bottlesPerCase ?? 0, "piece")} = {pluralize(totalBtl, "piece")} total
         </p>
       )}
     </div>
@@ -111,10 +128,7 @@ function CaseUnitInput({
 function CaseBadge({ quantity, piecesPerCase, compact = false }: {
   quantity: number; piecesPerCase?: number | null; compact?: boolean;
 }) {
-  const pcs      = piecesPerCase ?? 1;
-  const qty      = Number(quantity) || 0;
-  const totalBtl = pcs > 1 ? qty * pcs : null;
-  const unit     = getUnit(pcs === 1 ? "pcs" : pcs === 24 ? "case_24" : pcs === 12 ? "case_12" : pcs === 6 ? "case_6" : "pcs");
+  const { qty, quantityLabel, piecesLabel, totalLabel } = getStockLabels(quantity, piecesPerCase);
 
   const color = qty === 0
     ? "bg-red-100 text-red-700 border-red-200"
@@ -124,12 +138,14 @@ function CaseBadge({ quantity, piecesPerCase, compact = false }: {
 
   return (
     <div className="flex flex-col gap-0.5">
-      <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border w-fit ${color}`}>
-        {qty} <span className="font-normal opacity-80">{unit.short}</span>
+      <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border w-fit ${color}`}>
+        {quantityLabel}
       </span>
-      <span className={`text-xs font-medium ${compact ? "text-gray-400" : "text-indigo-500"}`}>
-        {totalBtl !== null ? `${qty} × ${pcs} = ${totalBtl} btl` : null}
-      </span>
+      {(piecesLabel || totalLabel) && (
+        <span className={`text-xs font-medium ${compact ? "text-gray-400" : "text-indigo-500"}`}>
+          {[piecesLabel, totalLabel].filter(Boolean).join(" · ")}
+        </span>
+      )}
     </div>
   );
 }
@@ -398,7 +414,7 @@ export default function ProductManagementPage() {
       const stockQuantity = editForm.stockQuantity === "" ? 0 : Number(editForm.stockQuantity);
       const pcs = Number(editForm.piecesPerCase);
       if (isNaN(pcs) || pcs < 1) {
-        showToast("Please enter a valid piece per case (minimum 1).", true);
+        showToast("Please enter valid pieces per case (minimum 1).", true);
         setIsEditing(true);
         setSaving(false);
         isEditingRef.current = false;
@@ -454,7 +470,7 @@ export default function ProductManagementPage() {
       const stockQuantity = addForm.stockQuantity === "" ? 0 : Number(addForm.stockQuantity);
       const pcs = Number(addForm.piecesPerCase);
       if (isNaN(pcs) || pcs < 1) {
-        showToast("Please enter a valid piece per case (minimum 1).", true);
+        showToast("Please enter valid pieces per case (minimum 1).", true);
         setShowAddModal(true);
         setSaving(false);
         isAddingRef.current = false;
@@ -697,10 +713,7 @@ export default function ProductManagementPage() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-4">
                 {paginated.map((product) => {
-                  const pcs      = product.piecesPerCase ?? 1;
-                  const qty      = Number(product.stockQuantity) || 0;
-                  const totalBtl = pcs > 1 ? qty * pcs : null;
-                  const unit     = getUnit(pcs === 1 ? "pcs" : pcs === 24 ? "case_24" : pcs === 12 ? "case_12" : pcs === 6 ? "case_6" : "pcs");
+                  const { qty, quantityLabel, piecesLabel, totalLabel } = getStockLabels(product.stockQuantity, product.piecesPerCase);
                   const badgeColor = qty === 0
                     ? "bg-red-100 text-red-700 border-red-200"
                     : qty <= 10
@@ -741,12 +754,12 @@ export default function ProductManagementPage() {
                         )}
 
                         <div className="mt-1.5">
-                          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border w-fit ${badgeColor}`}>
-                            {qty} <span className="font-normal opacity-80">{unit.short}</span>
+                          <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full border w-fit ${badgeColor}`}>
+                            {quantityLabel}
                           </span>
-                          {totalBtl !== null && (
+                          {(piecesLabel || totalLabel) && (
                             <p className="text-xs text-gray-400 mt-0.5">
-                              {qty} × {pcs} = {totalBtl} btl
+                              {[piecesLabel, totalLabel].filter(Boolean).join(" · ")}
                             </p>
                           )}
                         </div>
@@ -869,9 +882,9 @@ export default function ProductManagementPage() {
                         placeholder="What you pay the supplier"
                         className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900 placeholder:text-gray-400" />
                     </div>
-                    {/* ── Piece per Case input with dropdown ── */}
+                    {/* ── Pieces per Case input with dropdown ── */}
                     <div ref={editPcsRef}>
-                      <p className="text-xs text-gray-400">Piece per Case</p>
+                      <p className="text-xs text-gray-400">Pieces per Case</p>
                       <div className="relative mt-1">
                         <input
                           type="text"
@@ -891,12 +904,17 @@ export default function ProductManagementPage() {
                               <button key={pcs} type="button"
                                 onClick={() => { setEditForm({ ...editForm, piecesPerCase: pcs }); setShowEditPcsDropdown(false); }}
                                 className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${editForm.piecesPerCase === pcs ? "text-indigo-600 font-medium bg-indigo-50" : "text-gray-600"}`}>
-                                {pcs} pcs per case
+                                {pluralize(Number(pcs), "piece")} per case
                               </button>
                             ))}
                           </div>
                         )}
                       </div>
+                      {Number(editForm.piecesPerCase) > 1 && (
+                        <p className="text-xs text-indigo-500 mt-1 font-medium">
+                          1 case = {pluralize(Number(editForm.piecesPerCase), "piece")}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <p className="text-xs text-gray-400">Category</p>
@@ -954,9 +972,6 @@ export default function ProductManagementPage() {
                       <p className="text-xs text-gray-400">Stock</p>
                       <div className="mt-1">
                         <CaseBadge quantity={selectedProduct.stockQuantity} piecesPerCase={selectedProduct.piecesPerCase} />
-                        {selectedProduct.piecesPerCase != null && selectedProduct.piecesPerCase > 1 && (
-                          <p className="text-xs text-gray-400 mt-0.5">{selectedProduct.piecesPerCase} pieces per case</p>
-                        )}
                       </div>
                     </div>
                     <div>
@@ -1072,9 +1087,9 @@ export default function ProductManagementPage() {
                   {suppliers.map((s) => <option key={s.id} value={s.id}>{s.supplierName}</option>)}
                 </select>
               </div>
-              {/* ── Piece per Case input with dropdown ── */}
+              {/* ── Pieces per Case input with dropdown ── */}
               <div ref={pcsRef}>
-                <label className="text-xs font-medium text-gray-600">Piece per Case</label>
+                <label className="text-xs font-medium text-gray-600">Pieces per Case</label>
                 <div className="relative mt-1">
                   <input
                     type="text"
@@ -1094,12 +1109,17 @@ export default function ProductManagementPage() {
                         <button key={pcs} type="button"
                           onClick={() => { setAddForm({ ...addForm, piecesPerCase: pcs }); setShowPcsDropdown(false); }}
                           className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${addForm.piecesPerCase === pcs ? "text-indigo-600 font-medium bg-indigo-50" : "text-gray-600"}`}>
-                          {pcs} pcs per case
+                          {pluralize(Number(pcs), "piece")} per case
                         </button>
                       ))}
                     </div>
                   )}
                 </div>
+                {Number(addForm.piecesPerCase) > 1 && (
+                  <p className="text-xs text-indigo-500 mt-1 font-medium">
+                    1 case = {pluralize(Number(addForm.piecesPerCase), "piece")}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600">Status</label>

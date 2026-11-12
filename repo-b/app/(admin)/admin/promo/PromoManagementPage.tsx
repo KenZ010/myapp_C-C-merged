@@ -3,6 +3,7 @@ import Image from "next/image";
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "@/lib/api";
+import { exportStyledExcel } from "@/lib/excelExport";
 import AlertModal from "@/components/admin/components/AlertModal";
 import { 
   LayoutDashboard, ShoppingCart, Users, LineChart, 
@@ -531,13 +532,30 @@ export default function PromoManagementPage() {
     }
   };
 
-  const handleExport = () => {
-    const headers = ["Title", "Product", "Type", "Discount%", "Bundle Qty", "Status", "Start Date", "End Date"];
-    const rows = promos.map((p) => [p.title, p.product, p.type, p.discount || "", p.bundleQty || "", p.status, p.startDate, p.endDate]);
-    const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "promos.csv"; a.click(); URL.revokeObjectURL(url);
+  const handleExport = async () => {
+    try {
+      await exportStyledExcel({
+        fileName: "Promos",
+        sheetName: "Promos",
+        title: "Promo Management",
+        cols: [
+          { header: "Title",       width: 30 },
+          { header: "Product",     width: 30 },
+          { header: "Type",        width: 18 },
+          { header: "Discount %",  width: 12, format: "0",     align: "right" },
+          { header: "Bundle Qty",  width: 12, format: "#,##0", align: "right" },
+          { header: "Status",      width: 14, align: "center" },
+          { header: "Start Date",  width: 16, align: "center" },
+          { header: "End Date",    width: 16, align: "center" },
+        ],
+        rows: promos.map((p) => [
+          p.title, p.product, p.type, p.discount ?? "", p.bundleQty ?? "",
+          p.status, p.startDate, p.endDate,
+        ]),
+      });
+    } catch {
+      showToast("Failed to export promos.", true);
+    }
   };
 
   const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("employee"); router.push("/"); };
@@ -696,7 +714,7 @@ export default function PromoManagementPage() {
               {(typeFilter !== "All" || statusFilter !== "All") && (
                 <button onClick={() => { setTypeFilter("All"); setStatusFilter("All"); setCurrentPage(1); }} className="text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">✕ Clear</button>
               )}
-              <button onClick={handleExport} className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">📤 Export</button>
+              <button onClick={handleExport} className="flex items-center gap-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 hover:bg-gray-50">📤 Export to Excel</button>
               <button onClick={() => { setShowAddModal(true); setIsDirty(false); }} className="ml-auto flex items-center gap-1 bg-gray-900 rounded-lg px-3 py-2 text-sm text-white hover:bg-gray-700">+ Add Promo</button>
             </div>
 
