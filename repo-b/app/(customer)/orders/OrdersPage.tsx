@@ -19,14 +19,22 @@ type OrderItem = {
   price:         number;
 };
 
+type Driver = {
+  name:  string;
+  phone: string | null;
+};
+
 type Order = {
-  id:            string;
-  date:          string;
-  status:        OrderStatus;
-  note:          string;
-  total:         number;
-  paymentMethod: string;  // raw, uppercased (e.g. "CASH", "GCASH")
-  items:         OrderItem[];
+  id:             string;
+  date:           string;
+  status:         OrderStatus;
+  note:           string;
+  total:          number;
+  paymentMethod:  string;  // raw, uppercased (e.g. "CASH", "GCASH")
+  items:          OrderItem[];
+  driver:         Driver | null;  // null until a driver is assigned
+  amountTendered: number | null;  // cash the customer hands over (cash orders only)
+  change:         number | null;  // change the driver owes back
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -110,7 +118,28 @@ function normalizeOrder(o: Record<string, unknown>): Order {
     .toUpperCase()
     .replace(/[\s_-]/g, "");
 
-  return { id: String(o.id ?? ""), date, status, note: statusNote[status], total, paymentMethod, items };
+  // Driver assigned to deliver this order (SaleRecord.driver)
+  const rawDriver = o.driver as Record<string, unknown> | null | undefined;
+  const driver: Driver | null = rawDriver
+    ? {
+        name:  String(rawDriver.name ?? "Driver"),
+        phone: rawDriver.phone ? String(rawDriver.phone) : null,
+      }
+    : null;
+
+  // Cash handed over + change owed (Payment.amountTendered / Payment.change)
+  const toNum = (v: unknown): number | null =>
+    v === null || v === undefined || v === "" || Number.isNaN(Number(v)) ? null : Number(v);
+  const amountTendered = toNum(payment?.amountTendered);
+  // Prefer the stored change; fall back to tendered − total if only tendered is known
+  const change =
+    toNum(payment?.change) ??
+    (amountTendered !== null ? Math.max(0, amountTendered - total) : null);
+
+  return {
+    id: String(o.id ?? ""), date, status, note: statusNote[status], total, paymentMethod, items,
+    driver, amountTendered, change,
+  };
 }
 
 // GCash orders are already paid, so they can't be cancelled by the customer
