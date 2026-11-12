@@ -519,6 +519,35 @@ export const api = {
     return res.json();
   },
 
+  // ── ORDER REQUESTS (inventory manager → admin approval) ─────────────────────
+  getOrderRequests: async () => {
+    const res = await fetch(`${API_URL}/order-requests`, { headers: authHeaders() });
+    return parseJson(res, 'Failed to fetch order requests');
+  },
+  createOrderRequest: async (data: {
+    supplierId: string;
+    notes?: string;
+    items: { productId: string; quantity: number; costPrice: number; unit?: string }[];
+  }) => {
+    const res = await fetch(`${API_URL}/order-requests`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    return parseJson(res, 'Failed to create order request');
+  },
+  updateOrderRequest: async (
+    id: string,
+    data: { status: 'APPROVED' | 'REJECTED'; adminRemarks?: string },
+  ) => {
+    const res = await fetch(`${API_URL}/order-requests/${id}`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify(data),
+    });
+    return parseJson(res, 'Failed to update order request');
+  },
+
   // ── DELIVERIES ──────────────────────────────────────────────────────────────
   getDeliveries: async () => {
     const res = await fetch(`${API_URL}/deliveries`, { headers: authHeaders() });
