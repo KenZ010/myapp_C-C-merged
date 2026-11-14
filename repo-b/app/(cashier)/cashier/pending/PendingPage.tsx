@@ -13,12 +13,14 @@ const GREEN_BORDER = "#d6e8d9"; // borders
 const INK          = "#14301b"; // headings (green-tinted near-black)
 const MUTED        = "#5f7a66"; // secondary text
 const FAINT        = "#8fa596"; // labels / icons
+const PURPLE       = "#6d28d9"; // "Received" status
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type OrderStatus =
   | "Pending"
   | "Processing"
   | "Out for Delivery"
+  | "Received"
   | "Completed"
   | "Cancelled";
 
@@ -67,6 +69,7 @@ const Icon = {
   clock: (<svg width="13" height="13" viewBox="0 0 24 24" {...svgProps}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>),
   box: (<svg width="14" height="14" viewBox="0 0 24 24" {...svgProps}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>),
   wallet: (<svg width="14" height="14" viewBox="0 0 24 24" {...svgProps}><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>),
+  walletLg: (<svg width="18" height="18" viewBox="0 0 24 24" {...svgProps}><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>),
   check: (<svg width="14" height="14" viewBox="0 0 24 24" {...svgProps} strokeWidth={2.5}><polyline points="20 6 9 17 4 12"/></svg>),
   x: (<svg width="14" height="14" viewBox="0 0 24 24" {...svgProps} strokeWidth={2.5}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>),
   truck: (<svg width="14" height="14" viewBox="0 0 24 24" {...svgProps}><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>),
@@ -78,16 +81,19 @@ const Icon = {
   chevronUp: (<svg width="11" height="11" viewBox="0 0 24 24" {...svgProps} strokeWidth={2.5}><polyline points="18 15 12 9 6 15"/></svg>),
   image: (<svg width="14" height="14" viewBox="0 0 24 24" {...svgProps}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>),
   hash: (<svg width="14" height="14" viewBox="0 0 24 24" {...svgProps}><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>),
+  received: (<svg width="13" height="13" viewBox="0 0 24 24" {...svgProps}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="8.5 12 11 14.5 15.5 9.5"/></svg>),
+  receivedLg: (<svg width="18" height="18" viewBox="0 0 24 24" {...svgProps}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="8.5 12 11 14.5 15.5 9.5"/></svg>),
   emptyState: (<svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#a9d3b1" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 12"/></svg>),
 };
 
 // ── Status config ─────────────────────────────────────────────────────────────
 // Green is reserved for the brand / success actions. Statuses use colours that
-// sit well next to it: warm amber, calm blue, and orange.
+// sit well next to it: warm amber, calm blue, orange and violet.
 const statusStyle: Record<OrderStatus, { bg: string; color: string; border: string }> = {
   Pending:            { bg: "#fffbeb", color: "#b45309", border: "#fde68a" },
   Processing:         { bg: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe" },
   "Out for Delivery": { bg: "#fff7ed", color: "#c2410c", border: "#fed7aa" },
+  Received:           { bg: "#f5f3ff", color: PURPLE,    border: "#ddd6fe" },
   Completed:          { bg: GREEN_LIGHT, color: GREEN,  border: "#b7dcbd" },
   Cancelled:          { bg: "#fef2f2", color: "#b91c1c", border: "#fecaca" },
 };
@@ -96,6 +102,7 @@ const statusIcon: Record<OrderStatus, React.ReactNode> = {
   Pending:            Icon.clock,
   Processing:         <svg width="13" height="13" viewBox="0 0 24 24" {...svgProps}><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>,
   "Out for Delivery": Icon.truck,
+  Received:           Icon.received,
   Completed:          Icon.check,
   Cancelled:          Icon.x,
 };
@@ -104,6 +111,7 @@ const statusMap: Record<string, OrderStatus> = {
   PENDING:          "Pending",
   PROCESSING:       "Processing",
   OUT_FOR_DELIVERY: "Out for Delivery",
+  RECEIVED:         "Received",
   COMPLETED:        "Completed",
   CANCELLED:        "Cancelled",
   CANCELED:         "Cancelled",
@@ -113,11 +121,12 @@ const backendStatus: Record<OrderStatus, string> = {
   Pending:            "PENDING",
   Processing:         "PROCESSING",
   "Out for Delivery": "OUT_FOR_DELIVERY",
+  Received:           "RECEIVED",
   Completed:          "COMPLETED",
   Cancelled:          "CANCELLED",
 };
 
-const ACTIVE_STATUSES: OrderStatus[] = ["Pending", "Processing", "Out for Delivery"];
+const ACTIVE_STATUSES: OrderStatus[] = ["Pending", "Processing", "Out for Delivery", "Received"];
 
 // Payment method badge colours
 const methodStyle: Record<PaymentMethod, { bg: string; color: string; border: string }> = {
@@ -202,7 +211,7 @@ const byOldestFirst = (a: Order, b: Order) =>
   a.createdAt - b.createdAt || a.id.localeCompare(b.id);
 
 type FilterTab = "All Orders" | OrderStatus;
-const filterTabs: FilterTab[] = ["All Orders", "Pending", "Processing", "Out for Delivery"];
+const filterTabs: FilterTab[] = ["All Orders", "Pending", "Processing", "Out for Delivery", "Received"];
 
 // ── Skeletons ─────────────────────────────────────────────────────────────────
 const shimmerBg: React.CSSProperties = {
@@ -251,6 +260,9 @@ export default function PendingPage() {
   // Drivers the cashier can pick from + the pick made on each Processing card
   const [drivers,         setDrivers]         = useState<Driver[]>([]);
   const [selectedDrivers, setSelectedDrivers] = useState<Record<string, string>>({}); // orderId -> driverId
+
+  // Cash the driver handed to the cashier, typed on each Received card
+  const [remitInputs, setRemitInputs] = useState<Record<string, string>>({}); // orderId -> amount (string)
 
   const socket = useSocket();
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
@@ -326,12 +338,21 @@ export default function PendingPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [proofModal]);
 
-  const updateStatus = async (id: string, status: OrderStatus, driverId?: string) => {
+  /**
+   * @param driverId       set when dispatching (Processing → Out for Delivery)
+   * @param remittedAmount cash the driver handed over (Received → Completed, Cash orders)
+   */
+  const updateStatus = async (
+    id: string,
+    status: OrderStatus,
+    driverId?: string,
+    remittedAmount?: number
+  ) => {
     const previous = orders.find((o) => o.id === id);
     setUpdatingId(id);
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
     try {
-      await api.updateOrderStatus(id, backendStatus[status], driverId);
+      await api.updateOrderStatus(id, backendStatus[status], driverId, remittedAmount);
       if (driverId) fetchOrders(true); // pull in the driver's name/phone
       if (status === "Completed" || status === "Cancelled") {
         setTimeout(() => setOrders((prev) => prev.filter((o) => o.id !== id)), 1500);
@@ -355,10 +376,11 @@ export default function PendingPage() {
     tab === "All Orders" ? orders.length : orders.filter((o) => o.status === tab).length;
 
   const statCards = [
-    { label: "All Active", count: orders.length,                                               icon: Icon.layers,    accent: GREEN,     light: GREEN_LIGHT, highlight: true  },
-    { label: "Pending",    count: orders.filter((o) => o.status === "Pending").length,          icon: Icon.hourglass, accent: "#d97706", light: "#fffbeb",   highlight: false },
-    { label: "Processing", count: orders.filter((o) => o.status === "Processing").length,       icon: Icon.gear,      accent: "#2563eb", light: "#eff6ff",   highlight: false },
-    { label: "In Transit", count: orders.filter((o) => o.status === "Out for Delivery").length, icon: Icon.truckLg,   accent: "#ea580c", light: "#fff7ed",   highlight: false },
+    { label: "All Active", count: orders.length,                                               icon: Icon.layers,      accent: GREEN,     light: GREEN_LIGHT, highlight: true  },
+    { label: "Pending",    count: orders.filter((o) => o.status === "Pending").length,          icon: Icon.hourglass,   accent: "#d97706", light: "#fffbeb",   highlight: false },
+    { label: "Processing", count: orders.filter((o) => o.status === "Processing").length,       icon: Icon.gear,        accent: "#2563eb", light: "#eff6ff",   highlight: false },
+    { label: "In Transit", count: orders.filter((o) => o.status === "Out for Delivery").length, icon: Icon.truckLg,     accent: "#ea580c", light: "#fff7ed",   highlight: false },
+    { label: "Received",   count: orders.filter((o) => o.status === "Received").length,         icon: Icon.receivedLg,  accent: PURPLE,    light: "#f5f3ff",   highlight: false },
   ];
 
   return (
@@ -378,6 +400,7 @@ export default function PendingPage() {
         .proof-thumb:hover { border-color: #1d4ed8 !important; }
         .pending-page button:focus-visible { outline: 2px solid ${GREEN}; outline-offset: 2px; }
         .pending-page select:focus-visible { outline: 2px solid ${GREEN}; outline-offset: 2px; }
+        .pending-page input:focus-visible { outline: 2px solid ${GREEN}; outline-offset: 2px; }
 
         /* ── Horizontal order card: 4 columns on desktop ── */
         .oc-grid {
@@ -431,9 +454,9 @@ export default function PendingPage() {
         </div>
 
         {/* Stat Cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: "14px", marginBottom: "24px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: "14px", marginBottom: "24px" }}>
           {loading
-            ? Array.from({ length: 4 }).map((_, i) => <SkeletonStatCard key={i} />)
+            ? Array.from({ length: 5 }).map((_, i) => <SkeletonStatCard key={i} />)
             : statCards.map((s) => (
                 <div key={s.label}
                   style={{
@@ -527,6 +550,13 @@ export default function PendingPage() {
 
               // Driver picked on this card (Processing orders only)
               const pickedDriverId = selectedDrivers[order.id] ?? "";
+
+              // Cash the driver handed over (Received orders only)
+              const remitRaw    = remitInputs[order.id] ?? "";
+              const remitAmount = remitRaw.trim() === "" ? NaN : Number(remitRaw);
+              const remitValid  = Number.isFinite(remitAmount) && remitAmount >= 0;
+              const remitDiff   = remitValid ? Math.round((remitAmount - grandTotal) * 100) / 100 : 0;
+              const needsRemit  = order.paymentMethod === "Cash";
 
               return (
                 <div key={order.id} className="order-card" style={{ background: "#fff", borderRadius: "14px", border: `1px solid ${GREEN_BORDER}`, overflow: "hidden" }}>
@@ -751,15 +781,74 @@ export default function PendingPage() {
 
                       {order.status === "Out for Delivery" && (
                         order.isWalkIn ? (
-                          <button className="act-green" onClick={() => updateStatus(order.id, "Completed")} disabled={isUpdating}
+                          // Cashier-placed order: the cashier marks it received on the customer's behalf
+                          <button className="act-green" onClick={() => updateStatus(order.id, "Received")} disabled={isUpdating}
                             style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "13px", fontWeight: 700, cursor: isUpdating ? "not-allowed" : "pointer", opacity: isUpdating ? 0.6 : 1, boxShadow: "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
-                            {Icon.check} Mark as Completed
+                            {Icon.received} Mark as Received
                           </button>
                         ) : (
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", background: "#fff7ed", border: "1px solid #fed7aa", fontSize: "13px", fontWeight: 600, color: "#c2410c", textAlign: "center" }}>
                             {Icon.truck} Awaiting customer confirmation
                           </div>
                         )
+                      )}
+
+                      {/* Customer has the order → settle the cash with the driver, then close it */}
+                      {order.status === "Received" && (
+                        <>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "9px 11px", borderRadius: "10px", background: "#f5f3ff", border: "1px solid #ddd6fe", fontSize: "12.5px", fontWeight: 600, color: PURPLE, textAlign: "center" }}>
+                            {Icon.received} Customer received the order
+                          </div>
+
+                          {needsRemit ? (
+                            <>
+                              <div>
+                                <p style={{ fontSize: "11px", fontWeight: 600, color: FAINT, margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                                  Cash from driver{order.driverName ? ` (${order.driverName})` : ""}
+                                </p>
+                                <div style={{ position: "relative" }}>
+                                  <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "13px", fontWeight: 700, color: MUTED }}>₱</span>
+                                  <input
+                                    type="number" inputMode="decimal" min="0" step="0.01"
+                                    value={remitRaw}
+                                    onChange={(e) => setRemitInputs((p) => ({ ...p, [order.id]: e.target.value }))}
+                                    disabled={isUpdating}
+                                    placeholder="0.00"
+                                    aria-label="Cash received from driver"
+                                    style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px 10px 26px", borderRadius: "10px", fontSize: "14px", fontWeight: 700, color: INK, background: "#fff", border: `1px solid ${remitValid ? GREEN : GREEN_BORDER}` }} />
+                                </div>
+                                <p style={{ fontSize: "12px", color: MUTED, margin: "6px 0 0" }}>
+                                  Expected: <strong style={{ color: INK }}>₱{peso(grandTotal)}</strong>
+                                </p>
+                                {remitValid && remitDiff < 0 && (
+                                  <p style={{ fontSize: "12px", fontWeight: 700, color: "#b91c1c", margin: "4px 0 0" }}>Short by ₱{peso(Math.abs(remitDiff))}</p>
+                                )}
+                                {remitValid && remitDiff > 0 && (
+                                  <p style={{ fontSize: "12px", fontWeight: 700, color: "#b45309", margin: "4px 0 0" }}>Over by ₱{peso(remitDiff)}</p>
+                                )}
+                                {remitValid && remitDiff === 0 && (
+                                  <p style={{ fontSize: "12px", fontWeight: 700, color: GREEN, margin: "4px 0 0" }}>Exact amount ✓</p>
+                                )}
+                              </div>
+
+                              <button className="act-green"
+                                onClick={() => updateStatus(order.id, "Completed", undefined, remitAmount)}
+                                disabled={isUpdating || !remitValid}
+                                title={!remitValid ? "Enter the cash the driver handed over" : undefined}
+                                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "13px", fontWeight: 700, cursor: isUpdating || !remitValid ? "not-allowed" : "pointer", opacity: isUpdating || !remitValid ? 0.5 : 1, boxShadow: "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
+                                {Icon.check} Transaction Done
+                              </button>
+                            </>
+                          ) : (
+                            // GCash (or unspecified): already paid, nothing to collect from the driver
+                            <button className="act-green"
+                              onClick={() => updateStatus(order.id, "Completed")}
+                              disabled={isUpdating}
+                              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "13px", fontWeight: 700, cursor: isUpdating ? "not-allowed" : "pointer", opacity: isUpdating ? 0.6 : 1, boxShadow: "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
+                              {Icon.check} Transaction Done
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
