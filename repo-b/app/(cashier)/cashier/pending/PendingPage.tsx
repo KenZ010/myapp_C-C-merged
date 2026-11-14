@@ -13,16 +13,14 @@ const GREEN_BORDER = "#d6e8d9"; // borders
 const INK          = "#14301b"; // headings (green-tinted near-black)
 const MUTED        = "#5f7a66"; // secondary text
 const FAINT        = "#8fa596"; // labels / icons
-const PURPLE       = "#6d28d9"; // "Received" status
+const PURPLE       = "#6d28d9"; // "Order Received" status
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type OrderStatus =
   | "Pending"
   | "Processing"
   | "Out for Delivery"
-  | "Received"
-  | "Completed"
-  | "Cancelled";
+  | "Order Received";
 
 type PaymentMethod = "Cash" | "GCash";
 
@@ -69,7 +67,6 @@ const Icon = {
   clock: (<svg width="13" height="13" viewBox="0 0 24 24" {...svgProps}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>),
   box: (<svg width="14" height="14" viewBox="0 0 24 24" {...svgProps}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>),
   wallet: (<svg width="14" height="14" viewBox="0 0 24 24" {...svgProps}><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>),
-  walletLg: (<svg width="18" height="18" viewBox="0 0 24 24" {...svgProps}><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>),
   check: (<svg width="14" height="14" viewBox="0 0 24 24" {...svgProps} strokeWidth={2.5}><polyline points="20 6 9 17 4 12"/></svg>),
   x: (<svg width="14" height="14" viewBox="0 0 24 24" {...svgProps} strokeWidth={2.5}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>),
   truck: (<svg width="14" height="14" viewBox="0 0 24 24" {...svgProps}><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>),
@@ -87,46 +84,35 @@ const Icon = {
 };
 
 // ── Status config ─────────────────────────────────────────────────────────────
-// Green is reserved for the brand / success actions. Statuses use colours that
-// sit well next to it: warm amber, calm blue, orange and violet.
 const statusStyle: Record<OrderStatus, { bg: string; color: string; border: string }> = {
   Pending:            { bg: "#fffbeb", color: "#b45309", border: "#fde68a" },
   Processing:         { bg: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe" },
   "Out for Delivery": { bg: "#fff7ed", color: "#c2410c", border: "#fed7aa" },
-  Received:           { bg: "#f5f3ff", color: PURPLE,    border: "#ddd6fe" },
-  Completed:          { bg: GREEN_LIGHT, color: GREEN,  border: "#b7dcbd" },
-  Cancelled:          { bg: "#fef2f2", color: "#b91c1c", border: "#fecaca" },
+  "Order Received":   { bg: "#f5f3ff", color: PURPLE,    border: "#ddd6fe" },
 };
 
 const statusIcon: Record<OrderStatus, React.ReactNode> = {
   Pending:            Icon.clock,
   Processing:         <svg width="13" height="13" viewBox="0 0 24 24" {...svgProps}><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>,
   "Out for Delivery": Icon.truck,
-  Received:           Icon.received,
-  Completed:          Icon.check,
-  Cancelled:          Icon.x,
+  "Order Received":   Icon.received,
 };
 
+// Only the statuses this page shows. Anything else from the backend
+// (e.g. COMPLETED / CANCELLED) is ignored by the list.
 const statusMap: Record<string, OrderStatus> = {
   PENDING:          "Pending",
   PROCESSING:       "Processing",
   OUT_FOR_DELIVERY: "Out for Delivery",
-  RECEIVED:         "Received",
-  COMPLETED:        "Completed",
-  CANCELLED:        "Cancelled",
-  CANCELED:         "Cancelled",
+  RECEIVED:         "Order Received",
 };
 
 const backendStatus: Record<OrderStatus, string> = {
   Pending:            "PENDING",
   Processing:         "PROCESSING",
   "Out for Delivery": "OUT_FOR_DELIVERY",
-  Received:           "RECEIVED",
-  Completed:          "COMPLETED",
-  Cancelled:          "CANCELLED",
+  "Order Received":   "RECEIVED",
 };
-
-const ACTIVE_STATUSES: OrderStatus[] = ["Pending", "Processing", "Out for Delivery", "Received"];
 
 // Payment method badge colours
 const methodStyle: Record<PaymentMethod, { bg: string; color: string; border: string }> = {
@@ -182,7 +168,7 @@ function normalizeOrder(o: Record<string, unknown>): Order {
     address:  walkInAddress || (customer ? String((customer.address as string) ?? "—") : "—"),
     total:    Number(o.totalAmount ?? 0),
     status,
-    // No account → the cashier completes it. Has an account → the customer completes it.
+    // No account → the cashier marks it received. Has an account → the customer does.
     isWalkIn: !o.customerId,
     isOnline: !!o.customerId,
     items: rawLines.map((l) => {
@@ -211,7 +197,7 @@ const byOldestFirst = (a: Order, b: Order) =>
   a.createdAt - b.createdAt || a.id.localeCompare(b.id);
 
 type FilterTab = "All Orders" | OrderStatus;
-const filterTabs: FilterTab[] = ["All Orders", "Pending", "Processing", "Out for Delivery", "Received"];
+const filterTabs: FilterTab[] = ["All Orders", "Pending", "Processing", "Out for Delivery", "Order Received"];
 
 // ── Skeletons ─────────────────────────────────────────────────────────────────
 const shimmerBg: React.CSSProperties = {
@@ -261,7 +247,7 @@ export default function PendingPage() {
   const [drivers,         setDrivers]         = useState<Driver[]>([]);
   const [selectedDrivers, setSelectedDrivers] = useState<Record<string, string>>({}); // orderId -> driverId
 
-  // Cash the driver handed to the cashier, typed on each Received card
+  // Cash the driver handed to the cashier, typed on each Order Received card
   const [remitInputs, setRemitInputs] = useState<Record<string, string>>({}); // orderId -> amount (string)
 
   const socket = useSocket();
@@ -275,8 +261,9 @@ export default function PendingPage() {
       if (data?.message) { setError(data.message); setOrders([]); return; }
       const raw: Record<string, unknown>[] = Array.isArray(data) ? data : [];
       const activeOrders = raw
+        // keep only the statuses this page shows (drops COMPLETED / CANCELLED)
+        .filter((o) => statusMap[String(o.status ?? "PENDING").toUpperCase()] !== undefined)
         .map(normalizeOrder)
-        .filter((o) => ACTIVE_STATUSES.includes(o.status))
         .sort(byOldestFirst); // earliest order at the top
       setOrders(activeOrders);
       setLastUpdated(new Date());
@@ -338,25 +325,14 @@ export default function PendingPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [proofModal]);
 
-  /**
-   * @param driverId       set when dispatching (Processing → Out for Delivery)
-   * @param remittedAmount cash the driver handed over (Received → Completed, Cash orders)
-   */
-  const updateStatus = async (
-    id: string,
-    status: OrderStatus,
-    driverId?: string,
-    remittedAmount?: number
-  ) => {
+  /** Move an order forward one step (Pending → Processing → Out for Delivery → Order Received). */
+  const updateStatus = async (id: string, status: OrderStatus, driverId?: string) => {
     const previous = orders.find((o) => o.id === id);
     setUpdatingId(id);
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
     try {
-      await api.updateOrderStatus(id, backendStatus[status], driverId, remittedAmount);
+      await api.updateOrderStatus(id, backendStatus[status], driverId);
       if (driverId) fetchOrders(true); // pull in the driver's name/phone
-      if (status === "Completed" || status === "Cancelled") {
-        setTimeout(() => setOrders((prev) => prev.filter((o) => o.id !== id)), 1500);
-      }
     } catch (err) {
       // Roll back the optimistic update and show the server's message
       if (previous) {
@@ -370,17 +346,33 @@ export default function PendingPage() {
     }
   };
 
+  /**
+   * Cashier confirms the cash handed over by the driver. The order is closed on the
+   * backend (sent as COMPLETED, which is not a status shown on this page) and removed from the list.
+   */
+  const confirmCash = async (id: string, remittedAmount?: number) => {
+    setUpdatingId(id);
+    try {
+      await api.updateOrderStatus(id, "COMPLETED", undefined, remittedAmount);
+      setOrders((prev) => prev.filter((o) => o.id !== id));
+    } catch (err) {
+      setError((err as Error).message || "Failed to confirm the order.");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   // `orders` is already sorted oldest → newest, and filter() keeps that order
   const filtered = activeTab === "All Orders" ? orders : orders.filter((o) => o.status === activeTab);
   const tabCount = (tab: FilterTab) =>
     tab === "All Orders" ? orders.length : orders.filter((o) => o.status === tab).length;
 
   const statCards = [
-    { label: "All Active", count: orders.length,                                               icon: Icon.layers,      accent: GREEN,     light: GREEN_LIGHT, highlight: true  },
-    { label: "Pending",    count: orders.filter((o) => o.status === "Pending").length,          icon: Icon.hourglass,   accent: "#d97706", light: "#fffbeb",   highlight: false },
-    { label: "Processing", count: orders.filter((o) => o.status === "Processing").length,       icon: Icon.gear,        accent: "#2563eb", light: "#eff6ff",   highlight: false },
-    { label: "In Transit", count: orders.filter((o) => o.status === "Out for Delivery").length, icon: Icon.truckLg,     accent: "#ea580c", light: "#fff7ed",   highlight: false },
-    { label: "Received",   count: orders.filter((o) => o.status === "Received").length,         icon: Icon.receivedLg,  accent: PURPLE,    light: "#f5f3ff",   highlight: false },
+    { label: "All Active",     count: orders.length,                                                 icon: Icon.layers,     accent: GREEN,     light: GREEN_LIGHT, highlight: true  },
+    { label: "Pending",        count: orders.filter((o) => o.status === "Pending").length,            icon: Icon.hourglass,  accent: "#d97706", light: "#fffbeb",   highlight: false },
+    { label: "Processing",     count: orders.filter((o) => o.status === "Processing").length,         icon: Icon.gear,       accent: "#2563eb", light: "#eff6ff",   highlight: false },
+    { label: "In Transit",     count: orders.filter((o) => o.status === "Out for Delivery").length,   icon: Icon.truckLg,    accent: "#ea580c", light: "#fff7ed",   highlight: false },
+    { label: "Order Received", count: orders.filter((o) => o.status === "Order Received").length,     icon: Icon.receivedLg, accent: PURPLE,    light: "#f5f3ff",   highlight: false },
   ];
 
   return (
@@ -395,7 +387,6 @@ export default function PendingPage() {
         .link-btn:hover { color: ${GREEN_DARK} !important; }
         .tab-btn:hover { color: ${GREEN_DARK} !important; }
         .act-green:hover:not(:disabled) { background: ${GREEN_DARK} !important; }
-        .act-red:hover:not(:disabled) { background: #fee2e2 !important; }
         .act-amber:hover:not(:disabled) { background: #b45309 !important; }
         .proof-thumb:hover { border-color: #1d4ed8 !important; }
         .pending-page button:focus-visible { outline: 2px solid ${GREEN}; outline-offset: 2px; }
@@ -551,7 +542,7 @@ export default function PendingPage() {
               // Driver picked on this card (Processing orders only)
               const pickedDriverId = selectedDrivers[order.id] ?? "";
 
-              // Cash the driver handed over (Received orders only)
+              // Cash the driver handed over (Order Received orders only)
               const remitRaw    = remitInputs[order.id] ?? "";
               const remitAmount = remitRaw.trim() === "" ? NaN : Number(remitRaw);
               const remitValid  = Number.isFinite(remitAmount) && remitAmount >= 0;
@@ -734,16 +725,10 @@ export default function PendingPage() {
                     {/* ── Column 4: actions ────────────────────────────────── */}
                     <div className="oc-col" style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "8px" }}>
                       {order.status === "Pending" && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                          <button className="act-green" onClick={() => updateStatus(order.id, "Processing")} disabled={isUpdating}
-                            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "11px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "13px", fontWeight: 700, cursor: isUpdating ? "not-allowed" : "pointer", opacity: isUpdating ? 0.6 : 1, boxShadow: "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
-                            {Icon.check} Approve
-                          </button>
-                          <button className="act-red" onClick={() => updateStatus(order.id, "Cancelled")} disabled={isUpdating}
-                            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "11px", borderRadius: "10px", border: "1px solid #fecaca", background: "#fef2f2", color: "#b91c1c", fontSize: "13px", fontWeight: 700, cursor: isUpdating ? "not-allowed" : "pointer", opacity: isUpdating ? 0.6 : 1, transition: "background 0.15s" }}>
-                            {Icon.x} Cancel
-                          </button>
-                        </div>
+                        <button className="act-green" onClick={() => updateStatus(order.id, "Processing")} disabled={isUpdating}
+                          style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "11px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "13px", fontWeight: 700, cursor: isUpdating ? "not-allowed" : "pointer", opacity: isUpdating ? 0.6 : 1, boxShadow: "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
+                          {Icon.check} Approve
+                        </button>
                       )}
 
                       {order.status === "Processing" && (
@@ -782,9 +767,9 @@ export default function PendingPage() {
                       {order.status === "Out for Delivery" && (
                         order.isWalkIn ? (
                           // Cashier-placed order: the cashier marks it received on the customer's behalf
-                          <button className="act-green" onClick={() => updateStatus(order.id, "Received")} disabled={isUpdating}
+                          <button className="act-green" onClick={() => updateStatus(order.id, "Order Received")} disabled={isUpdating}
                             style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "13px", fontWeight: 700, cursor: isUpdating ? "not-allowed" : "pointer", opacity: isUpdating ? 0.6 : 1, boxShadow: "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
-                            {Icon.received} Mark as Received
+                            {Icon.received} Order Received
                           </button>
                         ) : (
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", background: "#fff7ed", border: "1px solid #fed7aa", fontSize: "13px", fontWeight: 600, color: "#c2410c", textAlign: "center" }}>
@@ -793,8 +778,8 @@ export default function PendingPage() {
                         )
                       )}
 
-                      {/* Customer has the order → settle the cash with the driver, then close it */}
-                      {order.status === "Received" && (
+                      {/* Customer has the order → collect the cash from the driver, then confirm */}
+                      {order.status === "Order Received" && (
                         <>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "9px 11px", borderRadius: "10px", background: "#f5f3ff", border: "1px solid #ddd6fe", fontSize: "12.5px", fontWeight: 600, color: PURPLE, textAlign: "center" }}>
                             {Icon.received} Customer received the order
@@ -832,20 +817,20 @@ export default function PendingPage() {
                               </div>
 
                               <button className="act-green"
-                                onClick={() => updateStatus(order.id, "Completed", undefined, remitAmount)}
+                                onClick={() => confirmCash(order.id, remitAmount)}
                                 disabled={isUpdating || !remitValid}
                                 title={!remitValid ? "Enter the cash the driver handed over" : undefined}
                                 style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "13px", fontWeight: 700, cursor: isUpdating || !remitValid ? "not-allowed" : "pointer", opacity: isUpdating || !remitValid ? 0.5 : 1, boxShadow: "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
-                                {Icon.check} Transaction Done
+                                {Icon.check} Confirm Cash
                               </button>
                             </>
                           ) : (
                             // GCash (or unspecified): already paid, nothing to collect from the driver
                             <button className="act-green"
-                              onClick={() => updateStatus(order.id, "Completed")}
+                              onClick={() => confirmCash(order.id)}
                               disabled={isUpdating}
                               style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "13px", fontWeight: 700, cursor: isUpdating ? "not-allowed" : "pointer", opacity: isUpdating ? 0.6 : 1, boxShadow: "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
-                              {Icon.check} Transaction Done
+                              {Icon.check} Confirm
                             </button>
                           )}
                         </>
