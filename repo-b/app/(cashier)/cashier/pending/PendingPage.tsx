@@ -31,6 +31,7 @@ type Driver = { id: string; name: string; phone?: string };
 type Order = {
   id: string;
   date: string;
+  createdAt: number; // epoch ms — used to sort oldest → newest
   customer: string;
   address: string;
   total: number;
@@ -141,7 +142,7 @@ function normalizeOrder(o: Record<string, unknown>): Order {
 
   // ── Payment (matches the Prisma Payment model) ─────────────────────────────
   const payment = o.payment as Record<string, unknown> | null;
-  const cashReceived = payment?.amountTendered;   // FIX: real column name
+  const cashReceived = payment?.amountTendered;
   const changeRaw    = payment?.change;
 
   const methodRaw = String(payment?.method ?? "").toUpperCase();
@@ -157,11 +158,15 @@ function normalizeOrder(o: Record<string, unknown>): Order {
   // ── Driver (assigned when the order goes out for delivery) ─────────────────
   const driver = o.driver as Record<string, unknown> | null;
 
+  // Raw timestamp for sorting (orders with no/invalid date go to the bottom)
+  const createdMs = o.createdAt ? new Date(String(o.createdAt)).getTime() : NaN;
+
   return {
     id: String(o.id ?? ""),
     date: o.createdAt
       ? new Date(String(o.createdAt)).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" })
       : "—",
+    createdAt: Number.isNaN(createdMs) ? Number.MAX_SAFE_INTEGER : createdMs,
     customer: customer
       ? String(customer.name ?? (walkInName || "Walk-in"))
       : (walkInName || "Walk-in"),
@@ -192,6 +197,10 @@ function normalizeOrder(o: Record<string, unknown>): Order {
   };
 }
 
+/** First come, first served: oldest order first. */
+const byOldestFirst = (a: Order, b: Order) =>
+  a.createdAt - b.createdAt || a.id.localeCompare(b.id);
+
 type FilterTab = "All Orders" | OrderStatus;
 const filterTabs: FilterTab[] = ["All Orders", "Pending", "Processing", "Out for Delivery"];
 
@@ -214,18 +223,15 @@ function SkeletonStatCard() {
 function SkeletonCard() {
   return (
     <div style={{ background: "#fff", borderRadius: "14px", border: `1px solid ${GREEN_BORDER}`, overflow: "hidden" }}>
-      <div style={{ padding: "16px 20px", borderBottom: `1px solid ${GREEN_BORDER}`, background: GREEN_TINT, display: "flex", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          <div style={{ ...shimmerBg, width: "110px", height: "13px", borderRadius: "6px" }} />
-          <div style={{ ...shimmerBg, width: "80px", height: "11px", borderRadius: "6px" }} />
-        </div>
-        <div style={{ ...shimmerBg, width: "80px", height: "24px", borderRadius: "20px" }} />
-      </div>
-      <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: "12px" }}>
-        {[100, 140, 60].map((w, i) => (
-          <div key={i} style={{ ...shimmerBg, width: `${w}px`, height: "13px", borderRadius: "6px" }} />
+      <div className="oc-grid">
+        {[0, 1, 2, 3].map((c) => (
+          <div key={c} className="oc-col" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ ...shimmerBg, width: "110px", height: "13px", borderRadius: "6px" }} />
+            <div style={{ ...shimmerBg, width: "140px", height: "13px", borderRadius: "6px" }} />
+            <div style={{ ...shimmerBg, width: "80px", height: "13px", borderRadius: "6px" }} />
+            <div style={{ ...shimmerBg, height: "38px", borderRadius: "10px" }} />
+          </div>
         ))}
-        <div style={{ ...shimmerBg, height: "38px", borderRadius: "10px" }} />
       </div>
     </div>
   );
@@ -258,7 +264,8 @@ export default function PendingPage() {
       const raw: Record<string, unknown>[] = Array.isArray(data) ? data : [];
       const activeOrders = raw
         .map(normalizeOrder)
-        .filter((o) => ACTIVE_STATUSES.includes(o.status));
+        .filter((o) => ACTIVE_STATUSES.includes(o.status))
+        .sort(byOldestFirst); // earliest order at the top
       setOrders(activeOrders);
       setLastUpdated(new Date());
     } catch (err) {
@@ -342,6 +349,7 @@ export default function PendingPage() {
     }
   };
 
+  // `orders` is already sorted oldest → newest, and filter() keeps that order
   const filtered = activeTab === "All Orders" ? orders : orders.filter((o) => o.status === activeTab);
   const tabCount = (tab: FilterTab) =>
     tab === "All Orders" ? orders.length : orders.filter((o) => o.status === tab).length;
@@ -370,6 +378,28 @@ export default function PendingPage() {
         .proof-thumb:hover { border-color: #1d4ed8 !important; }
         .pending-page button:focus-visible { outline: 2px solid ${GREEN}; outline-offset: 2px; }
         .pending-page select:focus-visible { outline: 2px solid ${GREEN}; outline-offset: 2px; }
+
+        /* ── Horizontal order card: 4 columns on desktop ── */
+        .oc-grid {
+          display: grid;
+          grid-template-columns: minmax(0,1.15fr) minmax(0,1fr) minmax(0,1.1fr) minmax(0,0.95fr);
+        }
+        .oc-col { padding: 16px 20px; min-width: 0; }
+        .oc-col + .oc-col { border-left: 1px solid ${GREEN_BORDER}; }
+
+        /* Tablet: 2 columns */
+        @media (max-width: 1180px) {
+          .oc-grid { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+          .oc-col + .oc-col { border-left: none; }
+          .oc-col:nth-child(even) { border-left: 1px solid ${GREEN_BORDER}; }
+          .oc-col:nth-child(n+3) { border-top: 1px solid ${GREEN_BORDER}; }
+        }
+        /* Mobile: 1 column */
+        @media (max-width: 700px) {
+          .oc-grid { grid-template-columns: minmax(0,1fr); }
+          .oc-col:nth-child(even) { border-left: none; }
+          .oc-col:nth-child(n+2) { border-top: 1px solid ${GREEN_BORDER}; }
+        }
       `}</style>
 
       <div className="pending-page" style={{ padding: "28px 32px", width: "100%", boxSizing: "border-box" }}>
@@ -382,7 +412,7 @@ export default function PendingPage() {
             </div>
             <div>
               <h1 style={{ fontSize: "22px", fontWeight: 700, color: INK, margin: 0, letterSpacing: "-0.02em" }}>Active Orders</h1>
-              <p style={{ fontSize: "13px", color: MUTED, margin: "2px 0 0" }}>Monitor and update the status of incoming customer orders</p>
+              <p style={{ fontSize: "13px", color: MUTED, margin: "2px 0 0" }}>Monitor and update the status of incoming customer orders · earliest orders first</p>
             </div>
           </div>
 
@@ -453,8 +483,8 @@ export default function PendingPage() {
 
         {/* Skeleton */}
         {loading && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "16px" }}>
-            {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            {Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)}
           </div>
         )}
 
@@ -473,10 +503,10 @@ export default function PendingPage() {
           </div>
         )}
 
-        {/* Orders Grid */}
+        {/* Orders List — one horizontal card per row, oldest on top */}
         {!loading && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "16px", alignItems: "start" }}>
-            {filtered.map((order) => {
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            {filtered.map((order, index) => {
               const s          = statusStyle[order.status];
               const isExpanded = expandedId === order.id;
               const isUpdating = updatingId === order.id;
@@ -501,47 +531,67 @@ export default function PendingPage() {
               return (
                 <div key={order.id} className="order-card" style={{ background: "#fff", borderRadius: "14px", border: `1px solid ${GREEN_BORDER}`, overflow: "hidden" }}>
 
-                  {/* Card header */}
-                  <div style={{ padding: "14px 20px", borderBottom: `1px solid ${GREEN_BORDER}`, background: GREEN_TINT, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
-                    <div style={{ minWidth: 0 }}>
-                      <span title={order.id} style={{ fontFamily: "monospace", fontSize: "12px", fontWeight: 700, color: GREEN_DARK, background: GREEN_LIGHT, border: "1px solid #c3e0c8", padding: "3px 9px", borderRadius: "6px", display: "inline-block" }}>
-                        {order.id.slice(0, 12)}…
-                      </span>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "7px", color: FAINT }}>
+                  <div className="oc-grid">
+
+                    {/* ── Column 1: order info ─────────────────────────────── */}
+                    <div className="oc-col" style={{ background: GREEN_TINT }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "8px" }}>
+                        <span title={`Queue position ${index + 1}`}
+                          style={{ minWidth: "28px", height: "28px", padding: "0 8px", boxSizing: "border-box", borderRadius: "8px", background: index === 0 ? GREEN : "#fff", color: index === 0 ? "#fff" : GREEN_DARK, border: `1px solid ${index === 0 ? GREEN : "#c3e0c8"}`, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 800 }}>
+                          #{index + 1}
+                        </span>
+                        <span title={order.id} style={{ fontFamily: "monospace", fontSize: "12px", fontWeight: 700, color: GREEN_DARK, background: GREEN_LIGHT, border: "1px solid #c3e0c8", padding: "3px 9px", borderRadius: "6px", display: "inline-block" }}>
+                          {order.id.slice(0, 12)}…
+                        </span>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", color: FAINT, marginBottom: "10px" }}>
                         {Icon.clock}
                         <span style={{ fontSize: "12px", color: MUTED }}>{order.date}</span>
                       </div>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "6px", alignItems: "flex-end", flexShrink: 0 }}>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "3px 10px", borderRadius: "20px", fontSize: "11.5px", fontWeight: 600, background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
-                        {statusIcon[order.status]} {order.status}
-                      </span>
-                      {order.isOnline && (
-                        <span style={{ padding: "2px 9px", borderRadius: "20px", fontSize: "10.5px", fontWeight: 700, background: GREEN, color: "#fff", letterSpacing: "0.02em" }}>Online</span>
-                      )}
-                    </div>
-                  </div>
 
-                  {/* Card body */}
-                  <div style={{ padding: "16px 20px 18px" }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "16px" }}>
-                      {[
-                        { icon: Icon.user, label: "Customer", value: order.customer },
-                        { icon: Icon.pin,  label: "Address",  value: order.address },
-                      ].map((row) => (
-                        <div key={row.label} style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
-                          <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: GREEN_LIGHT, color: GREEN, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{row.icon}</div>
-                          <div style={{ minWidth: 0 }}>
-                            <p style={{ fontSize: "11px", fontWeight: 600, color: FAINT, margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>{row.label}</p>
-                            <p style={{ fontSize: "13px", fontWeight: 500, color: INK, margin: "1px 0 0", wordBreak: "break-word" }}>{row.value}</p>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginBottom: "14px" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "3px 10px", borderRadius: "20px", fontSize: "11.5px", fontWeight: 600, background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
+                          {statusIcon[order.status]} {order.status}
+                        </span>
+                        {order.isOnline && (
+                          <span style={{ padding: "2px 9px", borderRadius: "20px", fontSize: "10.5px", fontWeight: 700, background: GREEN, color: "#fff", letterSpacing: "0.02em" }}>Online</span>
+                        )}
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: "11px" }}>
+                        {[
+                          { icon: Icon.user, label: "Customer", value: order.customer },
+                          { icon: Icon.pin,  label: "Address",  value: order.address },
+                        ].map((row) => (
+                          <div key={row.label} style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                            <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: GREEN_LIGHT, color: GREEN, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{row.icon}</div>
+                            <div style={{ minWidth: 0 }}>
+                              <p style={{ fontSize: "11px", fontWeight: 600, color: FAINT, margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>{row.label}</p>
+                              <p style={{ fontSize: "13px", fontWeight: 500, color: INK, margin: "1px 0 0", wordBreak: "break-word" }}>{row.value}</p>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+
+                        {/* Assigned driver (shown once the order is dispatched) */}
+                        {order.driverName && (
+                          <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                            <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "#fff7ed", color: "#c2410c", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{Icon.truck}</div>
+                            <div style={{ minWidth: 0 }}>
+                              <p style={{ fontSize: "11px", fontWeight: 600, color: FAINT, margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>Driver</p>
+                              <p style={{ fontSize: "13px", fontWeight: 600, color: INK, margin: "1px 0 0" }}>
+                                {order.driverName}
+                                {order.driverPhone && <span style={{ fontWeight: 400, color: MUTED }}> · {order.driverPhone}</span>}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Amount breakdown */}
-                    <div style={{ background: GREEN_TINT, borderRadius: "12px", border: `1px solid ${GREEN_BORDER}`, padding: "13px 15px", marginBottom: "12px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px", color: GREEN, marginBottom: "9px" }}>
+                    {/* ── Column 2: amount breakdown ───────────────────────── */}
+                    <div className="oc-col">
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", color: GREEN, marginBottom: "12px" }}>
                         {Icon.wallet}
                         <p style={{ fontSize: "11px", fontWeight: 700, margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>Amount breakdown</p>
                       </div>
@@ -553,16 +603,24 @@ export default function PendingPage() {
                         <span>VAT (12%)</span>
                         <span>₱{peso(vat)}</span>
                       </div>
-                      <div style={{ borderTop: `1px solid ${GREEN_BORDER}`, margin: "9px 0" }} />
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                      <div style={{ borderTop: `1px solid ${GREEN_BORDER}`, margin: "10px 0" }} />
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "8px" }}>
                         <span style={{ fontSize: "13px", fontWeight: 600, color: INK }}>Total</span>
-                        <span style={{ fontSize: "20px", fontWeight: 800, color: GREEN, letterSpacing: "-0.02em" }}>₱{peso(grandTotal)}</span>
+                        <span style={{ fontSize: "22px", fontWeight: 800, color: GREEN, letterSpacing: "-0.02em" }}>₱{peso(grandTotal)}</span>
                       </div>
+
+                      {/* Items toggle */}
+                      <button className="link-btn" onClick={() => setExpandedId(isExpanded ? null : order.id)}
+                        style={{ background: "none", border: "none", color: GREEN, fontSize: "12.5px", fontWeight: 600, cursor: "pointer", padding: "2px 0", marginTop: "14px", display: "flex", alignItems: "center", gap: "6px", transition: "color 0.12s" }}>
+                        <span style={{ display: "flex" }}>{Icon.box}</span>
+                        {isExpanded ? "Hide items" : `View items (${order.items.length})`}
+                        {isExpanded ? Icon.chevronUp : Icon.chevronDown}
+                      </button>
                     </div>
 
-                    {/* Payment */}
-                    <div style={{ background: "#fff", borderRadius: "12px", border: `1px solid ${GREEN_BORDER}`, padding: "13px 15px", marginBottom: "12px" }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: order.paymentMethod ? "10px" : 0 }}>
+                    {/* ── Column 3: payment ────────────────────────────────── */}
+                    <div className="oc-col">
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginBottom: "12px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px", color: GREEN }}>
                           {Icon.wallet}
                           <p style={{ fontSize: "11px", fontWeight: 700, margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>Payment</p>
@@ -589,7 +647,7 @@ export default function PendingPage() {
                               <span>Customer gave</span>
                               <span style={{ fontWeight: 600, color: INK }}>₱{peso(order.cashReceived)}</span>
                             </div>
-                            <div style={{ borderTop: "1px dashed #bcd7c1", margin: "8px 0" }} />
+                            <div style={{ borderTop: "1px dashed #bcd7c1", margin: "10px 0" }} />
                             {shortBy > 0 ? (
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", color: "#b91c1c" }}>
                                 <span style={{ fontSize: "13px", fontWeight: 700 }}>Short by</span>
@@ -609,87 +667,55 @@ export default function PendingPage() {
 
                       {/* GCash: reference number + screenshot */}
                       {order.paymentMethod === "GCash" && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                          <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
-                            <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "#eff6ff", color: "#1d4ed8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{Icon.hash}</div>
-                            <div style={{ minWidth: 0 }}>
-                              <p style={{ fontSize: "11px", fontWeight: 600, color: FAINT, margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>Reference no.</p>
-                              <p style={{ fontSize: "14px", fontWeight: 700, fontFamily: "monospace", color: INK, margin: "1px 0 0", wordBreak: "break-all", letterSpacing: "0.02em" }}>
-                                {order.gcashRef ?? "—"}
-                              </p>
+                        <div style={{ display: "flex", gap: "12px", alignItems: "flex-start" }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "10px", minWidth: 0, flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                              <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "#eff6ff", color: "#1d4ed8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{Icon.hash}</div>
+                              <div style={{ minWidth: 0 }}>
+                                <p style={{ fontSize: "11px", fontWeight: 600, color: FAINT, margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>Reference no.</p>
+                                <p style={{ fontSize: "14px", fontWeight: 700, fontFamily: "monospace", color: INK, margin: "1px 0 0", wordBreak: "break-all", letterSpacing: "0.02em" }}>
+                                  {order.gcashRef ?? "—"}
+                                </p>
+                              </div>
                             </div>
+                            {!order.proofUrl && (
+                              <p style={{ fontSize: "12.5px", color: "#b91c1c", margin: 0 }}>No screenshot uploaded.</p>
+                            )}
                           </div>
 
-                          <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
-                            <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "#eff6ff", color: "#1d4ed8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{Icon.image}</div>
-                            <div style={{ minWidth: 0 }}>
-                              <p style={{ fontSize: "11px", fontWeight: 600, color: FAINT, margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Payment screenshot</p>
-                              {order.proofUrl ? (
-                                <button className="proof-thumb" onClick={() => setProofModal(order.proofUrl!)}
-                                  title="Click to enlarge"
-                                  style={{ padding: 0, border: `1px solid ${GREEN_BORDER}`, borderRadius: "10px", overflow: "hidden", cursor: "zoom-in", background: GREEN_TINT, display: "block", transition: "border-color 0.15s" }}>
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={order.proofUrl} alt="GCash payment screenshot"
-                                    style={{ display: "block", width: "96px", height: "128px", objectFit: "cover" }} />
-                                </button>
-                              ) : (
-                                <p style={{ fontSize: "12.5px", color: "#b91c1c", margin: 0 }}>No screenshot uploaded.</p>
-                              )}
+                          {order.proofUrl && (
+                            <div style={{ flexShrink: 0 }}>
+                              <p style={{ fontSize: "11px", fontWeight: 600, color: FAINT, margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: "5px" }}>
+                                {Icon.image} Screenshot
+                              </p>
+                              <button className="proof-thumb" onClick={() => setProofModal(order.proofUrl!)}
+                                title="Click to enlarge"
+                                style={{ padding: 0, border: `1px solid ${GREEN_BORDER}`, borderRadius: "10px", overflow: "hidden", cursor: "zoom-in", background: GREEN_TINT, display: "block", transition: "border-color 0.15s" }}>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={order.proofUrl} alt="GCash payment screenshot"
+                                  style={{ display: "block", width: "72px", height: "96px", objectFit: "cover" }} />
+                              </button>
                             </div>
-                          </div>
+                          )}
                         </div>
                       )}
                     </div>
 
-                    {/* Items toggle */}
-                    <button className="link-btn" onClick={() => setExpandedId(isExpanded ? null : order.id)}
-                      style={{ background: "none", border: "none", color: GREEN, fontSize: "12.5px", fontWeight: 600, cursor: "pointer", padding: "2px 0", marginBottom: "12px", display: "flex", alignItems: "center", gap: "6px", transition: "color 0.12s" }}>
-                      <span style={{ display: "flex" }}>{Icon.box}</span>
-                      {isExpanded ? "Hide items" : `View items (${order.items.length})`}
-                      {isExpanded ? Icon.chevronUp : Icon.chevronDown}
-                    </button>
-
-                    {isExpanded && (
-                      <div style={{ background: "#fff", borderRadius: "12px", border: `1px solid ${GREEN_BORDER}`, marginBottom: "14px", overflow: "hidden" }}>
-                        {order.items.map((item, i) => (
-                          <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", padding: "10px 14px", borderBottom: i < order.items.length - 1 ? `1px solid ${GREEN_LIGHT}` : "none", background: i % 2 === 0 ? "#fff" : GREEN_TINT }}>
-                            <span style={{ fontSize: "13px", color: INK, wordBreak: "break-word" }}>
-                              {item.name} <span style={{ color: FAINT }}>× {item.qty}</span>
-                            </span>
-                            <span style={{ fontSize: "13px", fontWeight: 700, color: INK, whiteSpace: "nowrap" }}>₱{peso(item.price * item.qty)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Assigned driver (shown once the order is dispatched) */}
-                    {order.driverName && (
-                      <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", marginBottom: "12px" }}>
-                        <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "#fff7ed", color: "#c2410c", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{Icon.truck}</div>
-                        <div style={{ minWidth: 0 }}>
-                          <p style={{ fontSize: "11px", fontWeight: 600, color: FAINT, margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>Driver</p>
-                          <p style={{ fontSize: "13px", fontWeight: 600, color: INK, margin: "1px 0 0" }}>
-                            {order.driverName}
-                            {order.driverPhone && <span style={{ fontWeight: 400, color: MUTED }}> · {order.driverPhone}</span>}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Actions */}
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {/* ── Column 4: actions ────────────────────────────────── */}
+                    <div className="oc-col" style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "8px" }}>
                       {order.status === "Pending" && (
-                        <div style={{ display: "flex", gap: "8px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                           <button className="act-green" onClick={() => updateStatus(order.id, "Processing")} disabled={isUpdating}
-                            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "11px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "13px", fontWeight: 700, cursor: isUpdating ? "not-allowed" : "pointer", opacity: isUpdating ? 0.6 : 1, boxShadow: "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
+                            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "11px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "13px", fontWeight: 700, cursor: isUpdating ? "not-allowed" : "pointer", opacity: isUpdating ? 0.6 : 1, boxShadow: "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
                             {Icon.check} Approve
                           </button>
                           <button className="act-red" onClick={() => updateStatus(order.id, "Cancelled")} disabled={isUpdating}
-                            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "11px", borderRadius: "10px", border: "1px solid #fecaca", background: "#fef2f2", color: "#b91c1c", fontSize: "13px", fontWeight: 700, cursor: isUpdating ? "not-allowed" : "pointer", opacity: isUpdating ? 0.6 : 1, transition: "background 0.15s" }}>
+                            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", padding: "11px", borderRadius: "10px", border: "1px solid #fecaca", background: "#fef2f2", color: "#b91c1c", fontSize: "13px", fontWeight: 700, cursor: isUpdating ? "not-allowed" : "pointer", opacity: isUpdating ? 0.6 : 1, transition: "background 0.15s" }}>
                             {Icon.x} Cancel
                           </button>
                         </div>
                       )}
+
                       {order.status === "Processing" && (
                         <>
                           {/* A driver must be picked before the order can go out */}
@@ -722,6 +748,7 @@ export default function PendingPage() {
                           </button>
                         </>
                       )}
+
                       {order.status === "Out for Delivery" && (
                         order.isWalkIn ? (
                           <button className="act-green" onClick={() => updateStatus(order.id, "Completed")} disabled={isUpdating}
@@ -729,13 +756,27 @@ export default function PendingPage() {
                             {Icon.check} Mark as Completed
                           </button>
                         ) : (
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", background: "#fff7ed", border: "1px solid #fed7aa", fontSize: "13px", fontWeight: 600, color: "#c2410c" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", background: "#fff7ed", border: "1px solid #fed7aa", fontSize: "13px", fontWeight: 600, color: "#c2410c", textAlign: "center" }}>
                             {Icon.truck} Awaiting customer confirmation
                           </div>
                         )
                       )}
                     </div>
                   </div>
+
+                  {/* Items list — full width under the row */}
+                  {isExpanded && (
+                    <div style={{ borderTop: `1px solid ${GREEN_BORDER}`, background: "#fff" }}>
+                      {order.items.map((item, i) => (
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", padding: "10px 20px", borderBottom: i < order.items.length - 1 ? `1px solid ${GREEN_LIGHT}` : "none", background: i % 2 === 0 ? "#fff" : GREEN_TINT }}>
+                          <span style={{ fontSize: "13px", color: INK, wordBreak: "break-word" }}>
+                            {item.name} <span style={{ color: FAINT }}>× {item.qty}</span>
+                          </span>
+                          <span style={{ fontSize: "13px", fontWeight: 700, color: INK, whiteSpace: "nowrap" }}>₱{peso(item.price * item.qty)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
