@@ -24,7 +24,6 @@ type Product = {
   productName:   string;
   category:      CategoryType;
   size:          string | null;
-  barcode:       string | null;
   price:         number;
   stock:         number;
   piecesPerCase: number;
@@ -355,7 +354,6 @@ export default function InventoryAdjustmentPage() {
         productName:   String(p.productName),
         category:      (p.category ?? "OTHER") as CategoryType,
         size:          p.size ?? null,
-        barcode:       p.barcode ?? null,
         price:         Number(p.price ?? 0),
         stock:         Number(p.stock ?? 0),
         piecesPerCase: Number(p.piecesPerCase ?? PIECES_PER_CASE_DEFAULT),
@@ -382,7 +380,7 @@ export default function InventoryAdjustmentPage() {
     products
       .filter((p) => {
         const q = search.toLowerCase();
-        const matchSearch = !q || p.productName.toLowerCase().includes(q) || (p.barcode ?? "").toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
+        const matchSearch = !q || p.productName.toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
         const matchCat    = catFilter  === "All" || p.category === catFilter;
         const matchStat   = statFilter === "All" || p.status   === statFilter;
         return matchSearch && matchCat && matchStat;
@@ -420,7 +418,7 @@ export default function InventoryAdjustmentPage() {
     return products
       .filter((p) => {
         const q = expSearch.toLowerCase();
-        const matchSearch = !q || p.productName.toLowerCase().includes(q) || (p.barcode ?? "").toLowerCase().includes(q);
+        const matchSearch = !q || p.productName.toLowerCase().includes(q);
         const matchStat   = expFilter === "All" || getExpiryStatus(p.expiryDate) === expFilter;
         return matchSearch && matchStat;
       })
@@ -690,7 +688,7 @@ export default function InventoryAdjustmentPage() {
 
           {/* ── Filter Bar ── */}
           <div style={FilterCard}>
-            <SearchBox value={search} onChange={setSearch} placeholder="Search name, barcode, ID..." />
+            <SearchBox value={search} onChange={setSearch} placeholder="Search name or ID..." />
             <SelectBox icon={Icon.tag} value={catFilter} onChange={(v) => setCatFilter(v as any)}>
               <option value="All">Category: All</option>
               {(Object.keys(categoryLabels) as CategoryType[]).map(c => (
@@ -711,17 +709,17 @@ export default function InventoryAdjustmentPage() {
           {/* ── Table ── */}
           <div style={TableCard}>
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1000px" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
                 <thead>
                   <tr>
-                    {["Product", "Category", "Barcode", "Supplier", "Price / pc", "Stock (cases)", "Stock (pcs)", "Reserved", "Expiry Date", "Status", "Action"].map((h) => (
+                    {["Product", "Category", "Supplier", "Price / pc", "Stock (cases)", "Stock (pcs)", "Reserved", "Expiry Date", "Status", "Action"].map((h) => (
                       <th key={h} style={thStyle}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.length === 0 ? (
-                    <EmptyRow cols={11} text="No products found" />
+                    <EmptyRow cols={10} text="No products found" />
                   ) : filtered.map((p) => {
                     const stockStatus = deriveStockStatus(p.stock);
                     const st          = statusStyle[stockStatus];
@@ -741,11 +739,6 @@ export default function InventoryAdjustmentPage() {
                         </td>
                         <td style={tdStyle}>
                           <span style={pill(GREEN_LIGHT, GREEN_DARK, "#c3e0c8")}>{categoryLabels[p.category] ?? p.category}</span>
-                        </td>
-                        <td style={tdStyle}>
-                          <span style={{ background: "#f1f5f2", color: MUTED, padding: "3px 9px", borderRadius: "6px", fontSize: "11.5px", fontFamily: "monospace", fontWeight: 600 }}>
-                            {p.barcode ?? "—"}
-                          </span>
                         </td>
                         <td style={tdStyle}>
                           <span style={pill("#eff6ff", "#1d4ed8", "#bfdbfe")}>{p.supplierName}</span>
@@ -818,7 +811,7 @@ export default function InventoryAdjustmentPage() {
 
           {/* ── Filter Bar ── */}
           <div style={FilterCard}>
-            <SearchBox value={expSearch} onChange={setExpSearch} placeholder="Search name or barcode..." />
+            <SearchBox value={expSearch} onChange={setExpSearch} placeholder="Search product name..." />
             <SelectBox icon={Icon.calendar} value={expFilter} onChange={(v) => setExpFilter(v as any)}>
               <option value="All">Expiry: All</option>
               <option value="Expired">Expired</option>
@@ -1030,11 +1023,6 @@ export default function InventoryAdjustmentPage() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
-                    {detailProd.barcode && (
-                      <span style={{ background: "rgba(255,255,255,0.2)", color: "#fff", padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontFamily: "monospace", fontWeight: 700 }}>
-                        {detailProd.barcode}
-                      </span>
-                    )}
                     <span style={pill(productStatusStyle[detailProd.status].bg, productStatusStyle[detailProd.status].color, productStatusStyle[detailProd.status].border)}>
                       {detailProd.status}
                     </span>
