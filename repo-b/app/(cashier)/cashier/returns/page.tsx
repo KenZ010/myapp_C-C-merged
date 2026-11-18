@@ -1,4 +1,4 @@
-import ReturnPage from "@/app/(inventory)/inventory/return/ReturnPage";
+import ReturnPage from "@/app/(cashier)/cashier/returns/ReturnPage";
 
 export default function Page() {
   return <ReturnPage />;

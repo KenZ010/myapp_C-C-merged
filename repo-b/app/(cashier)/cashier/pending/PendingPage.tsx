@@ -13,9 +13,11 @@ const GREEN_BORDER = "#d6e8d9"; // borders
 const INK          = "#14301b"; // headings (green-tinted near-black)
 const MUTED        = "#5f7a66"; // secondary text
 const FAINT        = "#8fa596"; // labels / icons
-const PURPLE       = "#6d28d9"; // "Order Received" status
+const PURPLE       = "#6d28d9"; // "Customer received" chip
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+// "Order Received" is the internal state after the customer pressed Received.
+// On this page it is shown under Out for Delivery, with a Complete button.
 type OrderStatus =
   | "Pending"
   | "Processing"
@@ -79,7 +81,6 @@ const Icon = {
   image: (<svg width="14" height="14" viewBox="0 0 24 24" {...svgProps}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>),
   hash: (<svg width="14" height="14" viewBox="0 0 24 24" {...svgProps}><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>),
   received: (<svg width="13" height="13" viewBox="0 0 24 24" {...svgProps}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="8.5 12 11 14.5 15.5 9.5"/></svg>),
-  receivedLg: (<svg width="18" height="18" viewBox="0 0 24 24" {...svgProps}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="8.5 12 11 14.5 15.5 9.5"/></svg>),
   emptyState: (<svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#a9d3b1" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="9 15 11 17 15 12"/></svg>),
 };
 
@@ -88,14 +89,22 @@ const statusStyle: Record<OrderStatus, { bg: string; color: string; border: stri
   Pending:            { bg: "#fffbeb", color: "#b45309", border: "#fde68a" },
   Processing:         { bg: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe" },
   "Out for Delivery": { bg: "#fff7ed", color: "#c2410c", border: "#fed7aa" },
-  "Order Received":   { bg: "#f5f3ff", color: PURPLE,    border: "#ddd6fe" },
+  "Order Received":   { bg: "#fff7ed", color: "#c2410c", border: "#fed7aa" }, // shown as Out for Delivery
 };
 
 const statusIcon: Record<OrderStatus, React.ReactNode> = {
   Pending:            Icon.clock,
   Processing:         <svg width="13" height="13" viewBox="0 0 24 24" {...svgProps}><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>,
   "Out for Delivery": Icon.truck,
-  "Order Received":   Icon.received,
+  "Order Received":   Icon.truck,
+};
+
+// The label the cashier sees. A customer-received order still reads "Out for Delivery".
+const statusLabel: Record<OrderStatus, string> = {
+  Pending:            "Pending",
+  Processing:         "Processing",
+  "Out for Delivery": "Out for Delivery",
+  "Order Received":   "Out for Delivery",
 };
 
 // Only the statuses this page shows. Anything else from the backend
@@ -196,8 +205,15 @@ function normalizeOrder(o: Record<string, unknown>): Order {
 const byOldestFirst = (a: Order, b: Order) =>
   a.createdAt - b.createdAt || a.id.localeCompare(b.id);
 
-type FilterTab = "All Orders" | OrderStatus;
-const filterTabs: FilterTab[] = ["All Orders", "Pending", "Processing", "Out for Delivery", "Order Received"];
+type FilterTab = "All Orders" | "Pending" | "Processing" | "Out for Delivery";
+const filterTabs: FilterTab[] = ["All Orders", "Pending", "Processing", "Out for Delivery"];
+
+/** Does this order belong under the given tab? Customer-received orders stay under Out for Delivery. */
+const matchesTab = (o: Order, tab: FilterTab) => {
+  if (tab === "All Orders") return true;
+  if (tab === "Out for Delivery") return o.status === "Out for Delivery" || o.status === "Order Received";
+  return o.status === tab;
+};
 
 // ── Skeletons ─────────────────────────────────────────────────────────────────
 const shimmerBg: React.CSSProperties = {
@@ -247,7 +263,7 @@ export default function PendingPage() {
   const [drivers,         setDrivers]         = useState<Driver[]>([]);
   const [selectedDrivers, setSelectedDrivers] = useState<Record<string, string>>({}); // orderId -> driverId
 
-  // Cash the driver handed to the cashier, typed on each Order Received card
+  // Cash the driver handed to the cashier, typed on each customer-received card
   const [remitInputs, setRemitInputs] = useState<Record<string, string>>({}); // orderId -> amount (string)
 
   const socket = useSocket();
@@ -325,7 +341,7 @@ export default function PendingPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [proofModal]);
 
-  /** Move an order forward one step (Pending → Processing → Out for Delivery → Order Received). */
+  /** Move an order forward one step (Pending → Processing → Out for Delivery). */
   const updateStatus = async (id: string, status: OrderStatus, driverId?: string) => {
     const previous = orders.find((o) => o.id === id);
     setUpdatingId(id);
@@ -347,32 +363,31 @@ export default function PendingPage() {
   };
 
   /**
-   * Cashier confirms the cash handed over by the driver. The order is closed on the
-   * backend (sent as COMPLETED, which is not a status shown on this page) and removed from the list.
+   * Cashier completes the order after the customer received it and the driver handed
+   * over the cash. The order is closed on the backend (sent as COMPLETED, which is not
+   * a status shown on this page) and removed from the list.
    */
-  const confirmCash = async (id: string, remittedAmount?: number) => {
+  const completeOrder = async (id: string, remittedAmount?: number) => {
     setUpdatingId(id);
     try {
       await api.updateOrderStatus(id, "COMPLETED", undefined, remittedAmount);
       setOrders((prev) => prev.filter((o) => o.id !== id));
     } catch (err) {
-      setError((err as Error).message || "Failed to confirm the order.");
+      setError((err as Error).message || "Failed to complete the order.");
     } finally {
       setUpdatingId(null);
     }
   };
 
   // `orders` is already sorted oldest → newest, and filter() keeps that order
-  const filtered = activeTab === "All Orders" ? orders : orders.filter((o) => o.status === activeTab);
-  const tabCount = (tab: FilterTab) =>
-    tab === "All Orders" ? orders.length : orders.filter((o) => o.status === tab).length;
+  const filtered = orders.filter((o) => matchesTab(o, activeTab));
+  const tabCount = (tab: FilterTab) => orders.filter((o) => matchesTab(o, tab)).length;
 
   const statCards = [
-    { label: "All Active",     count: orders.length,                                                 icon: Icon.layers,     accent: GREEN,     light: GREEN_LIGHT, highlight: true  },
-    { label: "Pending",        count: orders.filter((o) => o.status === "Pending").length,            icon: Icon.hourglass,  accent: "#d97706", light: "#fffbeb",   highlight: false },
-    { label: "Processing",     count: orders.filter((o) => o.status === "Processing").length,         icon: Icon.gear,       accent: "#2563eb", light: "#eff6ff",   highlight: false },
-    { label: "In Transit",     count: orders.filter((o) => o.status === "Out for Delivery").length,   icon: Icon.truckLg,    accent: "#ea580c", light: "#fff7ed",   highlight: false },
-    { label: "Order Received", count: orders.filter((o) => o.status === "Order Received").length,     icon: Icon.receivedLg, accent: PURPLE,    light: "#f5f3ff",   highlight: false },
+    { label: "All Active",     count: orders.length,                                                                                   icon: Icon.layers,    accent: GREEN,     light: GREEN_LIGHT, highlight: true  },
+    { label: "Pending",        count: orders.filter((o) => o.status === "Pending").length,                                              icon: Icon.hourglass, accent: "#d97706", light: "#fffbeb",   highlight: false },
+    { label: "Processing",     count: orders.filter((o) => o.status === "Processing").length,                                           icon: Icon.gear,      accent: "#2563eb", light: "#eff6ff",   highlight: false },
+    { label: "Out for Delivery", count: orders.filter((o) => o.status === "Out for Delivery" || o.status === "Order Received").length,  icon: Icon.truckLg,   accent: "#ea580c", light: "#fff7ed",   highlight: false },
   ];
 
   return (
@@ -447,7 +462,7 @@ export default function PendingPage() {
         {/* Stat Cards */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: "14px", marginBottom: "24px" }}>
           {loading
-            ? Array.from({ length: 5 }).map((_, i) => <SkeletonStatCard key={i} />)
+            ? Array.from({ length: 4 }).map((_, i) => <SkeletonStatCard key={i} />)
             : statCards.map((s) => (
                 <div key={s.label}
                   style={{
@@ -524,6 +539,7 @@ export default function PendingPage() {
               const s          = statusStyle[order.status];
               const isExpanded = expandedId === order.id;
               const isUpdating = updatingId === order.id;
+              const customerReceived = order.status === "Order Received";
 
               const sub = order.items.reduce((acc, i) => acc + i.price * i.qty, 0);
               const vat = sub * 0.12;
@@ -542,7 +558,7 @@ export default function PendingPage() {
               // Driver picked on this card (Processing orders only)
               const pickedDriverId = selectedDrivers[order.id] ?? "";
 
-              // Cash the driver handed over (Order Received orders only)
+              // Cash the driver handed over (customer-received orders only)
               const remitRaw    = remitInputs[order.id] ?? "";
               const remitAmount = remitRaw.trim() === "" ? NaN : Number(remitRaw);
               const remitValid  = Number.isFinite(remitAmount) && remitAmount >= 0;
@@ -573,8 +589,13 @@ export default function PendingPage() {
 
                       <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginBottom: "14px" }}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "3px 10px", borderRadius: "20px", fontSize: "11.5px", fontWeight: 600, background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
-                          {statusIcon[order.status]} {order.status}
+                          {statusIcon[order.status]} {statusLabel[order.status]}
                         </span>
+                        {customerReceived && (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", padding: "3px 10px", borderRadius: "20px", fontSize: "11.5px", fontWeight: 600, background: "#f5f3ff", color: PURPLE, border: "1px solid #ddd6fe" }}>
+                            {Icon.received} Customer received
+                          </span>
+                        )}
                         {order.isOnline && (
                           <span style={{ padding: "2px 9px", borderRadius: "20px", fontSize: "10.5px", fontWeight: 700, background: GREEN, color: "#fff", letterSpacing: "0.02em" }}>Online</span>
                         )}
@@ -764,6 +785,7 @@ export default function PendingPage() {
                         </>
                       )}
 
+                      {/* Still on the road: waiting for the customer (online) or the cashier marks it (walk-in) */}
                       {order.status === "Out for Delivery" && (
                         order.isWalkIn ? (
                           // Cashier-placed order: the cashier marks it received on the customer's behalf
@@ -778,13 +800,9 @@ export default function PendingPage() {
                         )
                       )}
 
-                      {/* Customer has the order → collect the cash from the driver, then confirm */}
+                      {/* Customer has the order → collect the cash from the driver, then Complete */}
                       {order.status === "Order Received" && (
                         <>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "9px 11px", borderRadius: "10px", background: "#f5f3ff", border: "1px solid #ddd6fe", fontSize: "12.5px", fontWeight: 600, color: PURPLE, textAlign: "center" }}>
-                            {Icon.received} Customer received the order
-                          </div>
-
                           {needsRemit ? (
                             <>
                               <div>
@@ -817,20 +835,20 @@ export default function PendingPage() {
                               </div>
 
                               <button className="act-green"
-                                onClick={() => confirmCash(order.id, remitAmount)}
+                                onClick={() => completeOrder(order.id, remitAmount)}
                                 disabled={isUpdating || !remitValid}
                                 title={!remitValid ? "Enter the cash the driver handed over" : undefined}
                                 style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "13px", fontWeight: 700, cursor: isUpdating || !remitValid ? "not-allowed" : "pointer", opacity: isUpdating || !remitValid ? 0.5 : 1, boxShadow: "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
-                                {Icon.check} Confirm Cash
+                                {Icon.check} Complete
                               </button>
                             </>
                           ) : (
                             // GCash (or unspecified): already paid, nothing to collect from the driver
                             <button className="act-green"
-                              onClick={() => confirmCash(order.id)}
+                              onClick={() => completeOrder(order.id)}
                               disabled={isUpdating}
                               style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "13px", fontWeight: 700, cursor: isUpdating ? "not-allowed" : "pointer", opacity: isUpdating ? 0.6 : 1, boxShadow: "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
-                              {Icon.check} Confirm
+                              {Icon.check} Complete
                             </button>
                           )}
                         </>
