@@ -7,7 +7,7 @@ import { exportStyledExcel } from "@/lib/excelExport";
 import {
   LayoutDashboard, ShoppingCart, Users, LineChart,
   Package, User, ClipboardList, AlertTriangle, Gift,
-  Clock, Inbox, Search,
+  Clock, Inbox, Search, Bell,
 } from "lucide-react";
 
 // ─── CASE UNIT SYSTEM ────────────────────────────────────────────────────────
@@ -387,9 +387,9 @@ export default function PurchaseOrderPage() {
             <p className="text-xs text-gray-400 hidden md:block">Review order requests and manage deliveries from suppliers</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-1">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-xs text-green-600 font-medium">Online</span>
+            <div className="relative">
+              <Bell className="w-5 h-5 text-gray-500" />
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" />
             </div>
             <div className="relative">
               <div className="flex items-center gap-2 px-2 py-1.5">
