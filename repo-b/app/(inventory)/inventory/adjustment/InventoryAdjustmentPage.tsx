@@ -351,6 +351,11 @@ export default function InventoryAdjustmentPage() {
   const [expLoading, setExpLoading] = useState(false);
   const [expError,   setExpError]   = useState<string | null>(null);
 
+  // ── Write-off (deduct an expired batch from inventory) ──
+  const [writeOffProd,    setWriteOffProd]    = useState<Product | null>(null);
+  const [writeOffLoading, setWriteOffLoading] = useState(false);
+  const [writeOffError,   setWriteOffError]   = useState<string | null>(null);
+
   const fetchProducts = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     setError(null);
@@ -624,6 +629,34 @@ export default function InventoryAdjustmentPage() {
       setExpError(e instanceof Error ? e.message : "Failed to save expiration date");
     } finally {
       setExpLoading(false);
+    }
+  };
+
+  // ── Write-off actions ──
+  const openWriteOff = (p: Product) => {
+    setWriteOffProd(p);
+    setWriteOffError(null);
+  };
+
+  const closeWriteOff = () => {
+    if (writeOffLoading) return;
+    setWriteOffProd(null);
+    setWriteOffError(null);
+  };
+
+  // Runs only after the user presses "Confirm" in the write-off dialog
+  const confirmWriteOff = async () => {
+    if (!writeOffProd?.batchId) return;
+    setWriteOffLoading(true);
+    setWriteOffError(null);
+    try {
+      await api.writeOffBatch(writeOffProd.batchId);
+      await fetchProducts(true); // re-read so the batch disappears and counts update
+      setWriteOffProd(null);
+    } catch (e) {
+      setWriteOffError(e instanceof Error ? e.message : "Failed to deduct the batch");
+    } finally {
+      setWriteOffLoading(false);
     }
   };
 
@@ -972,12 +1005,21 @@ export default function InventoryAdjustmentPage() {
 
                         {/* Action */}
                         <td style={tdExpStyle}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                           <button onClick={() => openExpiry(p)} disabled={!p.batchId}
                             className={hasDate ? "btn-ghost" : "btn-green"}
                             title={p.batchId ? undefined : "No stock batch yet — receive this product through a delivery first"}
                             style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 14px", borderRadius: "9px", fontSize: "12px", fontWeight: 700, cursor: p.batchId ? "pointer" : "not-allowed", opacity: p.batchId ? 1 : 0.45, whiteSpace: "nowrap", border: hasDate ? `1px solid ${GREEN}` : "none", background: hasDate ? "#fff" : GREEN, color: hasDate ? GREEN_DARK : "#fff", boxShadow: hasDate ? "none" : "0 2px 8px rgba(46,125,62,0.25)", transition: "all 0.15s" }}>
                             {hasDate ? <>{Icon.edit} Adjust</> : <>{Icon.plus} Add Date</>}
                           </button>
+                          {es === "Expired" && !!p.batchId && p.stock > 0 && (
+                            <button onClick={() => openWriteOff(p)} className="btn-red"
+                              title="Remove this expired batch from the product's inventory"
+                              style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 14px", borderRadius: "9px", border: "none", background: "#e11d48", color: "#fff", fontSize: "12px", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxShadow: "0 2px 8px rgba(225,29,72,0.25)", transition: "background 0.15s" }}>
+                              {Icon.minus} Deduct
+                            </button>
+                          )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1304,6 +1346,69 @@ export default function InventoryAdjustmentPage() {
           </div>
         </>
       )}
+
+      {/* ── Confirm: Deduct expired batch ── */}
+      {writeOffProd && (() => {
+        const batchCases  = writeOffProd.stock; // cases left in THIS batch
+        const batchPieces = totalPieces(writeOffProd);
+        const productNow  = products.find((x) => x.id === writeOffProd.id)?.stock ?? 0;
+        const productAfter = Math.max(0, productNow - batchCases);
+        const daysAgo = Math.abs(daysUntilExpiry(writeOffProd.expiryDate) ?? 0);
+        return (
+          <>
+            <div onClick={closeWriteOff} style={{ position: "fixed", inset: 0, background: "rgba(10,30,15,0.6)", zIndex: 60, backdropFilter: "blur(2px)" }} />
+            <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 70, background: "#fff", borderRadius: "18px", width: "min(92vw, 420px)", padding: "26px", boxShadow: "0 24px 70px rgba(10,30,15,0.35)", border: `1px solid ${GREEN_BORDER}` }}>
+              <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: "#fef2f2", color: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+                {Icon.ban}
+              </div>
+              <p style={{ fontSize: "17px", fontWeight: 800, color: INK, textAlign: "center", margin: "0 0 6px" }}>
+                Deduct expired batch?
+              </p>
+              <p style={{ fontSize: "13px", color: MUTED, textAlign: "center", margin: "0 0 16px" }}>
+                {writeOffProd.productName}{writeOffProd.size ? ` · ${writeOffProd.size}` : ""}
+              </p>
+
+              <div style={{ background: GREEN_TINT, border: `1px solid ${GREEN_BORDER}`, borderRadius: "12px", padding: "14px", marginBottom: "14px", fontSize: "13px", color: INK, display: "grid", gap: "8px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: FAINT }}>Batch No</span>
+                  <strong>{fmtBatchNo(writeOffProd.batchNo)}</strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: FAINT }}>Expired</span>
+                  <strong style={{ color: "#b91c1c" }}>{fmtDate(writeOffProd.expiryDate)} · {daysAgo} day{daysAgo !== 1 ? "s" : ""} ago</strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: FAINT }}>Deduct</span>
+                  <strong style={{ color: "#b91c1c" }}>{batchCases} case{batchCases !== 1 ? "s" : ""} ({batchPieces.toLocaleString()} pcs)</strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: FAINT }}>Product stock</span>
+                  <strong>{productNow} → <span style={{ color: GREEN }}>{productAfter}</span> cases</strong>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "14px" }}>
+                <Banner kind="warn">This empties the batch and logs it as an expired loss. It can’t be undone.</Banner>
+              </div>
+
+              {writeOffError && (
+                <div style={{ marginBottom: "14px" }}><Banner kind="error">{writeOffError}</Banner></div>
+              )}
+
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button onClick={closeWriteOff} disabled={writeOffLoading} className="btn-outline"
+                  style={{ flex: 1, padding: "12px", borderRadius: "10px", border: `1px solid ${GREEN_BORDER}`, background: "#fff", color: MUTED, fontSize: "13px", fontWeight: 600, cursor: writeOffLoading ? "not-allowed" : "pointer", transition: "all 0.15s" }}>
+                  Cancel
+                </button>
+                <button onClick={confirmWriteOff} disabled={writeOffLoading} className="btn-red"
+                  style={{ flex: 1.3, padding: "12px", borderRadius: "10px", border: "none", background: writeOffLoading ? "#e5ece6" : "#e11d48", color: writeOffLoading ? FAINT : "#fff", fontSize: "14px", fontWeight: 700, cursor: writeOffLoading ? "not-allowed" : "pointer", transition: "background 0.15s" }}>
+                  {writeOffLoading ? "Deducting…" : "Confirm deduct"}
+                </button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* ── Confirm: Stock adjustment ── */}
       {detailProd && showAdjConfirm && (() => {

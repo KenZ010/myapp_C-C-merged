@@ -397,7 +397,7 @@ export const api = {
     return parseJson(res, 'Failed to fetch drivers');
   },
   // driverId is required by the backend when status is OUT_FOR_DELIVERY
-    updateOrderStatus: async (
+  updateOrderStatus: async (
     orderId: string,
     status: string,
     driverId?: string,
@@ -686,6 +686,14 @@ export const api = {
     });
     if (!res.ok) throw new Error('Failed to write off expired batches');
     return res.json();
+  },
+  // STOCK MANAGER: deduct ONE expired batch from the product's inventory
+  writeOffBatch: async (batchId: string) => {
+    const res = await fetch(`${API_URL}/stock-batches/${batchId}/write-off`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    return parseJson(res, 'Failed to deduct the expired batch');
   },
   updateBatchExpiry: async (batchId: string, expiryDate: string | null) => {
     const res = await fetch(`${API_URL}/stock-batches/${batchId}/expiry`, {
