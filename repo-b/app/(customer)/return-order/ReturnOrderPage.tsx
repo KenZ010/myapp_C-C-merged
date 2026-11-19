@@ -269,6 +269,74 @@ function QtyField({
   );
 }
 
+// ─── Return Policy Notice Modal ───────────────────────────────────────────────
+function ReturnPolicyModal({
+  order,
+  onClose,
+  onContinue,
+}: {
+  order:      Order;
+  onClose:    () => void;
+  onContinue: () => void;
+}) {
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 40, backdropFilter: "blur(2px)" }} />
+
+      <div style={{
+        position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+        zIndex: 50, width: "min(440px, 92vw)", background: "#fff", borderRadius: "20px",
+        overflow: "hidden", boxShadow: "0 24px 64px rgba(233,30,140,0.18)",
+        maxHeight: "90vh", overflowY: "auto", display: "flex", flexDirection: "column",
+      }}>
+        {/* Header */}
+        <div style={{ background: "linear-gradient(135deg,#c2185b,#e91e8c)", padding: "22px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+          <div>
+            <p style={{ color: "rgba(255,255,255,0.7)", fontSize: "11px", margin: "0 0 2px" }}>Before you return</p>
+            <h3 style={{ color: "#fff", fontSize: "16px", fontWeight: 800, margin: 0 }}>1-Day Return Policy</h3>
+          </div>
+          <button onClick={onClose} style={{ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: "50%", width: 32, height: 32, cursor: "pointer", color: "#fff", fontSize: 14 }}>✕</button>
+        </div>
+
+        <div style={{ padding: "22px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 64, height: 64, borderRadius: "50%", background: "#fff0f6", margin: "0 auto", fontSize: 30 }}>
+            ⏱️
+          </div>
+
+          <div style={{ textAlign: "center" }}>
+            <p style={{ fontSize: 15, fontWeight: 800, color: "#1a1a1a", margin: "0 0 6px" }}>
+              Returns are accepted within 1 day
+            </p>
+            <p style={{ fontSize: 13, color: "#777", lineHeight: 1.7, margin: 0 }}>
+              You can only return items within <strong style={{ color: "#c2185b" }}>1 day (24 hours)</strong> after
+              your order is completed. Once the window closes, the order can no longer be returned.
+            </p>
+          </div>
+
+          <div style={{ background: "#f4faf5", border: "1px solid #d6e8d9", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#2e5d3a", lineHeight: 1.6 }}>
+            📦 Order #{order.id.slice(0, 8)} · Completed {order.date}
+          </div>
+
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              onClick={onClose}
+              style={{ flex: 1, padding: 13, borderRadius: 30, border: "1.5px solid #f0c0cc", background: "#fff", color: "#c2185b", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onContinue}
+              style={{ flex: 1.4, padding: 13, borderRadius: 30, border: "none", background: "linear-gradient(135deg,#ff6b8a,#e91e8c)", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: "0 6px 20px rgba(233,30,140,0.35)" }}
+            >
+              I Understand, Continue
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── Return Form Modal ────────────────────────────────────────────────────────
 function ReturnFormModal({
   order,
@@ -812,6 +880,7 @@ export default function ReturnOrderPage() {
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState<string | null>(null);
   const [selected,  setSelected]  = useState<Order | null>(null);
+  const [policyOrder, setPolicyOrder] = useState<Order | null>(null);
   const [successId, setSuccessId] = useState<string | null>(null);
   const [myReturns, setMyReturns] = useState<MyReturn[]>([]);
 
@@ -989,7 +1058,7 @@ export default function ReturnOrderPage() {
                     ₱{order.total.toLocaleString()}.00
                   </p>
                   <button
-                    onClick={() => setSelected(order)}
+                    onClick={() => setPolicyOrder(order)}
                     style={{ background: "linear-gradient(135deg,#ff6b8a,#e91e8c)", color: "#fff", border: "none", borderRadius: 20, padding: "8px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxShadow: "0 4px 12px rgba(233,30,140,0.3)" }}
                   >
                     Return
@@ -1026,6 +1095,14 @@ export default function ReturnOrderPage() {
           </>
         )}
       </div>
+
+      {policyOrder && !selected && (
+        <ReturnPolicyModal
+          order={policyOrder}
+          onClose={() => setPolicyOrder(null)}
+          onContinue={() => { setSelected(policyOrder); setPolicyOrder(null); }}
+        />
+      )}
 
       {selected && (
         <ReturnFormModal
