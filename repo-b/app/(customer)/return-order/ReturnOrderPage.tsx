@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { api } from "@/lib/api";
+import { useSocket } from "@/app/providers";
 
 // ─── API (return endpoints) ───────────────────────────────────────────────────
 // Same base URL the cashier return page uses. Swap for your api helper if you prefer.
@@ -64,6 +65,7 @@ type MyReturn = {
   reviewNote?: string | null;
   closeNote?: string | null;
   createdAt: string;
+  receivedAt?: string | null; // customer confirmed the replacement arrived
   driver?: { id: string; name: string; phone?: string } | null;
   items: MyReturnItem[];
 };
@@ -736,9 +738,25 @@ function ReturnFormModal({
 }
 
 // ─── One of the customer's return requests ───────────────────────────────────
-function MyReturnCard({ r }: { r: MyReturn }) {
+function MyReturnCard({ r, onChanged }: { r: MyReturn; onChanged: () => void }) {
   const meta   = RETURN_STATUS_META[r.status] ?? { label: r.status, bg: "#f3f4f6", color: "#6b7280", hint: "" };
   const active = ACTIVE_RETURN_STATUSES.includes(r.status);
+
+  const [confirming,  setConfirming]  = useState(false);
+  const [confirmErr,  setConfirmErr]  = useState<string | null>(null);
+
+  const confirmReceived = async () => {
+    setConfirming(true);
+    setConfirmErr(null);
+    try {
+      await api.confirmReplacementReceived(r.id);
+      onChanged();
+    } catch (err) {
+      setConfirmErr((err as Error).message || "Could not confirm. Please try again.");
+    } finally {
+      setConfirming(false);
+    }
+  };
 
   return (
     <div style={{
@@ -780,6 +798,36 @@ function MyReturnCard({ r }: { r: MyReturn }) {
               ? `🚚 On its way with ${r.driver.name}${r.driver.phone ? ` · ${r.driver.phone}` : ""}. Please hand over the items you are returning when it arrives.`
               : meta.hint}
           </p>
+
+          {/* Customer confirms the replacement arrived (no payment for replacements) */}
+          {r.status === "OUT_FOR_DELIVERY" && (
+            r.receivedAt ? (
+              <p style={{ fontSize: 12, fontWeight: 700, color: "#2e7d32", margin: "10px 0 0" }}>
+                ✅ You confirmed receiving this replacement. The store will finish the return once the items you are returning are collected.
+              </p>
+            ) : (
+              <>
+                <button
+                  onClick={confirmReceived}
+                  disabled={confirming}
+                  style={{
+                    marginTop: 10, width: "100%", padding: "11px 14px", borderRadius: 24, border: "none",
+                    background: "linear-gradient(135deg,#ff6b8a,#e91e8c)", color: "#fff",
+                    fontSize: 13, fontWeight: 700, cursor: confirming ? "not-allowed" : "pointer",
+                    opacity: confirming ? 0.7 : 1, boxShadow: "0 4px 12px rgba(233,30,140,0.3)",
+                  }}
+                >
+                  {confirming ? "Confirming…" : "📦 I received my replacement"}
+                </button>
+                <p style={{ fontSize: 11, color: "#aaa", margin: "6px 0 0", textAlign: "center" }}>
+                  Only tap this once the replacement is in your hands.
+                </p>
+              </>
+            )
+          )}
+          {confirmErr && (
+            <p style={{ fontSize: 12, color: "#c62828", margin: "8px 0 0" }}>⚠️ {confirmErr}</p>
+          )}
         </div>
       )}
 
@@ -876,6 +924,15 @@ export default function ReturnOrderPage() {
     const timer = setInterval(fetchMyReturns, 30_000);
     return () => clearInterval(timer);
   }, [fetchOrders, fetchMyReturns]);
+
+  // Live updates: the store approved / sent / completed my return
+  const socket = useSocket();
+  useEffect(() => {
+    if (!socket) return;
+    const refresh = () => fetchMyReturns();
+    socket.on("return:status", refresh);
+    return () => { socket.off("return:status", refresh); };
+  }, [socket, fetchMyReturns]);
 
   if (successId) {
     return (
@@ -1048,7 +1105,7 @@ export default function ReturnOrderPage() {
             {/* active replacements first */}
             {[...myReturns]
               .sort((a, b) => Number(ACTIVE_RETURN_STATUSES.includes(b.status)) - Number(ACTIVE_RETURN_STATUSES.includes(a.status)))
-              .map((r) => <MyReturnCard key={r.id} r={r} />)}
+              .map((r) => <MyReturnCard key={r.id} r={r} onChanged={fetchMyReturns} />)}
           </>
         )}
       </div>

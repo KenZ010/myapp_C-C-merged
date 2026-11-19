@@ -476,6 +476,48 @@ export const api = {
     return res.json();
   },
 
+  // ── REPLACEMENTS (approved return → delivered to the customer, no payment) ──
+  // CASHIER: approved + out-for-delivery returns. Customers get only their own.
+  getActiveReturns: async () => {
+    const res = await fetch(`${API_URL}/returns/active`, { headers: authHeaders() });
+    return parseJson(res, 'Failed to fetch replacements');
+  },
+  // CASHIER: send the replacement with a driver (inventory is deducted here)
+  dispatchReplacement: async (returnRequestId: string, driverId: string) => {
+    const res = await fetch(`${API_URL}/returns/${returnRequestId}/dispatch`, {
+      method:  'PATCH',
+      headers: authHeaders(),
+      body:    JSON.stringify({ driverId }),
+    });
+    return parseJson(res, 'Failed to send the replacement');
+  },
+  // CASHIER / DRIVER: replacement delivered and bad items collected → COMPLETED
+  completeReturn: async (returnRequestId: string, closeNote?: string) => {
+    const res = await fetch(`${API_URL}/returns/${returnRequestId}/complete`, {
+      method:  'PATCH',
+      headers: authHeaders(),
+      body:    JSON.stringify({ closeNote }),
+    });
+    return parseJson(res, 'Failed to complete the return');
+  },
+  // CASHIER: cancel an approved return before it is dispatched
+  cancelReturnRequest: async (returnRequestId: string, closeNote?: string) => {
+    const res = await fetch(`${API_URL}/returns/${returnRequestId}/cancel`, {
+      method:  'PATCH',
+      headers: authHeaders(),
+      body:    JSON.stringify({ closeNote }),
+    });
+    return parseJson(res, 'Failed to cancel the return');
+  },
+  // CUSTOMER: confirm the replacement arrived
+  confirmReplacementReceived: async (returnRequestId: string) => {
+    const res = await fetch(`${API_URL}/returns/${returnRequestId}/received`, {
+      method:  'PATCH',
+      headers: authHeaders(),
+    });
+    return parseJson(res, 'Failed to confirm receipt');
+  },
+
   // ── LOSS REPORTS ────────────────────────────────────────────────────────────
   fileLossReport: async (data: {
     productId:  string;

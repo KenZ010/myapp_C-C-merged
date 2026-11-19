@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { useSocket } from "@/app/providers";
+import ReplacementsSection from "@/components/cashier/ReplacementsSection"; // adjust path to where you save it
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 const GREEN        = "#2e7d3e"; // primary
@@ -205,11 +206,12 @@ function normalizeOrder(o: Record<string, unknown>): Order {
 const byOldestFirst = (a: Order, b: Order) =>
   a.createdAt - b.createdAt || a.id.localeCompare(b.id);
 
-type FilterTab = "All Orders" | "Pending" | "Processing" | "Out for Delivery";
-const filterTabs: FilterTab[] = ["All Orders", "Pending", "Processing", "Out for Delivery"];
+type FilterTab = "All Orders" | "Pending" | "Processing" | "Out for Delivery" | "Replacements";
+const filterTabs: FilterTab[] = ["All Orders", "Pending", "Processing", "Out for Delivery", "Replacements"];
 
 /** Does this order belong under the given tab? Customer-received orders stay under Out for Delivery. */
 const matchesTab = (o: Order, tab: FilterTab) => {
+  if (tab === "Replacements") return false; // replacements are not sales; ReplacementsSection renders them
   if (tab === "All Orders") return true;
   if (tab === "Out for Delivery") return o.status === "Out for Delivery" || o.status === "Order Received";
   return o.status === tab;
@@ -258,6 +260,7 @@ export default function PendingPage() {
   const [updatingId,  setUpdatingId]  = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [proofModal,  setProofModal]  = useState<string | null>(null); // GCash screenshot URL
+  const [replacementCount, setReplacementCount] = useState(0); // approved returns waiting to be sent / completed
 
   // Drivers the cashier can pick from + the pick made on each Processing card
   const [drivers,         setDrivers]         = useState<Driver[]>([]);
@@ -492,7 +495,7 @@ export default function PendingPage() {
                 style={{ padding: "8px 16px", borderRadius: "9px", fontSize: "13px", fontWeight: 600, cursor: "pointer", border: "none", background: isActive ? GREEN : "transparent", color: isActive ? "#fff" : MUTED, boxShadow: isActive ? "0 2px 8px rgba(46,125,62,0.3)" : "none", transition: "all 0.15s", display: "flex", alignItems: "center", gap: "8px" }}>
                 {tab}
                 <span style={{ background: isActive ? "rgba(255,255,255,0.22)" : "#fff", color: isActive ? "#fff" : GREEN, padding: "1px 8px", borderRadius: "10px", fontSize: "11px", fontWeight: 700 }}>
-                  {loading ? "…" : tabCount(tab)}
+                  {tab === "Replacements" ? replacementCount : loading ? "…" : tabCount(tab)}
                 </span>
               </button>
             );
@@ -510,15 +513,22 @@ export default function PendingPage() {
           </div>
         )}
 
+        {/* Replacements for approved returns (always mounted so the tab badge stays live) */}
+        <ReplacementsSection
+          visible={activeTab === "Replacements"}
+          drivers={drivers}
+          onCount={setReplacementCount}
+        />
+
         {/* Skeleton */}
-        {loading && (
+        {loading && activeTab !== "Replacements" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
             {Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)}
           </div>
         )}
 
         {/* Empty */}
-        {!loading && !error && filtered.length === 0 && (
+        {!loading && !error && activeTab !== "Replacements" && filtered.length === 0 && (
           <div style={{ background: "#fff", borderRadius: "14px", padding: "64px 24px", textAlign: "center", border: `1px dashed ${GREEN_BORDER}` }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
               <div style={{ width: "84px", height: "84px", borderRadius: "50%", background: GREEN_TINT, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -533,7 +543,7 @@ export default function PendingPage() {
         )}
 
         {/* Orders List — one horizontal card per row, oldest on top */}
-        {!loading && (
+        {!loading && activeTab !== "Replacements" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
             {filtered.map((order, index) => {
               const s          = statusStyle[order.status];
