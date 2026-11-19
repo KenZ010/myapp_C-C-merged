@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { api } from "@/lib/api";
 
 // ─── API (return endpoints) ───────────────────────────────────────────────────
@@ -88,6 +88,8 @@ const RETURN_STATUS_META: Record<string, { label: string; bg: string; color: str
   CANCELLED:        { label: "Cancelled",           bg: "#f3f4f6", color: "#6b7280", hint: "" },
 };
 const ACTIVE_RETURN_STATUSES = ["APPROVED", "OUT_FOR_DELIVERY"];
+// An order with a request in any of these statuses can't be returned again (matches backend OPEN_REQUEST_STATUSES)
+const OPEN_RETURN_STATUSES   = ["PENDING", "APPROVED", "OUT_FOR_DELIVERY"];
 
 function compressImage(file: File, maxWidth = 1200, quality = 0.78): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -815,6 +817,17 @@ export default function ReturnOrderPage() {
   const [successId, setSuccessId] = useState<string | null>(null);
   const [myReturns, setMyReturns] = useState<MyReturn[]>([]);
 
+  // saleId -> its open (pending / approved / out for delivery) return request
+  const openReturnBySale = useMemo(() => {
+    const m = new Map<string, MyReturn>();
+    myReturns.forEach((r) => {
+      if (OPEN_RETURN_STATUSES.includes(r.status)) m.set(r.saleId, r);
+    });
+    return m;
+  }, [myReturns]);
+
+  const eligibleCount = orders.filter((o) => !openReturnBySale.has(o.id)).length;
+
   const getCustomerId = () =>
     JSON.parse(localStorage.getItem("user") || "{}")?.id ?? "";
 
@@ -913,7 +926,7 @@ export default function ReturnOrderPage() {
           <div style={{ display: "flex", gap: 24, textAlign: "right" }}>
             <div>
               <p style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, margin: 0 }}>Eligible Orders</p>
-              <h2 style={{ color: "#fff", fontSize: 32, fontWeight: 800, margin: 0 }}>{orders.length}</h2>
+              <h2 style={{ color: "#fff", fontSize: 32, fontWeight: 800, margin: 0 }}>{eligibleCount}</h2>
             </div>
             <div>
               <p style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, margin: 0 }}>Active Replacements</p>
@@ -988,12 +1001,25 @@ export default function ReturnOrderPage() {
                   <p style={{ fontSize: 14, fontWeight: 800, color: "#c2185b", margin: 0 }}>
                     ₱{order.total.toLocaleString()}.00
                   </p>
-                  <button
-                    onClick={() => setSelected(order)}
-                    style={{ background: "linear-gradient(135deg,#ff6b8a,#e91e8c)", color: "#fff", border: "none", borderRadius: 20, padding: "8px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxShadow: "0 4px 12px rgba(233,30,140,0.3)" }}
-                  >
-                    Return
-                  </button>
+                  {(() => {
+                    const open = openReturnBySale.get(order.id);
+                    if (open) {
+                      const m = RETURN_STATUS_META[open.status];
+                      return (
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: "6px 14px", borderRadius: 20, background: m.bg, color: m.color, whiteSpace: "nowrap" }}>
+                          Return {m.label.toLowerCase()}
+                        </span>
+                      );
+                    }
+                    return (
+                      <button
+                        onClick={() => setSelected(order)}
+                        style={{ background: "linear-gradient(135deg,#ff6b8a,#e91e8c)", color: "#fff", border: "none", borderRadius: 20, padding: "8px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxShadow: "0 4px 12px rgba(233,30,140,0.3)" }}
+                      >
+                        Return
+                      </button>
+                    );
+                  })()}
                 </div>
               );
             })}
@@ -1031,7 +1057,7 @@ export default function ReturnOrderPage() {
         <ReturnFormModal
           order={selected}
           onClose={() => setSelected(null)}
-          onSuccess={(id) => { setSelected(null); setSuccessId(id); }}
+          onSuccess={(id) => { setSelected(null); setSuccessId(id); fetchMyReturns(); }}
         />
       )}
     </>
