@@ -368,10 +368,16 @@ export default function InventoryAdjustmentPage() {
         return v === undefined || v === null || v === "" ? null : String(v);
       };
 
-      // Earliest dated active batch per product → drives the expiry column of the Inventory tab
+      // Cases left in a batch. The API returns `remaining` (StockBatch.remaining in the schema).
+      const remainingOf = (b: any): number => Number(b.remaining ?? 0);
+
+      // Only batches that still hold stock count: an empty batch can't be expired or expiring
+      const liveBatches = (batches || []).filter((b: any) => remainingOf(b) > 0);
+
+      // Earliest dated live batch per product → drives the expiry column of the Inventory tab
       // (an undated batch is used only when the product has no dated one)
       const earliest: Record<string, { id: string; batchNo: string | null; expiryDate: string | null }> = {};
-      for (const b of batches || []) {
+      for (const b of liveBatches) {
         const cur = earliest[b.productId];
         if (!b.expiryDate) {
           if (!cur) earliest[b.productId] = { id: String(b.id), batchNo: batchNoOf(b), expiryDate: null };
@@ -407,28 +413,26 @@ export default function InventoryAdjustmentPage() {
       }));
       setProducts(mapped);
 
-      // One row per batch for the Expiration tab
+      // One row per live batch for the Expiration tab
       const byProduct = new Map<string, Product>(mapped.map((p) => [p.id, p]));
       const rows: Product[] = [];
       const hasBatch = new Set<string>();
-      for (const b of batches || []) {
+      for (const b of liveBatches) {
         const p = byProduct.get(String(b.productId));
         if (!p) continue;
-        // Cases left in THIS batch. Rename these fields to match your /stock-batches response.
-        const qty = Number(b.remainingQty ?? b.quantity ?? b.qty ?? NaN);
-        if (!isNaN(qty) && qty <= 0) continue; // skip empty / depleted batches
         hasBatch.add(p.id);
         rows.push({
           ...p,
           batchId:    String(b.id),
           batchNo:    batchNoOf(b),
           expiryDate: b.expiryDate ? String(b.expiryDate) : null,
-          stock:      isNaN(qty) ? p.stock : qty,
+          stock:      remainingOf(b), // this batch's cases, not the product total
           updatedAt:  String(b.receivedAt ?? b.createdAt ?? p.updatedAt),
         });
       }
-      // Products with no batch still appear (with a disabled "Add Date" button)
-      for (const p of mapped) if (!hasBatch.has(p.id)) rows.push(p);
+      // Products with stock but no live batch still appear (with a disabled "Add Date" button).
+      // Products with 0 stock and no live batch are not listed.
+      for (const p of mapped) if (!hasBatch.has(p.id) && p.stock > 0) rows.push(p);
       setBatchRows(rows);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load products");
