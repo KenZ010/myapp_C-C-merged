@@ -30,7 +30,7 @@ type Product = {
   piecesPerCase: number;
   reservedStock: number;
   expiryDate:    string | null;
-  batchId:       string | null; // earliest dated active batch (edited by the Expiration tab)
+  batchId:       string | null; // batch this row refers to (edited by the Expiration tab)
   batchNo:       string | null; // batch number shown in the Expiration table
   image:         string | null;
   status:        ProductStatus;
@@ -319,6 +319,8 @@ const TableCard: React.CSSProperties  = { background: "#fff", borderRadius: "14p
 export default function InventoryAdjustmentPage() {
   const [tab,        setTab]        = useState<TabKey>("adjustment");
   const [products,   setProducts]   = useState<Product[]>([]);
+  // One row per stock batch — drives the Expiration tab
+  const [batchRows,  setBatchRows]  = useState<Product[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState<string | null>(null);
   const [search,     setSearch]     = useState("");
@@ -360,14 +362,15 @@ export default function InventoryAdjustmentPage() {
         api.getAllStockBatches().catch(() => [] as any[]),
       ]);
 
-      // Earliest dated active batch per product → drives the expiry column
-      // (an undated batch is used only when the product has no dated one)
-      const earliest: Record<string, { id: string; batchNo: string | null; expiryDate: string | null }> = {};
       // Uses the batch's own number if the API provides one, otherwise falls back to its id
       const batchNoOf = (b: any): string | null => {
         const v = b.batchNo ?? b.batchNumber ?? b.batchCode ?? b.id;
         return v === undefined || v === null || v === "" ? null : String(v);
       };
+
+      // Earliest dated active batch per product → drives the expiry column of the Inventory tab
+      // (an undated batch is used only when the product has no dated one)
+      const earliest: Record<string, { id: string; batchNo: string | null; expiryDate: string | null }> = {};
       for (const b of batches || []) {
         const cur = earliest[b.productId];
         if (!b.expiryDate) {
@@ -382,7 +385,8 @@ export default function InventoryAdjustmentPage() {
         acc[s.id] = s.supplierName;
         return acc;
       }, {});
-      setProducts((productsData || []).map((p: any): Product => ({
+
+      const mapped: Product[] = (productsData || []).map((p: any): Product => ({
         id:            String(p.id),
         productName:   String(p.productName),
         category:      (p.category ?? "OTHER") as CategoryType,
@@ -394,13 +398,38 @@ export default function InventoryAdjustmentPage() {
         expiryDate:    earliest[p.id]?.expiryDate ?? null,
         batchId:       earliest[p.id]?.id ?? null,
         batchNo:       earliest[p.id]?.batchNo ?? null,
-        image:        p.image ?? null,
+        image:         p.image ?? null,
         status:        (p.status ?? "ACTIVE") as ProductStatus,
         supplierId:    String(p.supplierId ?? ""),
         supplierName:  supplierMap[p.supplierId] || p.supplier?.supplierName || "—",
         createdAt:     String(p.createdAt ?? ""),
         updatedAt:     String(p.updatedAt ?? p.createdAt ?? ""),
-      })));
+      }));
+      setProducts(mapped);
+
+      // One row per batch for the Expiration tab
+      const byProduct = new Map<string, Product>(mapped.map((p) => [p.id, p]));
+      const rows: Product[] = [];
+      const hasBatch = new Set<string>();
+      for (const b of batches || []) {
+        const p = byProduct.get(String(b.productId));
+        if (!p) continue;
+        // Cases left in THIS batch. Rename these fields to match your /stock-batches response.
+        const qty = Number(b.remainingQty ?? b.quantity ?? b.qty ?? NaN);
+        if (!isNaN(qty) && qty <= 0) continue; // skip empty / depleted batches
+        hasBatch.add(p.id);
+        rows.push({
+          ...p,
+          batchId:    String(b.id),
+          batchNo:    batchNoOf(b),
+          expiryDate: b.expiryDate ? String(b.expiryDate) : null,
+          stock:      isNaN(qty) ? p.stock : qty,
+          updatedAt:  String(b.receivedAt ?? b.createdAt ?? p.updatedAt),
+        });
+      }
+      // Products with no batch still appear (with a disabled "Add Date" button)
+      for (const p of mapped) if (!hasBatch.has(p.id)) rows.push(p);
+      setBatchRows(rows);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load products");
     } finally {
@@ -439,17 +468,17 @@ export default function InventoryAdjustmentPage() {
     out:    products.filter(p => p.stock === 0).length,
   }), [products]);
 
-  // ── Expiration derived data ──
+  // ── Expiration derived data (one entry per batch) ──
   const expCounts = useMemo(() => ({
-    expired:  products.filter(p => getExpiryStatus(p.expiryDate) === "Expired").length,
-    soon:     products.filter(p => getExpiryStatus(p.expiryDate) === "Expiring Soon").length,
-    good:     products.filter(p => getExpiryStatus(p.expiryDate) === "Good").length,
-    noDate:   products.filter(p => getExpiryStatus(p.expiryDate) === "No Date").length,
-  }), [products]);
+    expired:  batchRows.filter(p => getExpiryStatus(p.expiryDate) === "Expired").length,
+    soon:     batchRows.filter(p => getExpiryStatus(p.expiryDate) === "Expiring Soon").length,
+    good:     batchRows.filter(p => getExpiryStatus(p.expiryDate) === "Good").length,
+    noDate:   batchRows.filter(p => getExpiryStatus(p.expiryDate) === "No Date").length,
+  }), [batchRows]);
 
   const expFiltered = useMemo(() => {
     const priority: Record<ExpiryStatus, number> = { "Expired": 0, "Expiring Soon": 1, "Good": 2, "No Date": 3 };
-    return products
+    return batchRows
       .filter((p) => {
         const q = expSearch.toLowerCase();
         const matchSearch = !q || p.productName.toLowerCase().includes(q) || (p.batchNo ?? "").toLowerCase().includes(q);
@@ -464,7 +493,7 @@ export default function InventoryAdjustmentPage() {
         const db = daysUntilExpiry(b.expiryDate) ?? Infinity;
         return da - db;
       });
-  }, [products, expSearch, expFilter]);
+  }, [batchRows, expSearch, expFilter]);
 
   const openDetail = (p: Product) => {
     setDetailProd({ ...p });
@@ -857,7 +886,7 @@ export default function InventoryAdjustmentPage() {
               “Expiring Soon” = within {EXPIRING_SOON_DAYS} days
             </span>
             <span style={{ marginLeft: "auto", fontSize: "12px", color: SUBTLE, fontWeight: 600 }}>
-              {expFiltered.length} of {products.length} products
+              {expFiltered.length} of {batchRows.length} batches
             </span>
           </div>
 
@@ -874,7 +903,7 @@ export default function InventoryAdjustmentPage() {
                 </thead>
                 <tbody>
                   {expFiltered.length === 0 ? (
-                    <EmptyRow cols={8} text="No products found" />
+                    <EmptyRow cols={8} text="No batches found" />
                   ) : expFiltered.map((p) => {
                     const es   = getExpiryStatus(p.expiryDate);
                     const est  = expiryStyle[es];
@@ -882,7 +911,7 @@ export default function InventoryAdjustmentPage() {
                     const hasDate = !!p.expiryDate;
                     const dt = fmtDateTime(p.updatedAt || p.createdAt);
                     return (
-                      <tr key={p.id} className="row-hover" style={{ transition: "background 0.15s", background: expiryRowBg[es] }}>
+                      <tr key={p.batchId ?? p.id} className="row-hover" style={{ transition: "background 0.15s", background: expiryRowBg[es] }}>
                         {/* Batch No */}
                         <td style={{ ...tdExpStyle, whiteSpace: "nowrap", boxShadow: es === "Expired" ? "inset 4px 0 0 #dc2626" : es === "Expiring Soon" ? "inset 4px 0 0 #d97706" : "none" }}>
                           <span title={p.batchNo ?? undefined}
@@ -920,7 +949,7 @@ export default function InventoryAdjustmentPage() {
                           </span>
                         </td>
 
-                        {/* Total Bottles */}
+                        {/* Total Bottles (in this batch) */}
                         <td style={tdExpStyle}>
                           <p style={{ fontSize: "15px", fontWeight: 800, color: INK, margin: 0 }}>{totalPieces(p).toLocaleString()}</p>
                           <p style={{ fontSize: "12px", color: SUBTLE, margin: "2px 0 0" }}>{p.stock} case{p.stock !== 1 ? "s" : ""}</p>
@@ -954,7 +983,7 @@ export default function InventoryAdjustmentPage() {
             </div>
             <div style={{ padding: "12px 20px", borderTop: `1px solid ${GREEN_BORDER}`, background: GREEN_LIGHT }}>
               <p style={{ fontSize: "12px", color: SUBTLE, margin: 0 }}>
-                Showing <strong style={{ color: INK }}>{expFiltered.length}</strong> of <strong style={{ color: INK }}>{products.length}</strong> products
+                Showing <strong style={{ color: INK }}>{expFiltered.length}</strong> of <strong style={{ color: INK }}>{batchRows.length}</strong> batches
               </p>
             </div>
           </div>
@@ -974,7 +1003,10 @@ export default function InventoryAdjustmentPage() {
                 </p>
                 <p style={{ fontSize: "20px", fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.01em" }}>{expProd.productName}</p>
                 <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.75)", margin: "3px 0 0" }}>
-                  {expProd.size && `${expProd.size} · `}{categoryLabels[expProd.category]} · {expProd.stock} cases in stock
+                  {expProd.size && `${expProd.size} · `}{categoryLabels[expProd.category]} · {expProd.stock} cases in batch
+                </p>
+                <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.75)", margin: "3px 0 0" }}>
+                  Batch No: <strong style={{ color: "#fff" }}>{fmtBatchNo(expProd.batchNo)}</strong>
                 </p>
               </div>
               <ModalCloseBtn onClick={closeExpiry} />
@@ -1240,6 +1272,10 @@ export default function InventoryAdjustmentPage() {
               {expProd.productName}{expProd.size ? ` · ${expProd.size}` : ""}
             </p>
             <div style={{ background: GREEN_TINT, border: `1px solid ${GREEN_BORDER}`, borderRadius: "12px", padding: "12px 14px", marginBottom: "18px", fontSize: "13px", color: INK, display: "grid", gap: "6px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: FAINT }}>Batch No</span>
+                <strong>{fmtBatchNo(expProd.batchNo)}</strong>
+              </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span style={{ color: FAINT }}>Current</span>
                 <strong>{fmtDate(expProd.expiryDate)}</strong>
