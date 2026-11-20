@@ -68,6 +68,7 @@ const STATUS_MAP: Record<string, OrderStatus> = {
   PENDING:            "Waiting",
   PROCESSING:         "Processing",
   OUT_FOR_DELIVERY:   "Out For Delivery",
+  RECEIVED:           "Received",   // customer confirmed arrival, cashier still has to complete it
   COMPLETED:          "Received",
   CANCELLED:          "Cancelled",
   CANCELED:           "Cancelled",
@@ -140,6 +141,16 @@ function normalizeOrder(o: Record<string, unknown>): Order {
     id: String(o.id ?? ""), date, status, note: statusNote[status], total, paymentMethod, items,
     driver, amountTendered, change,
   };
+}
+
+// The api helper may either throw or resolve with the server's { message } body
+// on a 4xx. A successful status update returns the updated order (it has an id).
+function responseError(res: unknown): string | null {
+  if (res && typeof res === "object") {
+    const r = res as Record<string, unknown>;
+    if (typeof r.message === "string" && !("id" in r)) return r.message;
+  }
+  return null;
 }
 
 // GCash orders are already paid, so they can't be cancelled by the customer
@@ -303,6 +314,7 @@ export default function OrdersPage() {
   const [selectedOrder,     setSelectedOrder]     = useState<Order | null>(null);
   const [loading,           setLoading]           = useState(true);
   const [error,             setError]             = useState<string | null>(null);
+  const [actionError,       setActionError]       = useState<string | null>(null);
   const [activeTab,         setActiveTab]         = useState<TabFilter>("All");
   const [cancellingId,      setCancellingId]      = useState<string | null>(null);
   const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
@@ -358,14 +370,32 @@ export default function OrdersPage() {
   }, [socket, fetchOrders]);
 
   // ── Called after the receive modal is confirmed ────────────────────────────
+  // The customer only confirms arrival (OUT_FOR_DELIVERY -> RECEIVED).
+  // The cashier completes the order later, after collecting the driver's cash.
   const markReceived = async (id: string) => {
     setShowReceiveConfirm(null);
     const order = orders.find((o) => o.id === id);
     if (!order || order.status !== "Out For Delivery") return;
+
+    setActionError(null);
+    try {
+      const res = await api.updateOrderStatus(id, "RECEIVED");
+      const msg = responseError(res);
+      if (msg) {
+        setActionError(msg);
+        fetchOrders();
+        return;
+      }
+    } catch (err) {
+      setActionError((err as Error).message || "Could not confirm receipt. Please try again.");
+      fetchOrders();
+      return;
+    }
+
+    // Server accepted it — now update the UI
     setOrders((prev) => prev.map((o) => o.id === id ? { ...o, status: "Received" } : o));
     if (selectedOrder?.id === id)
       setSelectedOrder((p) => p ? { ...p, status: "Received" } : null);
-    try { await api.updateOrderStatus(id, "COMPLETED"); } catch { /* optimistic */ }
     setTimeout(() => {
       setOrders((prev) => prev.filter((o) => o.id !== id));
       if (selectedOrder?.id === id) setSelectedOrder(null);
@@ -461,6 +491,20 @@ export default function OrdersPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Action error banner ──────────────────────────────────────────── */}
+      {actionError && (
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 flex items-start justify-between gap-3">
+          <p className="text-[13px] m-0 leading-relaxed">⚠️ {actionError}</p>
+          <button
+            onClick={() => setActionError(null)}
+            className="bg-transparent border-0 text-red-700 cursor-pointer text-sm font-bold leading-none"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
         </div>
       )}
 
