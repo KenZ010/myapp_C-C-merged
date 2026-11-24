@@ -70,6 +70,15 @@ type MyReturn = {
   items: MyReturnItem[];
 };
 
+// One row of the confirmation summary
+type SummaryLine = {
+  id: string;
+  productName: string;
+  piecesPerCase: number;
+  ordered: number;   // total pieces ordered
+  returning: number; // total pieces being returned
+};
+
 const RETURN_REASON_LABELS: Record<ReturnReason, string> = {
   WRONG_ITEM_SENT: "Wrong item delivered",
   DAMAGED:         "Damaged / broken item",
@@ -341,6 +350,142 @@ function ReturnPolicyModal({
   );
 }
 
+// ─── Return Summary Confirmation Modal ────────────────────────────────────────
+// Shown after the customer taps "Review Return Request" and before anything is sent.
+function ReturnSummaryModal({
+  order,
+  lines,
+  reasonLabel,
+  proofImages,
+  submitting,
+  onBack,
+  onConfirm,
+}: {
+  order:       Order;
+  lines:       SummaryLine[];
+  reasonLabel: string;
+  proofImages: string[];
+  submitting:  boolean;
+  onBack:      () => void;
+  onConfirm:   () => void;
+}) {
+  const totalPcs = lines.reduce((sum, l) => sum + l.returning, 0);
+
+  const sectionLabel: React.CSSProperties = {
+    fontSize: 11, fontWeight: 700, color: "#c2185b",
+    textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 8px",
+  };
+
+  return (
+    <>
+      <div
+        onClick={submitting ? undefined : onBack}
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 60, backdropFilter: "blur(2px)" }}
+      />
+
+      <div style={{
+        position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+        zIndex: 70, width: "min(460px, 94vw)", background: "#fff", borderRadius: "20px",
+        overflow: "hidden", boxShadow: "0 24px 64px rgba(233,30,140,0.22)",
+        maxHeight: "90vh", overflowY: "auto", display: "flex", flexDirection: "column",
+      }}>
+        {/* Header */}
+        <div style={{ background: "linear-gradient(135deg,#c2185b,#e91e8c)", padding: "20px 24px", flexShrink: 0 }}>
+          <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, margin: "0 0 2px" }}>Last step</p>
+          <h3 style={{ color: "#fff", fontSize: 16, fontWeight: 800, margin: 0 }}>Review your return request</h3>
+        </div>
+
+        <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+
+          {/* Order */}
+          <div style={{ background: "#fff8fa", border: "1px solid #f0e0e8", borderRadius: 10, padding: "10px 14px" }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>Order #{order.id.slice(0, 8)}</p>
+            <p style={{ fontSize: 11, color: "#aaa", margin: "2px 0 0" }}>Completed {order.date}</p>
+          </div>
+
+          {/* Items */}
+          <div>
+            <p style={sectionLabel}>Items you are returning</p>
+            <div style={{ border: "1px solid #f5e0e8", borderRadius: 12, overflow: "hidden" }}>
+              {lines.map((l, i) => (
+                <div
+                  key={l.id}
+                  style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12,
+                    padding: "11px 14px",
+                    borderBottom: i < lines.length - 1 ? "1px solid #fdf0f5" : "none",
+                    background: i % 2 === 0 ? "#fff" : "#fff8fa",
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a", margin: 0, wordBreak: "break-word" }}>{l.productName}</p>
+                    <p style={{ fontSize: 11, color: "#aaa", margin: "2px 0 0" }}>
+                      of {formatQty(l.ordered, l.piecesPerCase)} ordered
+                    </p>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <p style={{ fontSize: 13, fontWeight: 800, color: "#c2185b", margin: 0 }}>{formatQty(l.returning, l.piecesPerCase)}</p>
+                    {l.piecesPerCase > 1 && l.returning >= l.piecesPerCase && (
+                      <p style={{ fontSize: 11, color: "#aaa", margin: "2px 0 0" }}>{l.returning} pcs</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "#fff0f6", borderTop: "1px solid #f8c0d8" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#c2185b" }}>Total pieces returning</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: "#c2185b" }}>{totalPcs} pcs</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Reason */}
+          <div>
+            <p style={sectionLabel}>Reason</p>
+            <p style={{ fontSize: 13, color: "#1a1a1a", margin: 0 }}>{reasonLabel}</p>
+          </div>
+
+          {/* Photos */}
+          <div>
+            <p style={sectionLabel}>Photo proof ({proofImages.length})</p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {proofImages.map((src, i) => (
+                <div key={i} style={{ width: 64, height: 64, borderRadius: 10, overflow: "hidden", border: "1.5px solid #f0c0cc" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={src} alt={`Proof ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* What happens next */}
+          <div style={{ background: "#f4faf5", border: "1px solid #d6e8d9", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#2e5d3a", lineHeight: 1.6 }}>
+            🔁 The store will review your request. If approved, we send a free replacement of the items above,
+            and you will hand over the returned items when it arrives. You can&apos;t change this request after submitting.
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              onClick={onBack}
+              disabled={submitting}
+              style={{ flex: 1, padding: 13, borderRadius: 30, border: "1.5px solid #f0c0cc", background: "#fff", color: "#c2185b", fontSize: 13, fontWeight: 700, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.5 : 1 }}
+            >
+              Go back &amp; edit
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={submitting}
+              style={{ flex: 1.4, padding: 13, borderRadius: 30, border: "none", background: "linear-gradient(135deg,#ff6b8a,#e91e8c)", color: "#fff", fontSize: 13, fontWeight: 700, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.7 : 1, boxShadow: "0 6px 20px rgba(233,30,140,0.35)" }}
+            >
+              {submitting ? "Uploading & submitting…" : "Confirm & Submit"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── Return Form Modal ────────────────────────────────────────────────────────
 function ReturnFormModal({
   order,
@@ -359,6 +504,7 @@ function ReturnFormModal({
   const [proofError,    setProofError]    = useState<string | null>(null);
   const [submitting,    setSubmitting]    = useState(false);
   const [error,         setError]         = useState<string | null>(null);
+  const [showSummary,   setShowSummary]   = useState(false); // confirmation step before sending
   const proofInputRef = useRef<HTMLInputElement>(null);
 
   // Only lines from this order that still have returnable pieces
@@ -438,6 +584,17 @@ function ReturnFormModal({
   const hasProof    = proofImages.length >= 1;
   const canSubmit   = anySelected && !!reason && hasProof && !submitting && !anyInvalid;
 
+  // What the confirmation step shows: only the lines the customer ticked
+  const summaryLines: SummaryLine[] = returnableLines
+    .filter((l) => selectedLines[l.id])
+    .map((l) => ({
+      id:            l.id,
+      productName:   l.productName,
+      piecesPerCase: l.piecesPerCase,
+      ordered:       totalOrdered(l),
+      returning:     totalPieces(l),
+    }));
+
   const handleProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
@@ -469,6 +626,14 @@ function ReturnFormModal({
     }
   };
 
+  // Step 1 of submitting: validate, then show the summary (nothing is sent yet)
+  const handleReview = () => {
+    if (!canSubmit) return;
+    setError(null);
+    setShowSummary(true);
+  };
+
+  // Step 2: the customer confirmed the summary → upload photos and send the request
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setError(null);
@@ -508,6 +673,7 @@ function ReturnFormModal({
       onSuccess(data.returnRequest?.id ?? order.id);
     } catch (err: any) {
       setError(err?.message || "Failed to submit return request.");
+      setShowSummary(false); // back to the form so the error is visible
     } finally {
       setSubmitting(false);
     }
@@ -783,9 +949,9 @@ function ReturnFormModal({
             </div>
           )}
 
-          {/* Submit */}
+          {/* Review (opens the summary; nothing is sent yet) */}
           <button
-            onClick={handleSubmit}
+            onClick={handleReview}
             disabled={!canSubmit}
             style={{
               width: "100%", padding: 14, borderRadius: 30, border: "none",
@@ -793,14 +959,26 @@ function ReturnFormModal({
               color: "#fff", fontSize: 14, fontWeight: 700,
               cursor: canSubmit ? "pointer" : "not-allowed",
               boxShadow: canSubmit ? "0 6px 20px rgba(233,30,140,0.35)" : "none",
-              opacity: submitting ? 0.7 : 1,
               transition: "all 0.2s",
             }}
           >
-            {submitting ? "Uploading & submitting…" : "Submit Return Request"}
+            Review Return Request
           </button>
         </div>
       </div>
+
+      {/* Confirmation step */}
+      {showSummary && (
+        <ReturnSummaryModal
+          order={order}
+          lines={summaryLines}
+          reasonLabel={reason ? RETURN_REASON_LABELS[reason] : ""}
+          proofImages={proofImages}
+          submitting={submitting}
+          onBack={() => setShowSummary(false)}
+          onConfirm={handleSubmit}
+        />
+      )}
     </>
   );
 }
@@ -1127,14 +1305,6 @@ export default function ReturnOrderPage() {
                   <p style={{ fontSize: 14, fontWeight: 800, color: "#c2185b", margin: 0 }}>
                     ₱{order.total.toLocaleString()}.00
                   </p>
-<<<<<<< HEAD
-                  <button
-                    onClick={() => setPolicyOrder(order)}
-                    style={{ background: "linear-gradient(135deg,#ff6b8a,#e91e8c)", color: "#fff", border: "none", borderRadius: 20, padding: "8px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxShadow: "0 4px 12px rgba(233,30,140,0.3)" }}
-                  >
-                    Return
-                  </button>
-=======
                   {(() => {
                     const open = openReturnBySale.get(order.id);
                     if (open) {
@@ -1147,14 +1317,13 @@ export default function ReturnOrderPage() {
                     }
                     return (
                       <button
-                        onClick={() => setSelected(order)}
+                        onClick={() => setPolicyOrder(order)}
                         style={{ background: "linear-gradient(135deg,#ff6b8a,#e91e8c)", color: "#fff", border: "none", borderRadius: 20, padding: "8px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", boxShadow: "0 4px 12px rgba(233,30,140,0.3)" }}
                       >
                         Return
                       </button>
                     );
                   })()}
->>>>>>> fe58d9770002ac21e780ad801bc51b4b15f83d87
                 </div>
               );
             })}
