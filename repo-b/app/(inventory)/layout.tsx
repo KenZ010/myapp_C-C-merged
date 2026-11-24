@@ -73,16 +73,6 @@ const navLinks = [
     ),
   },
   {
-    href: "/inventory/return",
-    label: "Return",
-    icon: (
-      <svg {...iconProps}>
-        <polyline points="1 4 1 10 7 10" />
-        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-      </svg>
-    ),
-  },
-  {
     href: "/inventory/loss-report",
     label: "Loss Report",
     icon: (
@@ -98,7 +88,6 @@ const pageTitles: Record<string, { title: string; sub: string }> = {
   "/inventory/monitoring":  { title: "Inventory Monitoring", sub: "Monitor stock levels" },
   "/inventory/adjustment":  { title: "Inventory Adjustment", sub: "Manage and update stock levels" },
   "/inventory/restocking":  { title: "Restocking",           sub: "Manage restocking orders" },
-  "/inventory/return":      { title: "Return",               sub: "Manage product returns" },
   "/inventory/loss-report": { title: "Loss Report",          sub: "Track product losses" },
 };
 

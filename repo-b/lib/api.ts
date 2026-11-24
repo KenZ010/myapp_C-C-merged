@@ -397,7 +397,7 @@ export const api = {
     return parseJson(res, 'Failed to fetch drivers');
   },
   // driverId is required by the backend when status is OUT_FOR_DELIVERY
-    updateOrderStatus: async (
+  updateOrderStatus: async (
     orderId: string,
     status: string,
     driverId?: string,
@@ -474,6 +474,48 @@ export const api = {
     });
     if (!res.ok) throw new Error('Failed to fetch return request');
     return res.json();
+  },
+
+  // ── REPLACEMENTS (approved return → delivered to the customer, no payment) ──
+  // CASHIER: approved + out-for-delivery returns. Customers get only their own.
+  getActiveReturns: async () => {
+    const res = await fetch(`${API_URL}/returns/active`, { headers: authHeaders() });
+    return parseJson(res, 'Failed to fetch replacements');
+  },
+  // CASHIER: send the replacement with a driver (inventory is deducted here)
+  dispatchReplacement: async (returnRequestId: string, driverId: string) => {
+    const res = await fetch(`${API_URL}/returns/${returnRequestId}/dispatch`, {
+      method:  'PATCH',
+      headers: authHeaders(),
+      body:    JSON.stringify({ driverId }),
+    });
+    return parseJson(res, 'Failed to send the replacement');
+  },
+  // CASHIER / DRIVER: replacement delivered and bad items collected → COMPLETED
+  completeReturn: async (returnRequestId: string, closeNote?: string) => {
+    const res = await fetch(`${API_URL}/returns/${returnRequestId}/complete`, {
+      method:  'PATCH',
+      headers: authHeaders(),
+      body:    JSON.stringify({ closeNote }),
+    });
+    return parseJson(res, 'Failed to complete the return');
+  },
+  // CASHIER: cancel an approved return before it is dispatched
+  cancelReturnRequest: async (returnRequestId: string, closeNote?: string) => {
+    const res = await fetch(`${API_URL}/returns/${returnRequestId}/cancel`, {
+      method:  'PATCH',
+      headers: authHeaders(),
+      body:    JSON.stringify({ closeNote }),
+    });
+    return parseJson(res, 'Failed to cancel the return');
+  },
+  // CUSTOMER: confirm the replacement arrived
+  confirmReplacementReceived: async (returnRequestId: string) => {
+    const res = await fetch(`${API_URL}/returns/${returnRequestId}/received`, {
+      method:  'PATCH',
+      headers: authHeaders(),
+    });
+    return parseJson(res, 'Failed to confirm receipt');
   },
 
   // ── LOSS REPORTS ────────────────────────────────────────────────────────────
@@ -644,6 +686,14 @@ export const api = {
     });
     if (!res.ok) throw new Error('Failed to write off expired batches');
     return res.json();
+  },
+  // STOCK MANAGER: deduct ONE expired batch from the product's inventory
+  writeOffBatch: async (batchId: string) => {
+    const res = await fetch(`${API_URL}/stock-batches/${batchId}/write-off`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    return parseJson(res, 'Failed to deduct the expired batch');
   },
   updateBatchExpiry: async (batchId: string, expiryDate: string | null) => {
     const res = await fetch(`${API_URL}/stock-batches/${batchId}/expiry`, {

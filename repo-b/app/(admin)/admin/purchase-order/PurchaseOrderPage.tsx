@@ -7,7 +7,7 @@ import { exportStyledExcel } from "@/lib/excelExport";
 import {
   LayoutDashboard, ShoppingCart, Users, LineChart,
   Package, User, ClipboardList, AlertTriangle, Gift,
-  Clock, Inbox, Search, Bell,
+  Clock, Inbox, Search, Check, X, Eye, StickyNote, CalendarDays,
 } from "lucide-react";
 
 // ─── CASE UNIT SYSTEM ────────────────────────────────────────────────────────
@@ -101,8 +101,37 @@ const REQUEST_STATUS_CONFIG: Record<RequestStatus, { bg: string; text: string }>
   REJECTED: { bg: "bg-red-100",    text: "text-red-700"    },
 };
 
+// Left edge color of each request card, so status reads at a glance
+const REQUEST_EDGE: Record<RequestStatus, string> = {
+  PENDING:  "border-l-yellow-400",
+  APPROVED: "border-l-green-500",
+  REJECTED: "border-l-red-400",
+};
+
 const requestTotal = (r: OrderRequest) =>
   r.items?.reduce((s, i) => s + Number(i.quantity) * Number(i.costPrice), 0) || 0;
+
+// Total pieces across all items (cases are expanded to pieces)
+const requestPieces = (r: OrderRequest) =>
+  r.items?.reduce((s, i) => {
+    const u = getUnit(i.unit || i.product?.stockUnit);
+    return s + Number(i.quantity) * (u.bottlesPerCase ?? 1);
+  }, 0) || 0;
+
+const initialsOf = (name?: string) =>
+  (name || "?").split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "?";
+
+const timeAgo = (iso: string) => {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+};
 
 const navItems = [
   { label: "Dashboard",             icon: LayoutDashboard, path: "/admin/dashboard"      },
@@ -117,6 +146,149 @@ const navItems = [
 ];
 
 const ITEMS_PER_PAGE = 8;
+const CARDS_PER_PAGE = 6;
+const PREVIEW_ITEMS  = 3;
+
+// ─── ORDER REQUEST CARD ──────────────────────────────────────────────────────
+function RequestCard({
+  request, productNameFor, processing, onView, onApprove, onReject,
+}: {
+  request: OrderRequest;
+  productNameFor: (item: { productId: string; product?: { productName: string } }) => string;
+  processing: boolean;
+  onView: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+}) {
+  const r = request;
+  const items = r.items || [];
+  const preview = items.slice(0, PREVIEW_ITEMS);
+  const extra = items.length - preview.length;
+  const isPending = r.status === "PENDING";
+
+  return (
+    <div className={`bg-white rounded-2xl border border-gray-100 border-l-4 ${REQUEST_EDGE[r.status]} shadow-sm flex flex-col overflow-hidden`}>
+
+      {/* Header: supplier + status */}
+      <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] text-gray-400">Supplier</p>
+          <h3 className="text-base font-bold text-gray-800 truncate">{r.supplier?.supplierName || r.supplierId}</h3>
+          <p className="text-[11px] text-gray-400 font-mono mt-0.5">#{r.id.slice(0, 8)}</p>
+        </div>
+        <span className={`shrink-0 px-3 py-1 rounded-full text-xs font-medium ${REQUEST_STATUS_CONFIG[r.status]?.bg} ${REQUEST_STATUS_CONFIG[r.status]?.text}`}>
+          {r.status}
+        </span>
+      </div>
+
+      {/* Requested by */}
+      <div className="px-4 pb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0">
+            {initialsOf(r.requestedBy?.name)}
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-800 truncate">{r.requestedBy?.name || "Unknown"}</p>
+            <p className="text-xs text-gray-400 truncate">{r.requestedBy?.role || "Inventory Manager"}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 text-xs text-gray-400 shrink-0" title={new Date(r.createdAt).toLocaleString("en-PH")}>
+          <CalendarDays className="w-3.5 h-3.5" />
+          <span>{timeAgo(r.createdAt)}</span>
+        </div>
+      </div>
+
+      {/* Items */}
+      <div className="mx-4 rounded-xl bg-gray-50 px-3 py-2">
+        <p className="text-xs font-semibold text-gray-500 py-1">
+          {pluralize(items.length, "product")} requested
+        </p>
+        <div className="divide-y divide-gray-100">
+          {preview.map((item, idx) => (
+            <div key={idx} className="py-2 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm text-gray-800 truncate">
+                  {productNameFor(item)}
+                  {item.product?.size && <span className="text-gray-400 ml-1">{item.product.size}</span>}
+                </p>
+                <div className="mt-0.5">
+                  <UnitPill unit={item.unit || item.product?.stockUnit} qty={Number(item.quantity)} />
+                </div>
+              </div>
+              <span className="text-sm font-medium text-gray-700 shrink-0">
+                ₱{(Number(item.quantity) * Number(item.costPrice)).toLocaleString()}
+              </span>
+            </div>
+          ))}
+        </div>
+        {extra > 0 && (
+          <button onClick={onView} className="w-full text-left text-xs text-indigo-600 hover:text-indigo-800 font-medium py-1.5">
+            +{extra} more {extra === 1 ? "product" : "products"}
+          </button>
+        )}
+      </div>
+
+      {/* Notes */}
+      {r.notes && (
+        <div className="mx-4 mt-3 flex gap-2 text-xs text-gray-600 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+          <StickyNote className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+          <p className="line-clamp-2">{r.notes}</p>
+        </div>
+      )}
+
+      {/* Rejection reason */}
+      {r.status === "REJECTED" && r.adminRemarks && (
+        <div className="mx-4 mt-3 text-xs text-red-700 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+          <span className="font-semibold">Rejected: </span>{r.adminRemarks}
+        </div>
+      )}
+
+      {/* Total */}
+      <div className="px-4 pt-4 pb-3 mt-auto flex items-end justify-between gap-2">
+        <div>
+          <p className="text-[11px] text-gray-400">Total amount</p>
+          <p className="text-2xl font-bold text-indigo-700 leading-tight">₱{requestTotal(r).toLocaleString()}</p>
+        </div>
+        <p className="text-xs text-gray-400 text-right">{pluralize(requestPieces(r), "piece")} in total</p>
+      </div>
+
+      {/* Actions */}
+      <div className="px-4 pb-4 flex gap-2">
+        <button onClick={onView}
+          className="flex items-center justify-center gap-1 border border-indigo-300 text-indigo-600 hover:bg-indigo-50 rounded-lg px-3 py-2 text-xs font-medium">
+          <Eye className="w-3.5 h-3.5" /> Details
+        </button>
+        {isPending && (
+          <>
+            <button disabled={processing} onClick={onReject}
+              className="flex-1 flex items-center justify-center gap-1 border border-red-200 text-red-500 hover:bg-red-50 disabled:opacity-50 rounded-lg px-3 py-2 text-xs font-medium">
+              <X className="w-3.5 h-3.5" /> Reject
+            </button>
+            <button disabled={processing} onClick={onApprove}
+              className="flex-1 flex items-center justify-center gap-1 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white rounded-lg px-3 py-2 text-xs font-semibold">
+              <Check className="w-3.5 h-3.5" /> {processing ? "Working..." : "Approve"}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RequestCardSkeleton() {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 border-l-4 border-l-gray-200 shadow-sm p-4 animate-pulse space-y-3">
+      <div className="flex justify-between">
+        <div className="space-y-2"><div className="h-3 w-12 bg-gray-100 rounded" /><div className="h-4 w-32 bg-gray-200 rounded" /></div>
+        <div className="h-6 w-16 bg-gray-100 rounded-full" />
+      </div>
+      <div className="flex items-center gap-2"><div className="w-8 h-8 rounded-full bg-gray-100" /><div className="h-3 w-24 bg-gray-100 rounded" /></div>
+      <div className="h-24 bg-gray-50 rounded-xl" />
+      <div className="h-7 w-28 bg-gray-100 rounded" />
+      <div className="h-8 bg-gray-100 rounded-lg" />
+    </div>
+  );
+}
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 export default function PurchaseOrderPage() {
@@ -195,24 +367,8 @@ export default function PurchaseOrderPage() {
       try {
         setProcessingId(r.id);
         setPageError("");
-        const employeeId = localStorage.getItem("userId") || "";
-        const res = await api.createDelivery({
-          supplierId: r.supplierId,
-          employeeId,
-          deliveryDate: new Date().toISOString().split("T")[0],
-          totalItems: r.items.reduce((s, i) => s + Number(i.quantity), 0),
-          notes: r.notes || "",
-          items: r.items.map((i) => ({
-            productId: i.productId,
-            quantity: Number(i.quantity) || 1,
-            costPrice: Number(i.costPrice) || 0,
-            unit: i.unit || "case_24",
-          })),
-        });
-        if (res?.error || res?.message?.toLowerCase().includes("error")) {
-          setPageError(res.message || "Failed to create delivery.");
-          return;
-        }
+        // The server creates the purchase order in the same transaction as the approval,
+        // so only the status update is sent from here (calling createDelivery too made a duplicate PO).
         await api.updateOrderRequest(r.id, { status: "APPROVED" });
         await fetchAll();
         setViewRequest(null);
@@ -220,7 +376,9 @@ export default function PurchaseOrderPage() {
         setTimeout(() => setPageSuccess(""), 3000);
       } catch (e) {
         console.error(e);
-        setPageError("Failed to approve request. Please try again.");
+        // parseJson throws the server's message, e.g. "This request has already been reviewed."
+        setPageError((e as Error)?.message || "Failed to approve request. Please try again.");
+        await fetchAll();
       } finally {
         setProcessingId(null);
         closeConfirm();
@@ -241,7 +399,9 @@ export default function PurchaseOrderPage() {
       setTimeout(() => setPageSuccess(""), 3000);
     } catch (e) {
       console.error(e);
-      setPageError("Failed to reject request. Please try again.");
+      setPageError((e as Error)?.message || "Failed to reject request. Please try again.");
+      setRejectTarget(null);
+      await fetchAll();
     } finally { setProcessingId(null); }
   };
 
@@ -252,17 +412,20 @@ export default function PurchaseOrderPage() {
   });
 
   // ── Derived lists ──
-  const filteredRequests = orderRequests.filter((r) => {
-    const q = requestSearch.toLowerCase();
-    return (
-      (r.id.toLowerCase().includes(q) ||
-        (r.supplier?.supplierName || "").toLowerCase().includes(q) ||
-        (r.requestedBy?.name || "").toLowerCase().includes(q)) &&
-      (requestStatus === "All" || r.status === requestStatus)
-    );
-  });
-  const requestTotalPages = Math.ceil(filteredRequests.length / ITEMS_PER_PAGE);
-  const paginatedRequests = filteredRequests.slice((requestPage - 1) * ITEMS_PER_PAGE, requestPage * ITEMS_PER_PAGE);
+  const filteredRequests = orderRequests
+    .filter((r) => {
+      const q = requestSearch.toLowerCase();
+      return (
+        (r.id.toLowerCase().includes(q) ||
+          (r.supplier?.supplierName || "").toLowerCase().includes(q) ||
+          (r.requestedBy?.name || "").toLowerCase().includes(q)) &&
+        (requestStatus === "All" || r.status === requestStatus)
+      );
+    })
+    // newest first so the admin sees the latest requests on top
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const requestTotalPages = Math.ceil(filteredRequests.length / CARDS_PER_PAGE);
+  const paginatedRequests = filteredRequests.slice((requestPage - 1) * CARDS_PER_PAGE, requestPage * CARDS_PER_PAGE);
   const pendingCount      = orderRequests.filter((r) => r.status === "PENDING").length;
 
   const filteredHistory = deliveries.filter((d) =>
@@ -308,11 +471,11 @@ export default function PurchaseOrderPage() {
   const handleLogout = () => { document.cookie = "token=; path=/; max-age=0"; localStorage.removeItem("token"); localStorage.removeItem("employee"); router.push("/"); };
   const navigate     = (path: string) => { router.push(path); setShowMobileMenu(false); };
 
-  const PaginationBar = ({ page, totalPages, setPage, total, label }: {
-    page: number; totalPages: number; setPage: (p: number) => void; total: number; label: string;
+  const PaginationBar = ({ page, totalPages, setPage, total, label, perPage = ITEMS_PER_PAGE }: {
+    page: number; totalPages: number; setPage: (p: number) => void; total: number; label: string; perPage?: number;
   }) => totalPages <= 1 ? null : (
     <div className="flex items-center justify-between mt-4 px-1 flex-wrap gap-2">
-      <p className="text-xs text-gray-400">Showing {(page - 1) * ITEMS_PER_PAGE + 1}–{Math.min(page * ITEMS_PER_PAGE, total)} of {total} {label}</p>
+      <p className="text-xs text-gray-400">Showing {(page - 1) * perPage + 1}–{Math.min(page * perPage, total)} of {total} {label}</p>
       <div className="flex gap-1 flex-wrap">
         <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}
           className="px-3 py-1 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">← Prev</button>
@@ -388,10 +551,6 @@ export default function PurchaseOrderPage() {
           </div>
           <div className="flex items-center gap-3">
             <div className="relative">
-              <Bell className="w-5 h-5 text-gray-500" />
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" />
-            </div>
-            <div className="relative">
               <div className="flex items-center gap-2 px-2 py-1.5">
                 <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-semibold text-sm md:text-base">R</div>
                 <div className="hidden md:block text-left">
@@ -450,7 +609,7 @@ export default function PurchaseOrderPage() {
             </div>
           )}
 
-          {/* ORDER REQUESTS */}
+          {/* ORDER REQUESTS — card review board */}
           {activeTab === "requests" && (
             <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm">
               <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -486,74 +645,40 @@ export default function PurchaseOrderPage() {
                 ].map((s) => <span key={s.label} className={`${s.color} rounded-full px-3 py-1 text-xs font-semibold`}>{s.label}: {s.count}</span>)}
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-max">
-                  <thead>
-                    <tr className="bg-indigo-900 text-white text-xs">
-                      <th className="p-3 text-left">Request ID</th>
-                      <th className="p-3 text-left">Requested By</th>
-                      <th className="p-3 text-left">Supplier</th>
-                      <th className="p-3 text-left">Products</th>
-                      <th className="p-3 text-left">Total</th>
-                      <th className="p-3 text-left">Date</th>
-                      <th className="p-3 text-left">Status</th>
-                      <th className="p-3 text-left">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loading ? (
-                      <tr><td colSpan={8} className="p-6 text-center text-gray-400">Loading...</td></tr>
-                    ) : paginatedRequests.length === 0 ? (
-                      <tr><td colSpan={8} className="p-10 text-center">
-                        <div className="flex flex-col items-center gap-2">
-                          <Inbox className="w-8 h-8 text-gray-300" />
-                          <p className="text-gray-400 text-sm">No order requests found.</p>
-                        </div>
-                      </td></tr>
-                    ) : paginatedRequests.map((r) => (
-                      <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="p-3"><span className="bg-gray-700 text-white px-3 py-1 rounded-full text-xs font-mono">{r.id.slice(0, 8)}...</span></td>
-                        <td className="p-3 text-xs text-gray-600">
-                          {r.requestedBy ? (
-                            <div>
-                              <p className="font-medium">{r.requestedBy.name}</p>
-                              <p className="text-gray-400">{r.requestedBy.role}</p>
-                            </div>
-                          ) : "—"}
-                        </td>
-                        <td className="p-3 text-gray-700">{r.supplier?.supplierName || r.supplierId}</td>
-                        <td className="p-3 text-gray-600 text-xs max-w-xs">
-                          <div className="space-y-1">
-                            {r.items?.slice(0, 3).map((item, idx) => (
-                              <div key={idx} className="truncate">{productNameFor(item)}</div>
-                            ))}
-                            {(r.items?.length || 0) > 3 && <p className="text-gray-400">+{r.items.length - 3} more</p>}
-                          </div>
-                        </td>
-                        <td className="p-3 text-gray-700 font-medium">₱{requestTotal(r).toLocaleString()}</td>
-                        <td className="p-3 text-xs text-gray-500">{new Date(r.createdAt).toLocaleDateString("en-PH")}</td>
-                        <td className="p-3">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${REQUEST_STATUS_CONFIG[r.status]?.bg} ${REQUEST_STATUS_CONFIG[r.status]?.text}`}>{r.status}</span>
-                        </td>
-                        <td className="p-3">
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => setViewRequest(r)} className="border border-indigo-300 text-indigo-600 hover:bg-indigo-50 rounded-lg px-2 py-1 text-xs font-medium">View</button>
-                            {r.status === "PENDING" && (
-                              <>
-                                <button disabled={processingId === r.id} onClick={() => handleApproveRequest(r)}
-                                  className="bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white rounded-lg px-2 py-1 text-xs font-medium">Approve</button>
-                                <button disabled={processingId === r.id} onClick={() => setRejectTarget(r)}
-                                  className="border border-red-200 text-red-500 hover:bg-red-50 disabled:opacity-50 rounded-lg px-2 py-1 text-xs font-medium">Reject</button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <PaginationBar page={requestPage} totalPages={requestTotalPages} setPage={setRequestPage} total={filteredRequests.length} label="requests" />
+              {loading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {[0, 1, 2].map((i) => <RequestCardSkeleton key={i} />)}
+                </div>
+              ) : paginatedRequests.length === 0 ? (
+                <div className="py-14 flex flex-col items-center gap-2">
+                  <Inbox className="w-8 h-8 text-gray-300" />
+                  <p className="text-gray-500 text-sm font-medium">
+                    {requestStatus === "PENDING" && !requestSearch ? "You're all caught up" : "No order requests found"}
+                  </p>
+                  <p className="text-gray-400 text-xs">
+                    {requestStatus === "PENDING" && !requestSearch
+                      ? "New requests from the inventory manager will show up here."
+                      : "Try a different search or status filter."}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {paginatedRequests.map((r) => (
+                    <RequestCard
+                      key={r.id}
+                      request={r}
+                      productNameFor={productNameFor}
+                      processing={processingId === r.id}
+                      onView={() => setViewRequest(r)}
+                      onApprove={() => handleApproveRequest(r)}
+                      onReject={() => setRejectTarget(r)}
+                    />
+                  ))}
+                </div>
+              )}
+
+              <PaginationBar page={requestPage} totalPages={requestTotalPages} setPage={setRequestPage}
+                total={filteredRequests.length} label="requests" perPage={CARDS_PER_PAGE} />
             </div>
           )}
 
@@ -761,7 +886,7 @@ export default function PurchaseOrderPage() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
             <h2 className="text-base font-bold text-gray-800 mb-1">Reject this request?</h2>
             <p className="text-xs text-gray-400 mb-3">The inventory manager will see your reason.</p>
-            <textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3}
+            <textarea maxLength={500} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3}
               placeholder="Reason (optional)..."
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 resize-none" />
             <div className="flex gap-3 mt-4">

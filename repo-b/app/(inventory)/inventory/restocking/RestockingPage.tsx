@@ -42,7 +42,32 @@ function getCaseBreakdown(qty: number, unit?: string): string | null {
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 type POStatus = "PENDING" | "PARTIALLY_RECEIVED" | "DELIVERED" | "CANCELLED";
-type POStep = "receiving" | "create" | "history";
+type POStep = "receiving" | "create" | "requests" | "history";
+
+// Purchase order request: the stock manager submits it, the admin approves or rejects it
+type RequestStatus = "PENDING" | "APPROVED" | "REJECTED";
+type OrderRequest = {
+  id: string;
+  supplierId: string;
+  status: RequestStatus;
+  notes?: string | null;
+  adminRemarks?: string | null;
+  createdAt: string;
+  reviewedAt?: string | null;
+  deliveryId?: string | null;
+  supplier?: { id: string; supplierName: string };
+  reviewedBy?: { id: string; name: string } | null;
+  items: { id: string; productId: string; quantity: number; costPrice: number; unit?: string | null; product?: { productName: string; size?: string | null } }[];
+};
+
+const requestTheme: Record<RequestStatus, { bg: string; color: string; border: string; label: string }> = {
+  PENDING:  { bg: "#fffbeb", color: "#b45309", border: "#fde68a", label: "Waiting for admin" },
+  APPROVED: { bg: "#e8f5ea", color: "#1f5f2d", border: "#b7dcbd", label: "Approved" },
+  REJECTED: { bg: "#fef2f2", color: "#b91c1c", border: "#fecaca", label: "Rejected" },
+};
+
+const requestTotal = (r: OrderRequest) =>
+  r.items.reduce((s, i) => s + Number(i.quantity) * Number(i.costPrice), 0);
 
 type DeliveryItem = {
   id: string;
@@ -519,6 +544,8 @@ export default function PurchaseOrderPage() {
   const [step, setStep] = useState<POStep>("create");
 
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [orderRequests,  setOrderRequests]  = useState<OrderRequest[]>([]);
+  const [requestFilter,  setRequestFilter]  = useState<"All" | RequestStatus>("All");
   const [loading,    setLoading]    = useState(true);
 
   const [receiptModal, setReceiptModal] = useState<{
@@ -648,6 +675,29 @@ export default function PurchaseOrderPage() {
 
   useEffect(() => { fetchAll(); }, []);
 
+  // Pick up the admin's decision without a manual refresh
+  useEffect(() => {
+    const t = setInterval(async () => {
+      try {
+        const reqs = await api.getOrderRequests();
+        if (!Array.isArray(reqs)) return;
+        setOrderRequests((prev) => {
+          const approvedNow = reqs.filter((r: OrderRequest) => r.status !== "PENDING" &&
+            prev.find((x) => x.id === r.id)?.status === "PENDING");
+          if (approvedNow.length > 0) {
+            const ok = approvedNow.some((r: OrderRequest) => r.status === "APPROVED");
+            setToast(ok ? "Your purchase order request was approved." : "Your purchase order request was rejected.");
+            setTimeout(() => setToast(""), 4000);
+            // An approval creates a PO, so refresh the Receiving list too
+            if (ok) api.getDeliveries().then((d: Delivery[]) => Array.isArray(d) && setDeliveries(d)).catch(() => {});
+          }
+          return reqs;
+        });
+      } catch { /* ignore, try again next tick */ }
+    }, 20000);
+    return () => clearInterval(t);
+  }, []);
+
   // Reorder suggestions for every supplier — scoped client-side
   useEffect(() => {
     let cancelled = false;
@@ -670,13 +720,14 @@ export default function PurchaseOrderPage() {
     try {
       setLoading(true);
       // Extra lookups fail soft so the Receiving / History tabs never break because of them
-      const [d, s, p, orders] = await Promise.all([
+      const [d, s, p, reqs] = await Promise.all([
         api.getDeliveries(),
         api.getSuppliers().catch(() => []),
         api.getProducts().catch(() => []),
-        api.getCompletedOrders().catch(() => []),
+        api.getOrderRequests().catch(() => []),
       ]);
       setDeliveries(Array.isArray(d) ? d : []);
+      setOrderRequests(Array.isArray(reqs) ? reqs : []);
       setSuppliers((Array.isArray(s) ? s : []).filter((sup: { status?: string }) => sup.status !== "INACTIVE"));
 
       const normalized: Product[] = (Array.isArray(p) ? p : []).map((prod: Product) => ({
@@ -688,25 +739,6 @@ export default function PurchaseOrderPage() {
       }));
       setAllProducts(normalized);
 
-      // Units sold per product from completed orders (used to rank top sellers)
-      const sales: Record<string, number> = {};
-      for (const order of Array.isArray(orders) ? orders : []) {
-        const lines = (order as { orderLines?: unknown[] }).orderLines ?? [];
-        if (!Array.isArray(lines)) continue;
-        for (const line of lines as Record<string, unknown>[]) {
-          const product  = line.product as Record<string, unknown> | null;
-          const prodId   = product?.id ? String(product.id) : null;
-          const prodName = product?.productName ? String(product.productName) : null;
-          const qty      = Number(line.quantity ?? 0);
-          if (prodId) {
-            sales[prodId] = (sales[prodId] ?? 0) + qty;
-          } else if (prodName) {
-            const match = normalized.find((np) => np.productName === prodName);
-            if (match) sales[match.id] = (sales[match.id] ?? 0) + qty;
-          }
-        }
-      }
-      setProductSales(sales);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -924,8 +956,8 @@ export default function PurchaseOrderPage() {
   const openPreview = () => {
     if (!form.supplierId) { setCreateError("Please select a supplier."); return; }
     if (validLineItems.length === 0) { setCreateError("Please add at least one product."); return; }
-    if (validLineItems.some((i) => !(Number(i.quantity) > 0))) {
-      setCreateError("Every item needs a quantity of at least 1.");
+    if (validLineItems.some((i) => !Number.isInteger(Number(i.quantity)) || Number(i.quantity) < 1)) {
+      setCreateError("Every item needs a whole-number quantity of at least 1.");
       return;
     }
     setCreateError("");
@@ -936,17 +968,11 @@ export default function PurchaseOrderPage() {
     if (!form.supplierId) { setCreateError("Please select a supplier."); return; }
     if (validLineItems.length === 0) { setCreateError("Please add at least one product."); return; }
 
-    const employeeId = getEmployeeId();
-    if (!employeeId) { setCreateError("No employee session found. Please log in again."); return; }
-
-    try {
+        try {
       setSaving(true);
       setCreateError("");
-      const res = await api.createDelivery({
+      const res = await api.createOrderRequest({
         supplierId: form.supplierId,
-        employeeId,
-        deliveryDate: form.deliveryDate,
-        totalItems: validLineItems.reduce((s, i) => s + Number(i.quantity), 0),
         notes: form.notes || "",
         items: validLineItems.map((i) => ({
           productId: i.productId,
@@ -955,18 +981,19 @@ export default function PurchaseOrderPage() {
           unit:      i.unit || "case_24",
         })),
       });
-      if (res?.error || res?.message?.toLowerCase().includes("error")) {
-        setCreateError(res.message || "Failed to create purchase order.");
+      if (res?.error || !res?.id) {
+        setCreateError(res?.message || "Failed to send the request.");
         return;
       }
       setForm(makeEmptyForm());
       setSupplierSearch("");
       await fetchAll();
-      setToast("Purchase order created! It's now waiting in Receiving.");
+      setToast("Request sent. The admin will approve or reject it.");
       setTimeout(() => setToast(""), 3500);
+      setStep("requests");
     } catch (e) {
       console.error(e);
-      setCreateError((e as Error)?.message || "Failed to create purchase order. Please try again.");
+      setCreateError((e as Error)?.message || "Failed to send the request. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -1005,7 +1032,8 @@ export default function PurchaseOrderPage() {
   };
 
   const tabs: { key: POStep; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { key: "create",    label: "Create Order", icon: Icon.clipboard },
+    { key: "create",    label: "Create Request", icon: Icon.clipboard },
+    { key: "requests",  label: "My Requests",  icon: Icon.send, badge: orderRequests.filter((r) => r.status === "PENDING").length },
     { key: "receiving", label: "Receiving",    icon: Icon.box,       badge: pendingDeliveries.length },
     { key: "history",   label: "PO History",   icon: Icon.clock },
   ];
@@ -1075,7 +1103,7 @@ export default function PurchaseOrderPage() {
           <div onClick={() => setPreviewModal(false)}
             style={{ position: "fixed", inset: 0, background: "rgba(10,30,15,0.55)", zIndex: 40, backdropFilter: "blur(2px)" }} />
           <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 50, background: "#fff", borderRadius: "18px", width: "min(92vw, 520px)", boxShadow: "0 24px 70px rgba(10,30,15,0.3)", maxHeight: "90vh", overflowY: "auto", border: `1px solid ${GREEN_BORDER}` }}>
-            <ModalHeader icon={Icon.clipboard} title="Order Preview" subtitle="Please review before submitting" onClose={() => setPreviewModal(false)} />
+            <ModalHeader icon={Icon.clipboard} title="Order Preview" subtitle="This goes to the admin for approval" onClose={() => setPreviewModal(false)} />
             <div style={{ padding: "22px 24px" }}>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px", marginBottom: "16px" }}>
                 <div style={{ background: GREEN_LIGHT, border: "1px solid #b7dcbd", borderRadius: "12px", padding: "12px 14px", display: "flex", alignItems: "center", gap: "10px" }}>
@@ -1140,7 +1168,7 @@ export default function PurchaseOrderPage() {
                   style={{ flex: 1, padding: "12px", borderRadius: "10px", border: `1px solid ${GREEN_BORDER}`, background: "#fff", color: MUTED, fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>Back</button>
                 <button className="btn-green" onClick={() => { setPreviewModal(false); handleCreate(); }}
                   style={{ flex: 2, padding: "12px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "14px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", boxShadow: "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
-                  {Icon.check} Confirm Order
+                  {Icon.send} Send for Approval
                 </button>
               </div>
             </div>
@@ -1164,7 +1192,7 @@ export default function PurchaseOrderPage() {
           </div>
           <div>
             <h1 style={{ fontSize: "22px", fontWeight: 700, color: INK, margin: 0, letterSpacing: "-0.02em" }}>Restocking</h1>
-            <p style={{ fontSize: "13px", color: MUTED, margin: "2px 0 0" }}>Create purchase orders, receive supplier deliveries and track history</p>
+            <p style={{ fontSize: "13px", color: MUTED, margin: "2px 0 0" }}>Request purchase orders, receive approved deliveries and track history</p>
           </div>
         </div>
         <button className="btn-outline" onClick={fetchAll}
@@ -1495,7 +1523,7 @@ export default function PurchaseOrderPage() {
                           </div>
                           <div style={{ flex: "0 1 90px" }}>
                             <label style={labelStyle}>Cases</label>
-                            <input type="number" min="1" value={item.quantity}
+                            <input type="number" min="1" step="1" value={item.quantity}
                               onChange={(e) => updateLineItem(idx, "quantity", e.target.value)}
                               className="green-input"
                               style={{ ...fieldStyle, textAlign: "center", fontWeight: 700 }} />
@@ -1532,7 +1560,7 @@ export default function PurchaseOrderPage() {
             {/* Step 3 — Notes */}
             <div style={{ ...card, padding: "20px 22px", opacity: form.supplierId ? 1 : 0.55, pointerEvents: form.supplierId ? "auto" : "none", transition: "opacity 0.15s" }}>
               <StepHeader n={3} active={!!form.supplierId} title="Notes (Optional)" />
-              <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              <textarea maxLength={500} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 rows={3} className="green-input"
                 style={{ ...fieldStyle, resize: "none", fontFamily: "inherit" }}
                 placeholder="Optional notes about this order..." />
@@ -1602,7 +1630,7 @@ export default function PurchaseOrderPage() {
             <div style={{ background: GREEN_TINT, border: `1px solid ${GREEN_BORDER}`, borderRadius: "12px", padding: "10px 14px", marginBottom: "14px", display: "flex", alignItems: "center", gap: "10px" }}>
               <span style={{ color: FAINT, display: "flex" }}>{Icon.calendar}</span>
               <div>
-                <p style={{ fontSize: "10.5px", color: MUTED, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", margin: 0 }}>Date Created</p>
+                <p style={{ fontSize: "10.5px", color: MUTED, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", margin: 0 }}>Date Requested</p>
                 <p style={{ fontSize: "12.5px", fontWeight: 600, color: INK, margin: "2px 0 0" }}>
                   {new Date().toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
                 </p>
@@ -1649,9 +1677,95 @@ export default function PurchaseOrderPage() {
               disabled={saving || validLineItems.length === 0 || !form.supplierId}
               style={{ width: "100%", padding: "13px", borderRadius: "10px", border: "none", background: saving || validLineItems.length === 0 || !form.supplierId ? "#c5d3c8" : GREEN, color: "#fff", fontSize: "14px", fontWeight: 700, cursor: saving || validLineItems.length === 0 || !form.supplierId ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", boxShadow: validLineItems.length === 0 || !form.supplierId ? "none" : "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}
             >
-              {saving ? "Submitting..." : <>{Icon.send} Review &amp; Submit</>}
+              {saving ? "Submitting..." : <>{Icon.send} Review &amp; Request</>}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════
+          MY REQUESTS TAB
+      ══════════════════════════════════════════════════════════════════ */}
+      {step === "requests" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "14px", maxWidth: "860px" }}>
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+            {(["All", "PENDING", "APPROVED", "REJECTED"] as const).map((f) => {
+              const count = f === "All" ? orderRequests.length : orderRequests.filter((r) => r.status === f).length;
+              const active = requestFilter === f;
+              return (
+                <button key={f} onClick={() => setRequestFilter(f)}
+                  style={{ padding: "7px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, cursor: "pointer", border: `1px solid ${active ? GREEN : GREEN_BORDER}`, background: active ? GREEN : "#fff", color: active ? "#fff" : MUTED }}>
+                  {f === "All" ? "All" : f.charAt(0) + f.slice(1).toLowerCase()} · {count}
+                </button>
+              );
+            })}
+          </div>
+
+          {orderRequests.filter((r) => requestFilter === "All" || r.status === requestFilter).length === 0 ? (
+            <div style={{ ...card, padding: "48px 20px", textAlign: "center" }}>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: "10px" }}>{Icon.emptyBox}</div>
+              <p style={{ fontSize: "14px", fontWeight: 600, color: INK, margin: "0 0 4px" }}>No requests here yet</p>
+              <p style={{ fontSize: "12.5px", color: MUTED, margin: "0 0 14px" }}>Create a request and the admin will approve or reject it.</p>
+              <button className="btn-green" onClick={() => setStep("create")}
+                style={{ padding: "10px 18px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}>Create a request</button>
+            </div>
+          ) : (
+            orderRequests
+              .filter((r) => requestFilter === "All" || r.status === requestFilter)
+              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+              .map((r) => {
+                const t = requestTheme[r.status];
+                return (
+                  <div key={r.id} className="po-card" style={{ ...card, padding: "18px 20px", borderLeft: `4px solid ${t.color}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
+                      <div>
+                        <p style={{ fontSize: "15px", fontWeight: 700, color: INK, margin: 0 }}>{r.supplier?.supplierName || r.supplierId}</p>
+                        <p style={{ fontSize: "11.5px", color: FAINT, margin: "3px 0 0" }}>
+                          #{r.id.slice(0, 8)} · sent {new Date(r.createdAt).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
+                        </p>
+                      </div>
+                      <span style={{ display: "inline-flex", alignItems: "center", height: "fit-content", padding: "4px 12px", borderRadius: "20px", fontSize: "11.5px", fontWeight: 700, background: t.bg, color: t.color, border: `1px solid ${t.border}` }}>{t.label}</span>
+                    </div>
+
+                    <div style={{ background: GREEN_TINT, border: `1px solid ${GREEN_BORDER}`, borderRadius: "12px", padding: "4px 14px" }}>
+                      {r.items.map((i, idx) => (
+                        <div key={i.id} style={{ display: "flex", justifyContent: "space-between", gap: "12px", padding: "9px 0", borderBottom: idx < r.items.length - 1 ? `1px solid ${GREEN_BORDER}` : "none" }}>
+                          <div style={{ minWidth: 0 }}>
+                            <p style={{ fontSize: "13px", fontWeight: 600, color: INK, margin: 0 }}>
+                              {i.product?.productName || i.productId}{i.product?.size ? <span style={{ color: FAINT, fontWeight: 400 }}> {i.product.size}</span> : null}
+                            </p>
+                            <div style={{ marginTop: "4px" }}><UnitPill unit={i.unit || undefined} qty={Number(i.quantity)} /></div>
+                          </div>
+                          <span style={{ fontSize: "13px", fontWeight: 700, color: GREEN_DARK, whiteSpace: "nowrap" }}>₱{(Number(i.quantity) * Number(i.costPrice)).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "12px", gap: "10px", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: "12px", color: MUTED }}>Total</span>
+                      <span style={{ fontSize: "18px", fontWeight: 800, color: INK }}>₱{requestTotal(r).toLocaleString()}</span>
+                    </div>
+
+                    {r.notes && <p style={{ fontSize: "12.5px", color: MUTED, margin: "10px 0 0" }}><strong style={{ color: INK }}>Your note:</strong> {r.notes}</p>}
+
+                    {r.status === "REJECTED" && (
+                      <div style={{ ...errorBanner, marginTop: "12px" }}>
+                        <span style={{ display: "flex", marginTop: "1px" }}>{Icon.alert}</span>
+                        <span>{r.adminRemarks ? `Rejected: ${r.adminRemarks}` : "Rejected by the admin. No reason was given."}</span>
+                      </div>
+                    )}
+
+                    {r.status === "APPROVED" && (
+                      <div style={{ marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap", background: GREEN_LIGHT, border: "1px solid #b7dcbd", borderRadius: "10px", padding: "10px 14px" }}>
+                        <span style={{ fontSize: "12.5px", color: GREEN_DARK, fontWeight: 600 }}>Approved. The purchase order is ready to receive.</span>
+                        <button className="btn-green" onClick={() => setStep("receiving")}
+                          style={{ padding: "7px 14px", borderRadius: "8px", border: "none", background: GREEN, color: "#fff", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>Go to Receiving</button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+          )}
         </div>
       )}
 

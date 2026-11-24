@@ -1,5 +1,6 @@
 "use client";
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { useSocket } from "@/app/providers";
 
 // ── Theme (same green design as the other pages) ──────────────────────────────
 // GREEN #2e7d3e · DARK #1f5f2d · MID #3f9a52 · LIGHT #e8f5ea · TINT #f4faf5
@@ -52,6 +53,12 @@ type ReturnRequest = {
   driverId?: string | null;
   driver?: Driver | null;
   outForDeliveryAt?: string | null;
+  receivedAt?: string | null;        // customer confirmed the replacement arrived
+  // Added by the backend for APPROVED requests: can we cover it from stock right now?
+  fulfillment?: {
+    canDispatch: boolean;
+    shortages: { productId: string; productName: string; needed: string; available: string }[];
+  } | null;
   closedAt?: string | null;
   closeNote?: string | null;
   createdAt: string;
@@ -307,6 +314,7 @@ export default function ReturnPage() {
   const [driversLoading, setDriversLoading] = useState(false);
   const [driverId,      setDriverId]      = useState("");
   const [collect,       setCollect]       = useState<Record<string, CollectRow>>({});
+  const socket = useSocket();
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchRecords = useCallback(async () => {
@@ -325,6 +333,39 @@ export default function ReturnPage() {
   }, [page, statusFil]);
 
   useEffect(() => { fetchRecords(); }, [fetchRecords]);
+
+  // Quiet refresh (no spinner) for live updates
+  const refreshQuiet = useCallback(async () => {
+    try {
+      const result = await getReturnRequests({ page, limit: LIMIT, status: statusFil });
+      setRecords(result.data);
+      setTotal(result.total);
+      setTotalPages(result.totalPages);
+    } catch { /* keep what we already have */ }
+  }, [page, statusFil]);
+
+  // Live updates: new request, customer confirmed receipt, status changes.
+  // Also reloads the open modal so "Customer confirmed" shows up without closing it.
+  const openId = viewItem?.id ?? null;
+  useEffect(() => {
+    if (!socket) return;
+    const onChange = () => {
+      void refreshQuiet();
+      if (openId) {
+        void getReturnRequestDetail(openId).then((d) => {
+          if (d) setViewItem((prev) => (prev && prev.id === d.id ? { ...prev, ...d } : prev));
+        });
+      }
+    };
+    socket.on("return:new",      onChange);
+    socket.on("return:status",   onChange);
+    socket.on("return:received", onChange);
+    return () => {
+      socket.off("return:new",      onChange);
+      socket.off("return:status",   onChange);
+      socket.off("return:received", onChange);
+    };
+  }, [socket, refreshQuiet, openId]);
 
   // ── Client-side filter ────────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -371,6 +412,13 @@ export default function ReturnPage() {
     const detail = await getReturnRequestDetail(r.id);
     if (!detail) return;
     setViewItem((prev) => (prev && prev.id === r.id ? { ...prev, ...detail } : prev));
+  };
+
+  // Stock can change while the modal is open (a delivery was received, another dispatch went out)
+  const recheckStock = async () => {
+    if (!viewItem) return;
+    const d = await getReturnRequestDetail(viewItem.id);
+    if (d) setViewItem((prev) => (prev && prev.id === d.id ? { ...prev, ...d } : prev));
   };
 
   const startAction = async (action: ConfirmAction) => {
@@ -718,6 +766,14 @@ export default function ReturnPage() {
                             <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
                             {STATUS_LABEL[r.status]}
                           </span>
+                          {r.status === "APPROVED" && r.fulfillment?.canDispatch === false && (
+                            <p className="text-[11px] font-semibold text-[#b91c1c] m-0 mt-1">⚠️ Not enough stock</p>
+                          )}
+                          {r.status === "OUT_FOR_DELIVERY" && (
+                            <p className={`text-[11px] font-semibold m-0 mt-1 ${r.receivedAt ? "text-[#6d28d9]" : "text-[#b45309]"}`}>
+                              {r.receivedAt ? "✓ Customer received" : "Awaiting customer"}
+                            </p>
+                          )}
                           {r.driver && r.status === "OUT_FOR_DELIVERY" && (
                             <p className="text-[11px] text-[#8fa596] m-0 mt-1">Driver: {r.driver.name}</p>
                           )}
@@ -941,7 +997,20 @@ export default function ReturnPage() {
                     {viewItem.driver.phone && <span className="font-normal text-[#5f7a66]">· {viewItem.driver.phone}</span>}
                   </p>
                   {viewItem.outForDeliveryAt && (
-                    <p className="text-[12px] text-[#5f7a66] m-0 mt-1">Dispatched {fmtDateTime(viewItem.outForDeliveryAt)}</p>
+                    <>
+                      <p className="text-[12px] text-[#5f7a66] m-0 mt-1">Dispatched {fmtDateTime(viewItem.outForDeliveryAt)}</p>
+                      {viewItem.status === "OUT_FOR_DELIVERY" && (
+                        viewItem.receivedAt ? (
+                          <p className="text-[12.5px] font-bold text-[#6d28d9] m-0 mt-1.5">
+                            ✓ Customer confirmed receiving it · {fmtDateTime(viewItem.receivedAt)}
+                          </p>
+                        ) : (
+                          <p className="text-[12.5px] font-semibold text-[#b45309] m-0 mt-1.5">
+                            Waiting for the customer to confirm they received it
+                          </p>
+                        )
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -955,7 +1024,7 @@ export default function ReturnPage() {
                       {viewItem.status === "REJECTED" ? <>{Icons.x} Rejected</> : <>{Icons.check} Approved</>}
                     </span>
                     {viewItem.reviewer && <span className="text-[12px] text-[#5f7a66]">by {viewItem.reviewer.name}</span>}
-                    {viewItem.reviewedAt && <span className="text-[12px] text-[#5f7a66]">· {fmtDate(viewItem.reviewedAt)}</span>}
+                    {viewItem.reviewedAt && <span className="text-[12px] text-[#5f7a66]">· {fmtDateTime(viewItem.reviewedAt)}</span>}
                   </div>
                   {viewItem.reviewNote && (
                     <p className="text-[13px] text-[#14301b] m-0 mt-2 leading-relaxed">{viewItem.reviewNote}</p>
@@ -971,6 +1040,29 @@ export default function ReturnPage() {
                   </p>
                   <p className="text-[12px] text-[#5f7a66] m-0">{fmtDateTime(viewItem.closedAt)}</p>
                   {viewItem.closeNote && <p className="text-[13px] text-[#14301b] m-0 mt-1.5">{viewItem.closeNote}</p>}
+                </div>
+              )}
+
+              {/* Not enough stock to dispatch (approval is still allowed; dispatch is blocked) */}
+              {viewItem.status === "APPROVED" && viewItem.fulfillment && !viewItem.fulfillment.canDispatch && !confirmAction && (
+                <div className="rounded-xl px-4 py-3.5 border bg-[#fef2f2] border-[#fecaca]">
+                  <p className="text-[13px] font-bold text-[#b91c1c] m-0 flex items-center gap-2">
+                    {Icons.alert} Not enough stock to dispatch
+                  </p>
+                  {viewItem.fulfillment.shortages.map((s) => (
+                    <p key={s.productId} className="text-[12.5px] text-[#b91c1c] m-0 mt-1">
+                      {s.productName}: need {s.needed}, only {s.available} in stock
+                    </p>
+                  ))}
+                  <p className="text-[12px] text-[#7f1d1d] m-0 mt-2">
+                    Restock, then re-check. You can also cancel this return.
+                  </p>
+                  <button
+                    onClick={() => { void recheckStock(); }}
+                    className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#fecaca] bg-white text-[#b91c1c] text-[12px] font-semibold cursor-pointer hover:bg-[#fee2e2] transition-colors"
+                  >
+                    {Icons.refresh} Re-check stock
+                  </button>
                 </div>
               )}
 
@@ -1017,6 +1109,11 @@ export default function ReturnPage() {
                       <div className="flex flex-col gap-2.5 mb-3">
                         <p className="text-[12px] text-[#5f7a66] m-0 leading-relaxed">
                           Enter what was collected from the customer. Resellable items go back to stock; damaged and expired items don&apos;t.
+                          {!viewItem.receivedAt && (
+                            <span className="block mt-1.5 font-semibold text-[#b45309]">
+                              ⚠️ The customer hasn&apos;t confirmed receiving the replacement yet.
+                            </span>
+                          )}
                         </p>
                         {viewItem.items.map((it) => {
                           const row     = collect[it.id];
@@ -1151,7 +1248,9 @@ export default function ReturnPage() {
                       </button>
                       <button
                         onClick={() => startAction("DISPATCH")}
-                        className="flex-[1.4] py-[11px] rounded-[10px] border-0 bg-[#2563eb] text-white text-[13px] font-bold cursor-pointer hover:bg-[#1d4ed8] transition-colors flex items-center justify-center gap-2 shadow-[0_4px_12px_rgba(37,99,235,0.28)]"
+                        disabled={viewItem.fulfillment?.canDispatch === false}
+                        title={viewItem.fulfillment?.canDispatch === false ? "Not enough stock to dispatch" : undefined}
+                        className="flex-[1.4] py-[11px] rounded-[10px] border-0 bg-[#2563eb] text-white text-[13px] font-bold cursor-pointer hover:bg-[#1d4ed8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-[0_4px_12px_rgba(37,99,235,0.28)]"
                       >
                         {Icons.truck} Dispatch
                       </button>
