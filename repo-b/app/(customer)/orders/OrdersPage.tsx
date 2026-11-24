@@ -93,7 +93,7 @@ const money = (n: number) =>
 type TabFilter = "All" | OrderStatus;
 const TABS: TabFilter[] = ["All", "Waiting", "Processing", "Out For Delivery"];
 
-const MAX_ITEMS_ON_CARD = 3;
+const MAX_ITEMS_ON_CARD = 2;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function normalizeOrder(o: Record<string, unknown>): Order {
@@ -198,7 +198,7 @@ function StepTracker({ status, compact = false }: { status: OrderStatus; compact
 
   if (compact) {
     return (
-      <div className="mb-4">
+      <div>
         <div className="flex gap-1.5">
           {statusSteps.map((s, i) => (
             <div
@@ -257,7 +257,20 @@ function StepTracker({ status, compact = false }: { status: OrderStatus; compact
   );
 }
 
-function ItemRow({ item, large = false }: { item: OrderItem; large?: boolean }) {
+function ItemRow({ item, large = false, compact = false }: { item: OrderItem; large?: boolean; compact?: boolean }) {
+  if (compact) {
+    return (
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-[13px] text-gray-800 m-0 min-w-0 truncate">
+          <span className="font-semibold">{item.name}</span>
+          <span className="text-[11px] text-gray-400"> · {qtyLabel(item)}</span>
+        </p>
+        <span className="text-[13px] font-semibold text-gray-800 shrink-0">
+          ₱{money(item.price * item.qty)}
+        </span>
+      </div>
+    );
+  }
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="flex items-center gap-3 min-w-0">
@@ -280,7 +293,7 @@ function ItemRow({ item, large = false }: { item: OrderItem; large?: boolean }) 
 function DriverCard({ driver }: { driver: Driver }) {
   const initial = driver.name.trim().charAt(0).toUpperCase() || "D";
   return (
-    <div className="flex items-center gap-3 bg-orange-50 border border-orange-100 rounded-xl px-3.5 py-3">
+    <div className="flex items-center gap-3 bg-orange-50 border border-orange-100 rounded-xl px-3.5 py-2.5">
       <div className="w-9 h-9 rounded-full bg-orange-500 text-white flex items-center justify-center text-sm font-bold shrink-0">
         {initial}
       </div>
@@ -295,7 +308,7 @@ function DriverCard({ driver }: { driver: Driver }) {
 function CashInfo({ order }: { order: Order }) {
   if (isGcash(order) || order.amountTendered === null) return null;
   return (
-    <div className="flex items-center justify-between gap-3 bg-green-50 border border-green-100 rounded-xl px-3.5 py-3">
+    <div className="flex items-center justify-between gap-3 bg-green-50 border border-green-100 rounded-xl px-3.5 py-2.5">
       <div>
         <p className="text-[11px] text-green-700/70 m-0">You&apos;ll hand over</p>
         <p className="text-[14px] font-bold text-gray-900 m-0">₱{money(order.amountTendered)}</p>
@@ -687,7 +700,7 @@ export default function OrdersPage() {
         }}
       >
         {/* Orders List */}
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           {filtered.length === 0 ? (
             <div className="bg-white rounded-2xl px-8 py-14 text-center border border-gray-100 shadow-sm">
               <div className="w-20 h-20 rounded-full bg-[#2d7a3a]/10 flex items-center justify-center text-4xl mx-auto mb-4">📦</div>
@@ -710,7 +723,7 @@ export default function OrdersPage() {
               const canCancel   = canCancelOrder(order);
               const gcashLocked = isGcash(order) && (order.status === "Waiting" || order.status === "Processing");
               const canReceive  = order.status === "Out For Delivery";
-              const { subtotal, vat, grandTotal } = withVat(order);
+              const { grandTotal } = withVat(order);
               const shown  = order.items.slice(0, MAX_ITEMS_ON_CARD);
               const hidden = order.items.length - shown.length;
               const style  = statusStyle[order.status];
@@ -728,49 +741,38 @@ export default function OrdersPage() {
                   {/* Status stripe */}
                   <div className={`h-1 w-full ${style.bar}`} />
 
-                  <div className="px-5 pt-4 pb-5 md:px-6">
+                  <div className="px-4 pt-3 pb-4 md:px-5">
                     {/* Header */}
-                    <div className="flex justify-between items-start gap-3 mb-1">
-                      <div className="min-w-0">
-                        <p className="text-[11px] text-gray-400 m-0">Order ID</p>
-                        <p className="text-sm font-bold text-gray-900 m-0 truncate">{order.id}</p>
-                      </div>
+                    <div className="flex justify-between items-center gap-3 mb-0.5">
+                      <p className="text-sm font-bold text-gray-900 m-0 truncate">{order.id}</p>
                       <StatusBadge status={order.status} />
                     </div>
-
-                    <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
-                      <p className="text-xs text-gray-400 m-0">📅 {order.date}</p>
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <p className="text-xs text-gray-400 m-0">{order.date}</p>
                       <PaymentChip method={order.paymentMethod} />
                     </div>
 
                     {/* Status message + progress */}
-                    <div className={`${style.soft} rounded-xl px-3.5 py-3 mb-4`}>
-                      <p className="text-[13px] font-medium text-gray-700 m-0 mb-3">{order.note}</p>
+                    <div className={`${style.soft} rounded-xl px-3 py-2.5 mb-3`}>
+                      <p className="text-[12px] font-medium text-gray-700 m-0 mb-2">{order.note}</p>
                       <StepTracker status={order.status} compact />
                     </div>
 
                     {/* Driver + cash (only when available) */}
                     {order.driver && order.status === "Out For Delivery" && (
-                      <div className="flex flex-col gap-2 mb-4">
+                      <div className="flex flex-col sm:flex-row gap-2 mb-3 [&>*]:flex-1">
                         <DriverCard driver={order.driver} />
                         <CashInfo order={order} />
                       </div>
                     )}
 
                     {/* Items */}
-                    <div className="mb-4">
-                      <div className="flex items-center justify-between mb-2.5">
-                        <p className="text-xs font-semibold text-gray-500 m-0">
-                          Items ({order.items.length})
-                        </p>
-                      </div>
-                      <div className="flex flex-col gap-2.5">
-                        {shown.map((item, i) => <ItemRow key={i} item={item} />)}
-                      </div>
+                    <div className="flex flex-col gap-1.5 mb-3">
+                      {shown.map((item, i) => <ItemRow key={i} item={item} compact />)}
                       {hidden > 0 && (
                         <button
                           onClick={() => setSelectedOrder(order)}
-                          className="mt-2.5 bg-transparent border-0 p-0 text-xs font-semibold text-[#2d7a3a] cursor-pointer hover:underline"
+                          className="self-start bg-transparent border-0 p-0 text-xs font-semibold text-[#2d7a3a] cursor-pointer hover:underline"
                         >
                           +{hidden} more item{hidden !== 1 ? "s" : ""}
                         </button>
@@ -779,33 +781,30 @@ export default function OrdersPage() {
 
                     {/* GCash no-cancel notice */}
                     {gcashLocked && (
-                      <p className="text-[11px] text-blue-700 bg-blue-50 rounded-lg px-3 py-2 mb-4 m-0">
+                      <p className="text-[11px] text-blue-700 bg-blue-50 rounded-lg px-3 py-1.5 mb-3 m-0">
                         📱 Paid via GCash, so this order can&apos;t be cancelled.
                       </p>
                     )}
 
                     {/* Footer */}
-                    <div className="flex justify-between items-end gap-3 flex-wrap pt-4 border-t border-dashed border-gray-200">
+                    <div className="flex justify-between items-center gap-3 flex-wrap pt-3 border-t border-dashed border-gray-200">
                       <div>
-                        <p className="text-[11px] text-gray-400 m-0">
-                          Subtotal ₱{money(subtotal)} + VAT ₱{money(vat)}
-                        </p>
-                        <p className="text-xs text-gray-500 m-0 mt-1">Total amount</p>
-                        <p className="text-[24px] font-extrabold text-[#2d7a3a] m-0 leading-tight">
+                        <p className="text-[11px] text-gray-400 m-0">Total</p>
+                        <p className="text-[20px] font-extrabold text-[#2d7a3a] m-0 leading-tight">
                           ₱{money(grandTotal)}
                         </p>
                       </div>
                       <div className="flex gap-2 flex-wrap justify-end">
                         <button
                           onClick={() => setSelectedOrder(isSelected ? null : order)}
-                          className="bg-white text-gray-700 border border-gray-200 rounded-full px-[18px] py-2.5 text-[13px] font-semibold cursor-pointer hover:bg-gray-50 transition-colors"
+                          className="bg-white text-gray-700 border border-gray-200 rounded-full px-4 py-2 text-[13px] font-semibold cursor-pointer hover:bg-gray-50 transition-colors"
                         >
                           {isSelected ? "Hide details" : "Details"}
                         </button>
                         {canCancel && (
                           <button
                             onClick={() => setShowCancelConfirm(order.id)}
-                            className="bg-white text-red-600 border border-red-200 rounded-full px-[18px] py-2.5 text-[13px] font-semibold cursor-pointer hover:bg-red-50 transition-colors"
+                            className="bg-white text-red-600 border border-red-200 rounded-full px-4 py-2 text-[13px] font-semibold cursor-pointer hover:bg-red-50 transition-colors"
                           >
                             Cancel
                           </button>
@@ -814,7 +813,7 @@ export default function OrdersPage() {
                           onClick={() => canReceive && setShowReceiveConfirm(order)}
                           disabled={!canReceive}
                           className={[
-                            "border-0 rounded-full px-5 py-2.5 text-[13px] font-semibold transition-colors",
+                            "border-0 rounded-full px-5 py-2 text-[13px] font-semibold transition-colors",
                             canReceive
                               ? "bg-[#2d7a3a] text-white cursor-pointer hover:bg-[#245f2d] shadow-[0_4px_12px_rgba(45,122,58,0.3)]"
                               : "bg-gray-100 text-gray-400 cursor-not-allowed",
