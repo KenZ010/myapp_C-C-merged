@@ -13,7 +13,7 @@ import {
   LayoutDashboard, ShoppingCart, Users, BarChart3,
   FileText, Package, User, ClipboardList, AlertTriangle, Gift,
   Coffee, Zap, Beer, Droplets, ShoppingBasket,
-  Calendar, Search, Globe, Bell
+  Calendar, Search, Globe
 } from "lucide-react";
 
 type Period = "Daily" | "Weekly" | "Monthly" | "Custom";
@@ -832,7 +832,6 @@ export default function SalesReportsPage() {
               <p className="text-xs text-gray-400">Administrator Dashboard</p>
             </div>
             <div className="flex items-center gap-2">
-              <div className="relative"><Bell className="w-5 h-5 text-gray-500" /><div className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-400 rounded-full border-2 border-white" /></div>
               <div className="relative">
                 <div className="flex items-center gap-2 md:gap-3 px-2 md:px-3 py-2">
                   <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center font-semibold text-sm md:text-base">R</div>
