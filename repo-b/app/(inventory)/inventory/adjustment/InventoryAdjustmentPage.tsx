@@ -32,6 +32,7 @@ type Product = {
   expiryDate:    string | null;
   batchId:       string | null; // batch this row refers to (edited by the Expiration tab)
   batchNo:       string | null; // batch number shown in the Expiration table
+  receivedAt:    string | null; // date the batch was received (used to validate the expiration date)
   image:         string | null;
   status:        ProductStatus;
   supplierId:    string;
@@ -42,6 +43,10 @@ type Product = {
 
 const PIECES_PER_CASE_DEFAULT = 24;
 const EXPIRING_SOON_DAYS      = 30; // products expiring within this many days are flagged
+
+// An expiration date must be at least this many days after the received date
+const MIN_EXPIRY_DAYS_AFTER_RECEIVED = 14;
+const INVALID_EXPIRY_MESSAGE = "Invalid Expiration Date. The expiration date must be at least 2 weeks after the received date.";
 
 // Reasons that can only DEDUCT stock (no addition allowed)
 const DEDUCT_ONLY_REASONS = ["Expired", "Damaged"];
@@ -170,14 +175,38 @@ function toDateInput(str: string | null): string {
   return str.slice(0, 10);
 }
 
-// Today + N months, formatted for <input type="date">
-function dateInMonths(months: number): string {
-  const d = new Date();
-  d.setMonth(d.getMonth() + months);
+// Local calendar date of a Date object, formatted for <input type="date">
+function formatLocalDateInput(d: Date): string {
   const y  = d.getFullYear();
   const m  = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
+}
+
+// Today + N months, formatted for <input type="date">
+function dateInMonths(months: number): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() + months);
+  return formatLocalDateInput(d);
+}
+
+// Earliest allowed expiration date for a batch: received date + 14 days ("YYYY-MM-DD").
+// Returns "" when the received date is unknown, in which case no minimum can be enforced.
+function minExpiryDateFor(receivedAt: string | null): string {
+  if (!receivedAt) return "";
+  const r = new Date(receivedAt);
+  if (isNaN(r.getTime())) return "";
+  // Work on the calendar day (local time) so the time of day never affects the rule
+  const d = new Date(r.getFullYear(), r.getMonth(), r.getDate() + MIN_EXPIRY_DAYS_AFTER_RECEIVED);
+  return formatLocalDateInput(d);
+}
+
+// True when the chosen date ("YYYY-MM-DD") is inside the restricted 14-day window after receiving
+function isExpiryTooSoon(expDate: string, receivedAt: string | null): boolean {
+  if (!expDate) return false;
+  const min = minExpiryDateFor(receivedAt);
+  if (!min) return false;
+  return expDate < min; // ISO dates compare correctly as strings
 }
 
 const statusStyle = {
@@ -300,7 +329,7 @@ const Banner = ({ kind, children }: { kind: "error" | "success" | "warn"; childr
     ? { bg: "#fffbeb", border: "#fde68a", color: "#b45309" }
     : { bg: GREEN_LIGHT, border: "#b7dcbd", color: GREEN_DARK };
   return (
-    <div style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: "10px", padding: "10px 14px", fontSize: "13px", fontWeight: 600, color: s.color, display: "flex", alignItems: "flex-start", gap: "8px" }}>
+    <div role={kind === "error" ? "alert" : undefined} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: "10px", padding: "10px 14px", fontSize: "13px", fontWeight: 600, color: s.color, display: "flex", alignItems: "flex-start", gap: "8px" }}>
       <span style={{ display: "flex", marginTop: "1px", flexShrink: 0 }}>{kind === "success" ? Icon.check : Icon.alertSm}</span>
       <span>{children}</span>
     </div>
@@ -409,6 +438,7 @@ export default function InventoryAdjustmentPage() {
         expiryDate:    earliest[p.id]?.expiryDate ?? null,
         batchId:       earliest[p.id]?.id ?? null,
         batchNo:       earliest[p.id]?.batchNo ?? null,
+        receivedAt:    null, // set per batch below
         image:         p.image ?? null,
         status:        (p.status ?? "ACTIVE") as ProductStatus,
         supplierId:    String(p.supplierId ?? ""),
@@ -426,11 +456,14 @@ export default function InventoryAdjustmentPage() {
         const p = byProduct.get(String(b.productId));
         if (!p) continue;
         hasBatch.add(p.id);
+        // The date this batch was received (falls back to when the batch record was created)
+        const received = b.receivedAt ?? b.createdAt ?? null;
         rows.push({
           ...p,
           batchId:    String(b.id),
           batchNo:    batchNoOf(b),
           expiryDate: b.expiryDate ? String(b.expiryDate) : null,
+          receivedAt: received ? String(received) : null,
           stock:      remainingOf(b), // this batch's cases, not the product total
           updatedAt:  String(b.receivedAt ?? b.createdAt ?? p.updatedAt),
         });
@@ -596,12 +629,18 @@ export default function InventoryAdjustmentPage() {
     setExpProd(null);
     setExpDate("");
     setExpError(null);
+    setShowExpConfirm(false);
   };
 
   // Step 1: validate, then ask the user to confirm
   const requestExpiry = () => {
     if (!expProd) return;
     if (!expDate) { setExpError("Please choose an expiration date."); return; }
+    // Rule: the expiration date must be at least 14 days after the received date
+    if (isExpiryTooSoon(expDate, expProd.receivedAt)) {
+      setExpError(INVALID_EXPIRY_MESSAGE);
+      return;
+    }
     setExpError(null);
     setShowExpConfirm(true);
   };
@@ -611,6 +650,11 @@ export default function InventoryAdjustmentPage() {
     setShowExpConfirm(false);
     if (!expProd) return;
     if (!expDate) { setExpError("Please choose an expiration date."); return; }
+    // Re-check right before saving so an invalid date can never be submitted
+    if (isExpiryTooSoon(expDate, expProd.receivedAt)) {
+      setExpError(INVALID_EXPIRY_MESSAGE);
+      return;
+    }
 
     setExpLoading(true);
     setExpError(null);
@@ -706,6 +750,10 @@ export default function InventoryAdjustmentPage() {
     { key: "expiration", label: "Expiration Adjustment", icon: Icon.calendar, badge: expCounts.expired + expCounts.soon },
   ];
 
+  // ── Expiration date validation (14 days after the received date) ──
+  const expMinDate   = expProd ? minExpiryDateFor(expProd.receivedAt) : "";
+  const expTooSoon   = !!expProd && isExpiryTooSoon(expDate, expProd.receivedAt);
+  const expSaveBlocked = expLoading || !expDate || expTooSoon;
 
   return (
     <div className="adj-page" style={{ padding: "28px 32px", width: "100%", boxSizing: "border-box" }}>
@@ -1071,13 +1119,29 @@ export default function InventoryAdjustmentPage() {
                 </div>
               )}
 
+              {/* Received date + earliest allowed expiration date */}
+              {expMinDate && (
+                <div style={{ background: GREEN_TINT, border: `1px solid ${GREEN_BORDER}`, borderRadius: "12px", padding: "12px 14px", marginBottom: "18px", display: "grid", gap: "6px", fontSize: "13px", color: INK }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "10px" }}>
+                    <span style={{ color: FAINT }}>Received</span>
+                    <strong>{fmtDate(expProd.receivedAt)}</strong>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "10px" }}>
+                    <span style={{ color: FAINT }}>Earliest allowed expiry</span>
+                    <strong style={{ color: GREEN_DARK }}>{fmtDate(`${expMinDate}T00:00:00.000Z`)}</strong>
+                  </div>
+                </div>
+              )}
+
               <label style={labelStyle}>Expiration Date</label>
               <input
                 type="date"
                 value={expDate}
-                onChange={(e) => setExpDate(e.target.value)}
+                min={expMinDate || undefined}
+                onChange={(e) => { setExpDate(e.target.value); setExpError(null); }}
                 className="green-input"
-                style={{ width: "100%", padding: "11px 14px", borderRadius: "10px", border: `1px solid ${GREEN_BORDER}`, fontSize: "15px", fontWeight: 600, color: INK, background: "#fff", boxSizing: "border-box", marginBottom: "14px" }}
+                aria-invalid={expTooSoon}
+                style={{ width: "100%", padding: "11px 14px", borderRadius: "10px", border: `1px solid ${expTooSoon ? "#ef4444" : GREEN_BORDER}`, fontSize: "15px", fontWeight: 600, color: INK, background: "#fff", boxSizing: "border-box", marginBottom: "14px" }}
               />
 
               <p style={{ fontSize: "11.5px", color: MUTED, margin: "0 0 8px", fontWeight: 600 }}>Quick set (from today)</p>
@@ -1088,14 +1152,14 @@ export default function InventoryAdjustmentPage() {
                   { label: "+1 year",   months: 12 },
                   { label: "+2 years",  months: 24 },
                 ].map((q) => (
-                  <button key={q.label} onClick={() => setExpDate(dateInMonths(q.months))} className="btn-outline"
+                  <button key={q.label} onClick={() => { setExpDate(dateInMonths(q.months)); setExpError(null); }} className="btn-outline"
                     style={{ padding: "6px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, border: `1px solid ${GREEN_BORDER}`, background: GREEN_TINT, color: GREEN_DARK, cursor: "pointer", transition: "all 0.15s" }}>
                     {q.label}
                   </button>
                 ))}
               </div>
 
-              {expDate && (
+              {expDate && !expTooSoon && (
                 <p style={{ fontSize: "12.5px", marginTop: "12px", marginBottom: 0, color: expiryStyle[getExpiryStatus(expDate)].color, fontWeight: 600, display: "flex", alignItems: "center", gap: "7px" }}>
                   <span style={{ display: "flex" }}>{getExpiryStatus(expDate) === "Good" ? Icon.check : getExpiryStatus(expDate) === "Expiring Soon" ? Icon.clock : Icon.alertSm}</span>
                   {getExpiryStatus(expDate) === "Expired"
@@ -1106,7 +1170,12 @@ export default function InventoryAdjustmentPage() {
                 </p>
               )}
 
-              {expError && (
+              {/* Validation error: date is inside the 14-day restricted period */}
+              {expTooSoon && (
+                <div style={{ marginTop: "14px" }}><Banner kind="error">{INVALID_EXPIRY_MESSAGE}</Banner></div>
+              )}
+
+              {expError && expError !== INVALID_EXPIRY_MESSAGE && (
                 <div style={{ marginTop: "14px" }}><Banner kind="error">{expError}</Banner></div>
               )}
 
@@ -1115,8 +1184,8 @@ export default function InventoryAdjustmentPage() {
                   style={{ flex: 1, padding: "12px", borderRadius: "10px", border: `1px solid ${GREEN_BORDER}`, background: "#fff", color: MUTED, fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
                   Cancel
                 </button>
-                <button onClick={requestExpiry} disabled={expLoading || !expDate} className="btn-green"
-                  style={{ flex: 1.4, padding: "12px", borderRadius: "10px", border: "none", background: expLoading || !expDate ? "#e5ece6" : GREEN, color: expLoading || !expDate ? FAINT : "#fff", fontSize: "14px", fontWeight: 700, cursor: expLoading || !expDate ? "not-allowed" : "pointer", boxShadow: expLoading || !expDate ? "none" : "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
+                <button onClick={requestExpiry} disabled={expSaveBlocked} className="btn-green"
+                  style={{ flex: 1.4, padding: "12px", borderRadius: "10px", border: "none", background: expSaveBlocked ? "#e5ece6" : GREEN, color: expSaveBlocked ? FAINT : "#fff", fontSize: "14px", fontWeight: 700, cursor: expSaveBlocked ? "not-allowed" : "pointer", boxShadow: expSaveBlocked ? "none" : "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
                   {expLoading ? "Saving…" : expProd.expiryDate ? "Save Changes" : "Save Expiration"}
                 </button>
               </div>
