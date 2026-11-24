@@ -9,6 +9,7 @@ import {
 } from "recharts";
 import type { Workbook, Worksheet, Row, Borders } from "exceljs";
 import { api } from "@/lib/api";
+import { exportInfoLabel, getCurrentAdminName } from "@/lib/excelExport";
 import {
   LayoutDashboard, ShoppingCart, Users, BarChart3,
   FileText, Package, User, ClipboardList, AlertTriangle, Gift,
@@ -217,6 +218,11 @@ function addSheetTitle(ws: Worksheet, title: string, periodLabel: string, colCou
   const p = ws.getCell(2, 1);
   p.value = `Period: ${periodLabel}`;
   p.font = { size: 11, italic: true, color: { argb: "FF6B7280" } };
+
+  ws.mergeCells(3, 1, 3, colCount);
+  const e = ws.getCell(3, 1);
+  e.value = exportInfoLabel();
+  e.font = { size: 10, italic: true, color: { argb: "FF6B7280" } };
 }
 
 type XlCol = { header: string; width: number; format?: string; align?: "left" | "center" | "right" };
@@ -295,6 +301,7 @@ async function exportSalesExcel(opts: {
   const ExcelJS = (mod as any).default ?? mod;
   const wb: Workbook = new ExcelJS.Workbook();
   wb.creator = "Julieta Soft Drinks Store";
+  wb.lastModifiedBy = getCurrentAdminName();
   wb.created = new Date();
 
   const totalRevenue = txs.reduce((s, t) => s + t.total, 0);
@@ -323,6 +330,11 @@ async function exportSalesExcel(opts: {
   ws.getCell("A4").font  = { bold: true, color: { argb: "FF6B7280" } };
   ws.mergeCells("B4:C4");
   ws.getCell("B4").value = new Date().toLocaleString("en-PH", { dateStyle: "long", timeStyle: "short" });
+
+  ws.getCell("A5").value = "Exported By";
+  ws.getCell("A5").font  = { bold: true, color: { argb: "FF6B7280" } };
+  ws.mergeCells("B5:C5");
+  ws.getCell("B5").value = getCurrentAdminName();
 
   // Key metrics
   const metricsHeader = ws.getRow(6);
