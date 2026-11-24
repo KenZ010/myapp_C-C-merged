@@ -720,11 +720,10 @@ export default function PurchaseOrderPage() {
     try {
       setLoading(true);
       // Extra lookups fail soft so the Receiving / History tabs never break because of them
-      const [d, s, p, orders, reqs] = await Promise.all([
+      const [d, s, p, reqs] = await Promise.all([
         api.getDeliveries(),
         api.getSuppliers().catch(() => []),
         api.getProducts().catch(() => []),
-        api.getCompletedOrders().catch(() => []),
         api.getOrderRequests().catch(() => []),
       ]);
       setDeliveries(Array.isArray(d) ? d : []);
@@ -740,25 +739,6 @@ export default function PurchaseOrderPage() {
       }));
       setAllProducts(normalized);
 
-      // Units sold per product from completed orders (used to rank top sellers)
-      const sales: Record<string, number> = {};
-      for (const order of Array.isArray(orders) ? orders : []) {
-        const lines = (order as { orderLines?: unknown[] }).orderLines ?? [];
-        if (!Array.isArray(lines)) continue;
-        for (const line of lines as Record<string, unknown>[]) {
-          const product  = line.product as Record<string, unknown> | null;
-          const prodId   = product?.id ? String(product.id) : null;
-          const prodName = product?.productName ? String(product.productName) : null;
-          const qty      = Number(line.quantity ?? 0);
-          if (prodId) {
-            sales[prodId] = (sales[prodId] ?? 0) + qty;
-          } else if (prodName) {
-            const match = normalized.find((np) => np.productName === prodName);
-            if (match) sales[match.id] = (sales[match.id] ?? 0) + qty;
-          }
-        }
-      }
-      setProductSales(sales);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
