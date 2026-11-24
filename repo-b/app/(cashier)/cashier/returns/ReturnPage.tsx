@@ -1024,7 +1024,7 @@ export default function ReturnPage() {
                       {viewItem.status === "REJECTED" ? <>{Icons.x} Rejected</> : <>{Icons.check} Approved</>}
                     </span>
                     {viewItem.reviewer && <span className="text-[12px] text-[#5f7a66]">by {viewItem.reviewer.name}</span>}
-                    {viewItem.reviewedAt && <span className="text-[12px] text-[#5f7a66]">· {fmtDate(viewItem.reviewedAt)}</span>}
+                    {viewItem.reviewedAt && <span className="text-[12px] text-[#5f7a66]">· {fmtDateTime(viewItem.reviewedAt)}</span>}
                   </div>
                   {viewItem.reviewNote && (
                     <p className="text-[13px] text-[#14301b] m-0 mt-2 leading-relaxed">{viewItem.reviewNote}</p>
