@@ -397,11 +397,16 @@ export const api = {
     return parseJson(res, 'Failed to fetch drivers');
   },
   // driverId is required by the backend when status is OUT_FOR_DELIVERY
-  updateOrderStatus: async (orderId: string, status: string, driverId?: string) => {
+    updateOrderStatus: async (
+    orderId: string,
+    status: string,
+    driverId?: string,
+    remittedAmount?: number,
+  ) => {
     const res = await fetch(`${API_URL}/orders/${orderId}/status`, {
       method:  'PATCH',
       headers: authHeaders(),
-      body:    JSON.stringify({ status, driverId }),
+      body:    JSON.stringify({ status, driverId, remittedAmount }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Failed to update order status');

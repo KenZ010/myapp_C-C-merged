@@ -12,6 +12,7 @@ const GREEN_BORDER = "#d6e8d9"; // borders
 const INK          = "#14301b"; // headings (green-tinted near-black)
 const MUTED        = "#5f7a66"; // secondary text
 const FAINT        = "#8fa596"; // labels / icons
+const SUBTLE       = "#3f5a47"; // darker secondary text (better contrast in the Expiration table)
 
 // ── Types matching Prisma schema ──────────────────────────────────────────────
 type ProductStatus = "ACTIVE" | "INACTIVE" | "OUT_OF_STOCK";
@@ -29,7 +30,8 @@ type Product = {
   piecesPerCase: number;
   reservedStock: number;
   expiryDate:    string | null;
-  batchId:       string | null; // earliest dated active batch (edited by the Expiration tab)
+  batchId:       string | null; // batch this row refers to (edited by the Expiration tab)
+  batchNo:       string | null; // batch number shown in the Expiration table
   image:         string | null;
   status:        ProductStatus;
   supplierId:    string;
@@ -73,7 +75,6 @@ const Icon = {
   edit:        (<svg width="13" height="13" viewBox="0 0 24 24" {...sp}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>),
   plus:        (<svg width="14" height="14" viewBox="0 0 24 24" {...sp} strokeWidth={2.5}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>),
   minus:       (<svg width="14" height="14" viewBox="0 0 24 24" {...sp} strokeWidth={2.5}><line x1="5" y1="12" x2="19" y2="12"/></svg>),
-  trash:       (<svg width="22" height="22" viewBox="0 0 24 24" {...sp}><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>),
   clipboard:   (<svg width="13" height="13" viewBox="0 0 24 24" {...sp}><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>),
   check:       (<svg width="14" height="14" viewBox="0 0 24 24" {...sp} strokeWidth={2.5}><polyline points="20 6 9 17 4 12"/></svg>),
   clock:       (<svg width="14" height="14" viewBox="0 0 24 24" {...sp}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>),
@@ -114,6 +115,12 @@ function fmtPrice(n: number): string {
   return `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
 }
 
+// Long ids (e.g. UUIDs) are shortened for display; short batch numbers are shown as-is
+function fmtBatchNo(str: string | null): string {
+  if (!str) return "—";
+  return str.length > 12 ? str.slice(0, 8).toUpperCase() : str;
+}
+
 // ── Expiration helpers ────────────────────────────────────────────────────────
 // Days from today until the expiry date (negative = already expired). Null if no date.
 function daysUntilExpiry(str: string | null): number | null {
@@ -134,11 +141,20 @@ function getExpiryStatus(str: string | null): ExpiryStatus {
   return "Good";
 }
 
+// Higher-contrast colors so the status pills are easy to read
 const expiryStyle: Record<ExpiryStatus, { bg: string; color: string; dot: string; border: string }> = {
-  "Expired":       { bg: "#fef2f2",   color: "#b91c1c",  dot: "#ef4444", border: "#fecaca" },
-  "Expiring Soon": { bg: "#fffbeb",   color: "#b45309",  dot: "#f59e0b", border: "#fde68a" },
-  "Good":          { bg: GREEN_LIGHT, color: GREEN_DARK, dot: GREEN_MID, border: "#b7dcbd" },
-  "No Date":       { bg: "#f1f5f2",   color: MUTED,      dot: "#b6c4ba", border: "#dbe5dd" },
+  "Expired":       { bg: "#fee2e2",   color: "#991b1b",  dot: "#dc2626", border: "#fca5a5" },
+  "Expiring Soon": { bg: "#fef3c7",   color: "#92400e",  dot: "#d97706", border: "#fcd34d" },
+  "Good":          { bg: "#dcfce7",   color: "#14532d",  dot: "#16a34a", border: "#86efac" },
+  "No Date":       { bg: "#e5e7eb",   color: "#374151",  dot: "#6b7280", border: "#cbd5d1" },
+};
+
+// Soft row tint + left accent so problem rows stand out in the Expiration table
+const expiryRowBg: Record<ExpiryStatus, string> = {
+  "Expired":       "#fff5f5",
+  "Expiring Soon": "#fffbeb",
+  "Good":          "#ffffff",
+  "No Date":       "#ffffff",
 };
 
 function daysLabel(days: number | null): string {
@@ -197,6 +213,18 @@ const thStyle: React.CSSProperties = {
 };
 const tdStyle: React.CSSProperties = {
   padding: "13px 16px", fontSize: "13px", color: INK, borderBottom: `1px solid ${GREEN_LIGHT}`, verticalAlign: "middle",
+};
+// Expiration table: stronger header + darker borders for readability
+const thExpStyle: React.CSSProperties = {
+  ...thStyle,
+  background: GREEN_LIGHT,
+  color: INK,
+  fontSize: "11.5px",
+  borderBottom: `2px solid ${GREEN_BORDER}`,
+};
+const tdExpStyle: React.CSSProperties = {
+  ...tdStyle,
+  borderBottom: `1px solid ${GREEN_BORDER}`,
 };
 const pill = (bg: string, color: string, border?: string): React.CSSProperties => ({
   display: "inline-flex", alignItems: "center", gap: "5px", padding: "3px 10px", borderRadius: "20px",
@@ -291,6 +319,8 @@ const TableCard: React.CSSProperties  = { background: "#fff", borderRadius: "14p
 export default function InventoryAdjustmentPage() {
   const [tab,        setTab]        = useState<TabKey>("adjustment");
   const [products,   setProducts]   = useState<Product[]>([]);
+  // One row per stock batch — drives the Expiration tab
+  const [batchRows,  setBatchRows]  = useState<Product[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState<string | null>(null);
   const [search,     setSearch]     = useState("");
@@ -308,7 +338,7 @@ export default function InventoryAdjustmentPage() {
 
   // Confirmation dialogs (shown before anything is saved)
   const [showAdjConfirm, setShowAdjConfirm] = useState(false);
-  const [expConfirm,     setExpConfirm]     = useState<null | "save" | "clear">(null);
+  const [showExpConfirm, setShowExpConfirm] = useState(false);
 
   // Expired / Damaged → deduct only (no addition)
   const isDeductOnly = DEDUCT_ONLY_REASONS.includes(adjReason);
@@ -332,24 +362,31 @@ export default function InventoryAdjustmentPage() {
         api.getAllStockBatches().catch(() => [] as any[]),
       ]);
 
-      // Earliest dated active batch per product → drives the expiry column
+      // Uses the batch's own number if the API provides one, otherwise falls back to its id
+      const batchNoOf = (b: any): string | null => {
+        const v = b.batchNo ?? b.batchNumber ?? b.batchCode ?? b.id;
+        return v === undefined || v === null || v === "" ? null : String(v);
+      };
+
+      // Earliest dated active batch per product → drives the expiry column of the Inventory tab
       // (an undated batch is used only when the product has no dated one)
-      const earliest: Record<string, { id: string; expiryDate: string | null }> = {};
+      const earliest: Record<string, { id: string; batchNo: string | null; expiryDate: string | null }> = {};
       for (const b of batches || []) {
         const cur = earliest[b.productId];
         if (!b.expiryDate) {
-          if (!cur) earliest[b.productId] = { id: String(b.id), expiryDate: null };
+          if (!cur) earliest[b.productId] = { id: String(b.id), batchNo: batchNoOf(b), expiryDate: null };
           continue;
         }
         if (!cur || !cur.expiryDate || b.expiryDate < cur.expiryDate) {
-          earliest[b.productId] = { id: String(b.id), expiryDate: String(b.expiryDate) };
+          earliest[b.productId] = { id: String(b.id), batchNo: batchNoOf(b), expiryDate: String(b.expiryDate) };
         }
       }
       const supplierMap = (suppliersData || []).reduce((acc: Record<string, string>, s: any) => {
         acc[s.id] = s.supplierName;
         return acc;
       }, {});
-      setProducts((productsData || []).map((p: any): Product => ({
+
+      const mapped: Product[] = (productsData || []).map((p: any): Product => ({
         id:            String(p.id),
         productName:   String(p.productName),
         category:      (p.category ?? "OTHER") as CategoryType,
@@ -360,13 +397,39 @@ export default function InventoryAdjustmentPage() {
         reservedStock: Number(p.reservedStock ?? 0),
         expiryDate:    earliest[p.id]?.expiryDate ?? null,
         batchId:       earliest[p.id]?.id ?? null,
-        image:        p.image ?? null,
+        batchNo:       earliest[p.id]?.batchNo ?? null,
+        image:         p.image ?? null,
         status:        (p.status ?? "ACTIVE") as ProductStatus,
         supplierId:    String(p.supplierId ?? ""),
         supplierName:  supplierMap[p.supplierId] || p.supplier?.supplierName || "—",
         createdAt:     String(p.createdAt ?? ""),
         updatedAt:     String(p.updatedAt ?? p.createdAt ?? ""),
-      })));
+      }));
+      setProducts(mapped);
+
+      // One row per batch for the Expiration tab
+      const byProduct = new Map<string, Product>(mapped.map((p) => [p.id, p]));
+      const rows: Product[] = [];
+      const hasBatch = new Set<string>();
+      for (const b of batches || []) {
+        const p = byProduct.get(String(b.productId));
+        if (!p) continue;
+        // Cases left in THIS batch. Rename these fields to match your /stock-batches response.
+        const qty = Number(b.remainingQty ?? b.quantity ?? b.qty ?? NaN);
+        if (!isNaN(qty) && qty <= 0) continue; // skip empty / depleted batches
+        hasBatch.add(p.id);
+        rows.push({
+          ...p,
+          batchId:    String(b.id),
+          batchNo:    batchNoOf(b),
+          expiryDate: b.expiryDate ? String(b.expiryDate) : null,
+          stock:      isNaN(qty) ? p.stock : qty,
+          updatedAt:  String(b.receivedAt ?? b.createdAt ?? p.updatedAt),
+        });
+      }
+      // Products with no batch still appear (with a disabled "Add Date" button)
+      for (const p of mapped) if (!hasBatch.has(p.id)) rows.push(p);
+      setBatchRows(rows);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load products");
     } finally {
@@ -405,20 +468,20 @@ export default function InventoryAdjustmentPage() {
     out:    products.filter(p => p.stock === 0).length,
   }), [products]);
 
-  // ── Expiration derived data ──
+  // ── Expiration derived data (one entry per batch) ──
   const expCounts = useMemo(() => ({
-    expired:  products.filter(p => getExpiryStatus(p.expiryDate) === "Expired").length,
-    soon:     products.filter(p => getExpiryStatus(p.expiryDate) === "Expiring Soon").length,
-    good:     products.filter(p => getExpiryStatus(p.expiryDate) === "Good").length,
-    noDate:   products.filter(p => getExpiryStatus(p.expiryDate) === "No Date").length,
-  }), [products]);
+    expired:  batchRows.filter(p => getExpiryStatus(p.expiryDate) === "Expired").length,
+    soon:     batchRows.filter(p => getExpiryStatus(p.expiryDate) === "Expiring Soon").length,
+    good:     batchRows.filter(p => getExpiryStatus(p.expiryDate) === "Good").length,
+    noDate:   batchRows.filter(p => getExpiryStatus(p.expiryDate) === "No Date").length,
+  }), [batchRows]);
 
   const expFiltered = useMemo(() => {
     const priority: Record<ExpiryStatus, number> = { "Expired": 0, "Expiring Soon": 1, "Good": 2, "No Date": 3 };
-    return products
+    return batchRows
       .filter((p) => {
         const q = expSearch.toLowerCase();
-        const matchSearch = !q || p.productName.toLowerCase().includes(q);
+        const matchSearch = !q || p.productName.toLowerCase().includes(q) || (p.batchNo ?? "").toLowerCase().includes(q);
         const matchStat   = expFilter === "All" || getExpiryStatus(p.expiryDate) === expFilter;
         return matchSearch && matchStat;
       })
@@ -430,7 +493,7 @@ export default function InventoryAdjustmentPage() {
         const db = daysUntilExpiry(b.expiryDate) ?? Infinity;
         return da - db;
       });
-  }, [products, expSearch, expFilter]);
+  }, [batchRows, expSearch, expFilter]);
 
   const openDetail = (p: Product) => {
     setDetailProd({ ...p });
@@ -527,23 +590,23 @@ export default function InventoryAdjustmentPage() {
   };
 
   // Step 1: validate, then ask the user to confirm
-  const requestExpiry = (clear = false) => {
+  const requestExpiry = () => {
     if (!expProd) return;
-    if (!clear && !expDate) { setExpError("Please choose an expiration date."); return; }
+    if (!expDate) { setExpError("Please choose an expiration date."); return; }
     setExpError(null);
-    setExpConfirm(clear ? "clear" : "save");
+    setShowExpConfirm(true);
   };
 
   // Step 2: runs only after the user presses "Confirm"
-  const saveExpiry = async (clear = false) => {
-    setExpConfirm(null);
+  const saveExpiry = async () => {
+    setShowExpConfirm(false);
     if (!expProd) return;
-    if (!clear && !expDate) { setExpError("Please choose an expiration date."); return; }
+    if (!expDate) { setExpError("Please choose an expiration date."); return; }
 
     setExpLoading(true);
     setExpError(null);
     try {
-      const newExpiry = clear ? null : new Date(`${expDate}T00:00:00.000Z`).toISOString();
+      const newExpiry = new Date(`${expDate}T00:00:00.000Z`).toISOString();
 
       if (!expProd.batchId) {
         throw new Error("This product has no stock batch yet. Receive it through a delivery first.");
@@ -785,10 +848,10 @@ export default function InventoryAdjustmentPage() {
           {/* ── Summary Cards (click to filter) ── */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "14px", marginBottom: "24px" }}>
             {([
-              { label: "Expired",       value: expCounts.expired, icon: Icon.ban,         status: "Expired"       as ExpiryStatus, accent: "#dc2626", light: "#fef2f2" },
-              { label: "Expiring Soon", value: expCounts.soon,    icon: Icon.hourglass,   status: "Expiring Soon" as ExpiryStatus, accent: "#d97706", light: "#fffbeb" },
-              { label: "Good",          value: expCounts.good,    icon: Icon.checkCircle, status: "Good"          as ExpiryStatus, accent: GREEN_MID, light: GREEN_LIGHT },
-              { label: "No Date Set",   value: expCounts.noDate,  icon: Icon.help,        status: "No Date"       as ExpiryStatus, accent: "#8fa596", light: "#f1f5f2" },
+              { label: "Expired",       value: expCounts.expired, icon: Icon.ban,         status: "Expired"       as ExpiryStatus, accent: "#dc2626", light: "#fee2e2" },
+              { label: "Expiring Soon", value: expCounts.soon,    icon: Icon.hourglass,   status: "Expiring Soon" as ExpiryStatus, accent: "#d97706", light: "#fef3c7" },
+              { label: "Good",          value: expCounts.good,    icon: Icon.checkCircle, status: "Good"          as ExpiryStatus, accent: "#16a34a", light: "#dcfce7" },
+              { label: "No Date Set",   value: expCounts.noDate,  icon: Icon.help,        status: "No Date"       as ExpiryStatus, accent: "#6b7280", light: "#e5e7eb" },
             ]).map((s) => {
               const active = expFilter === s.status;
               return (
@@ -800,7 +863,7 @@ export default function InventoryAdjustmentPage() {
                 >
                   <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "4px", background: s.accent }} />
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
-                    <p style={{ fontSize: "12px", fontWeight: 600, color: MUTED, margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>{s.label}</p>
+                    <p style={{ fontSize: "12px", fontWeight: 700, color: SUBTLE, margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>{s.label}</p>
                     <div style={{ width: "34px", height: "34px", borderRadius: "10px", background: s.light, display: "flex", alignItems: "center", justifyContent: "center", color: s.accent }}>{s.icon}</div>
                   </div>
                   <p style={{ fontSize: "28px", fontWeight: 800, color: INK, margin: 0, letterSpacing: "-0.02em", lineHeight: 1 }}>{s.value}</p>
@@ -811,7 +874,7 @@ export default function InventoryAdjustmentPage() {
 
           {/* ── Filter Bar ── */}
           <div style={FilterCard}>
-            <SearchBox value={expSearch} onChange={setExpSearch} placeholder="Search product name..." />
+            <SearchBox value={expSearch} onChange={setExpSearch} placeholder="Search product or batch no..." />
             <SelectBox icon={Icon.calendar} value={expFilter} onChange={(v) => setExpFilter(v as any)}>
               <option value="All">Expiry: All</option>
               <option value="Expired">Expired</option>
@@ -819,28 +882,28 @@ export default function InventoryAdjustmentPage() {
               <option value="Good">Good</option>
               <option value="No Date">No Date Set</option>
             </SelectBox>
-            <span style={{ fontSize: "11.5px", color: FAINT }}>
+            <span style={{ fontSize: "12px", color: SUBTLE }}>
               “Expiring Soon” = within {EXPIRING_SOON_DAYS} days
             </span>
-            <span style={{ marginLeft: "auto", fontSize: "12px", color: MUTED, fontWeight: 500 }}>
-              {expFiltered.length} of {products.length} products
+            <span style={{ marginLeft: "auto", fontSize: "12px", color: SUBTLE, fontWeight: 600 }}>
+              {expFiltered.length} of {batchRows.length} batches
             </span>
           </div>
 
           {/* ── Expiration Table ── */}
           <div style={TableCard}>
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "900px" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "1000px" }}>
                 <thead>
                   <tr>
-                    {["Date & Time", "Product", "Category", "Unit Type", "Total Bottles", "Expiration Date", "Action"].map((h) => (
-                      <th key={h} style={thStyle}>{h}</th>
+                    {["Batch No", "Date & Time", "Product", "Category", "Unit Type", "Total Bottles", "Expiration Date", "Action"].map((h) => (
+                      <th key={h} style={thExpStyle}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {expFiltered.length === 0 ? (
-                    <EmptyRow cols={7} text="No products found" />
+                    <EmptyRow cols={8} text="No batches found" />
                   ) : expFiltered.map((p) => {
                     const es   = getExpiryStatus(p.expiryDate);
                     const est  = expiryStyle[es];
@@ -848,59 +911,67 @@ export default function InventoryAdjustmentPage() {
                     const hasDate = !!p.expiryDate;
                     const dt = fmtDateTime(p.updatedAt || p.createdAt);
                     return (
-                      <tr key={p.id} className="row-hover" style={{ transition: "background 0.15s" }}>
+                      <tr key={p.batchId ?? p.id} className="row-hover" style={{ transition: "background 0.15s", background: expiryRowBg[es] }}>
+                        {/* Batch No */}
+                        <td style={{ ...tdExpStyle, whiteSpace: "nowrap", boxShadow: es === "Expired" ? "inset 4px 0 0 #dc2626" : es === "Expiring Soon" ? "inset 4px 0 0 #d97706" : "none" }}>
+                          <span title={p.batchNo ?? undefined}
+                            style={{ display: "inline-block", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", fontSize: "12px", fontWeight: 700, color: p.batchNo ? INK : SUBTLE, background: GREEN_LIGHT, border: `1px solid ${GREEN_BORDER}`, borderRadius: "8px", padding: "4px 10px" }}>
+                            {fmtBatchNo(p.batchNo)}
+                          </span>
+                        </td>
+
                         {/* Date & Time */}
-                        <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                          <p style={{ fontSize: "12.5px", fontWeight: 600, color: INK, margin: 0 }}>{dt.date}</p>
-                          <p style={{ fontSize: "11px", color: FAINT, margin: "2px 0 0" }}>{dt.time}</p>
+                        <td style={{ ...tdExpStyle, whiteSpace: "nowrap" }}>
+                          <p style={{ fontSize: "13px", fontWeight: 700, color: INK, margin: 0 }}>{dt.date}</p>
+                          <p style={{ fontSize: "12px", color: SUBTLE, margin: "2px 0 0" }}>{dt.time}</p>
                         </td>
 
                         {/* Product */}
-                        <td style={tdStyle}>
+                        <td style={tdExpStyle}>
                           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                             <ProductThumb p={p} />
                             <div>
-                              <p style={{ fontSize: "13px", fontWeight: 700, color: INK, margin: 0 }}>{p.productName}</p>
-                              {p.size && <p style={{ fontSize: "11px", color: FAINT, margin: "2px 0 0" }}>{p.size}</p>}
+                              <p style={{ fontSize: "13.5px", fontWeight: 700, color: INK, margin: 0 }}>{p.productName}</p>
+                              {p.size && <p style={{ fontSize: "12px", color: SUBTLE, margin: "2px 0 0" }}>{p.size}</p>}
                             </div>
                           </div>
                         </td>
 
                         {/* Category */}
-                        <td style={tdStyle}>
-                          <span style={pill(GREEN_LIGHT, GREEN_DARK, "#c3e0c8")}>{categoryLabels[p.category] ?? p.category}</span>
+                        <td style={tdExpStyle}>
+                          <span style={pill("#dcfce7", "#14532d", "#86efac")}>{categoryLabels[p.category] ?? p.category}</span>
                         </td>
 
                         {/* Unit Type */}
-                        <td style={tdStyle}>
-                          <span style={{ background: "#f1f5f2", color: MUTED, padding: "3px 10px", borderRadius: "20px", fontSize: "11.5px", fontWeight: 600, whiteSpace: "nowrap" }}>
+                        <td style={tdExpStyle}>
+                          <span style={{ background: "#e5ece6", color: INK, border: `1px solid ${GREEN_BORDER}`, padding: "3px 10px", borderRadius: "20px", fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}>
                             Case · {getPiecesPerCase(p)} pcs
                           </span>
                         </td>
 
-                        {/* Total Bottles */}
-                        <td style={tdStyle}>
-                          <p style={{ fontSize: "14px", fontWeight: 800, color: INK, margin: 0 }}>{totalPieces(p).toLocaleString()}</p>
-                          <p style={{ fontSize: "11px", color: FAINT, margin: "2px 0 0" }}>{p.stock} case{p.stock !== 1 ? "s" : ""}</p>
+                        {/* Total Bottles (in this batch) */}
+                        <td style={tdExpStyle}>
+                          <p style={{ fontSize: "15px", fontWeight: 800, color: INK, margin: 0 }}>{totalPieces(p).toLocaleString()}</p>
+                          <p style={{ fontSize: "12px", color: SUBTLE, margin: "2px 0 0" }}>{p.stock} case{p.stock !== 1 ? "s" : ""}</p>
                         </td>
 
                         {/* Expiration Date */}
-                        <td style={tdStyle}>
-                          <p style={{ fontSize: "13px", fontWeight: hasDate ? 700 : 400, color: hasDate ? INK : FAINT, margin: 0 }}>
+                        <td style={tdExpStyle}>
+                          <p style={{ fontSize: "13.5px", fontWeight: hasDate ? 700 : 500, color: hasDate ? INK : SUBTLE, margin: 0 }}>
                             {fmtDate(p.expiryDate)}
                           </p>
-                          <span style={{ ...pill(est.bg, est.color, est.border), marginTop: "5px", fontSize: "10.5px", fontWeight: 700, padding: "2px 9px" }}>
-                            <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: est.dot }} />
+                          <span style={{ ...pill(est.bg, est.color, est.border), marginTop: "5px", fontSize: "11.5px", fontWeight: 700, padding: "3px 10px" }}>
+                            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: est.dot }} />
                             {es}{hasDate ? ` · ${daysLabel(days)}` : ""}
                           </span>
                         </td>
 
                         {/* Action */}
-                        <td style={tdStyle}>
+                        <td style={tdExpStyle}>
                           <button onClick={() => openExpiry(p)} disabled={!p.batchId}
                             className={hasDate ? "btn-ghost" : "btn-green"}
                             title={p.batchId ? undefined : "No stock batch yet — receive this product through a delivery first"}
-                            style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 14px", borderRadius: "9px", fontSize: "12px", fontWeight: 600, cursor: p.batchId ? "pointer" : "not-allowed", opacity: p.batchId ? 1 : 0.45, whiteSpace: "nowrap", border: hasDate ? `1px solid ${GREEN_BORDER}` : "none", background: hasDate ? "#fff" : GREEN, color: hasDate ? GREEN : "#fff", boxShadow: hasDate ? "none" : "0 2px 8px rgba(46,125,62,0.25)", transition: "all 0.15s" }}>
+                            style={{ display: "flex", alignItems: "center", gap: "6px", padding: "7px 14px", borderRadius: "9px", fontSize: "12px", fontWeight: 700, cursor: p.batchId ? "pointer" : "not-allowed", opacity: p.batchId ? 1 : 0.45, whiteSpace: "nowrap", border: hasDate ? `1px solid ${GREEN}` : "none", background: hasDate ? "#fff" : GREEN, color: hasDate ? GREEN_DARK : "#fff", boxShadow: hasDate ? "none" : "0 2px 8px rgba(46,125,62,0.25)", transition: "all 0.15s" }}>
                             {hasDate ? <>{Icon.edit} Adjust</> : <>{Icon.plus} Add Date</>}
                           </button>
                         </td>
@@ -910,9 +981,9 @@ export default function InventoryAdjustmentPage() {
                 </tbody>
               </table>
             </div>
-            <div style={{ padding: "12px 20px", borderTop: `1px solid ${GREEN_BORDER}`, background: GREEN_TINT }}>
-              <p style={{ fontSize: "12px", color: MUTED, margin: 0 }}>
-                Showing <strong style={{ color: INK }}>{expFiltered.length}</strong> of <strong style={{ color: INK }}>{products.length}</strong> products
+            <div style={{ padding: "12px 20px", borderTop: `1px solid ${GREEN_BORDER}`, background: GREEN_LIGHT }}>
+              <p style={{ fontSize: "12px", color: SUBTLE, margin: 0 }}>
+                Showing <strong style={{ color: INK }}>{expFiltered.length}</strong> of <strong style={{ color: INK }}>{batchRows.length}</strong> batches
               </p>
             </div>
           </div>
@@ -932,7 +1003,10 @@ export default function InventoryAdjustmentPage() {
                 </p>
                 <p style={{ fontSize: "20px", fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.01em" }}>{expProd.productName}</p>
                 <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.75)", margin: "3px 0 0" }}>
-                  {expProd.size && `${expProd.size} · `}{categoryLabels[expProd.category]} · {expProd.stock} cases in stock
+                  {expProd.size && `${expProd.size} · `}{categoryLabels[expProd.category]} · {expProd.stock} cases in batch
+                </p>
+                <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.75)", margin: "3px 0 0" }}>
+                  Batch No: <strong style={{ color: "#fff" }}>{fmtBatchNo(expProd.batchNo)}</strong>
                 </p>
               </div>
               <ModalCloseBtn onClick={closeExpiry} />
@@ -995,18 +1069,11 @@ export default function InventoryAdjustmentPage() {
                   style={{ flex: 1, padding: "12px", borderRadius: "10px", border: `1px solid ${GREEN_BORDER}`, background: "#fff", color: MUTED, fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
                   Cancel
                 </button>
-                <button onClick={() => requestExpiry(false)} disabled={expLoading || !expDate} className="btn-green"
+                <button onClick={requestExpiry} disabled={expLoading || !expDate} className="btn-green"
                   style={{ flex: 1.4, padding: "12px", borderRadius: "10px", border: "none", background: expLoading || !expDate ? "#e5ece6" : GREEN, color: expLoading || !expDate ? FAINT : "#fff", fontSize: "14px", fontWeight: 700, cursor: expLoading || !expDate ? "not-allowed" : "pointer", boxShadow: expLoading || !expDate ? "none" : "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
                   {expLoading ? "Saving…" : expProd.expiryDate ? "Save Changes" : "Save Expiration"}
                 </button>
               </div>
-
-              {expProd.expiryDate && (
-                <button onClick={() => requestExpiry(true)} disabled={expLoading}
-                  style={{ width: "100%", marginTop: "10px", padding: "10px", borderRadius: "10px", border: "1px solid #fecaca", background: "#fef2f2", color: "#b91c1c", fontSize: "12.5px", fontWeight: 600, cursor: "pointer" }}>
-                  Remove expiration date
-                </button>
-              )}
             </div>
           </div>
         </>
@@ -1191,38 +1258,42 @@ export default function InventoryAdjustmentPage() {
       )}
 
       {/* ── Confirm: Expiration change ── */}
-      {expProd && expConfirm && (
+      {expProd && showExpConfirm && (
         <>
-          <div onClick={() => setExpConfirm(null)} style={{ position: "fixed", inset: 0, background: "rgba(10,30,15,0.6)", zIndex: 60, backdropFilter: "blur(2px)" }} />
+          <div onClick={() => setShowExpConfirm(false)} style={{ position: "fixed", inset: 0, background: "rgba(10,30,15,0.6)", zIndex: 60, backdropFilter: "blur(2px)" }} />
           <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 70, background: "#fff", borderRadius: "18px", width: "min(92vw, 400px)", padding: "26px", boxShadow: "0 24px 70px rgba(10,30,15,0.35)", border: `1px solid ${GREEN_BORDER}` }}>
-            <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: expConfirm === "clear" ? "#fef2f2" : GREEN_LIGHT, color: expConfirm === "clear" ? "#dc2626" : GREEN, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
-              {expConfirm === "clear" ? Icon.trash : <svg width="22" height="22" viewBox="0 0 24 24" {...sp}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>}
+            <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: GREEN_LIGHT, color: GREEN, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px" }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" {...sp}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             </div>
             <p style={{ fontSize: "17px", fontWeight: 800, color: INK, textAlign: "center", margin: "0 0 6px" }}>
-              {expConfirm === "clear" ? "Remove expiration date?" : "Save expiration date?"}
+              Save expiration date?
             </p>
             <p style={{ fontSize: "13px", color: MUTED, textAlign: "center", margin: "0 0 16px" }}>
               {expProd.productName}{expProd.size ? ` · ${expProd.size}` : ""}
             </p>
             <div style={{ background: GREEN_TINT, border: `1px solid ${GREEN_BORDER}`, borderRadius: "12px", padding: "12px 14px", marginBottom: "18px", fontSize: "13px", color: INK, display: "grid", gap: "6px" }}>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: FAINT }}>Batch No</span>
+                <strong>{fmtBatchNo(expProd.batchNo)}</strong>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span style={{ color: FAINT }}>Current</span>
                 <strong>{fmtDate(expProd.expiryDate)}</strong>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span style={{ color: FAINT }}>New</span>
-                <strong style={{ color: expConfirm === "clear" ? "#b91c1c" : GREEN }}>
-                  {expConfirm === "clear" ? "No date" : fmtDate(new Date(`${expDate}T00:00:00.000Z`).toISOString())}
+                <strong style={{ color: GREEN }}>
+                  {fmtDate(new Date(`${expDate}T00:00:00.000Z`).toISOString())}
                 </strong>
               </div>
             </div>
             <div style={{ display: "flex", gap: "10px" }}>
-              <button onClick={() => setExpConfirm(null)} className="btn-outline"
+              <button onClick={() => setShowExpConfirm(false)} className="btn-outline"
                 style={{ flex: 1, padding: "12px", borderRadius: "10px", border: `1px solid ${GREEN_BORDER}`, background: "#fff", color: MUTED, fontSize: "13px", fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
                 Cancel
               </button>
-              <button onClick={() => saveExpiry(expConfirm === "clear")} className={expConfirm === "clear" ? "btn-red" : "btn-green"}
-                style={{ flex: 1.3, padding: "12px", borderRadius: "10px", border: "none", background: expConfirm === "clear" ? "#e11d48" : GREEN, color: "#fff", fontSize: "14px", fontWeight: 700, cursor: "pointer", transition: "background 0.15s" }}>
+              <button onClick={saveExpiry} className="btn-green"
+                style={{ flex: 1.3, padding: "12px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "14px", fontWeight: 700, cursor: "pointer", transition: "background 0.15s" }}>
                 Confirm
               </button>
             </div>
