@@ -369,8 +369,19 @@ export default function PendingPage() {
    * Cashier completes the order after the customer received it and the driver handed
    * over the cash. The order is closed on the backend (sent as COMPLETED, which is not
    * a status shown on this page) and removed from the list.
+   *
+   * `expectedAmount` is the order total (incl. VAT). For cash orders, the order can't be
+   * completed if the driver handed over less than that.
    */
-  const completeOrder = async (id: string, remittedAmount?: number) => {
+  const completeOrder = async (id: string, remittedAmount?: number, expectedAmount?: number) => {
+    if (
+      remittedAmount !== undefined &&
+      expectedAmount !== undefined &&
+      Math.round((remittedAmount - expectedAmount) * 100) / 100 < 0
+    ) {
+      setError(`The driver's cash is short by ₱${peso(expectedAmount - remittedAmount)}. Collect the full amount before completing this order.`);
+      return;
+    }
     setUpdatingId(id);
     try {
       await api.updateOrderStatus(id, "COMPLETED", undefined, remittedAmount);
@@ -573,6 +584,8 @@ export default function PendingPage() {
               const remitAmount = remitRaw.trim() === "" ? NaN : Number(remitRaw);
               const remitValid  = Number.isFinite(remitAmount) && remitAmount >= 0;
               const remitDiff   = remitValid ? Math.round((remitAmount - grandTotal) * 100) / 100 : 0;
+              const remitShort  = remitValid && remitDiff < 0;           // driver gave less than the total
+              const canComplete = remitValid && !remitShort;             // must be exact or over
               const needsRemit  = order.paymentMethod === "Cash";
 
               return (
@@ -828,13 +841,16 @@ export default function PendingPage() {
                                     disabled={isUpdating}
                                     placeholder="0.00"
                                     aria-label="Cash received from driver"
-                                    style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px 10px 26px", borderRadius: "10px", fontSize: "14px", fontWeight: 700, color: INK, background: "#fff", border: `1px solid ${remitValid ? GREEN : GREEN_BORDER}` }} />
+                                    aria-invalid={remitShort}
+                                    style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px 10px 26px", borderRadius: "10px", fontSize: "14px", fontWeight: 700, color: INK, background: remitShort ? "#fef2f2" : "#fff", border: `1px solid ${remitShort ? "#ef4444" : remitValid ? GREEN : GREEN_BORDER}` }} />
                                 </div>
                                 <p style={{ fontSize: "12px", color: MUTED, margin: "6px 0 0" }}>
                                   Expected: <strong style={{ color: INK }}>₱{peso(grandTotal)}</strong>
                                 </p>
-                                {remitValid && remitDiff < 0 && (
-                                  <p style={{ fontSize: "12px", fontWeight: 700, color: "#b91c1c", margin: "4px 0 0" }}>Short by ₱{peso(Math.abs(remitDiff))}</p>
+                                {remitShort && (
+                                  <p style={{ fontSize: "12px", fontWeight: 700, color: "#b91c1c", margin: "4px 0 0" }}>
+                                    Short by ₱{peso(Math.abs(remitDiff))} — collect the full amount from the driver to continue.
+                                  </p>
                                 )}
                                 {remitValid && remitDiff > 0 && (
                                   <p style={{ fontSize: "12px", fontWeight: 700, color: "#b45309", margin: "4px 0 0" }}>Over by ₱{peso(remitDiff)}</p>
@@ -845,10 +861,14 @@ export default function PendingPage() {
                               </div>
 
                               <button className="act-green"
-                                onClick={() => completeOrder(order.id, remitAmount)}
-                                disabled={isUpdating || !remitValid}
-                                title={!remitValid ? "Enter the cash the driver handed over" : undefined}
-                                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "13px", fontWeight: 700, cursor: isUpdating || !remitValid ? "not-allowed" : "pointer", opacity: isUpdating || !remitValid ? 0.5 : 1, boxShadow: "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
+                                onClick={() => completeOrder(order.id, remitAmount, grandTotal)}
+                                disabled={isUpdating || !canComplete}
+                                title={
+                                  !remitValid ? "Enter the cash the driver handed over"
+                                  : remitShort ? `Driver's cash is short by ₱${peso(Math.abs(remitDiff))}`
+                                  : undefined
+                                }
+                                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px", padding: "11px", borderRadius: "10px", border: "none", background: GREEN, color: "#fff", fontSize: "13px", fontWeight: 700, cursor: isUpdating || !canComplete ? "not-allowed" : "pointer", opacity: isUpdating || !canComplete ? 0.5 : 1, boxShadow: "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
                                 {Icon.check} Complete
                               </button>
                             </>
