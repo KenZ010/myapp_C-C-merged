@@ -367,24 +367,8 @@ export default function PurchaseOrderPage() {
       try {
         setProcessingId(r.id);
         setPageError("");
-        const employeeId = localStorage.getItem("userId") || "";
-        const res = await api.createDelivery({
-          supplierId: r.supplierId,
-          employeeId,
-          deliveryDate: new Date().toISOString().split("T")[0],
-          totalItems: r.items.reduce((s, i) => s + Number(i.quantity), 0),
-          notes: r.notes || "",
-          items: r.items.map((i) => ({
-            productId: i.productId,
-            quantity: Number(i.quantity) || 1,
-            costPrice: Number(i.costPrice) || 0,
-            unit: i.unit || "case_24",
-          })),
-        });
-        if (res?.error || res?.message?.toLowerCase().includes("error")) {
-          setPageError(res.message || "Failed to create delivery.");
-          return;
-        }
+        // The server creates the purchase order in the same transaction as the approval,
+        // so only the status update is sent from here (calling createDelivery too made a duplicate PO).
         await api.updateOrderRequest(r.id, { status: "APPROVED" });
         await fetchAll();
         setViewRequest(null);
@@ -392,7 +376,9 @@ export default function PurchaseOrderPage() {
         setTimeout(() => setPageSuccess(""), 3000);
       } catch (e) {
         console.error(e);
-        setPageError("Failed to approve request. Please try again.");
+        // parseJson throws the server's message, e.g. "This request has already been reviewed."
+        setPageError((e as Error)?.message || "Failed to approve request. Please try again.");
+        await fetchAll();
       } finally {
         setProcessingId(null);
         closeConfirm();
@@ -413,7 +399,9 @@ export default function PurchaseOrderPage() {
       setTimeout(() => setPageSuccess(""), 3000);
     } catch (e) {
       console.error(e);
-      setPageError("Failed to reject request. Please try again.");
+      setPageError((e as Error)?.message || "Failed to reject request. Please try again.");
+      setRejectTarget(null);
+      await fetchAll();
     } finally { setProcessingId(null); }
   };
 
@@ -902,7 +890,7 @@ export default function PurchaseOrderPage() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
             <h2 className="text-base font-bold text-gray-800 mb-1">Reject this request?</h2>
             <p className="text-xs text-gray-400 mb-3">The inventory manager will see your reason.</p>
-            <textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3}
+            <textarea maxLength={500} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3}
               placeholder="Reason (optional)..."
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-indigo-400 text-gray-900 resize-none" />
             <div className="flex gap-3 mt-4">
