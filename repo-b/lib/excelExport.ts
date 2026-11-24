@@ -114,6 +114,28 @@ export function generatedOnLabel() {
   return `Generated On: ${new Date().toLocaleString("en-PH", { dateStyle: "long", timeStyle: "short" })}`;
 }
 
+type SessionUser = {
+  name?: string;
+  fullName?: string;
+  username?: string;
+};
+
+export function getCurrentAdminName() {
+  if (typeof window === "undefined") return "Admin";
+  try {
+    const stored = window.localStorage.getItem("employee") || window.localStorage.getItem("user");
+    if (!stored) return "Admin";
+    const user = JSON.parse(stored) as SessionUser | null;
+    return user?.name || user?.fullName || user?.username || "Admin";
+  } catch {
+    return "Admin";
+  }
+}
+
+export function exportInfoLabel() {
+  return `${generatedOnLabel()}  •  Exported by: ${getCurrentAdminName()}`;
+}
+
 export async function exportStyledExcel(opts: {
   fileName: string;
   sheetName: string;
@@ -127,12 +149,15 @@ export async function exportStyledExcel(opts: {
   const ExcelJS = (mod as any).default ?? mod;
   const wb: Workbook = new ExcelJS.Workbook();
   wb.creator = "Julieta Soft Drinks Store";
+  wb.lastModifiedBy = getCurrentAdminName();
   wb.created = new Date();
 
   buildTableSheet(wb, {
     name: opts.sheetName,
     title: opts.title,
-    subtitle: opts.subtitle ?? generatedOnLabel(),
+    subtitle: opts.subtitle
+      ? `${opts.subtitle}  •  Exported by: ${getCurrentAdminName()}`
+      : exportInfoLabel(),
     cols: opts.cols,
     rows: opts.rows,
     totals: opts.totals,
