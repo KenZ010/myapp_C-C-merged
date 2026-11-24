@@ -132,8 +132,11 @@ export function getCurrentAdminName() {
   }
 }
 
-export function exportInfoLabel() {
-  return `${generatedOnLabel()}  •  Exported by: ${getCurrentAdminName()}`;
+export function exportInfoLabel(totalTransactions?: number, prefix?: string) {
+  const count = totalTransactions === undefined
+    ? ""
+    : `  •  Total Transactions: ${totalTransactions.toLocaleString("en-PH")}`;
+  return `${prefix ? `${prefix}  •  ` : ""}${generatedOnLabel()}${count}  •  Exported by: ${getCurrentAdminName()}`;
 }
 
 export async function exportStyledExcel(opts: {
@@ -155,9 +158,7 @@ export async function exportStyledExcel(opts: {
   buildTableSheet(wb, {
     name: opts.sheetName,
     title: opts.title,
-    subtitle: opts.subtitle
-      ? `${opts.subtitle}  •  Exported by: ${getCurrentAdminName()}`
-      : exportInfoLabel(),
+    subtitle: exportInfoLabel(opts.rows.length, opts.subtitle),
     cols: opts.cols,
     rows: opts.rows,
     totals: opts.totals,

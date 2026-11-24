@@ -206,7 +206,7 @@ function styleHeaderRow(row: Row) {
   });
 }
 
-function addSheetTitle(ws: Worksheet, title: string, periodLabel: string, colCount: number) {
+function addSheetTitle(ws: Worksheet, title: string, periodLabel: string, colCount: number, totalTransactions: number) {
   ws.mergeCells(1, 1, 1, colCount);
   const t = ws.getCell(1, 1);
   t.value = title;
@@ -221,7 +221,7 @@ function addSheetTitle(ws: Worksheet, title: string, periodLabel: string, colCou
 
   ws.mergeCells(3, 1, 3, colCount);
   const e = ws.getCell(3, 1);
-  e.value = exportInfoLabel();
+  e.value = exportInfoLabel(totalTransactions);
   e.font = { size: 10, italic: true, color: { argb: "FF6B7280" } };
 }
 
@@ -232,13 +232,14 @@ function buildTableSheet(
   name: string,
   title: string,
   periodLabel: string,
+  totalTransactions: number,
   cols: XlCol[],
   rows: (string | number | Date)[][],
   totals?: (string | number | null)[],
 ) {
   const ws = wb.addWorksheet(name, { views: [{ state: "frozen", ySplit: 4, showGridLines: false }] });
   ws.columns = cols.map((c) => ({ width: c.width }));
-  addSheetTitle(ws, title, periodLabel, cols.length);
+  addSheetTitle(ws, title, periodLabel, cols.length, totalTransactions);
 
   const header = ws.getRow(4);
   header.values = cols.map((c) => c.header);
@@ -403,7 +404,7 @@ async function exportSalesExcel(opts: {
 
   // ── Sheet 2: Top Selling Items ────────────────────────────────────────────
   buildTableSheet(
-    wb, "Top Selling", "Top Selling Items", periodLabel,
+    wb, "Top Selling", "Top Selling Items", periodLabel, txCount,
     [
       { header: "Rank",            width: 8,  align: "center" },
       { header: "Product Name",    width: 36 },
@@ -426,7 +427,7 @@ async function exportSalesExcel(opts: {
 
   // ── Sheet 3: Unpopular Items ──────────────────────────────────────────────
   buildTableSheet(
-    wb, "Unpopular Items", "Unpopular Items (Needs Attention)", periodLabel,
+    wb, "Unpopular Items", "Unpopular Items (Needs Attention)", periodLabel, txCount,
     [
       { header: "Product Name", width: 36 },
       { header: "Category",     width: 18 },
@@ -439,7 +440,7 @@ async function exportSalesExcel(opts: {
   // ── Sheet 4: Transactions ─────────────────────────────────────────────────
   const sortedTx = [...txs].sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime());
   buildTableSheet(
-    wb, "Transactions", "Transaction Logs", periodLabel,
+    wb, "Transactions", "Transaction Logs", periodLabel, txCount,
     [
       { header: "Order ID",    width: 26 },
       { header: "Date & Time", width: 22, format: "mmm d, yyyy h:mm AM/PM", align: "left" },
