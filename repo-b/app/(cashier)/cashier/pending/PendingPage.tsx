@@ -135,6 +135,9 @@ const methodStyle: Record<PaymentMethod, { bg: string; color: string; border: st
 const peso = (n: number) =>
   n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** Whole centavos — compare money in integers so floating-point drift can't flip a check. */
+const toCents = (n: number) => Math.round(n * 100);
+
 function normalizeOrder(o: Record<string, unknown>): Order {
   const rawStatus = String(o.status ?? "PENDING").toUpperCase();
   const status: OrderStatus = statusMap[rawStatus] ?? "Pending";
@@ -370,17 +373,22 @@ export default function PendingPage() {
    * over the cash. The order is closed on the backend (sent as COMPLETED, which is not
    * a status shown on this page) and removed from the list.
    *
-   * `expectedAmount` is the order total (incl. VAT). For cash orders, the order can't be
-   * completed if the driver handed over less than that.
+   * `expectedAmount` is the order total (incl. VAT). When it is passed (cash orders),
+   * a remitted amount is required and the order can't be completed if it is less than
+   * the total. Amounts are compared in whole centavos.
    */
   const completeOrder = async (id: string, remittedAmount?: number, expectedAmount?: number) => {
-    if (
-      remittedAmount !== undefined &&
-      expectedAmount !== undefined &&
-      Math.round((remittedAmount - expectedAmount) * 100) / 100 < 0
-    ) {
-      setError(`The driver's cash is short by ₱${peso(expectedAmount - remittedAmount)}. Collect the full amount before completing this order.`);
-      return;
+    if (expectedAmount !== undefined) {
+      // Cash order: an amount is required and must cover the total
+      if (remittedAmount === undefined || !Number.isFinite(remittedAmount)) {
+        setError("Enter the cash the driver handed over before completing this order.");
+        return;
+      }
+      const shortC = toCents(expectedAmount) - toCents(remittedAmount);
+      if (shortC > 0) {
+        setError(`The driver's cash is short by ₱${peso(shortC / 100)}. Collect the full amount before completing this order.`);
+        return;
+      }
     }
     setUpdatingId(id);
     try {
@@ -562,9 +570,10 @@ export default function PendingPage() {
               const isUpdating = updatingId === order.id;
               const customerReceived = order.status === "Order Received";
 
+              // Money is rounded to centavos at each step so totals match what the cashier counts
               const sub = order.items.reduce((acc, i) => acc + i.price * i.qty, 0);
-              const vat = sub * 0.12;
-              const grandTotal = sub + vat;
+              const vat = Math.round(sub * 0.12 * 100) / 100;
+              const grandTotal = Math.round((sub + vat) * 100) / 100;
 
               // Cash: what the cashier hands back
               const change =
@@ -572,8 +581,8 @@ export default function PendingPage() {
                   ? order.changeDue ?? Math.max(order.cashReceived - grandTotal, 0)
                   : undefined;
               const shortBy =
-                order.cashReceived !== undefined && order.cashReceived < grandTotal - 0.005
-                  ? grandTotal - order.cashReceived
+                order.cashReceived !== undefined && toCents(order.cashReceived) < toCents(grandTotal)
+                  ? (toCents(grandTotal) - toCents(order.cashReceived)) / 100
                   : 0;
 
               // Driver picked on this card (Processing orders only)
@@ -583,10 +592,14 @@ export default function PendingPage() {
               const remitRaw    = remitInputs[order.id] ?? "";
               const remitAmount = remitRaw.trim() === "" ? NaN : Number(remitRaw);
               const remitValid  = Number.isFinite(remitAmount) && remitAmount >= 0;
-              const remitDiff   = remitValid ? Math.round((remitAmount - grandTotal) * 100) / 100 : 0;
-              const remitShort  = remitValid && remitDiff < 0;           // driver gave less than the total
+              const remitDiffC  = remitValid ? toCents(remitAmount) - toCents(grandTotal) : 0; // centavos
+              const remitDiff   = remitDiffC / 100;
+              const remitShort  = remitValid && remitDiffC < 0;          // driver gave less than the total
               const canComplete = remitValid && !remitShort;             // must be exact or over
-              const needsRemit  = order.paymentMethod === "Cash";
+
+              // Everything except GCash (already paid online) must be remitted by the driver,
+              // including orders whose payment method is not specified.
+              const needsRemit  = order.paymentMethod !== "GCash";
 
               return (
                 <div key={order.id} className="order-card" style={{ background: "#fff", borderRadius: "14px", border: `1px solid ${GREEN_BORDER}`, overflow: "hidden" }}>
@@ -847,15 +860,18 @@ export default function PendingPage() {
                                 <p style={{ fontSize: "12px", color: MUTED, margin: "6px 0 0" }}>
                                   Expected: <strong style={{ color: INK }}>₱{peso(grandTotal)}</strong>
                                 </p>
+                                {!remitValid && (
+                                  <p style={{ fontSize: "12px", color: FAINT, margin: "4px 0 0" }}>Enter the amount to enable Complete.</p>
+                                )}
                                 {remitShort && (
                                   <p style={{ fontSize: "12px", fontWeight: 700, color: "#b91c1c", margin: "4px 0 0" }}>
                                     Short by ₱{peso(Math.abs(remitDiff))} — collect the full amount from the driver to continue.
                                   </p>
                                 )}
-                                {remitValid && remitDiff > 0 && (
+                                {remitValid && remitDiffC > 0 && (
                                   <p style={{ fontSize: "12px", fontWeight: 700, color: "#b45309", margin: "4px 0 0" }}>Over by ₱{peso(remitDiff)}</p>
                                 )}
-                                {remitValid && remitDiff === 0 && (
+                                {remitValid && remitDiffC === 0 && (
                                   <p style={{ fontSize: "12px", fontWeight: 700, color: GREEN, margin: "4px 0 0" }}>Exact amount ✓</p>
                                 )}
                               </div>
@@ -873,7 +889,7 @@ export default function PendingPage() {
                               </button>
                             </>
                           ) : (
-                            // GCash (or unspecified): already paid, nothing to collect from the driver
+                            // GCash: already paid, nothing to collect from the driver
                             <button className="act-green"
                               onClick={() => completeOrder(order.id)}
                               disabled={isUpdating}
