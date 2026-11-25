@@ -124,6 +124,40 @@ type ReceiveQty = {
   expiryDate: string; // must be non-empty before submission
 };
 
+const MIN_EXPIRY_DAYS_AFTER_RECEIVED = 14;
+const INVALID_EXPIRY_MESSAGE = "Invalid Expiration Date. The expiration date must be at least 2 weeks after the received date.";
+
+function formatLocalDateInput(d: Date): string {
+  const y  = d.getFullYear();
+  const m  = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+function minExpiryDateFor(receivedDate: string | null): string {
+  if (!receivedDate) return "";
+  const r = new Date(receivedDate);
+  if (isNaN(r.getTime())) return "";
+  const d = new Date(r.getFullYear(), r.getMonth(), r.getDate() + MIN_EXPIRY_DAYS_AFTER_RECEIVED);
+  return formatLocalDateInput(d);
+}
+
+function receivedDateFor(deliveryDate: string | null): string {
+  const today = formatLocalDateInput(new Date());
+  if (!deliveryDate) return today;
+  const d = new Date(deliveryDate);
+  if (isNaN(d.getTime())) return today;
+  const day = formatLocalDateInput(d);
+  return day > today ? day : today;
+}
+
+function isExpiryTooSoon(expiryDate: string, receivedDate: string | null): boolean {
+  if (!expiryDate) return false;
+  const min = minExpiryDateFor(receivedDate);
+  if (!min) return false;
+  return expiryDate < min;
+}
+
 // ── Create-order types ──
 type Supplier = { id: string; supplierName: string };
 
@@ -612,6 +646,12 @@ export default function PurchaseOrderPage() {
     (d) => d.status === "PENDING" || d.status === "PARTIALLY_RECEIVED"
   );
 
+  const receivedDate = receivingDelivery ? receivedDateFor(receivingDelivery.deliveryDate) : "";
+  const minExpiryDate = minExpiryDateFor(receivedDate);
+  const hasInvalidExpiry = receiveQtys.some(
+    (r) => r.receivedQty > 0 && isExpiryTooSoon(r.expiryDate, receivedDate)
+  );
+
   const filteredReceiving = pendingDeliveries.filter(
     (d) =>
       d.id.toLowerCase().includes(receivingSearch.toLowerCase()) ||
@@ -813,6 +853,11 @@ export default function PurchaseOrderPage() {
     const missingExpiry = itemsToReceive.filter((r) => !r.expiryDate || r.expiryDate.trim() === "");
     if (missingExpiry.length > 0) {
       setReceiveError("Please enter the expiry date for all items being received.");
+      return;
+    }
+
+    if (itemsToReceive.some((r) => isExpiryTooSoon(r.expiryDate, receivedDate))) {
+      setReceiveError(INVALID_EXPIRY_MESSAGE);
       return;
     }
 
@@ -2100,6 +2145,7 @@ export default function PurchaseOrderPage() {
                     const receivedBtl = rq?.receivedQty && unitInfo.bottlesPerCase
                       ? rq.receivedQty * unitInfo.bottlesPerCase : null;
                     const willReceive = (rq?.receivedQty ?? 0) > 0;
+                    const expiryTooSoon = willReceive && isExpiryTooSoon(rq?.expiryDate ?? "", receivedDate);
                     const itemUnit  = item.unit || item.product?.stockUnit;
 
                     return (
@@ -2169,14 +2215,15 @@ export default function PurchaseOrderPage() {
                             <input
                               type="date"
                               value={rq?.expiryDate ?? ""}
-                              min={new Date().toISOString().split("T")[0]}
+                              min={minExpiryDate || new Date().toISOString().split("T")[0]}
+                              aria-invalid={expiryTooSoon}
                               className="green-input"
                               onChange={(e) => setReceiveQtys((prev) => prev.map((r) =>
                                 r.deliveryItemId === item.id ? { ...r, expiryDate: e.target.value } : r
                               ))}
                               style={{
                                 padding: "9px 12px", borderRadius: "10px",
-                                border: willReceive && !rq?.expiryDate ? "1px solid #fcd34d" : `1px solid ${GREEN_BORDER}`,
+                                border: expiryTooSoon ? "1px solid #dc2626" : willReceive && !rq?.expiryDate ? "1px solid #fcd34d" : `1px solid ${GREEN_BORDER}`,
                                 fontSize: "13px", color: INK,
                                 background: "#fff", width: "100%", boxSizing: "border-box",
                                 cursor: "pointer",
@@ -2184,6 +2231,9 @@ export default function PurchaseOrderPage() {
                             />
                             {willReceive && !rq?.expiryDate && (
                               <p style={{ fontSize: "11.5px", color: "#b45309", margin: 0, display: "flex", alignItems: "center", gap: "6px", fontWeight: 600 }}>{Icon.alert} Required — check the box/label</p>
+                            )}
+                            {expiryTooSoon && (
+                              <p role="alert" style={{ fontSize: "11.5px", color: "#dc2626", margin: 0, display: "flex", alignItems: "center", gap: "6px", fontWeight: 600 }}>{Icon.alert} {INVALID_EXPIRY_MESSAGE}</p>
                             )}
                           </div>
                         )}
@@ -2218,8 +2268,8 @@ export default function PurchaseOrderPage() {
                   </div>
                 )}
 
-                <button className="btn-green" onClick={handleReceive} disabled={receiving}
-                  style={{ width: "100%", padding: "13px", borderRadius: "10px", border: "none", background: receiving ? "#c5d3c8" : GREEN, color: "#fff", fontSize: "14px", fontWeight: 700, cursor: receiving ? "not-allowed" : "pointer", marginBottom: "10px", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", boxShadow: receiving ? "none" : "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
+                <button className="btn-green" onClick={handleReceive} disabled={receiving || hasInvalidExpiry}
+                  style={{ width: "100%", padding: "13px", borderRadius: "10px", border: "none", background: receiving || hasInvalidExpiry ? "#c5d3c8" : GREEN, color: "#fff", fontSize: "14px", fontWeight: 700, cursor: receiving || hasInvalidExpiry ? "not-allowed" : "pointer", marginBottom: "10px", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", boxShadow: receiving || hasInvalidExpiry ? "none" : "0 4px 12px rgba(46,125,62,0.28)", transition: "background 0.15s" }}>
                   {receiving ? "Processing..." : <>{Icon.check} Confirm Receiving</>}
                 </button>
                 <button className="btn-outline" onClick={() => { setReceivingDelivery(null); setReceiveQtys([]); }}
