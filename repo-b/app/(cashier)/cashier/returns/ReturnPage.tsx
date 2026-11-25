@@ -83,8 +83,6 @@ type ReturnRequest = {
   items: ReturnRequestItem[];
 };
 
-type CollectRow = { cases: string; pieces: string; condition: ReturnCondition };
-
 // ── API ───────────────────────────────────────────────────────────────────────
 const API_URL = "https://backend-production-dcaab.up.railway.app/api";
 
@@ -193,17 +191,12 @@ const REASON_LABELS: Record<ReturnReason, string> = {
   OTHER:           "Other",
 };
 
+// Used when closing a return: how the collected items are treated by default
 const DEFAULT_CONDITION: Record<ReturnReason, ReturnCondition> = {
   WRONG_ITEM_SENT: "RESELLABLE",
   DAMAGED:         "DAMAGED",
   EXPIRED:         "EXPIRED",
   OTHER:           "DAMAGED",
-};
-
-const CONDITION_LABELS: Record<ReturnCondition, string> = {
-  RESELLABLE: "Resellable (back to stock)",
-  DAMAGED:    "Damaged (not restocked)",
-  EXPIRED:    "Expired (not restocked)",
 };
 
 const reasonClasses: Record<ReturnReason, string> = {
@@ -249,11 +242,6 @@ const qtyText = (total: number, perCase: number) => {
   if (cases)            parts.push(`${cases} case${cases === 1 ? "" : "s"}`);
   if (pieces || !cases) parts.push(`${pieces} pc${pieces === 1 ? "" : "s"}`);
   return parts.join(" + ");
-};
-
-const toInt = (v: string) => {
-  const n = parseInt(v, 10);
-  return isNaN(n) || n < 0 ? 0 : n;
 };
 
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
@@ -313,7 +301,6 @@ export default function ReturnPage() {
   const [drivers,       setDrivers]       = useState<Driver[]>([]);
   const [driversLoading, setDriversLoading] = useState(false);
   const [driverId,      setDriverId]      = useState("");
-  const [collect,       setCollect]       = useState<Record<string, CollectRow>>({});
   const socket = useSocket();
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
@@ -433,31 +420,7 @@ export default function ReturnPage() {
       catch (e) { setActionError(e instanceof Error ? e.message : "Could not load drivers."); }
       finally { setDriversLoading(false); }
     }
-
-    if (action === "COMPLETE") {
-      const next: Record<string, CollectRow> = {};
-      for (const it of viewItem.items) {
-        const { cases, pieces } = splitQty(it.returnQty, perCaseOf(it));
-        next[it.id] = {
-          cases:     String(cases),
-          pieces:    String(pieces),
-          condition: DEFAULT_CONDITION[viewItem.reason] ?? "DAMAGED",
-        };
-      }
-      setCollect(next);
-    }
   };
-
-  const collectedPieces = (it: ReturnRequestItem) => {
-    const row = collect[it.id];
-    if (!row) return 0;
-    return toInt(row.cases) * perCaseOf(it) + toInt(row.pieces);
-  };
-  const collectOverMax = (it: ReturnRequestItem) => collectedPieces(it) > it.returnQty;
-  const anyCollectInvalid = viewItem ? viewItem.items.some(collectOverMax) : false;
-
-  const setCollectField = (id: string, patch: Partial<CollectRow>) =>
-    setCollect((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
 
   // Runs an action, refreshes the list, then reloads this request's detail
   const runAction = async (fn: () => Promise<unknown>, fallbackStatus?: ReturnRequestStatus) => {
@@ -499,14 +462,17 @@ export default function ReturnPage() {
         if (!driverId) { setActionError("Select a driver first."); return; }
         return runAction(() => dispatchReplacement(id, driverId), "OUT_FOR_DELIVERY");
       case "COMPLETE": {
-        if (anyCollectInvalid) { setActionError("Collected quantity can't be more than the replaced quantity."); return; }
-        const items = viewItem.items.map((it) => ({
-          itemId:    it.id,
-          cases:     toInt(collect[it.id]?.cases ?? "0"),
-          pieces:    toInt(collect[it.id]?.pieces ?? "0"),
-          condition: collect[it.id]?.condition ?? "DAMAGED",
-        }));
-        return runAction(() => completeReturn(id, items, trimmed || undefined), "COMPLETED");
+        // No form: the full replaced quantity is closed out, treated by the return reason
+        const items = viewItem.items.map((it) => {
+          const { cases, pieces } = splitQty(it.returnQty, perCaseOf(it));
+          return {
+            itemId:    it.id,
+            cases,
+            pieces,
+            condition: DEFAULT_CONDITION[viewItem.reason] ?? "DAMAGED",
+          };
+        });
+        return runAction(() => completeReturn(id, items), "COMPLETED");
       }
       case "CANCEL":
         return runAction(() => cancelReturn(id, trimmed || undefined), "CANCELLED");
@@ -517,7 +483,7 @@ export default function ReturnPage() {
     APPROVE:  { title: "Confirm Approval",   cta: "Confirm Approval",   tone: "green", noteLabel: "Review Note (optional)",        notePh: "Add any notes for the customer…" },
     REJECT:   { title: "Confirm Rejection",  cta: "Confirm Rejection",  tone: "red",   noteLabel: "Reason for rejection (required)", notePh: "Tell the customer why this was rejected…" },
     DISPATCH: { title: "Dispatch Replacement", cta: "Dispatch & Deduct Stock", tone: "blue", noteLabel: "", notePh: "" },
-    COMPLETE: { title: "Complete Return",    cta: "Mark Completed",     tone: "green", noteLabel: "Note (optional)",               notePh: "Anything worth recording about the pickup…" },
+    COMPLETE: { title: "Mark as Completed?", cta: "Yes, Mark Completed", tone: "green", noteLabel: "", notePh: "" },
     CANCEL:   { title: "Cancel Return",      cta: "Cancel This Return", tone: "red",   noteLabel: "Reason (optional)",             notePh: "Why is this return being cancelled?" },
   };
 
@@ -1104,68 +1070,28 @@ export default function ReturnPage() {
                       </div>
                     )}
 
-                    {/* Complete: collected qty + condition per item */}
+                    {/* Complete: simple confirmation */}
                     {confirmAction === "COMPLETE" && (
-                      <div className="flex flex-col gap-2.5 mb-3">
-                        <p className="text-[12px] text-[#5f7a66] m-0 leading-relaxed">
-                          Enter what was collected from the customer. Resellable items go back to stock; damaged and expired items don&apos;t.
-                          {!viewItem.receivedAt && (
-                            <span className="block mt-1.5 font-semibold text-[#b45309]">
-                              ⚠️ The customer hasn&apos;t confirmed receiving the replacement yet.
-                            </span>
-                          )}
+                      <div className="mb-3">
+                        <p className="text-[13px] text-[#14301b] m-0 leading-relaxed">
+                          The customer has confirmed receiving the replacement. Once you confirm, this return is closed and can&apos;t be changed.
                         </p>
-                        {viewItem.items.map((it) => {
-                          const row     = collect[it.id];
-                          const perCase = perCaseOf(it);
-                          const over    = collectOverMax(it);
-                          if (!row) return null;
-                          return (
-                            <div key={it.id} className="bg-white rounded-[10px] border border-[#d6e8d9] px-3.5 py-3">
-                              <p className="text-[13px] font-bold text-[#14301b] m-0">{it.orderLine.product.productName}</p>
-                              <p className="text-[11.5px] text-[#8fa596] m-0 mt-0.5">Replaced: {qtyText(it.returnQty, perCase)}</p>
-                              <div className="flex gap-2 mt-2 flex-wrap items-end">
-                                {perCase > 1 && (
-                                  <div className="w-[84px]">
-                                    <label className={labelCls}>Cases</label>
-                                    <input
-                                      value={row.cases}
-                                      inputMode="numeric"
-                                      onChange={(e) => /^\d*$/.test(e.target.value) && setCollectField(it.id, { cases: e.target.value })}
-                                      className={`${inputCls} text-center ${over ? "!border-[#e53935] !bg-[#fff0f0]" : ""}`}
-                                    />
-                                  </div>
-                                )}
-                                <div className="w-[84px]">
-                                  <label className={labelCls}>Pieces</label>
-                                  <input
-                                    value={row.pieces}
-                                    inputMode="numeric"
-                                    onChange={(e) => /^\d*$/.test(e.target.value) && setCollectField(it.id, { pieces: e.target.value })}
-                                    className={`${inputCls} text-center ${over ? "!border-[#e53935] !bg-[#fff0f0]" : ""}`}
-                                  />
-                                </div>
-                                <div className="flex-1 min-w-[170px]">
-                                  <label className={labelCls}>Condition</label>
-                                  <select
-                                    value={row.condition}
-                                    onChange={(e) => setCollectField(it.id, { condition: e.target.value as ReturnCondition })}
-                                    className={`${inputCls} cursor-pointer`}
-                                  >
-                                    {(Object.keys(CONDITION_LABELS) as ReturnCondition[]).map((c) => (
-                                      <option key={c} value={c}>{CONDITION_LABELS[c]}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                              </div>
-                              {over && (
-                                <p className="text-[11.5px] text-[#e53935] m-0 mt-1.5">
-                                  ⚠️ That&apos;s more than the {qtyText(it.returnQty, perCase)} that was replaced.
-                                </p>
-                              )}
+                        {viewItem.receivedAt && (
+                          <p className="text-[12.5px] font-bold text-[#6d28d9] m-0 mt-2">
+                            ✓ Customer confirmed · {fmtDateTime(viewItem.receivedAt)}
+                          </p>
+                        )}
+                        <div className="mt-3 bg-white rounded-[10px] border border-[#d6e8d9] px-3.5 py-2.5">
+                          {viewItem.items.map((it, i) => (
+                            <div
+                              key={it.id}
+                              className={`flex justify-between gap-3 py-1.5 text-[12.5px] ${i < viewItem.items.length - 1 ? "border-b border-[#e8f5ea]" : ""}`}
+                            >
+                              <span className="text-[#14301b] font-semibold">{it.orderLine.product.productName}</span>
+                              <span className="text-[#5f7a66] whitespace-nowrap">{qtyText(it.returnQty, perCaseOf(it))}</span>
                             </div>
-                          );
-                        })}
+                          ))}
+                        </div>
                       </div>
                     )}
 
@@ -1176,8 +1102,8 @@ export default function ReturnPage() {
                       </p>
                     )}
 
-                    {/* Note box (all except dispatch) */}
-                    {confirmAction !== "DISPATCH" && (
+                    {/* Note box (approve, reject, cancel) */}
+                    {confirmAction !== "DISPATCH" && confirmAction !== "COMPLETE" && (
                       <div className="mb-3">
                         <label className={labelCls}>{meta.noteLabel}</label>
                         <textarea
@@ -1200,7 +1126,7 @@ export default function ReturnPage() {
                       </button>
                       <button
                         onClick={handleConfirm}
-                        disabled={busy || (confirmAction === "DISPATCH" && !driverId) || (confirmAction === "COMPLETE" && anyCollectInvalid)}
+                        disabled={busy || (confirmAction === "DISPATCH" && !driverId)}
                         className={`flex-[2] py-2.5 rounded-[10px] border-0 text-white text-[13px] font-bold cursor-pointer flex items-center justify-center gap-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${toneBtn[meta.tone]}`}
                       >
                         {busy ? <span className="spin">{Icons.refresh}</span> : confirmAction === "DISPATCH" ? Icons.truck : meta.tone === "red" ? Icons.x : Icons.check}
@@ -1260,7 +1186,9 @@ export default function ReturnPage() {
                   {viewItem.status === "OUT_FOR_DELIVERY" && (
                     <button
                       onClick={() => startAction("COMPLETE")}
-                      className="flex-[2] py-[11px] rounded-[10px] border-0 bg-[#2e7d3e] text-white text-[13px] font-bold cursor-pointer hover:bg-[#1f5f2d] transition-colors flex items-center justify-center gap-2 shadow-[0_4px_12px_rgba(46,125,62,0.28)]"
+                      disabled={!viewItem.receivedAt}
+                      title={!viewItem.receivedAt ? "Waiting for the customer to confirm they received the replacement" : undefined}
+                      className="flex-[2] py-[11px] rounded-[10px] border-0 bg-[#2e7d3e] text-white text-[13px] font-bold cursor-pointer hover:bg-[#1f5f2d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-[0_4px_12px_rgba(46,125,62,0.28)]"
                     >
                       {Icons.check} Mark Completed
                     </button>
