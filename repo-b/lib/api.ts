@@ -738,10 +738,12 @@ export const api = {
     });
     return parseJson(res, 'Failed to delete promo');
   },
-  togglePromo: async (id: string) => {
+  // Deactivating needs no body. Activating requires a new date range.
+  togglePromo: async (id: string, dates?: { dateEffective: string; lastDate: string }) => {
     const res = await fetch(`${API_URL}/promos/${id}/toggle`, {
       method: 'PATCH',
       headers: authHeaders(),
+      body: JSON.stringify(dates ?? {}),
     });
     return parseJson(res, 'Failed to toggle promo');
   },

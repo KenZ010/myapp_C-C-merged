@@ -266,6 +266,10 @@ export default function PromoManagementPage() {
   const [editForm, setEditForm] = useState(emptyForm);
   const [editLoading, setEditLoading] = useState(false);
 
+  const [reactivatePromo, setReactivatePromo] = useState<Promo | null>(null);
+  const [reStart, setReStart] = useState("");
+  const [reEnd, setReEnd] = useState("");
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
@@ -463,19 +467,35 @@ export default function PromoManagementPage() {
     }
   };
 
-  const handleToggleStatus = async (promo: Promo) => {
-  try {
-    await api.togglePromo(promo.id);
-    await fetchPromos();
-    // Update selectedPromo to reflect new status
-    setSelectedPromo((prev) =>
-      prev ? { ...prev, status: prev.status === "Active" ? "Inactive" : "Active" } : prev
-    );
-    showToast(`Promo ${promo.status === "Active" ? "deactivated" : "activated"}!`);
-  } catch (err) {
-    showToast("Failed to toggle promo status.", true);
-  }
-};
+  const handleToggleStatus = async (promo: Promo, dates?: { dateEffective: string; lastDate: string }) => {
+    // Reactivating needs a new date range, so ask for it first
+    if (promo.status === "Inactive" && !dates) {
+      setReStart(""); setReEnd("");
+      setReactivatePromo(promo);
+      return;
+    }
+    try {
+      await api.togglePromo(promo.id, dates);
+      await fetchPromos();
+      setSelectedPromo((prev) =>
+        prev ? {
+          ...prev,
+          status: prev.status === "Active" ? "Inactive" : "Active",
+          ...(dates ? { startDate: dates.dateEffective, endDate: dates.lastDate } : {}),
+        } : prev
+      );
+      showToast(`Promo ${promo.status === "Active" ? "deactivated" : "activated"}!`);
+      setReactivatePromo(null);
+    } catch (err) {
+      showToast((err as Error)?.message || "Failed to toggle promo status.", true);
+    }
+  };
+
+  const confirmReactivate = () => {
+    if (!reStart || !reEnd) { showAlert("Start and End dates are required.", "Missing Field"); return; }
+    if (new Date(reStart) > new Date(reEnd)) { showAlert("Start date must be before end date.", "Invalid Date"); return; }
+    handleToggleStatus(reactivatePromo!, { dateEffective: reStart, lastDate: reEnd });
+  };
 
   const confirmDelete = async () => {
     try {
@@ -866,6 +886,24 @@ export default function PromoManagementPage() {
             <div className="flex gap-3 mt-5">
               <button onClick={handleCloseAddModal} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
               <button onClick={handleAddPromo} disabled={addLoading} className="flex-1 bg-indigo-600 rounded-lg py-2 text-sm text-white hover:bg-indigo-700 disabled:opacity-60">{addLoading ? "Adding..." : "Add Promo"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REACTIVATE PROMO (new date range required) */}
+      {reactivatePromo && (
+        <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-[60] px-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+            <h2 className="text-lg font-bold text-gray-800 mb-1">Reactivate Promo</h2>
+            <p className="text-xs text-gray-500 mb-4">Set a new date range for <b>{reactivatePromo.title}</b>.</p>
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              <DatePicker label="Start Date" value={reStart} onChange={setReStart} placeholder="Start date" />
+              <DatePicker label="End Date" value={reEnd} onChange={setReEnd} placeholder="End date" />
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setReactivatePromo(null)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button onClick={confirmReactivate} className="flex-1 bg-green-500 rounded-lg py-2 text-sm text-white hover:bg-green-600">Activate</button>
             </div>
           </div>
         </div>
