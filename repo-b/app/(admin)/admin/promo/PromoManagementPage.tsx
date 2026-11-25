@@ -269,6 +269,7 @@ export default function PromoManagementPage() {
   const [reactivatePromo, setReactivatePromo] = useState<Promo | null>(null);
   const [reStart, setReStart] = useState("");
   const [reEnd, setReEnd] = useState("");
+  const [reDiscount, setReDiscount] = useState("");
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -467,10 +468,11 @@ export default function PromoManagementPage() {
     }
   };
 
-  const handleToggleStatus = async (promo: Promo, dates?: { dateEffective: string; lastDate: string }) => {
-    // Reactivating needs a new date range, so ask for it first
+  const handleToggleStatus = async (promo: Promo, dates?: { dateEffective: string; lastDate: string; discountPercent: number }) => {
+    // Reactivating needs a new date range and discount, so ask for them first
     if (promo.status === "Inactive" && !dates) {
       setReStart(""); setReEnd("");
+      setReDiscount(promo.discount != null ? String(promo.discount) : "");
       setReactivatePromo(promo);
       return;
     }
@@ -481,7 +483,7 @@ export default function PromoManagementPage() {
         prev ? {
           ...prev,
           status: prev.status === "Active" ? "Inactive" : "Active",
-          ...(dates ? { startDate: dates.dateEffective, endDate: dates.lastDate } : {}),
+          ...(dates ? { startDate: dates.dateEffective, endDate: dates.lastDate, discount: dates.discountPercent } : {}),
         } : prev
       );
       showToast(`Promo ${promo.status === "Active" ? "deactivated" : "activated"}!`);
@@ -494,7 +496,9 @@ export default function PromoManagementPage() {
   const confirmReactivate = () => {
     if (!reStart || !reEnd) { showAlert("Start and End dates are required.", "Missing Field"); return; }
     if (new Date(reStart) > new Date(reEnd)) { showAlert("Start date must be before end date.", "Invalid Date"); return; }
-    handleToggleStatus(reactivatePromo!, { dateEffective: reStart, lastDate: reEnd });
+    const pct = Number(reDiscount);
+    if (!reDiscount || !Number.isFinite(pct) || pct < 1 || pct > 99) { showAlert("Please enter a discount between 1 and 99 percent.", "Invalid Discount"); return; }
+    handleToggleStatus(reactivatePromo!, { dateEffective: reStart, lastDate: reEnd, discountPercent: pct });
   };
 
   const confirmDelete = async () => {
@@ -896,10 +900,14 @@ export default function PromoManagementPage() {
         <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-[60] px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
             <h2 className="text-lg font-bold text-gray-800 mb-1">Reactivate Promo</h2>
-            <p className="text-xs text-gray-500 mb-4">Set a new date range for <b>{reactivatePromo.title}</b>.</p>
-            <div className="grid grid-cols-2 gap-3 mb-5">
+            <p className="text-xs text-gray-500 mb-4">Set a new date range and discount for <b>{reactivatePromo.title}</b>.</p>
+            <div className="grid grid-cols-2 gap-3 mb-3">
               <DatePicker label="Start Date" value={reStart} onChange={setReStart} placeholder="Start date" />
               <DatePicker label="End Date" value={reEnd} onChange={setReEnd} placeholder="End date" />
+            </div>
+            <div className="mb-5">
+              <label className="text-xs text-gray-400">Discount (%)</label>
+              <input type="number" min="1" max="99" value={reDiscount} onChange={(e) => setReDiscount(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mt-1 outline-none focus:border-indigo-400 text-gray-900" placeholder="e.g. 20" />
             </div>
             <div className="flex gap-3">
               <button onClick={() => setReactivatePromo(null)} className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
