@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { api } from "@/lib/api";
+import type { CellValue } from "exceljs";
 
 // ── Theme (same green design as the other pages) ──────────────────────────────
 const GREEN        = "#2e7d3e"; // primary
@@ -601,6 +602,7 @@ export default function PurchaseOrderPage() {
   const [createError,        setCreateError]        = useState("");
   const [previewModal,       setPreviewModal]       = useState(false);
 
+  const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState("");
   const [confirmModal, setConfirmModal] = useState<{ show: boolean; message: string; onConfirm: () => void }>({
     show: false, message: "", onConfirm: () => {},
@@ -1032,60 +1034,210 @@ export default function PurchaseOrderPage() {
       } catch (e) { console.error(e); }
     });
 
-  const handleExport = () => {
-    // Wrap in quotes (and escape quotes) whenever a value has a comma, quote or line break
-    const cell = (v: unknown) => {
-      const s = v == null ? "" : String(v);
-      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const day = (d?: string | null) => (d ? new Date(d).toLocaleDateString("en-CA") : ""); // 2026-11-25
+  const handleExport = async () => {
+    if (filteredHistory.length === 0) {
+      setToast("There are no purchase orders to export.");
+      setTimeout(() => setToast(""), 3000);
+      return;
+    }
 
-    const headers = [
-      "Delivery ID", "Supplier", "Delivery Date", "Status", "Receipt No.",
-      "Product", "Size", "Unit", "Ordered", "Received", "Short",
-      "Cost (PHP)", "Line Total (PHP)", "Expiry Date", "Notes",
-    ];
+    try {
+      setExporting(true);
 
-    // One row per product, so the file shows exactly what was ordered and received
-    const rows: (string | number)[][] = [];
-    filteredHistory.forEach((d) => {
-      const base = [
-        d.id,
-        d.supplier?.supplierName || d.supplierId,
-        day(d.deliveryDate),
-        STATUS_LABEL[d.status],
-        d.receiptNumber || "",
-      ];
-      if (!d.items?.length) {
-        rows.push([...base, "", "", "", "", "", "", "", "", "", d.notes || ""]);
-        return;
-      }
-      d.items.forEach((i) => {
-        rows.push([
-          ...base,
-          i.product?.productName || i.productId,
-          i.product?.size || "",
-          getUnit(i.unit || i.product?.stockUnit).label,
-          i.orderedQty,
-          i.receivedQty,
-          Math.max(0, i.orderedQty - i.receivedQty),
-          Number(i.costPrice).toFixed(2),
-          (i.orderedQty * Number(i.costPrice)).toFixed(2),
-          day(i.expiryDate),
-          d.notes || "",
-        ]);
+      // Loaded only when needed, so it does not add to the page's bundle size
+      const mod = await import("exceljs");
+      const ExcelJS = (mod as unknown as { default?: typeof mod }).default ?? mod;
+
+      const COLS = 15;
+      const argb = (hex: string) => "FF" + hex.replace("#", "").toUpperCase();
+      const fill = (hex: string) => ({ type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: argb(hex) } });
+      const line = { style: "thin" as const, color: { argb: argb(GREEN_BORDER) } };
+      const border = { top: line, left: line, bottom: line, right: line };
+      // Dates are written as real Excel dates (no timezone shift), so they can be sorted and filtered
+      const xlDate = (s?: string | null) => {
+        if (!s) return null;
+        const x = new Date(s);
+        if (isNaN(x.getTime())) return null;
+        return new Date(Date.UTC(x.getFullYear(), x.getMonth(), x.getDate()));
+      };
+
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "Stock Manager";
+      wb.created = new Date();
+      const ws = wb.addWorksheet("Purchase Orders", {
+        views: [{ state: "frozen", ySplit: 4, showGridLines: false }],
+        pageSetup: { orientation: "landscape", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
       });
-    });
 
-    const csv = [headers, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
-    // "\uFEFF" lets Excel read the file as UTF-8
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `purchase-orders-${new Date().toLocaleDateString("en-CA")}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+      ws.columns = [
+        { width: 13 }, // PO No.
+        { width: 26 }, // Supplier
+        { width: 14 }, // Delivery Date
+        { width: 13 }, // Status
+        { width: 16 }, // Receipt No.
+        { width: 30 }, // Product
+        { width: 11 }, // Size
+        { width: 15 }, // Unit
+        { width: 11 }, // Ordered
+        { width: 11 }, // Received
+        { width: 9 },  // Short
+        { width: 14 }, // Cost
+        { width: 16 }, // Line Total
+        { width: 14 }, // Expiry
+        { width: 34 }, // Notes
+      ];
+
+      // ── Title banner ──
+      ws.mergeCells(1, 1, 1, COLS);
+      const title = ws.getCell(1, 1);
+      title.value = "Purchase Orders";
+      title.font = { name: "Calibri", size: 18, bold: true, color: { argb: "FFFFFFFF" } };
+      title.fill = fill(GREEN_DARK);
+      title.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+      ws.getRow(1).height = 34;
+
+      const filterText = historyStatus === "All" ? "All statuses" : STATUS_LABEL[historyStatus as POStatus];
+      const searchText = searchHistory.trim() ? ` · Search: "${searchHistory.trim()}"` : "";
+      ws.mergeCells(2, 1, 2, COLS);
+      const sub = ws.getCell(2, 1);
+      sub.value =
+        `Exported ${new Date().toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })}` +
+        ` · ${filterText}${searchText} · ${filteredHistory.length} purchase order${filteredHistory.length !== 1 ? "s" : ""}`;
+      sub.font = { name: "Calibri", size: 10, italic: true, color: { argb: argb(GREEN_DARK) } };
+      sub.fill = fill(GREEN_LIGHT);
+      sub.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+      ws.getRow(2).height = 22;
+      ws.getRow(3).height = 8;
+
+      // ── Header row ──
+      const headers = [
+        "PO No.", "Supplier", "Delivery Date", "Status", "Receipt No.",
+        "Product", "Size", "Unit", "Ordered", "Received", "Short",
+        "Cost (₱)", "Line Total (₱)", "Expiry Date", "Notes",
+      ];
+      const headRow = ws.getRow(4);
+      headers.forEach((h, idx) => {
+        const c = headRow.getCell(idx + 1);
+        c.value = h;
+        c.font = { name: "Calibri", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+        c.fill = fill(GREEN);
+        c.border = border;
+        c.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+      });
+      headRow.height = 26;
+
+      // ── Data rows (one per product, shaded per purchase order) ──
+      const centered = [1, 3, 4, 5, 7, 8, 9, 10, 11, 14];
+      filteredHistory.forEach((d, gi) => {
+        const zebra = gi % 2 === 1 ? GREEN_TINT : "#FFFFFF";
+        const items: (DeliveryItem | undefined)[] = d.items?.length ? d.items : [undefined];
+
+        items.forEach((i) => {
+          const n = ws.rowCount + 1;
+          const ordered = i ? i.orderedQty : null;
+          const received = i ? i.receivedQty : null;
+          const cost = i ? Number(i.costPrice) : null;
+
+          const values: CellValue[] = [
+            d.id.slice(0, 8),
+            d.supplier?.supplierName || d.supplierId,
+            xlDate(d.deliveryDate),
+            STATUS_LABEL[d.status],
+            d.receiptNumber || "",
+            i ? (i.product?.productName || i.productId) : "",
+            i?.product?.size || "",
+            i ? getUnit(i.unit || i.product?.stockUnit).label : "",
+            ordered,
+            received,
+            i ? { formula: `MAX(0,I${n}-J${n})`, result: Math.max(0, (ordered ?? 0) - (received ?? 0)) } : null,
+            cost,
+            i ? { formula: `I${n}*L${n}`, result: (ordered ?? 0) * (cost ?? 0) } : null,
+            xlDate(i?.expiryDate),
+            d.notes || "",
+          ];
+
+          const row = ws.addRow(values);
+          row.height = 20;
+
+          for (let c = 1; c <= COLS; c++) {
+            const cell = row.getCell(c);
+            cell.font = { name: "Calibri", size: 10, color: { argb: argb(INK) } };
+            cell.fill = fill(zebra);
+            cell.border = border;
+            cell.alignment = {
+              vertical: "middle",
+              horizontal: centered.includes(c) ? "center" : c === 12 || c === 13 ? "right" : "left",
+              wrapText: c === 2 || c === 6 || c === 15,
+            };
+          }
+
+          row.getCell(3).numFmt = "dd mmm yyyy";
+          row.getCell(14).numFmt = "dd mmm yyyy";
+          row.getCell(9).numFmt = "#,##0";
+          row.getCell(10).numFmt = "#,##0";
+          row.getCell(11).numFmt = "#,##0";
+          row.getCell(12).numFmt = '"₱"#,##0.00';
+          row.getCell(13).numFmt = '"₱"#,##0.00';
+          row.getCell(13).font = { name: "Calibri", size: 10, bold: true, color: { argb: argb(GREEN_DARK) } };
+
+          // Status colour matches the badges on the page
+          const st = statusTheme[d.status];
+          const statusCell = row.getCell(4);
+          statusCell.fill = fill(st.bg);
+          statusCell.font = { name: "Calibri", size: 10, bold: true, color: { argb: argb(st.color) } };
+
+          // Received 0 = grey, short = red
+          if (i && (received ?? 0) === 0) row.getCell(10).font = { name: "Calibri", size: 10, color: { argb: argb(FAINT) } };
+          if (i && (ordered ?? 0) - (received ?? 0) > 0 && (received ?? 0) > 0) {
+            row.getCell(11).font = { name: "Calibri", size: 10, bold: true, color: { argb: "FFB91C1C" } };
+          }
+          if (i && (ordered ?? 0) - (received ?? 0) <= 0) {
+            row.getCell(11).font = { name: "Calibri", size: 10, color: { argb: argb(FAINT) } };
+          }
+        });
+      });
+
+      // ── Totals row ──
+      const lastData = ws.rowCount;
+      const tr = lastData + 1;
+      ws.addRow([]);
+      ws.mergeCells(tr, 1, tr, 8);
+      ws.getCell(tr, 1).value = "TOTAL";
+      ws.getCell(tr, 9).value = { formula: `SUM(I5:I${lastData})` };
+      ws.getCell(tr, 10).value = { formula: `SUM(J5:J${lastData})` };
+      ws.getCell(tr, 11).value = { formula: `SUM(K5:K${lastData})` };
+      ws.getCell(tr, 13).value = { formula: `SUM(M5:M${lastData})` };
+      ws.getRow(tr).height = 24;
+      for (let c = 1; c <= COLS; c++) {
+        const cell = ws.getCell(tr, c);
+        cell.fill = fill(GREEN_DARK);
+        cell.border = border;
+        cell.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
+        cell.alignment = { vertical: "middle", horizontal: c === 1 ? "right" : c === 13 ? "right" : "center", indent: c === 1 ? 1 : 0 };
+      }
+      ws.getCell(tr, 9).numFmt = "#,##0";
+      ws.getCell(tr, 10).numFmt = "#,##0";
+      ws.getCell(tr, 11).numFmt = "#,##0";
+      ws.getCell(tr, 13).numFmt = '"₱"#,##0.00';
+
+      // Filter buttons on the header row
+      ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: lastData, column: COLS } };
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `purchase-orders-${new Date().toLocaleDateString("en-CA")}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      setToast("Export failed. Please try again.");
+      setTimeout(() => setToast(""), 3500);
+    } finally {
+      setExporting(false);
+    }
   };
 
   const tabs: { key: POStep; label: string; icon: React.ReactNode; badge?: number }[] = [
@@ -2129,8 +2281,8 @@ export default function PurchaseOrderPage() {
               <button className="btn-red" onClick={() => { setHistoryStatus("All"); setHistoryPage(1); }}
                 style={{ padding: "8px 12px", borderRadius: "10px", border: "1px solid #fecaca", background: "#fef2f2", color: "#b91c1c", fontSize: "12px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>{Icon.x} Clear</button>
             )}
-            <button className="btn-outline" onClick={handleExport}
-              style={{ padding: "10px 14px", borderRadius: "10px", border: `1px solid ${GREEN_BORDER}`, background: "#fff", color: GREEN, fontSize: "13px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "7px", transition: "all 0.15s" }}>{Icon.download} Export</button>
+            <button className="btn-outline" onClick={handleExport} disabled={exporting}
+              style={{ padding: "10px 14px", borderRadius: "10px", border: `1px solid ${GREEN_BORDER}`, background: "#fff", color: GREEN, fontSize: "13px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "7px", transition: "all 0.15s" }}>{Icon.download} {exporting ? "Exporting..." : "Export"}</button>
             <span style={{ marginLeft: "auto", fontSize: "12px", color: MUTED, fontWeight: 500 }}>{filteredHistory.length} purchase order{filteredHistory.length !== 1 ? "s" : ""}</span>
           </div>
 
