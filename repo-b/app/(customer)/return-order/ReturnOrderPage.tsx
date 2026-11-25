@@ -989,6 +989,108 @@ function ReturnFormModal({
   );
 }
 
+function ReceivedConfirmationModal({
+  r,
+  acknowledged,
+  submitting,
+  error,
+  onAcknowledgeChange,
+  onCancel,
+  onConfirm,
+}: {
+  r: MyReturn;
+  acknowledged: boolean;
+  submitting: boolean;
+  error: string | null;
+  onAcknowledgeChange: (checked: boolean) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <>
+      <div
+        onClick={submitting ? undefined : onCancel}
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 60, backdropFilter: "blur(2px)" }}
+      />
+      <div style={{
+        position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)",
+        zIndex: 70, width: "min(440px, 94vw)", background: "#fff", borderRadius: "20px",
+        overflow: "hidden", boxShadow: "0 24px 64px rgba(233,30,140,0.22)",
+        maxHeight: "90vh", overflowY: "auto", display: "flex", flexDirection: "column",
+      }}>
+        <div style={{ background: "linear-gradient(135deg,#c2185b,#e91e8c)", padding: "20px 24px", flexShrink: 0 }}>
+          <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, margin: "0 0 2px" }}>Confirm delivery</p>
+          <h3 style={{ color: "#fff", fontSize: 16, fontWeight: 800, margin: 0 }}>You received your replacement?</h3>
+        </div>
+
+        <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ background: "#fff8fa", border: "1px solid #f0e0e8", borderRadius: 10, padding: "10px 14px" }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>Return #{r.id.slice(0, 8).toUpperCase()}</p>
+            <p style={{ fontSize: 11, color: "#aaa", margin: "2px 0 0" }}>Order #{r.saleId.slice(0, 8)}</p>
+          </div>
+
+          <div>
+            <p style={{ fontSize: 11, fontWeight: 700, color: "#c2185b", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 8px" }}>
+              Replacement items
+            </p>
+            <div style={{ border: "1px solid #f5e0e8", borderRadius: 12, overflow: "hidden" }}>
+              {r.items.map((it) => {
+                const ppc = it.orderLine?.product?.piecesPerCase ?? 1;
+                return (
+                  <div key={it.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "10px 14px", borderBottom: "1px solid #fdf0f5", background: "#fff" }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#1a1a1a" }}>{it.orderLine?.product?.productName ?? "Item"}</span>
+                    <strong style={{ fontSize: 13, color: "#c2185b", whiteSpace: "nowrap" }}>{formatQty(it.returnQty, ppc)}</strong>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {r.driver && (
+            <div style={{ background: "#e3f2fd", border: "1px solid #c3ddf2", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#1565c0", lineHeight: 1.6 }}>
+              🚚 Delivered by {r.driver.name}{r.driver.phone ? ` · ${r.driver.phone}` : ""}
+            </div>
+          )}
+
+          <div style={{ background: "#fff8e1", border: "1px solid #f5d98a", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#8a5a00", lineHeight: 1.6 }}>
+            Only confirm once the replacement is in your hands. This cannot be undone, and the store will finish the return after collecting the items you are returning.
+          </div>
+
+          <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", fontSize: 12, color: "#444", lineHeight: 1.5 }}>
+            <input
+              type="checkbox"
+              checked={acknowledged}
+              disabled={submitting}
+              onChange={(e) => onAcknowledgeChange(e.target.checked)}
+              style={{ width: 16, height: 16, marginTop: 1, accentColor: "#e91e8c", flexShrink: 0 }}
+            />
+            <span>I have received all the replacement items listed above.</span>
+          </label>
+
+          {error && <p style={{ fontSize: 12, color: "#c62828", margin: 0 }}>⚠️ {error}</p>}
+
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              onClick={onCancel}
+              disabled={submitting}
+              style={{ flex: 1, padding: 13, borderRadius: 30, border: "1.5px solid #f0c0cc", background: "#fff", color: "#c2185b", fontSize: 13, fontWeight: 700, cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.5 : 1 }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={!acknowledged || submitting}
+              style={{ flex: 1.4, padding: 13, borderRadius: 30, border: "none", background: "linear-gradient(135deg,#ff6b8a,#e91e8c)", color: "#fff", fontSize: 13, fontWeight: 700, cursor: !acknowledged || submitting ? "not-allowed" : "pointer", opacity: !acknowledged || submitting ? 0.5 : 1, boxShadow: "0 6px 20px rgba(233,30,140,0.35)" }}
+            >
+              {submitting ? "Confirming…" : "Confirm Received"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── One of the customer's return requests ───────────────────────────────────
 function MyReturnCard({ r, onChanged }: { r: MyReturn; onChanged: () => void }) {
   const meta   = RETURN_STATUS_META[r.status] ?? { label: r.status, bg: "#f3f4f6", color: "#6b7280", hint: "" };
@@ -996,12 +1098,15 @@ function MyReturnCard({ r, onChanged }: { r: MyReturn; onChanged: () => void }) 
 
   const [confirming,  setConfirming]  = useState(false);
   const [confirmErr,  setConfirmErr]  = useState<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [acknowledged, setAcknowledged] = useState(false);
 
   const confirmReceived = async () => {
     setConfirming(true);
     setConfirmErr(null);
     try {
       await api.confirmReplacementReceived(r.id);
+      setShowConfirm(false);
       onChanged();
     } catch (err) {
       setConfirmErr((err as Error).message || "Could not confirm. Please try again.");
@@ -1011,6 +1116,7 @@ function MyReturnCard({ r, onChanged }: { r: MyReturn; onChanged: () => void }) 
   };
 
   return (
+    <>
     <div style={{
       background: "#fff", borderRadius: 14, padding: "16px 18px", marginBottom: 12,
       border: active ? "1.5px solid #e91e8c" : "1px solid #f5e0e8",
@@ -1060,7 +1166,7 @@ function MyReturnCard({ r, onChanged }: { r: MyReturn; onChanged: () => void }) 
             ) : (
               <>
                 <button
-                  onClick={confirmReceived}
+                  onClick={() => { setConfirmErr(null); setAcknowledged(false); setShowConfirm(true); }}
                   disabled={confirming}
                   style={{
                     marginTop: 10, width: "100%", padding: "11px 14px", borderRadius: 24, border: "none",
@@ -1105,6 +1211,18 @@ function MyReturnCard({ r, onChanged }: { r: MyReturn; onChanged: () => void }) 
         </div>
       )}
     </div>
+      {showConfirm && (
+        <ReceivedConfirmationModal
+          r={r}
+          acknowledged={acknowledged}
+          submitting={confirming}
+          error={confirmErr}
+          onAcknowledgeChange={setAcknowledged}
+          onCancel={() => { setShowConfirm(false); setConfirmErr(null); }}
+          onConfirm={confirmReceived}
+        />
+      )}
+    </>
   );
 }
 
