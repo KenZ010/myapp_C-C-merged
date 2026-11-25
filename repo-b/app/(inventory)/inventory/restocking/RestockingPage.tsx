@@ -34,10 +34,32 @@ const CASE_UNITS: {
 const getUnit      = (u?: string) => CASE_UNITS.find((x) => x.value === u) ?? CASE_UNITS[0];
 const getUnitShort = (u?: string) => getUnit(u).short;
 
+// "1 case (24 pcs)" · "3 cases (24 pcs each)" · "5 bottles" · "2 pieces"
+function formatQty(qty: number, unit?: string): string {
+  const u = getUnit(unit);
+  if (u.bottlesPerCase) {
+    return qty === 1
+      ? `1 case (${u.bottlesPerCase} pcs)`
+      : `${qty} cases (${u.bottlesPerCase} pcs each)`;
+  }
+  const word = u.value === "btl" ? "bottle" : "piece";
+  return `${qty} ${word}${qty === 1 ? "" : "s"}`;
+}
+
+// "1 case × 24 pcs = 24 bottles" · "3 cases × 24 pcs = 72 bottles"
 function getCaseBreakdown(qty: number, unit?: string): string | null {
   const u = getUnit(unit);
   if (!u.bottlesPerCase) return null;
-  return `${qty} × ${u.bottlesPerCase} = ${qty * u.bottlesPerCase} btl`;
+  const total = qty * u.bottlesPerCase;
+  return `${qty} ${qty === 1 ? "case" : "cases"} × ${u.bottlesPerCase} pcs = ${total} ${total === 1 ? "bottle" : "bottles"}`;
+}
+
+// Plain-word unit label: "case" / "cases" / "bottle" / "bottles" / "piece" / "pieces"
+function unitLabel(unit: string | undefined, qty: number): string {
+  const u = getUnit(unit);
+  if (u.bottlesPerCase) return qty === 1 ? "case" : "cases";
+  if (u.value === "btl") return qty === 1 ? "bottle" : "bottles";
+  return qty === 1 ? "piece" : "pieces";
 }
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
@@ -358,13 +380,11 @@ function StepHeader({ n, title, active = true, right }: { n: number | string; ti
   );
 }
 
-// Unit pill, e.g. "3 24-cs"
+// Unit pill, e.g. "3 cases (24 pcs each)"
 function UnitPill({ unit, qty }: { unit?: string; qty?: number }) {
-  const u = getUnit(unit);
   return (
     <span style={chip(GREEN_LIGHT, GREEN_DARK, "#c3e0c8")}>
-      {qty != null && <strong style={{ color: INK }}>{qty}</strong>}
-      <span>{u.short}</span>
+      {qty != null ? <strong style={{ color: INK }}>{formatQty(qty, unit)}</strong> : getUnit(unit).label}
     </span>
   );
 }
@@ -506,7 +526,7 @@ function ProductSelect({
             products.map((p) => {
               const isUsed       = usedIds.includes(p.id) && p.id !== value;
               const isOutOfStock = (p.stockQuantity ?? 0) === 0;
-              const stockLabel   = p.stockQuantity != null ? `${p.stockQuantity} ${getUnitShort(p.stockUnit)} left` : null;
+              const stockLabel   = p.stockQuantity != null ? `${p.stockQuantity} ${unitLabel(p.stockUnit, p.stockQuantity)} left` : null;
               const top          = isTopSeller(p.id, products, productSales);
               return (
                 <button
@@ -1270,7 +1290,7 @@ export default function PurchaseOrderPage() {
                           {items.slice(0, 3).map((s) => (
                             <li key={s.productId} style={{ display: "flex", justifyContent: "space-between", gap: "8px", fontSize: "12px" }}>
                               <span style={{ color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.productName}{s.size ? ` ${s.size}` : ""}</span>
-                              <span style={{ color: FAINT, flexShrink: 0 }}>{s.suggestedCases != null ? `${s.suggestedCases} cs` : `${s.suggestedUnits} u`}</span>
+                              <span style={{ color: FAINT, flexShrink: 0 }}>{s.suggestedCases != null ? `${s.suggestedCases} ${s.suggestedCases === 1 ? "case" : "cases"}` : `${s.suggestedUnits} ${s.suggestedUnits === 1 ? "unit" : "units"}`}</span>
                             </li>
                           ))}
                           {items.length > 3 && <li style={{ fontSize: "12px", color: FAINT }}>+{items.length - 3} more</li>}
@@ -1353,7 +1373,7 @@ export default function PurchaseOrderPage() {
                                 </p>
                                 <p style={{ fontSize: "11.5px", color: FAINT, margin: "2px 0 0" }}>
                                   {!form.supplierId && `${suppliers.find((s) => s.id === p.supplierId)?.supplierName ?? ""} · `}
-                                  {p.stockQuantity != null ? `${p.stockQuantity} ${getUnitShort(p.stockUnit)} left` : ""}
+                                  {p.stockQuantity != null ? `${p.stockQuantity} ${unitLabel(p.stockUnit, p.stockQuantity)} left` : ""}
                                   {p.costPrice != null ? ` · ₱${p.costPrice}` : ""}
                                 </p>
                               </div>
@@ -1416,7 +1436,9 @@ export default function PurchaseOrderPage() {
                           <div style={{ textAlign: "right", flexShrink: 0 }}>
                             <p style={{ fontSize: "11px", color: FAINT, margin: 0 }}>Suggested</p>
                             <p style={{ fontSize: "13px", fontWeight: 700, color: INK, margin: "1px 0 6px" }}>
-                              {s.suggestedCases != null ? `${s.suggestedCases} 24-cs` : `${s.suggestedUnits} units`}
+                              {s.suggestedCases != null
+                                ? `${s.suggestedCases} ${s.suggestedCases === 1 ? "case" : "cases"} (24 pcs each)`
+                                : `${s.suggestedUnits} ${s.suggestedUnits === 1 ? "unit" : "units"}`}
                             </p>
                             <button
                               className={inCart ? undefined : "btn-green"}
@@ -1456,7 +1478,7 @@ export default function PurchaseOrderPage() {
                             <p style={{ fontSize: "12.5px", fontWeight: 700, color: INK, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.productName}{p.size ? ` ${p.size}` : ""}</p>
                             <p style={{ fontSize: "11.5px", color: MUTED, margin: "3px 0 0" }}>
                               ₱{p.costPrice ?? "—"} ·{" "}
-                              {out ? <span style={{ color: "#dc2626", fontWeight: 600 }}>Out of stock</span> : `${stock} ${getUnitShort(p.stockUnit)}`}
+                              {out ? <span style={{ color: "#dc2626", fontWeight: 600 }}>Out of stock</span> : `${stock} ${unitLabel(p.stockUnit, stock)}`}
                               {" "}· <span style={{ color: "#c2410c", fontWeight: 600 }}>{productSales[p.id]} sold</span>
                             </p>
                           </div>
@@ -1547,7 +1569,7 @@ export default function PurchaseOrderPage() {
                         </div>
                         {breakdown && item.productId && (
                           <p style={{ fontSize: "12px", color: GREEN, fontWeight: 600, margin: "8px 0 0", display: "flex", alignItems: "center", gap: "6px" }}>
-                            {Icon.box} {item.quantity} {getUnitShort(item.unit)} = {breakdown.split("= ")[1]}
+                            {Icon.box} {breakdown}
                           </p>
                         )}
                       </div>
@@ -1596,7 +1618,7 @@ export default function PurchaseOrderPage() {
                           <p style={{ fontSize: "11.5px", fontWeight: 600, color: t.color, margin: "3px 0 0 15px" }}>{t.label}</p>
                         </div>
                         <span style={{ ...chip("#fff", t.color, t.border), flexShrink: 0 }}>
-                          {out ? "—" : `${stock} ${getUnitShort(p.stockUnit)}`}
+                          {out ? "—" : `${stock} ${unitLabel(p.stockUnit, stock)}`}
                         </span>
                       </div>
                     );
@@ -1889,6 +1911,7 @@ export default function PurchaseOrderPage() {
                     const receivedBtl = rq?.receivedQty && unitInfo.bottlesPerCase
                       ? rq.receivedQty * unitInfo.bottlesPerCase : null;
                     const willReceive = (rq?.receivedQty ?? 0) > 0;
+                    const itemUnit  = item.unit || item.product?.stockUnit;
 
                     return (
                       <div key={item.id} style={{ background: GREEN_TINT, borderRadius: "12px", padding: "14px", border: diff < 0 ? "1px solid #fde68a" : `1px solid ${GREEN_BORDER}` }}>
@@ -1899,7 +1922,8 @@ export default function PurchaseOrderPage() {
                               {item.product?.size && <span style={{ color: FAINT, fontWeight: 400 }}> {item.product.size}</span>}
                             </p>
                             <p style={{ fontSize: "12px", color: MUTED, margin: "3px 0 0", lineHeight: 1.5 }}>
-                              Ordered: <strong style={{ color: INK }}>{item.orderedQty}</strong> {unitInfo.short} •
+                              Ordered: <strong style={{ color: INK }}>{item.orderedQty}</strong> {unitLabel(itemUnit, item.orderedQty)}
+                              {unitInfo.bottlesPerCase ? ` (${unitInfo.bottlesPerCase} pcs each)` : ""} •
                               Already received: <strong style={{ color: INK }}>{item.receivedQty}</strong> •
                               Remaining: <strong style={{ color: GREEN }}>{remaining}</strong>
                             </p>
@@ -1940,10 +1964,10 @@ export default function PurchaseOrderPage() {
                                 r.deliveryItemId === item.id ? { ...r, receivedQty: Math.min(r.receivedQty + 1, remaining) } : r
                               ))}
                               style={{ width: "30px", height: "30px", borderRadius: "50%", border: "none", background: GREEN, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>{Icon.plus}</button>
-                            <span style={{ fontSize: "12px", color: MUTED }}>{unitInfo.short}</span>
+                            <span style={{ fontSize: "12px", color: MUTED }}>{unitLabel(itemUnit, rq?.receivedQty ?? 0)}</span>
                           </div>
                           {receivedBtl !== null && receivedBtl > 0 && (
-                            <span style={{ fontSize: "12px", color: GREEN, fontWeight: 700 }}>= {receivedBtl} btl</span>
+                            <span style={{ fontSize: "12px", color: GREEN, fontWeight: 700 }}>= {receivedBtl} {receivedBtl === 1 ? "bottle" : "bottles"}</span>
                           )}
                         </div>
 
