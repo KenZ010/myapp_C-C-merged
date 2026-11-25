@@ -1033,22 +1033,59 @@ export default function PurchaseOrderPage() {
     });
 
   const handleExport = () => {
-    const headers = ["ID", "Supplier", "Delivery Date", "Total Items", "Status", "Receipt No.", "Notes"];
-    const rows = deliveries.map((d) => [
-      d.id,
-      d.supplier?.supplierName || d.supplierId,
-      new Date(d.deliveryDate).toLocaleDateString(),
-      d.totalItems,
-      d.status,
-      d.receiptNumber || "",
-      d.notes || "",
-    ]);
+    // Wrap in quotes (and escape quotes) whenever a value has a comma, quote or line break
+    const cell = (v: unknown) => {
+      const s = v == null ? "" : String(v);
+      return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const day = (d?: string | null) => (d ? new Date(d).toLocaleDateString("en-CA") : ""); // 2026-11-25
+
+    const headers = [
+      "Delivery ID", "Supplier", "Delivery Date", "Status", "Receipt No.",
+      "Product", "Size", "Unit", "Ordered", "Received", "Short",
+      "Cost (PHP)", "Line Total (PHP)", "Expiry Date", "Notes",
+    ];
+
+    // One row per product, so the file shows exactly what was ordered and received
+    const rows: (string | number)[][] = [];
+    filteredHistory.forEach((d) => {
+      const base = [
+        d.id,
+        d.supplier?.supplierName || d.supplierId,
+        day(d.deliveryDate),
+        STATUS_LABEL[d.status],
+        d.receiptNumber || "",
+      ];
+      if (!d.items?.length) {
+        rows.push([...base, "", "", "", "", "", "", "", "", "", d.notes || ""]);
+        return;
+      }
+      d.items.forEach((i) => {
+        rows.push([
+          ...base,
+          i.product?.productName || i.productId,
+          i.product?.size || "",
+          getUnit(i.unit || i.product?.stockUnit).label,
+          i.orderedQty,
+          i.receivedQty,
+          Math.max(0, i.orderedQty - i.receivedQty),
+          Number(i.costPrice).toFixed(2),
+          (i.orderedQty * Number(i.costPrice)).toFixed(2),
+          day(i.expiryDate),
+          d.notes || "",
+        ]);
+      });
+    });
+
+    const csv = [headers, ...rows].map((r) => r.map(cell).join(",")).join("\r\n");
+    // "\uFEFF" lets Excel read the file as UTF-8
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(
-      new Blob([[headers, ...rows].map((r) => r.join(",")).join("\n")], { type: "text/csv" })
-    );
-    a.download = "purchase-orders.csv";
+    a.href = url;
+    a.download = `purchase-orders-${new Date().toLocaleDateString("en-CA")}.csv`;
     a.click();
+    URL.revokeObjectURL(url);
   };
 
   const tabs: { key: POStep; label: string; icon: React.ReactNode; badge?: number }[] = [
