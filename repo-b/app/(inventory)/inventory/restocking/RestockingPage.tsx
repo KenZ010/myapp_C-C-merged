@@ -89,6 +89,16 @@ const requestTheme: Record<RequestStatus, { bg: string; color: string; border: s
   REJECTED: { bg: "#fef2f2", color: "#b91c1c", border: "#fecaca", label: "Rejected" },
 };
 
+// A request's stage also reflects what happened to its purchase order after approval
+type RequestStage = RequestStatus | "RECEIVED" | "PO_CANCELLED";
+
+const stageTheme: Record<RequestStage, { bg: string; color: string; border: string; label: string }> = {
+  ...requestTheme,
+  APPROVED:     { bg: "#e8f5ea", color: "#1f5f2d", border: "#b7dcbd", label: "Approved · Awaiting delivery" },
+  RECEIVED:     { bg: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe", label: "Received" },
+  PO_CANCELLED: { bg: "#f3f4f6", color: "#4b5563", border: "#d1d5db", label: "PO Cancelled" },
+};
+
 const requestTotal = (r: OrderRequest) =>
   r.items.reduce((s, i) => s + Number(i.quantity) * Number(i.costPrice), 0);
 
@@ -600,7 +610,7 @@ export default function PurchaseOrderPage() {
 
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [orderRequests,  setOrderRequests]  = useState<OrderRequest[]>([]);
-  const [requestFilter,  setRequestFilter]  = useState<"All" | RequestStatus>("All");
+  const [requestFilter,  setRequestFilter]  = useState<"All" | RequestStage>("All");
   const [loading,    setLoading]    = useState(true);
 
   const [receiptModal, setReceiptModal] = useState<{
@@ -645,6 +655,15 @@ export default function PurchaseOrderPage() {
   const pendingDeliveries = deliveries.filter(
     (d) => d.status === "PENDING" || d.status === "PARTIALLY_RECEIVED"
   );
+
+  // Where a request stands: approved requests follow their linked purchase order
+  const requestStage = (r: OrderRequest): RequestStage => {
+    if (r.status !== "APPROVED") return r.status;
+    const d = r.deliveryId ? deliveries.find((x) => x.id === r.deliveryId) : undefined;
+    if (d?.status === "DELIVERED") return "RECEIVED";
+    if (d?.status === "CANCELLED") return "PO_CANCELLED";
+    return "APPROVED"; // still PENDING or PARTIALLY_RECEIVED
+  };
 
   const receivedDate = receivingDelivery ? receivedDateFor(receivingDelivery.deliveryDate) : "";
   const minExpiryDate = minExpiryDateFor(receivedDate);
@@ -1035,7 +1054,7 @@ export default function PurchaseOrderPage() {
     if (!form.supplierId) { setCreateError("Please select a supplier."); return; }
     if (validLineItems.length === 0) { setCreateError("Please add at least one product."); return; }
 
-        try {
+    try {
       setSaving(true);
       setCreateError("");
       const res = await api.createOrderRequest({
@@ -1945,8 +1964,8 @@ export default function PurchaseOrderPage() {
       {step === "requests" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "14px", maxWidth: "860px" }}>
           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-            {(["All", "PENDING", "APPROVED", "REJECTED"] as const).map((f) => {
-              const count = f === "All" ? orderRequests.length : orderRequests.filter((r) => r.status === f).length;
+            {(["All", "PENDING", "APPROVED", "RECEIVED", "REJECTED"] as const).map((f) => {
+              const count = f === "All" ? orderRequests.length : orderRequests.filter((r) => requestStage(r) === f).length;
               const active = requestFilter === f;
               return (
                 <button key={f} onClick={() => setRequestFilter(f)}
@@ -1957,7 +1976,7 @@ export default function PurchaseOrderPage() {
             })}
           </div>
 
-          {orderRequests.filter((r) => requestFilter === "All" || r.status === requestFilter).length === 0 ? (
+          {orderRequests.filter((r) => requestFilter === "All" || requestStage(r) === requestFilter).length === 0 ? (
             <div style={{ ...card, padding: "48px 20px", textAlign: "center" }}>
               <div style={{ display: "flex", justifyContent: "center", marginBottom: "10px" }}>{Icon.emptyBox}</div>
               <p style={{ fontSize: "14px", fontWeight: 600, color: INK, margin: "0 0 4px" }}>No requests here yet</p>
@@ -1967,10 +1986,11 @@ export default function PurchaseOrderPage() {
             </div>
           ) : (
             orderRequests
-              .filter((r) => requestFilter === "All" || r.status === requestFilter)
+              .filter((r) => requestFilter === "All" || requestStage(r) === requestFilter)
               .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
               .map((r) => {
-                const t = requestTheme[r.status];
+                const stage = requestStage(r);
+                const t = stageTheme[stage];
                 return (
                   <div key={r.id} className="po-card" style={{ ...card, padding: "18px 20px", borderLeft: `4px solid ${t.color}` }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
@@ -2004,18 +2024,33 @@ export default function PurchaseOrderPage() {
 
                     {r.notes && <p style={{ fontSize: "12.5px", color: MUTED, margin: "10px 0 0" }}><strong style={{ color: INK }}>Your note:</strong> {r.notes}</p>}
 
-                    {r.status === "REJECTED" && (
+                    {stage === "REJECTED" && (
                       <div style={{ ...errorBanner, marginTop: "12px" }}>
                         <span style={{ display: "flex", marginTop: "1px" }}>{Icon.alert}</span>
                         <span>{r.adminRemarks ? `Rejected: ${r.adminRemarks}` : "Rejected by the admin. No reason was given."}</span>
                       </div>
                     )}
 
-                    {r.status === "APPROVED" && (
+                    {stage === "APPROVED" && (
                       <div style={{ marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap", background: GREEN_LIGHT, border: "1px solid #b7dcbd", borderRadius: "10px", padding: "10px 14px" }}>
                         <span style={{ fontSize: "12.5px", color: GREEN_DARK, fontWeight: 600 }}>Approved. The purchase order is ready to receive.</span>
                         <button className="btn-green" onClick={() => setStep("receiving")}
                           style={{ padding: "7px 14px", borderRadius: "8px", border: "none", background: GREEN, color: "#fff", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>Go to Receiving</button>
+                      </div>
+                    )}
+
+                    {stage === "RECEIVED" && (
+                      <div style={{ marginTop: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "10px", padding: "10px 14px" }}>
+                        <span style={{ fontSize: "12.5px", color: "#1d4ed8", fontWeight: 600 }}>All items were received and stock was updated.</span>
+                        <button className="btn-outline" onClick={() => setStep("history")}
+                          style={{ padding: "7px 14px", borderRadius: "8px", border: `1px solid ${GREEN_BORDER}`, background: "#fff", color: GREEN, fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>View in PO History</button>
+                      </div>
+                    )}
+
+                    {stage === "PO_CANCELLED" && (
+                      <div style={{ ...errorBanner, marginTop: "12px" }}>
+                        <span style={{ display: "flex", marginTop: "1px" }}>{Icon.alert}</span>
+                        <span>The purchase order for this request was cancelled.</span>
                       </div>
                     )}
                   </div>
