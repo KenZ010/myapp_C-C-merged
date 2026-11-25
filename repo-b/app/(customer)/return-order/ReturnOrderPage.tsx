@@ -457,6 +457,12 @@ function ReturnSummaryModal({
             </div>
           </div>
 
+          {/* 1-day policy reminder */}
+          <div style={{ background: "#fff8e1", border: "1px solid #f5d98a", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#8a5a00", lineHeight: 1.6 }}>
+            ⏱️ <strong>1-Day Return Policy</strong> — items can only be returned within 1 day (24 hours) after
+            the order was completed. By confirming below, you acknowledge this policy.
+          </div>
+
           {/* What happens next */}
           <div style={{ background: "#f4faf5", border: "1px solid #d6e8d9", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#2e5d3a", lineHeight: 1.6 }}>
             🔁 The store will review your request. If approved, we send a free replacement of the items above,
