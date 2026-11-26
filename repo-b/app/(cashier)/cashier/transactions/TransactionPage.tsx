@@ -160,11 +160,36 @@ function buildPrintHTML(
       <td style="padding:8px 10px;text-align:right;font-weight:700;color:${GREEN}">₱${peso(p.revenue)}</td>
     </tr>`).join("");
 
+  const recordsSection = activeTab === "Transactions" ? `
+  <h2>Transaction Records</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Order ID</th><th>Customer</th><th>Cashier</th>
+        <th>Date</th><th style="text-align:center">Items</th>
+        <th style="text-align:center">Payment</th><th style="text-align:right">Total</th>
+      </tr>
+    </thead>
+    <tbody>${rows || `<tr><td colspan="7" style="text-align:center;padding:24px;color:${FAINT}">No transactions in this period.</td></tr>`}</tbody>
+  </table>` : "";
+
+  const topSection = activeTab === "Sales Reports" && top.length > 0 ? `
+  <h2>Top Selling Products</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="text-align:center">#</th><th>Product</th>
+        <th style="text-align:center">Qty Sold</th><th style="text-align:right">Revenue</th>
+      </tr>
+    </thead>
+    <tbody>${topRows}</tbody>
+  </table>` : "";
+
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8"/>
-  <title>Transaction Report – ${label}</title>
+  <title>${activeTab === "Transactions" ? "Transaction" : "Sales"} Report – ${label}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; color: ${INK}; background: #fff; }
@@ -192,7 +217,7 @@ function buildPrintHTML(
 <div class="page">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid ${GREEN};padding-bottom:16px;margin-bottom:20px">
     <div>
-      <h1>Transaction Report</h1>
+      <h1>${activeTab === "Transactions" ? "Transaction Report" : "Sales Report"}</h1>
       <p class="meta">Julieta SoftDrink Store &nbsp;•&nbsp; 3065 JP Rizal St., Camarin Caloocan City</p>
       <p class="meta" style="margin-top:4px">Period: <strong>${label}</strong> &nbsp;•&nbsp; Generated: ${now}</p>
     </div>
@@ -209,29 +234,8 @@ function buildPrintHTML(
     <div class="stat"><div class="stat-label">Online Sales</div><div class="stat-value">₱${peso(online)}</div></div>
   </div>
 
-  <h2>Transaction Records</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Order ID</th><th>Customer</th><th>Cashier</th>
-        <th>Date</th><th style="text-align:center">Items</th>
-        <th style="text-align:center">Payment</th><th style="text-align:right">Total</th>
-      </tr>
-    </thead>
-    <tbody>${rows || `<tr><td colspan="7" style="text-align:center;padding:24px;color:${FAINT}">No transactions in this period.</td></tr>`}</tbody>
-  </table>
-
-  ${top.length > 0 ? `
-  <h2>Top Selling Products</h2>
-  <table>
-    <thead>
-      <tr>
-        <th style="text-align:center">#</th><th>Product</th>
-        <th style="text-align:center">Qty Sold</th><th style="text-align:right">Revenue</th>
-      </tr>
-    </thead>
-    <tbody>${topRows}</tbody>
-  </table>` : ""}
+  ${recordsSection}
+  ${topSection}
 
   <div class="footer">
     <span>Julieta SoftDrink Store • TECHNOLOGIA © 2026</span>
@@ -242,49 +246,335 @@ function buildPrintHTML(
 </html>`;
 }
 
-/** Trigger CSV download in the browser */
-function exportCSV(txs: Transaction[], label: string) {
-  const escape = (v: string | number) => {
-    const s = String(v);
-    return s.includes(",") || s.includes('"') || s.includes("\n")
-      ? `"${s.replace(/"/g, '""')}"`
-      : s;
+// ── Shared report data ────────────────────────────────────────────────────────
+function computeReport(txs: Transaction[]) {
+  const total       = txs.reduce((s, t) => s + t.total, 0);
+  const cash        = txs.filter((t) => t.payment === "CASH").reduce((s, t) => s + t.total, 0);
+  const online      = txs.filter((t) => t.payment !== "CASH").reduce((s, t) => s + t.total, 0);
+  const cashCount   = txs.filter((t) => t.payment === "CASH").length;
+  const onlineCount = txs.length - cashCount;
+  const avg         = txs.length ? total / txs.length : 0;
+
+  const map: Record<string, { name: string; category: string; qty: number; revenue: number; orders: number }> = {};
+  txs.forEach((tx) => {
+    const seen = new Set<string>();
+    tx.items.forEach((l) => {
+      const k = l.product.productName;
+      if (!map[k]) map[k] = { name: k, category: l.product.category || "—", qty: 0, revenue: 0, orders: 0 };
+      map[k].qty     += l.quantity;
+      map[k].revenue += l.subtotal;
+      if (!seen.has(k)) { map[k].orders += 1; seen.add(k); }
+    });
+  });
+  const products = Object.values(map).sort((a, b) => b.qty - a.qty);
+  return { total, cash, online, cashCount, onlineCount, avg, count: txs.length, products };
+}
+
+const productsText = (tx: Transaction) =>
+  tx.items.map((i) => `${i.product.productName} x${i.quantity}`).join("; ");
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+const fileSlug = (label: string) => label.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase();
+
+// ── CSV ───────────────────────────────────────────────────────────────────────
+function exportCSV(txs: Transaction[], label: string, tab: Tab) {
+  const esc = (v: string | number) => {
+    let s = String(v ?? "");
+    if (typeof v === "string" && /^[=+\-@]/.test(s)) s = "'" + s; // block formula injection
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const line = (cells: (string | number)[]) => cells.map(esc).join(",");
+  const r   = computeReport(txs);
+  const now = new Date().toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" });
+  const out: string[] = [];
+
+  out.push(line(["JULIETA SOFTDRINK STORE"]));
+  out.push(line([tab === "Transactions" ? "TRANSACTION REPORT" : "SALES REPORT"]));
+  out.push(line(["3065 JP Rizal St., Camarin Caloocan City"]));
+  out.push(line(["Period", label]));
+  out.push(line(["Generated", now]));
+  out.push("");
+
+  out.push(line(["SUMMARY"]));
+  out.push(line(["Metric", "Value"]));
+  out.push(line(["Total Sales (PHP)", r.total.toFixed(2)]));
+  out.push(line(["Total Transactions", r.count]));
+  out.push(line(["Cash Sales (PHP)", r.cash.toFixed(2)]));
+  out.push(line(["Online Sales (PHP)", r.online.toFixed(2)]));
+  out.push("");
+
+  if (tab === "Transactions") {
+    out.push(line(["TRANSACTION RECORDS"]));
+    out.push(line(["Order ID", "Customer", "Cashier", "Date", "Items", "Products", "Payment", "Total (PHP)"]));
+    txs.forEach((tx) =>
+      out.push(line([tx.id, tx.customer, tx.employeeName, tx.date, tx.items.length, productsText(tx), tx.payment, tx.total.toFixed(2)]))
+    );
+    out.push(line(["", "", "", "", "", "", "TOTAL", r.total.toFixed(2)]));
+  } else {
+    out.push(line(["TOP SELLING ITEMS"]));
+    out.push(line(["Rank", "Product", "Category", "Qty Sold", "Revenue (PHP)", "% of Sales", "Avg Price (PHP)", "Orders"]));
+    r.products.slice(0, 20).forEach((p, i) =>
+      out.push(line([
+        i + 1, p.name, p.category, p.qty, p.revenue.toFixed(2),
+        r.total ? ((p.revenue / r.total) * 100).toFixed(1) + "%" : "0%",
+        p.qty ? (p.revenue / p.qty).toFixed(2) : "0.00", p.orders,
+      ]))
+    );
+    out.push("");
+    out.push(line(["QUICK STATS"]));
+    out.push(line(["Metric", "Value"]));
+    out.push(line(["Avg Order Value (PHP)", r.avg.toFixed(2)]));
+    out.push(line(["Cash Transactions", r.cashCount]));
+    out.push(line(["Online Transactions", r.onlineCount]));
+    out.push(line(["Top Product", r.products[0]?.name ?? "—"]));
+  }
+
+  const blob = new Blob(["\uFEFF" + out.join("\r\n")], { type: "text/csv;charset=utf-8;" }); // BOM for Excel
+  downloadBlob(blob, `julieta-${tab === "Transactions" ? "transactions" : "sales-report"}-${fileSlug(label)}.csv`);
+}
+
+// ── Styled Excel (.xlsx) ──────────────────────────────────────────────────────
+async function exportExcel(txs: Transaction[], label: string, tab: Tab) {
+  const ExcelJS = (await import("exceljs")).default;
+  const r   = computeReport(txs);
+  const now = new Date().toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" });
+
+  const argb = (hex: string) => "FF" + hex.replace("#", "").toUpperCase();
+  const solid = (hex: string) => ({ type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: argb(hex) } });
+  const edge  = { style: "thin" as const, color: { argb: argb(GREEN_BORDER) } };
+  const box   = { top: edge, left: edge, bottom: edge, right: edge };
+  const PESO  = '"₱"#,##0.00';
+  const LAST_COL = 8; // A..H
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "Julieta SoftDrink Store";
+  const ws = wb.addWorksheet(tab === "Transactions" ? "Transactions" : "Sales Report", {
+    views: [{ showGridLines: false }],
+  });
+  ws.columns = tab === "Transactions"
+    ? [{ width: 26 }, { width: 22 }, { width: 20 }, { width: 22 }, { width: 8 }, { width: 44 }, { width: 12 }, { width: 16 }]
+    : [{ width: 7 },  { width: 30 }, { width: 16 }, { width: 11 }, { width: 16 }, { width: 12 }, { width: 14 }, { width: 10 }];
+
+  // Title banner
+  ws.mergeCells(1, 1, 1, LAST_COL);
+  const t = ws.getCell(1, 1);
+  t.value = `Julieta SoftDrink Store — ${tab === "Transactions" ? "Transaction Report" : "Sales Report"}`;
+  t.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
+  t.fill = solid(GREEN);
+  t.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+  ws.getRow(1).height = 34;
+
+  ws.mergeCells(2, 1, 2, LAST_COL);
+  ws.getCell(2, 1).value = "3065 JP Rizal St., Camarin Caloocan City";
+  ws.mergeCells(3, 1, 3, LAST_COL);
+  ws.getCell(3, 1).value = `Period: ${label}   •   Generated: ${now}`;
+  [2, 3].forEach((n) => {
+    const c = ws.getCell(n, 1);
+    c.font = { size: 10, color: { argb: argb(MUTED) } };
+    c.fill = solid(GREEN_TINT);
+    c.alignment = { indent: 1, vertical: "middle" };
+  });
+
+  // KPI cards (4 cards x 2 columns)
+  const kpis = [
+    { label: "TOTAL SALES",  value: r.total,  fmt: PESO, primary: true },
+    { label: "TRANSACTIONS", value: r.count,  fmt: "0" },
+    { label: "CASH SALES",   value: r.cash,   fmt: PESO },
+    { label: "ONLINE SALES", value: r.online, fmt: PESO },
+  ];
+  const kpiLabelRow = 5, kpiValueRow = 6;
+  ws.getRow(kpiLabelRow).height = 20;
+  ws.getRow(kpiValueRow).height = 32;
+  kpis.forEach((k, i) => {
+    const c1 = i * 2 + 1, c2 = c1 + 1;
+    ws.mergeCells(kpiLabelRow, c1, kpiLabelRow, c2);
+    ws.mergeCells(kpiValueRow, c1, kpiValueRow, c2);
+    const lc = ws.getCell(kpiLabelRow, c1);
+    const vc = ws.getCell(kpiValueRow, c1);
+    lc.value = k.label; vc.value = k.value; vc.numFmt = k.fmt;
+    lc.font = { bold: true, size: 9, color: { argb: k.primary ? "FFFFFFFF" : argb(MUTED) } };
+    vc.font = { bold: true, size: 16, color: { argb: k.primary ? "FFFFFFFF" : argb(INK) } };
+    [lc, vc].forEach((c) => {
+      c.fill = solid(k.primary ? GREEN : GREEN_LIGHT);
+      c.alignment = { horizontal: "center", vertical: "middle" };
+    });
+    // paint the merged partner cells + outer border
+    [c1, c2].forEach((cc) => {
+      ws.getCell(kpiLabelRow, cc).fill = solid(k.primary ? GREEN : GREEN_LIGHT);
+      ws.getCell(kpiValueRow, cc).fill = solid(k.primary ? GREEN : GREEN_LIGHT);
+      ws.getCell(kpiLabelRow, cc).border = { top: edge, left: cc === c1 ? edge : undefined, right: cc === c2 ? edge : undefined };
+      ws.getCell(kpiValueRow, cc).border = { bottom: edge, left: cc === c1 ? edge : undefined, right: cc === c2 ? edge : undefined };
+    });
+  });
+
+  const sectionTitle = (row: number, text: string) => {
+    ws.mergeCells(row, 1, row, LAST_COL);
+    const c = ws.getCell(row, 1);
+    c.value = text;
+    c.font = { bold: true, size: 12, color: { argb: argb(INK) } };
+    c.border = { bottom: { style: "medium", color: { argb: argb(GREEN) } } };
+    ws.getRow(row).height = 24;
+    c.alignment = { vertical: "middle" };
+  };
+  const headerRow = (row: number, headers: string[], rightFrom: number[] = []) => {
+    headers.forEach((h, i) => {
+      const c = ws.getCell(row, i + 1);
+      c.value = h;
+      c.font = { bold: true, size: 10, color: { argb: argb(GREEN_DARK) } };
+      c.fill = solid(GREEN_TINT);
+      c.border = { ...box, bottom: { style: "medium", color: { argb: argb(GREEN) } } };
+      c.alignment = { vertical: "middle", horizontal: rightFrom.includes(i + 1) ? "right" : "left", wrapText: true };
+    });
+    ws.getRow(row).height = 24;
+  };
+  const styleBodyRow = (row: number, idx: number, count: number) => {
+    for (let c = 1; c <= count; c++) {
+      const cell = ws.getCell(row, c);
+      cell.border = box;
+      cell.fill = solid(idx % 2 === 0 ? "#FFFFFF" : GREEN_TINT);
+      cell.font = { size: 10.5, color: { argb: argb(INK) } };
+      cell.alignment = { vertical: "middle", ...cell.alignment };
+    }
   };
 
-  const header = ["Order ID","Customer","Cashier","Date","Items","Payment","Total (PHP)"];
-  const rows   = txs.map((tx) => [
-    tx.id,
-    tx.customer,
-    tx.employeeName,
-    tx.date,
-    tx.items.length,
-    tx.payment,
-    tx.total.toFixed(2),
-  ].map(escape).join(","));
+  if (tab === "Transactions") {
+    sectionTitle(8, "Transaction Records");
+    const hr = 9;
+    headerRow(hr, ["Order ID", "Customer", "Cashier", "Date", "Items", "Products", "Payment", "Total"], [8]);
 
-  // Summary section
-  const total  = txs.reduce((s, t) => s + t.total, 0);
-  const cash   = txs.filter((t) => t.payment === "CASH").reduce((s, t) => s + t.total, 0);
-  const online = txs.filter((t) => t.payment !== "CASH").reduce((s, t) => s + t.total, 0);
+    txs.forEach((tx, i) => {
+      const row = hr + 1 + i;
+      ws.getCell(row, 1).value = tx.id;
+      ws.getCell(row, 2).value = tx.customer;
+      ws.getCell(row, 3).value = tx.employeeName;
+      ws.getCell(row, 4).value = tx.date;
+      ws.getCell(row, 5).value = tx.items.length;
+      ws.getCell(row, 6).value = productsText(tx);
+      ws.getCell(row, 7).value = tx.payment;
+      ws.getCell(row, 8).value = tx.total;
+      styleBodyRow(row, i, 8);
+      ws.getCell(row, 1).font = { name: "Consolas", size: 10, bold: true, color: { argb: argb(GREEN_DARK) } };
+      ws.getCell(row, 5).alignment = { horizontal: "center", vertical: "middle" };
+      ws.getCell(row, 6).alignment = { wrapText: true, vertical: "middle" };
+      ws.getCell(row, 7).alignment = { horizontal: "center", vertical: "middle" };
+      ws.getCell(row, 7).font = { bold: true, size: 10, color: { argb: tx.payment === "CASH" ? argb(GREEN_DARK) : "FF1D4ED8" } };
+      ws.getCell(row, 8).numFmt = PESO;
+      ws.getCell(row, 8).font = { bold: true, size: 10.5, color: { argb: argb(GREEN) } };
+    });
 
-  const summary = [
-    [],
-    ["SUMMARY"],
-    [`Period,${escape(label)}`],
-    [`Total Transactions,${txs.length}`],
-    [`Total Sales,${total.toFixed(2)}`],
-    [`Cash Sales,${cash.toFixed(2)}`],
-    [`Online Sales,${online.toFixed(2)}`],
-  ].map((r) => (Array.isArray(r) ? r.join(",") : r));
+    if (txs.length === 0) {
+      ws.mergeCells(hr + 1, 1, hr + 1, LAST_COL);
+      const c = ws.getCell(hr + 1, 1);
+      c.value = "No transactions in this period.";
+      c.font = { italic: true, color: { argb: argb(FAINT) } };
+      c.alignment = { horizontal: "center", vertical: "middle" };
+      ws.getRow(hr + 1).height = 30;
+    } else {
+      const first = hr + 1, last = hr + txs.length, totalRow = last + 1;
+      ws.mergeCells(totalRow, 1, totalRow, 7);
+      ws.getCell(totalRow, 1).value = "TOTAL";
+      ws.getCell(totalRow, 1).alignment = { horizontal: "right", vertical: "middle" };
+      ws.getCell(totalRow, 8).value = { formula: `SUM(H${first}:H${last})`, result: r.total };
+      ws.getCell(totalRow, 8).numFmt = PESO;
+      for (let c = 1; c <= 8; c++) {
+        const cell = ws.getCell(totalRow, c);
+        cell.fill = solid(GREEN);
+        cell.font = { bold: true, size: 11, color: { argb: "FFFFFFFF" } };
+        cell.border = box;
+      }
+      ws.getRow(totalRow).height = 26;
+      ws.autoFilter = { from: { row: hr, column: 1 }, to: { row: last, column: 8 } };
+    }
+    ws.views = [{ state: "frozen", ySplit: hr, showGridLines: false }];
+  } else {
+    // ── Top selling items
+    sectionTitle(8, "Top Selling Items");
+    const hr = 9;
+    headerRow(hr, ["Rank", "Product", "Category", "Qty Sold", "Revenue", "% of Sales", "Avg Price", "Orders"], [4, 5, 6, 7, 8]);
+    const top = r.products.slice(0, 20);
+    top.forEach((p, i) => {
+      const row = hr + 1 + i;
+      ws.getCell(row, 1).value = i + 1;
+      ws.getCell(row, 2).value = p.name;
+      ws.getCell(row, 3).value = p.category;
+      ws.getCell(row, 4).value = p.qty;
+      ws.getCell(row, 5).value = p.revenue;
+      ws.getCell(row, 6).value = r.total ? p.revenue / r.total : 0;
+      ws.getCell(row, 7).value = p.qty ? p.revenue / p.qty : 0;
+      ws.getCell(row, 8).value = p.orders;
+      styleBodyRow(row, i, 8);
+      ws.getCell(row, 1).alignment = { horizontal: "center", vertical: "middle" };
+      if (i < 3) ws.getCell(row, 1).font = { bold: true, size: 11, color: { argb: ["FFF59E0B", "FF94A3B8", "FFB45309"][i] } };
+      ws.getCell(row, 2).font = { bold: true, size: 10.5, color: { argb: argb(INK) } };
+      ws.getCell(row, 5).numFmt = PESO;
+      ws.getCell(row, 5).font = { bold: true, size: 10.5, color: { argb: argb(GREEN) } };
+      ws.getCell(row, 6).numFmt = "0.0%";
+      ws.getCell(row, 7).numFmt = PESO;
+      [4, 6, 7, 8].forEach((c) => (ws.getCell(row, c).alignment = { horizontal: "right", vertical: "middle" }));
+    });
+    if (top.length === 0) {
+      ws.mergeCells(hr + 1, 1, hr + 1, LAST_COL);
+      const c = ws.getCell(hr + 1, 1);
+      c.value = "No sales data for this period.";
+      c.font = { italic: true, color: { argb: argb(FAINT) } };
+      c.alignment = { horizontal: "center", vertical: "middle" };
+      ws.getRow(hr + 1).height = 30;
+    }
 
-  const csv = [header.join(","), ...rows, ...summary].join("\n");
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" }); // BOM for Excel
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href     = url;
-  a.download = `julieta-transactions-${label.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+    // ── Quick stats
+    let row = hr + Math.max(top.length, 1) + 3;
+    sectionTitle(row, "Quick Stats");
+    row += 1;
+    const stats: [string, string | number, string?][] = [
+      ["Avg Order Value",     r.avg,         PESO],
+      ["Total Transactions",  r.count,       "0"],
+      ["Cash Transactions",   r.cashCount,   "0"],
+      ["Online Transactions", r.onlineCount, "0"],
+      ["Top Product",         r.products[0]?.name ?? "—"],
+    ];
+    stats.forEach(([lab, val, fmt], i) => {
+      ws.mergeCells(row, 1, row, 3);
+      ws.mergeCells(row, 4, row, 5);
+      ws.getCell(row, 1).value = lab;
+      ws.getCell(row, 4).value = val;
+      if (fmt) ws.getCell(row, 4).numFmt = fmt;
+      for (let c = 1; c <= 5; c++) {
+        const cell = ws.getCell(row, c);
+        cell.fill = solid(i % 2 === 0 ? "#FFFFFF" : GREEN_TINT);
+        cell.border = box;
+      }
+      ws.getCell(row, 1).font = { size: 10.5, color: { argb: argb(MUTED) } };
+      ws.getCell(row, 4).font = { bold: true, size: 11, color: { argb: i === 0 ? argb(GREEN) : argb(INK) } };
+      ws.getCell(row, 4).alignment = { horizontal: "right", vertical: "middle" };
+      ws.getRow(row).height = 22;
+      row++;
+    });
+    ws.views = [{ state: "frozen", ySplit: 6, showGridLines: false }];
+  }
+
+  // Footer
+  const footerRow = ws.rowCount + 2;
+  ws.mergeCells(footerRow, 1, footerRow, LAST_COL);
+  const f = ws.getCell(footerRow, 1);
+  f.value = "Julieta SoftDrink Store • TECHNOLOGIA © 2026 • Confidential — For internal use only";
+  f.font = { size: 9, italic: true, color: { argb: argb(FAINT) } };
+  f.alignment = { horizontal: "center" };
+
+  // Print setup
+  ws.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 };
+
+  const buf = await wb.xlsx.writeBuffer();
+  downloadBlob(
+    new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+    `julieta-${tab === "Transactions" ? "transactions" : "sales-report"}-${fileSlug(label)}.xlsx`
+  );
 }
 
 // ── Normalize ─────────────────────────────────────────────────────────────────
@@ -428,7 +718,7 @@ function ExportMenu({
   period: Period; customFrom: string; customTo: string; activeTab: Tab;
 }) {
   const [open,        setOpen]        = useState(false);
-  const [exporting,   setExporting]   = useState<"pdf"|"csv"|null>(null);
+  const [exporting,   setExporting]   = useState<"pdf" | "csv" | "xlsx" | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close on outside click
@@ -464,9 +754,22 @@ function ExportMenu({
     setExporting("csv");
     setOpen(false);
     try {
-      exportCSV(periodFiltered, label);
+      exportCSV(periodFiltered, label, activeTab);
     } finally {
       setTimeout(() => setExporting(null), 600);
+    }
+  }
+
+  async function handleExcel() {
+    setExporting("xlsx");
+    setOpen(false);
+    try {
+      await exportExcel(periodFiltered, label, activeTab);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to export Excel file.");
+    } finally {
+      setExporting(null);
     }
   }
 
@@ -488,7 +791,7 @@ function ExportMenu({
         <span style={{ display:"flex", animation: exporting ? "spin 0.8s linear infinite" : "none" }}>
           {exporting ? Icon.spinner : Icon.download}
         </span>
-        {exporting === "pdf" ? "Preparing PDF…" : exporting === "csv" ? "Downloading…" : "Export"}
+        {exporting === "pdf" ? "Preparing PDF…" : exporting === "csv" ? "Downloading…" : exporting === "xlsx" ? "Building Excel…" : "Export"}
         {!exporting && (
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft:2 }}>
             <polyline points="6 9 12 15 18 9"/>
@@ -529,6 +832,26 @@ function ExportMenu({
             </div>
           </button>
 
+          {/* Excel option */}
+          <button onClick={handleExcel} style={{
+            display:"flex", alignItems:"center", gap:"10px", width:"100%", padding:"12px 14px",
+            background:"none", border:"none", textAlign:"left", cursor:"pointer", transition:"background 0.12s",
+          }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = GREEN_TINT)}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+          >
+            <div style={{ width:"32px", height:"32px", borderRadius:"8px", background:GREEN_LIGHT, display:"flex", alignItems:"center", justifyContent:"center", color:GREEN, flexShrink:0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <path d="M8 8l8 8M16 8l-8 8"/>
+              </svg>
+            </div>
+            <div>
+              <p style={{ fontSize:"13px", fontWeight:600, color:INK, margin:0 }}>Export as Excel</p>
+              <p style={{ fontSize:"11px", color:MUTED, margin:0 }}>Styled .xlsx with colors &amp; totals</p>
+            </div>
+          </button>
+
           {/* CSV option */}
           <button onClick={handleCSV} style={{
             display:"flex", alignItems:"center", gap:"10px", width:"100%", padding:"12px 14px",
@@ -545,7 +868,7 @@ function ExportMenu({
             </div>
             <div>
               <p style={{ fontSize:"13px", fontWeight:600, color:INK, margin:0 }}>Export as CSV</p>
-              <p style={{ fontSize:"11px", color:MUTED, margin:0 }}>Open in Excel or Google Sheets</p>
+              <p style={{ fontSize:"11px", color:MUTED, margin:0 }}>Plain data for Sheets / imports</p>
             </div>
           </button>
 
